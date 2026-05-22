@@ -1,23 +1,121 @@
 @import "tailwindcss";
 
+@theme {
+    --font-serif: "NewYork-Regular", "Noto Serif", "Noto Serif JP", serif;
+    --font-sans: "LINE Seed JP", sans-serif;
+}
+
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/fonts/LINESeedJP-Bold-Subset.woff2") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "LINE Seed JP";
+    src: url("/fonts/LINESeedJP-Regular-Subset.woff2") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Noto Serif";
+    src: url("/fonts/NotoSerif-Regular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Noto Serif JP";
+    src: url("/fonts/NotoSerifJP-Regular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
 :root {
-    --background: #ffffff;
-    --foreground: #171717;
+    --color-background: hsl(0, 0%, 100%);
+    --color-foreground: hsl(0, 0%, 15%);
+    --color-background-secondary: hsl(0, 0%, 94%);
+    --color-border: hsl(0, 0%, 0%, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-background: hsl(0, 0%, 10%);
+        --color-foreground: hsl(0, 0%, 90%);
+        --color-background-secondary: hsl(0, 0%, 20%);
+        --color-border: hsl(0, 0%, 100%, 0.25);
+    }
 }
 
 * {
     cursor: none;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #0a0a0a;
-        --foreground: #ededed;
+body {
+    @apply bg-(--color-background) text-(--color-foreground) flex flex-col items-center;
+}
+
+p {
+    @apply font-serif leading-loose;
+}
+
+h1 {
+    @apply text-xl font-bold text-center inline-block py-8;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.gradient-text {
+    background: linear-gradient(
+        90deg,
+        var(--color-border),
+        var(--color-border),
+        var(--color-border),
+        var(--color-border),
+        var(--color-foreground),
+        var(--color-border)
+    );
+
+    background-size: 200%;
+
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+
+    animation: gradientMove 1.5s linear infinite;
+}
+
+@keyframes gradientMove {
+    0% {
+        background-position: 200%;
+    }
+    100% {
+        background-position: 0%;
     }
 }
 
-body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+@keyframes shimmer {
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.loading .gradient-background {
+    background: linear-gradient(
+        270deg,
+        var(--color-background-secondary) 25%,
+        var(--color-border) 50%,
+        var(--color-background-secondary) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
 }
