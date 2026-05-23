@@ -30,7 +30,7 @@ export default function Home() {
 
             <button
                 data-cursor="button"
-                className="text-lg font-bold bg-cyan-600 w-32 justify-center py-2 rounded-md text-(--color-background) flex transition-all duration-200 ease-out active:scale-95"
+                className="text-lg font-bold bg-cyan-600 w-32 justify-center py-2 rounded-md text-white flex transition-all duration-200 ease-out active:scale-95"
                 data-cursor-shape="0"
                 onMouseEnter={() => {
                     setIsSelected(true);
