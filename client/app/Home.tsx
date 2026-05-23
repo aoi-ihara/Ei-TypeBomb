@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Keys } from "@/components/ui/Keys";
 
 export default function Home() {
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
@@ -14,8 +15,23 @@ export default function Home() {
             setShowCursor((prev) => !prev);
         }, 500);
 
-        return () => clearInterval(intervalId);
-    }, []);
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "p") {
+                router.push("/display-name");
+            }
+
+            if (e.key === "s") {
+                router.push("/settings");
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            clearInterval(intervalId);
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [router]);
 
     return (
         <div className="flex flex-col justify-center h-full items-center gap-16">
@@ -30,7 +46,7 @@ export default function Home() {
 
             <button
                 data-cursor="button"
-                className="text-lg font-bold bg-cyan-600 w-32 justify-center py-2 rounded-md text-white flex transition-all duration-200 ease-out active:scale-95"
+                className="text-lg items-center font-bold bg-cyan-600 w-32 justify-center py-2 rounded-md text-white flex transition-all duration-200 ease-out active:scale-95"
                 data-cursor-shape="0"
                 onMouseEnter={() => {
                     setIsSelected(true);
@@ -38,22 +54,25 @@ export default function Home() {
                 onMouseLeave={() => {
                     setIsSelected(false);
                 }}
+                onClick={() => router.push("/display-name")}
             >
                 <div
                     className={`${isSelected ? "w-5" : "w-0 opacity-0"} transition-all duration-200 ease-out flex overflow-hidden`}
                 >
                     ▶
                 </div>
-                <div>Play</div>
+                <div className="mr-1">Play</div>
+                <Keys keys={["P"]} />
             </button>
 
             <button
                 data-cursor="button"
-                className="px-2 py-1 rounded-md text-(--color-foreground) transition-transform duration-200 ease-out active:scale-95 inline-block z-1000 underline active:no-underline"
-                data-cursor-shape="2"
+                className="px-2 flex items-center py-1 text-cyan-600 rounded-md font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
+                data-cursor-shape="1"
                 onClick={() => router.push("/settings")}
             >
                 Settings
+                <Keys keys={["S"]}></Keys>
             </button>
         </div>
     );

@@ -149,7 +149,7 @@ export function Cursor() {
                         height: selectedButtons[0].height + 16,
 
                         weight: 4,
-                        opacity: 0.5,
+                        opacity: 0.25,
 
                         borderRadius: selectedButtons[0].borderRadius + 8,
                     };
@@ -163,7 +163,7 @@ export function Cursor() {
                         height: selectedButtons[0].height,
 
                         weight: 1000,
-                        opacity: 0.25,
+                        opacity: 0.15,
 
                         borderRadius: selectedButtons[0].borderRadius,
                     };
@@ -246,6 +246,8 @@ export function Cursor() {
         };
 
         const onMouseDown = () => {
+            getElements();
+
             setIsMouseDown(true);
             isMouseDownRef.current = true;
 
