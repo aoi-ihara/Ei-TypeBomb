@@ -202,7 +202,7 @@ export function Cursor() {
                     width: 20,
                     height: 20,
 
-                    weight: 10,
+                    weight: 1000,
                     opacity: 1,
 
                     borderRadius: 10,
