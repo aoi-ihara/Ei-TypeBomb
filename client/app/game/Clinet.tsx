@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 type User = {
     displayName: string;
     uuid: string;

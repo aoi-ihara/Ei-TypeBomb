@@ -22,8 +22,6 @@ type Text = {
 };
 
 export function Cursor() {
-    const pathname = usePathname();
-
     const buttons = useRef<Button[]>([]);
     const texts = useRef<Text[]>([]);
 

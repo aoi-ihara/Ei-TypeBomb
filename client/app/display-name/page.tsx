@@ -33,7 +33,7 @@ export default function Loading() {
             clearInterval(intervalId);
             window.removeEventListener("keydown", handleKeyDown);
         };
-    }, []);
+    });
 
     return (
         <main className="flex flex-col h-full gap-8 items-center pt-16">
@@ -45,7 +45,7 @@ export default function Loading() {
                     className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
                 />
             </div>
-            <div data-cursor="button" data-cursor-shape="2" className="w-full">
+            <div data-cursor="text" className="w-full rounded-2xl">
                 <RetchedInput
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
