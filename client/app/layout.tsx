@@ -29,13 +29,12 @@ export default function RootLayout({
             className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
         >
             <body className="min-h-full flex flex-col">
-                <main className="flex flex-col h-screen">
+                <main className="flex flex-col h-screen w-full items-center">
                     {children}
-                    <div
-                        data-cursor="text"
-                        className="text-xs w-full text-center fixed left-0 opacity-25 bottom-4"
-                    >
-                        © 2026 vgnz93hs. All rights reserved.
+                    <div className="text-xs w-full text-center flex justify-center fixed left-0 opacity-25 bottom-4">
+                        <div data-cursor="text" className="flex w-fit">
+                            © 2026 vgnz93hs. All rights reserved.
+                        </div>
                     </div>
                 </main>
                 <Cursor />

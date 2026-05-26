@@ -36,7 +36,7 @@ export default function Loading() {
     });
 
     return (
-        <main className="flex flex-col h-full gap-8 items-center pt-16">
+        <div className="flex flex-col w-fit h-full gap-8 items-center pt-16">
             <div className="flex items-end">
                 <h1 className="font-mono font-bold text-2xl" data-cursor="text">
                     Choose a Display Name
@@ -53,15 +53,21 @@ export default function Loading() {
                 />
             </div>
 
-            <button
+            <div
+                className="rounded-lg w-48 flex"
                 data-cursor="button"
-                className="text-lg items-center font-bold bg-cyan-600 w-48 justify-center py-2 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
                 data-cursor-shape="0"
-                onClick={handleContinue}
             >
-                <div className="mr-1">Continue</div>
-                <Keys keys={["C"]} />
-            </button>
-        </main>
+                <button
+                    data-cursor="button"
+                    className="text-lg items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
+                    data-cursor-shape="0"
+                    onClick={handleContinue}
+                >
+                    <div className="mr-1">Continue</div>
+                    <Keys keys={["C"]} />
+                </button>
+            </div>
+        </div>
     );
 }
