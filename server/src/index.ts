@@ -80,7 +80,6 @@ io.on("connection", (socket) => {
         });
         console.log("Pulse response received📡:", response.newPulse, "Current Users", room);
     });
-
 });
 
 httpServer.listen(3001, () => {

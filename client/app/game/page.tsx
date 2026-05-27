@@ -137,7 +137,9 @@ export default function Page() {
             <div className="w-full flex">
                 <UsersView users={room ?? []} positions={userPositions} />
             </div>
-            <div className={`w-2xl pr-4 py-4 h-full justify-end flex flex-col`}>
+            <div
+                className={`w-2xl pr-4 gap-4 py-4 h-full justify-end flex flex-col`}
+            >
                 <div
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator ? "opacity-0 scale-95 h-14" : room.some((user) => user.userId === userId) ? "h-full" : isConnected ? "h-14" : "h-14"} rounded-2xl p-2 w-full`}
                 >
@@ -148,35 +150,45 @@ export default function Page() {
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
                                     {room.length < 4 ? (
-                                        <div
-                                            className="gradient-text font-bold px-2 py-1 flex"
-                                            data-cursor="text"
-                                        >
-                                            Waiting for other players…
+                                        <div className="w-full flex flex-col items-center justify-center gap-8">
+                                            <div
+                                                className="gradient-text h-fit px-2 py-1 font-bold flex"
+                                                data-cursor="text"
+                                            >
+                                                Waiting for other players…
+                                            </div>
+                                            <div
+                                                className="rounded-lg w-48 flex"
+                                                data-cursor="button"
+                                                data-cursor-shape="0"
+                                            >
+                                                <button
+                                                    disabled={room.length >= 4}
+                                                    className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                    onClick={() =>
+                                                        handleConnect()
+                                                    }
+                                                >
+                                                    Start Game
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div></div>
                                     )}
                                 </div>
-                                <div className="px-2 flex flex-col gap-2 pb-8">
-                                    {room.map((user) => (
-                                        <div
-                                            className="w-fit flex"
-                                            data-cursor="text"
-                                            key={user.userId}
-                                        >
-                                            {user.displayName}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="w-full px-2 py-1 flex gap-2 items-center">
-                                    <div
-                                        className="font-bold opacity-50 flex"
-                                        data-cursor="text"
-                                    >
-                                        Connected
+                                <div className="px-2">
+                                    <div className="flex flex-col gap-2 pb-1 pt-3 border-t border-(--color-border)">
+                                        {room.map((user) => (
+                                            <div
+                                                className="w-fit flex"
+                                                data-cursor="text"
+                                                key={user.userId}
+                                            >
+                                                {user.displayName}
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="flex w-4 h-4 bg-green-500 rounded-full"></div>
                                 </div>
                             </div>
                         ) : (
