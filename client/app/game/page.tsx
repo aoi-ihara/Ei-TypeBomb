@@ -176,7 +176,19 @@ export default function Page() {
                 className={`w-2xl pr-4 gap-4 py-4 h-full justify-end flex flex-col`}
             >
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator ? "opacity-0 scale-95 h-14" : room.some((user) => user.userId === userId) ? (isStarted ? "h-full" : "h-96") : isConnected ? "h-14" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
+                        isSpectator
+                            ? "opacity-0 scale-95 h-14"
+                            : room.some((user) => user.userId === userId)
+                              ? isStarted
+                                  ? room[currentTurn]?.userId == userId
+                                      ? "h-full"
+                                      : "h-64"
+                                  : "h-96"
+                              : isConnected
+                                ? "h-14"
+                                : "h-14"
+                    } rounded-2xl p-2 w-full`}
                 >
                     {isConnected ? (
                         isSpectator ? (
@@ -194,23 +206,44 @@ export default function Page() {
                                                     Game started
                                                 </div>
                                             ) : (
-                                                <div className="flex h-full flex-col gap-2 w-full">
+                                                <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
                                                     {room[currentTurn]
-                                                        ?.userId == userId && (
+                                                        ?.userId == userId ? (
+                                                        <>
+                                                            <div
+                                                                className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                                data-cursor="text"
+                                                            >
+                                                                YOUR TURN
+                                                            </div>
+
+                                                            <TypingView
+                                                                japanese={
+                                                                    currentWord.jp
+                                                                }
+                                                                english={
+                                                                    currentWord.en
+                                                                }
+                                                                onSuccess={() => {
+                                                                    console.log(
+                                                                        "Success! Emitting to server...",
+                                                                    );
+                                                                    socketRef.current?.emit(
+                                                                        "success",
+                                                                    );
+                                                                }}
+                                                            />
+                                                        </>
+                                                    ) : (
                                                         <div
-                                                            className="font-bold px-2 pt-1 pb-1 w-fit flex"
+                                                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                                                             data-cursor="text"
                                                         >
-                                                            YOUR TURN
+                                                            {room[currentTurn]
+                                                                .displayName +
+                                                                "'s Turn"}
                                                         </div>
                                                     )}
-
-                                                    <TypingView
-                                                        japanese={
-                                                            currentWord.jp
-                                                        }
-                                                        english={currentWord.en}
-                                                    />
                                                 </div>
                                             )
                                         ) : (
