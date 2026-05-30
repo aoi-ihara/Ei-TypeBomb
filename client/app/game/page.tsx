@@ -186,8 +186,8 @@ export default function Page() {
                               ? isStarted
                                   ? room[currentTurn]?.userId == userId
                                       ? "h-full"
-                                      : "h-64"
-                                  : "h-96"
+                                      : "h-32"
+                                  : "h-48"
                               : isConnected
                                 ? "h-14"
                                 : "h-14"
@@ -199,7 +199,7 @@ export default function Page() {
                         ) : room.some((user) => user.userId === userId) ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
-                                    <div className="w-full flex flex-col items-center justify-center gap-8">
+                                    <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
                                             currentWord == null ? (
                                                 <div
@@ -281,19 +281,6 @@ export default function Page() {
                                                 </div>
                                             </>
                                         )}
-                                    </div>
-                                </div>
-                                <div className="px-2">
-                                    <div className="flex flex-col gap-2 pb-1 pt-3 border-t border-(--color-border)">
-                                        {room.map((user) => (
-                                            <div
-                                                className="w-fit flex"
-                                                data-cursor="text"
-                                                key={user.userId}
-                                            >
-                                                {user.displayName}
-                                            </div>
-                                        ))}
                                     </div>
                                 </div>
                             </div>

@@ -50,7 +50,10 @@ export default function TypingView({
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
-                <div className="font-bold text-center w-fit border border-(--color-border) px-2 rounded-lg py-1">
+                <div
+                    className="font-bold text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    data-cursor="text"
+                >
                     {japanese}
                 </div>
             </div>

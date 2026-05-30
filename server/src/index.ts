@@ -57,7 +57,7 @@ const startGame = () => {
     currentTurn = 0;
 
     setTimeout(() => {
-        currentWord = words[2];
+        const currentWord = words[Math.floor(Math.random() * words.length)];
         broadcastRoomInfo();
     }, 3000);
 }
