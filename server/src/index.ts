@@ -33,6 +33,22 @@ const io = new Server(httpServer, {
     },
 });
 
+const bombExplosioned = () => {
+    console.log("💥 BOMB EXPLODED");
+
+    isStarted = false;
+    currentTurn = 0;
+    currentWord = null;
+    bombStatus = 0;
+
+    if (bombTimer) {
+        clearTimeout(bombTimer);
+        bombTimer = null;
+    }
+
+    broadcastRoomInfo();
+};
+
 const broadcastRoomInfo = () => {
     io.emit("roomInfo", room);
     io.emit("gameStatus", { isStarted: isStarted, currentTurn: currentTurn, currentWord: currentWord, bombStatus: bombStatus });
@@ -45,29 +61,58 @@ const updateRoom = (fn: (room: User[]) => void) => {
     broadcastRoomInfo();
 }
 
-const endGame = (() => {
+const endGame = () => {
     isStarted = false;
     currentWord = null;
     currentTurn = 0;
     bombStatus = 0;
-})
+
+    if (bombTimer) {
+        clearTimeout(bombTimer);
+        bombTimer = null;
+    }
+};
 
 const startGame = () => {
     isStarted = true;
     console.log("Game Started 🎮");
 
     bombStatus = 0;
+    currentTurn = 0;
 
     broadcastRoomInfo();
-    currentTurn = 0;
 
     setTimeout(() => {
         currentWord = words[Math.floor(Math.random() * words.length)];
         broadcastRoomInfo();
-
         console.log("Word Changed");
     }, 3000);
-}
+
+    scheduleBombTick();
+};
+
+const scheduleBombTick = () => {
+    if (!isStarted) return;
+
+    const delay = 8000 + Math.random() * 8000;
+
+    bombTimer = setTimeout(() => {
+        if (!isStarted) return;
+
+        if (bombStatus >= 4) {
+            bombExplosioned();
+            return;
+        } else {
+            bombStatus += 1;
+        }
+
+        console.log("💣 bombStatus:", bombStatus);
+
+        broadcastRoomInfo();
+
+        scheduleBombTick();
+    }, delay);
+};
 
 setInterval(() => {
     updateRoom((r) => {
@@ -88,7 +133,7 @@ setInterval(() => {
     io.emit("pulse", sharedUUID);
     console.log("Pulse sent📡:", sharedUUID);
     previousPulse = sharedUUID;
-}, 1000);
+}, 2000);
 
 io.on("connection", (socket) => {
     const ip = socket.handshake.address;

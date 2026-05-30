@@ -133,6 +133,8 @@ export default function Page() {
                 setCurrentTurn(currentTurn);
                 setCurrentWord(currentWord);
                 setBombStatus(bombStatus);
+
+                console.log("bomb: ", bombStatus);
             },
         );
 
