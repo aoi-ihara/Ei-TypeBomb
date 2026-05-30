@@ -11,7 +11,7 @@ type User = {
 type Word = {
     jp: string;
     en: string;
-}
+};
 
 let room: User[] = [];
 let isStarted = false;
@@ -20,8 +20,13 @@ let currentTurn = 0;
 let bombTimer: NodeJS.Timeout | null = null;
 let currentWord: Word | null = null;
 let bombStatus: number = 0;
+let currentInput = "";
 
-const words: Word[] = [{ jp: "ねこ", en: "cat" }, { jp: "りんご", en: "apple" }, { jp: "三毛ねこ", en: "calico cat" }]
+const words: Word[] = [
+    { jp: "ねこ", en: "cat" },
+    { jp: "りんご", en: "apple" },
+    { jp: "三毛ねこ", en: "calico cat" },
+];
 
 const app = express();
 const httpServer = createServer(app);
@@ -35,13 +40,14 @@ const io = new Server(httpServer, {
 const bombExplosioned = () => {
     console.log("💥 BOMB EXPLODED");
 
-    io.emit("bombExplosioned", room[currentTurn].userId)
+    io.emit("bombExplosioned", room[currentTurn].userId);
 
     isStarted = false;
     currentTurn = 0;
     currentWord = null;
     bombStatus = 0;
     room = [];
+    currentInput = "";
 
     if (bombTimer) {
         clearTimeout(bombTimer);
@@ -53,21 +59,34 @@ const bombExplosioned = () => {
 
 const broadcastRoomInfo = () => {
     io.emit("roomInfo", room);
-    io.emit("gameStatus", { isStarted: isStarted, currentTurn: currentTurn, currentWord: currentWord, bombStatus: bombStatus });
+    io.emit("gameStatus", {
+        isStarted: isStarted,
+        currentTurn: currentTurn,
+        currentWord: currentWord,
+        bombStatus: bombStatus,
+        currentInput: currentInput,
+    });
 
-    console.log("Room status:", isStarted, currentTurn, currentWord, bombStatus);
-}
+    console.log(
+        "Room status:",
+        isStarted,
+        currentTurn,
+        currentWord,
+        bombStatus,
+    );
+};
 
 const updateRoom = (fn: (room: User[]) => void) => {
     fn(room);
     broadcastRoomInfo();
-}
+};
 
 const endGame = () => {
     isStarted = false;
     currentWord = null;
     currentTurn = 0;
     bombStatus = 0;
+    currentInput = "";
 
     if (bombTimer) {
         clearTimeout(bombTimer);
@@ -81,6 +100,7 @@ const startGame = () => {
 
     bombStatus = 0;
     currentTurn = 0;
+    currentInput = "";
 
     broadcastRoomInfo();
 
@@ -161,7 +181,9 @@ io.on("connection", (socket) => {
     socket.on("joinRoom", (displayName: string) => {
         if (room.length < 6 && !isStarted) {
             const uuid = crypto.randomUUID();
-            updateRoom((r) => r.push({ displayName, userId: uuid, pulse: previousPulse }));
+            updateRoom((r) =>
+                r.push({ displayName, userId: uuid, pulse: previousPulse }),
+            );
             socket.emit("joined", uuid);
             userId = uuid;
 
@@ -169,6 +191,14 @@ io.on("connection", (socket) => {
                 startGame();
             }
         }
+    });
+
+    socket.on("cuttentInput", (newCurrentInput) => {
+        if (userId == room[currentTurn].userId) {
+            currentInput = newCurrentInput;
+        }
+
+        broadcastRoomInfo();
     });
 
     socket.on("success", () => {
@@ -184,24 +214,38 @@ io.on("connection", (socket) => {
 
             broadcastRoomInfo();
         }
-    })
+    });
 
     socket.on("startGame", () => {
-        if (userId && room.map((user) => user.userId).includes(userId) && room.length <= 6 && room.length > 1 && !isStarted) {
+        if (
+            userId &&
+            room.map((user) => user.userId).includes(userId) &&
+            room.length <= 6 &&
+            room.length > 1 &&
+            !isStarted
+        ) {
             startGame();
         }
-    })
-
-    socket.on("pulseResponse", (response: { userId: string; newPulse: string }) => {
-        updateRoom((r) => {
-            for (let i = r.length - 1; i >= 0; i--) {
-                if (r[i].userId == userId) {
-                    r[i].pulse = response.newPulse
-                }
-            }
-        });
-        console.log("Pulse response received📡:", response.newPulse, "Current Users", room);
     });
+
+    socket.on(
+        "pulseResponse",
+        (response: { userId: string; newPulse: string }) => {
+            updateRoom((r) => {
+                for (let i = r.length - 1; i >= 0; i--) {
+                    if (r[i].userId == userId) {
+                        r[i].pulse = response.newPulse;
+                    }
+                }
+            });
+            console.log(
+                "Pulse response received📡:",
+                response.newPulse,
+                "Current Users",
+                room,
+            );
+        },
+    );
 });
 
 httpServer.listen(3001, () => {

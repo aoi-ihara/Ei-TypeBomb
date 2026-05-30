@@ -1,14 +1,17 @@
-import { fail } from "node:assert";
 import { useEffect, useRef, useState } from "react";
 
 export default function TypingView({
     japanese,
     english,
     onSuccess,
+    onChangeInput,
+    currentInput,
 }: {
     japanese: string;
     english: string | null;
     onSuccess: () => void;
+    onChangeInput: (input: string) => void;
+    currentInput: string | null;
 }) {
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
@@ -21,6 +24,16 @@ export default function TypingView({
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
 
+    const isReadonly = currentInput !== null;
+
+    useEffect(() => {
+        if (!isReadonly) {
+            requestAnimationFrame(() => {
+                inputRef.current?.focus();
+            });
+        }
+    }, [isReadonly]);
+
     const triggerFailAnimation = () => {
         setIsFailAnimating(false);
 
@@ -32,10 +45,6 @@ export default function TypingView({
             setIsFailAnimating(false);
         }, 400);
     };
-
-    useEffect(() => {
-        inputRef.current?.focus();
-    }, []);
 
     if (!english) return null;
 
@@ -62,6 +71,8 @@ export default function TypingView({
         }
     };
 
+    const displayChars = isReadonly ? [...currentInput] : input;
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
@@ -82,7 +93,8 @@ export default function TypingView({
                     }`}
                 >
                     {[...english].map((char, index) => {
-                        const isSelected = index === currentSelection;
+                        const isSelected =
+                            !isReadonly && index === currentSelection;
 
                         if (char == " ") {
                             return (
@@ -97,103 +109,113 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`font-bold w-6 h-12 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`font-bold w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null && "active:scale-95"}`}
                                     data-cursor="button"
-                                    data-cursor-shape="1"
-                                    onClick={() => {
-                                        setCurrentSelection(index);
+                                    data-cursor-shape={
+                                        currentInput == null ? "1" : "2"
+                                    }
+                                    onClick={
+                                        isReadonly
+                                            ? undefined
+                                            : () => {
+                                                  setCurrentSelection(index);
 
-                                        requestAnimationFrame(() => {
-                                            inputRef.current?.focus();
-                                        });
-                                    }}
+                                                  requestAnimationFrame(() => {
+                                                      inputRef.current?.focus();
+                                                  });
+                                              }
+                                    }
                                 >
                                     <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                        {input?.[index] ?? ""}
+                                        {displayChars?.[index] ?? ""}
                                     </div>
                                 </button>
                             );
                         }
                     })}
 
-                    <input
-                        ref={inputRef}
-                        value={charInput}
-                        onChange={(e) => {
-                            const value = e.target.value;
+                    {!isReadonly && (
+                        <input
+                            ref={inputRef}
+                            value={charInput}
+                            onChange={(e) => {
+                                const value = e.target.value;
 
-                            if (!value) return;
+                                if (!value) return;
 
-                            const char = value.slice(-1);
+                                const char = value.slice(-1);
 
-                            const targetChar = english[currentSelection];
+                                const targetChar = english[currentSelection];
 
-                            if (targetChar === " ") {
-                                if (char === " ") {
-                                    const next = [...input];
-                                    next[currentSelection] = " ";
-                                    setInput(next);
-                                    moveToNext(next);
-                                }
-                                setCharInput("");
-                                return;
-                            }
-
-                            if (char !== " ") {
-                                const next = [...input];
-                                next[currentSelection] = char;
-
-                                setInput(next);
-                                moveToNext(next);
-                            }
-
-                            setCharInput("");
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === "ArrowLeft") {
-                                e.preventDefault();
-                                setCurrentSelection(
-                                    Math.max(0, currentSelection - 1),
-                                );
-                            }
-
-                            if (e.key === "ArrowRight") {
-                                e.preventDefault();
-                                setCurrentSelection(
-                                    Math.min(
-                                        english.length - 1,
-                                        currentSelection + 1,
-                                    ),
-                                );
-                            }
-
-                            if (e.key === "Backspace") {
-                                e.preventDefault();
-
-                                const next = [...input];
-
-                                if (next[currentSelection]) {
-                                    next[currentSelection] = "";
-
-                                    setInput(next);
+                                if (targetChar === " ") {
+                                    if (char === " ") {
+                                        const next = [...input];
+                                        next[currentSelection] = " ";
+                                        setInput(next);
+                                        moveToNext(next);
+                                        onChangeInput(next.join(""));
+                                    }
+                                    setCharInput("");
                                     return;
                                 }
 
-                                const prev = currentSelection - 1;
-
-                                if (prev >= 0) {
-                                    next[prev] = "";
+                                if (char !== " ") {
+                                    const next = [...input];
+                                    next[currentSelection] = char;
 
                                     setInput(next);
-                                    setCurrentSelection(prev);
+                                    moveToNext(next);
+                                    onChangeInput(next.join(""));
                                 }
-                            }
-                        }}
-                        className="absolute opacity-0 pointer-events-none"
-                        autoCapitalize="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                    />
+                                setCharInput("");
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === "ArrowLeft") {
+                                    e.preventDefault();
+                                    setCurrentSelection(
+                                        Math.max(0, currentSelection - 1),
+                                    );
+                                }
+
+                                if (e.key === "ArrowRight") {
+                                    e.preventDefault();
+                                    setCurrentSelection(
+                                        Math.min(
+                                            english.length - 1,
+                                            currentSelection + 1,
+                                        ),
+                                    );
+                                }
+
+                                if (e.key === "Backspace") {
+                                    e.preventDefault();
+
+                                    const next = [...input];
+
+                                    if (next[currentSelection]) {
+                                        next[currentSelection] = "";
+
+                                        setInput(next);
+                                        return;
+                                    }
+
+                                    const prev = currentSelection - 1;
+
+                                    if (prev >= 0) {
+                                        next[prev] = "";
+
+                                        setInput(next);
+                                        setCurrentSelection(prev);
+                                    }
+                                    onChangeInput(next.join(""));
+                                }
+                            }}
+                            className="absolute opacity-0 pointer-events-none"
+                            autoCapitalize="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                        />
+                    )}
                 </div>
             </div>
         </div>

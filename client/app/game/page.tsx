@@ -4,10 +4,8 @@ import Connect from "@/components/feature/Connect";
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Keys } from "@/components/ui/Keys";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
-import { join } from "node:path/win32";
 import TypingView from "@/components/feature/InputView";
 
 type Word = {
@@ -49,8 +47,9 @@ export default function Page() {
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
     const [result, setResult] = useState<boolean | null>(null);
+    const [currentInput, setCurrentInput] = useState("");
     const [userPositions, setUserPositions] = useState<Position[]>(
-        Array.from({ length: 4 }, () => ({
+        Array.from({ length: 6 }, () => ({
             x: 0,
             y: 0,
             w: 24,
@@ -141,16 +140,19 @@ export default function Page() {
                 currentTurn,
                 currentWord,
                 bombStatus,
+                currentInput,
             }: {
                 isStarted: boolean;
                 currentTurn: number;
                 currentWord: Word;
                 bombStatus: number;
+                currentInput: string;
             }) => {
                 setIsStarted(isStarted);
                 setCurrentTurn(currentTurn);
                 setCurrentWord(currentWord);
                 setBombStatus(bombStatus);
+                setCurrentInput(currentInput);
 
                 console.log("bomb: ", bombStatus);
             },
@@ -221,7 +223,7 @@ export default function Page() {
                               ? isStarted
                                   ? room[currentTurn]?.userId == userId
                                       ? "h-full"
-                                      : "h-32"
+                                      : "h-64"
                                   : "h-48"
                               : isConnected
                                 ? "h-14"
@@ -254,23 +256,6 @@ export default function Page() {
                                                             >
                                                                 YOUR TURN
                                                             </div>
-
-                                                            <TypingView
-                                                                japanese={
-                                                                    currentWord.jp
-                                                                }
-                                                                english={
-                                                                    currentWord.en
-                                                                }
-                                                                onSuccess={() => {
-                                                                    console.log(
-                                                                        "Success! Emitting to server...",
-                                                                    );
-                                                                    socketRef.current?.emit(
-                                                                        "success",
-                                                                    );
-                                                                }}
-                                                            />
                                                         </>
                                                     ) : (
                                                         <div
@@ -282,6 +267,43 @@ export default function Page() {
                                                                 "'s Turn"}
                                                         </div>
                                                     )}
+
+                                                    <TypingView
+                                                        japanese={
+                                                            currentWord.jp
+                                                        }
+                                                        english={currentWord.en}
+                                                        onSuccess={() => {
+                                                            console.log(
+                                                                "Success! Emitting to server...",
+                                                            );
+                                                            socketRef.current?.emit(
+                                                                "success",
+                                                            );
+                                                        }}
+                                                        onChangeInput={(
+                                                            input,
+                                                        ) => {
+                                                            if (
+                                                                userId ==
+                                                                room[
+                                                                    currentTurn
+                                                                ].userId
+                                                            ) {
+                                                                socketRef.current?.emit(
+                                                                    "cuttentInput",
+                                                                    input,
+                                                                );
+                                                            }
+                                                        }}
+                                                        currentInput={
+                                                            userId ==
+                                                            room[currentTurn]
+                                                                .userId
+                                                                ? null
+                                                                : currentInput
+                                                        }
+                                                    />
                                                 </div>
                                             )
                                         ) : (
@@ -360,9 +382,6 @@ export default function Page() {
                                                     data-cursor-shape="0"
                                                 >
                                                     <button
-                                                        disabled={
-                                                            room.length >= 4
-                                                        }
                                                         className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
                                                         onClick={() =>
                                                             handleConnect()
