@@ -30,10 +30,12 @@ type Position = {
 };
 
 export default function Page() {
+    const [userId, setUserId] = useState("");
+    const userIdRef = useRef("");
+
     const [showCursor, setShowCursor] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [room, setRoom] = useState<User[]>([]);
-    const [userId, setUserId] = useState("");
     const [cameraAngle, setCameraAngle] = useState(1);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
@@ -46,6 +48,7 @@ export default function Page() {
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
+    const [result, setResult] = useState<boolean | null>(null);
     const [userPositions, setUserPositions] = useState<Position[]>(
         Array.from({ length: 4 }, () => ({
             x: 0,
@@ -58,7 +61,7 @@ export default function Page() {
 
     useEffect(() => {
         const url = localStorage.getItem("server-url") as string;
-        const socket = io(url == "" ? "http://localhost:3001" : url);
+        const socket = io(url == "" ? "https://ei-typing.onrender.com" : url);
 
         console.log(url);
         socketRef.current = socket;
@@ -112,8 +115,23 @@ export default function Page() {
             );
         });
 
-        socket.on("joined", (myUuid) => {
+        socket.on("bombExplosioned", (explosionedUserId) => {
+            console.log("FAILED USERNAME", explosionedUserId, "Mine:", userId);
+            if (userIdRef.current == explosionedUserId) {
+                setResult(true);
+            } else {
+                setResult(false);
+            }
+
+            const resultTimer = setTimeout(() => {
+                setResult(null);
+            }, 3000);
+        });
+
+        socket.on("joined", (myUuid: string) => {
+            userIdRef.current = myUuid;
             setUserId(myUuid);
+            console.log("Joined:", myUuid);
         });
 
         socket.on(
@@ -133,16 +151,18 @@ export default function Page() {
                 setCurrentTurn(currentTurn);
                 setCurrentWord(currentWord);
                 setBombStatus(bombStatus);
+
+                console.log("bomb: ", bombStatus);
             },
         );
 
         socket.on("pulse", (pulseUuid: string) => {
             console.log(pulseUuid);
 
-            if (userId !== null) {
+            if (userIdRef.current !== null) {
                 console.log("Sent pulse response📡:", pulseUuid);
                 socket.emit("pulseResponse", {
-                    userId: userId,
+                    userId: userIdRef.current,
                     newPulse: pulseUuid,
                 });
             } else {
@@ -171,6 +191,16 @@ export default function Page() {
 
     return (
         <div className="flex w-full h-full">
+            {result !== null && (
+                <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
+                    <div
+                        data-cursor="text"
+                        className="font-bold text-4xl animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]"
+                    >
+                        {result === false ? "You Survived" : "You Exploded"}
+                    </div>
+                </div>
+            )}
             <div className="w-full flex">
                 <UsersView
                     users={room ?? []}
@@ -291,7 +321,7 @@ export default function Page() {
                             </div>
                         ) : (
                             <div className="h-full w-full flex items-center">
-                                {room.length < 4 ? (
+                                {room.length < 6 ? (
                                     isStarted ? (
                                         <div
                                             className="font-mono opacity-50 w-fit pl-4 font-bold"

@@ -1,3 +1,4 @@
+import { fail } from "node:assert";
 import { useEffect, useRef, useState } from "react";
 
 export default function TypingView({
@@ -18,6 +19,19 @@ export default function TypingView({
     const inputRef = useRef<HTMLInputElement | null>(null);
 
     const [charInput, setCharInput] = useState("");
+    const [isFailAnimating, setIsFailAnimating] = useState(false);
+
+    const triggerFailAnimation = () => {
+        setIsFailAnimating(false);
+
+        requestAnimationFrame(() => {
+            setIsFailAnimating(true);
+        });
+
+        setTimeout(() => {
+            setIsFailAnimating(false);
+        }, 400);
+    };
 
     useEffect(() => {
         inputRef.current?.focus();
@@ -43,6 +57,7 @@ export default function TypingView({
 
                 setInput(Array(english.length).fill(""));
                 setCurrentSelection(0);
+                triggerFailAnimation();
             }
         }
     };
@@ -59,7 +74,13 @@ export default function TypingView({
             </div>
 
             <div className="w-full flex justify-center">
-                <div className="w-fit rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start">
+                <div
+                    className={`w-fit rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${
+                        isFailAnimating
+                            ? "animate-[bombBounce_400ms_ease-out]"
+                            : ""
+                    }`}
+                >
                     {[...english].map((char, index) => {
                         const isSelected = index === currentSelection;
 

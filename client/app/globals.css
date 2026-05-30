@@ -111,3 +111,28 @@ body {
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite linear;
 }
+
+@keyframes bombBounce {
+    0% {
+        transform: scale(1);
+    }
+    30% {
+        transform: scale(1.6);
+    }
+    60% {
+        transform: scale(0.85);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes resultAnimation {
+    0% {
+        transform: scale(0.75);
+        filter: blur(16px);
+        opacity: 0;
+    }
+    100% {
+    }
+}
