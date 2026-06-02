@@ -3,7 +3,9 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
 
-const words: Word[] = JSON.parse(fs.readFileSync("src/words/demo.json", "utf8")) as Word[];
+const words: Word[] = JSON.parse(
+    fs.readFileSync("./words/demo.json", "utf8"),
+) as Word[];
 
 type User = {
     displayName: string;
