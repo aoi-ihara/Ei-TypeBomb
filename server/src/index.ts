@@ -115,24 +115,24 @@ const startGame = () => {
 const scheduleBombTick = () => {
     if (!isStarted) return;
 
-    // const delay = 8000 + Math.random() * 8000;
+    const delay = 10000 + Math.random() * 10000;
 
-    // bombTimer = setTimeout(() => {
-    //     if (!isStarted) return;
+    bombTimer = setTimeout(() => {
+        if (!isStarted) return;
 
-    //     if (bombStatus >= 4) {
-    //         bombExplosioned();
-    //         return;
-    //     } else {
-    //         bombStatus += 1;
-    //     }
+        if (bombStatus >= 4) {
+            bombExplosioned();
+            return;
+        } else {
+            bombStatus += 1;
+        }
 
-    //     console.log("💣 bombStatus:", bombStatus);
+        console.log("💣 bombStatus:", bombStatus);
 
-    //     broadcastRoomInfo();
+        broadcastRoomInfo();
 
-    //     scheduleBombTick();
-    // }, delay);
+        scheduleBombTick();
+    }, delay);
 };
 
 setInterval(() => {
