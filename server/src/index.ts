@@ -1,6 +1,9 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import fs from "fs";
+
+const words: Word[] = JSON.parse(fs.readFileSync("src/words/demo.json", "utf8")) as Word[];
 
 type User = {
     displayName: string;
@@ -21,12 +24,6 @@ let bombTimer: NodeJS.Timeout | null = null;
 let currentWord: Word | null = null;
 let bombStatus: number = 0;
 let currentInput = "";
-
-const words: Word[] = [
-    { jp: "ねこ", en: "cat" },
-    { jp: "りんご", en: "apple" },
-    { jp: "三毛ねこ", en: "calico cat" },
-];
 
 const app = express();
 const httpServer = createServer(app);
