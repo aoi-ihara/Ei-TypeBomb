@@ -3,7 +3,9 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
 
-const words: Word[] = JSON.parse(fs.readFileSync("src/words/demo.json", "utf8")) as Word[];
+const words: Word[] = JSON.parse(
+    fs.readFileSync("src/words/demo.json", "utf8"),
+) as Word[];
 
 type User = {
     displayName: string;
@@ -113,7 +115,7 @@ const startGame = () => {
 const scheduleBombTick = () => {
     if (!isStarted) return;
 
-    const delay = 8000 + Math.random() * 8000;
+    const delay = 10000 + Math.random() * 10000;
 
     bombTimer = setTimeout(() => {
         if (!isStarted) return;

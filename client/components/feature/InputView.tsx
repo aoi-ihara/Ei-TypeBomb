@@ -13,6 +13,7 @@ export default function TypingView({
     onChangeInput: (input: string) => void;
     currentInput: string | null;
 }) {
+    const [missCount, setMissCount] = useState(0);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
@@ -52,15 +53,35 @@ export default function TypingView({
         const nextIndex = currentSelection + 1;
 
         if (nextIndex < english.length) {
-            setCurrentSelection(nextIndex);
+            if (nextIndex < missCount + 1) {
+                const input = next.slice(0, nextIndex).join("");
+                const target = english.slice(0, nextIndex);
+
+                if (input !== target) {
+                    setInput(Array(english.length).fill(""));
+                    setCurrentSelection(0);
+                    triggerFailAnimation();
+                    onChangeInput("");
+                } else {
+                    setCurrentSelection(nextIndex);
+                    onChangeInput(next.join(""));
+                }
+            } else {
+                setCurrentSelection(nextIndex);
+                onChangeInput(next.join(""));
+            }
         } else {
             const result = next.join("");
 
             if (result === english) {
                 onSuccess();
 
-                setInput(Array(english.length).fill(""));
+                const next = Array(english.length).fill("");
+                setInput(next);
                 setCurrentSelection(0);
+
+                setMissCount(0);
+                onChangeInput(next.join(""));
             } else {
                 console.log("Wrong answer. Query:", result);
 
@@ -68,6 +89,7 @@ export default function TypingView({
                 setCurrentSelection(0);
                 triggerFailAnimation();
                 onChangeInput("");
+                setMissCount(missCount + 1);
             }
         }
     };
@@ -87,12 +109,53 @@ export default function TypingView({
 
             <div className="w-full flex justify-center">
                 <div
-                    className={`w-fit rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${
+                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${
                         isFailAnimating
                             ? "animate-[wrongAnswer_400ms_ease-out]"
                             : ""
                     }`}
                 >
+                    <div className="absolute top-1 left-1 pointer-events-none">
+                        {[...english].slice(0, missCount).map((char, index) => {
+                            if (char == " ") {
+                                return (
+                                    <button
+                                        key={index}
+                                        className={`font-bold w-4 h-12 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out`}
+                                    >
+                                        <div className="flex items-center justify-center h-full w-full" />
+                                    </button>
+                                );
+                            } else {
+                                return (
+                                    <button
+                                        key={index}
+                                        className={`font-bold opacity-25 w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out $${currentInput == null && "active:scale-95"}`}
+                                        onClick={
+                                            isReadonly
+                                                ? undefined
+                                                : () => {
+                                                      setCurrentSelection(
+                                                          index,
+                                                      );
+
+                                                      requestAnimationFrame(
+                                                          () => {
+                                                              inputRef.current?.focus();
+                                                          },
+                                                      );
+                                                  }
+                                        }
+                                    >
+                                        <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
+                                            {char}
+                                        </div>
+                                    </button>
+                                );
+                            }
+                        })}
+                    </div>
+
                     {[...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
@@ -154,7 +217,6 @@ export default function TypingView({
                                         next[currentSelection] = " ";
                                         setInput(next);
                                         moveToNext(next);
-                                        onChangeInput(next.join(""));
                                     }
                                     setCharInput("");
                                     return;
@@ -166,7 +228,6 @@ export default function TypingView({
 
                                     setInput(next);
                                     moveToNext(next);
-                                    onChangeInput(next.join(""));
                                 }
                                 setCharInput("");
                             }}
