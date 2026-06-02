@@ -1,7 +1,5 @@
 "use client";
 
-import Connect from "@/components/feature/Connect";
-
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
@@ -102,8 +100,8 @@ export default function Page() {
                     } else if (index < roomInfo.length) {
                         const angle = (index / roomInfo.length) * 2 * Math.PI;
                         return {
-                            x: Math.cos(angle) * 50,
-                            y: Math.sin(angle) * 50,
+                            x: Math.cos(angle) * 25,
+                            y: Math.sin(angle) * 25,
                             w: 24,
                             h: 24,
                             opacity: 1,
