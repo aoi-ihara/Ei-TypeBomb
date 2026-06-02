@@ -13,6 +13,7 @@ export default function TypingView({
     onChangeInput: (input: string) => void;
     currentInput: string | null;
 }) {
+    const [missCount, setMissCount] = useState(0);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
@@ -53,14 +54,17 @@ export default function TypingView({
 
         if (nextIndex < english.length) {
             setCurrentSelection(nextIndex);
+            onChangeInput(next.join(""));
         } else {
             const result = next.join("");
 
             if (result === english) {
                 onSuccess();
 
-                setInput(Array(english.length).fill(""));
+                const next = Array(english.length).fill("");
+                setInput(next);
                 setCurrentSelection(0);
+                onChangeInput(next.join(""));
             } else {
                 console.log("Wrong answer. Query:", result);
 
@@ -154,7 +158,6 @@ export default function TypingView({
                                         next[currentSelection] = " ";
                                         setInput(next);
                                         moveToNext(next);
-                                        onChangeInput(next.join(""));
                                     }
                                     setCharInput("");
                                     return;
@@ -166,7 +169,6 @@ export default function TypingView({
 
                                     setInput(next);
                                     moveToNext(next);
-                                    onChangeInput(next.join(""));
                                 }
                                 setCharInput("");
                             }}
