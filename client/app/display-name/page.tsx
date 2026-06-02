@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { RetchedInput } from "@/components/ui/RetchedInput";
-import { Keys } from "@/components/ui/Keys";
 import { useRouter } from "next/navigation";
 
 export default function Loading() {
@@ -21,17 +20,8 @@ export default function Loading() {
             setShowCursor((prev) => !prev);
         }, 500);
 
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "c") {
-                handleContinue();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-
         return () => {
             clearInterval(intervalId);
-            window.removeEventListener("keydown", handleKeyDown);
         };
     });
 
@@ -65,7 +55,6 @@ export default function Loading() {
                     }}
                 >
                     <div className="mr-1">Continue</div>
-                    <Keys keys={["C"]} />
                 </button>
             </div>
         </div>

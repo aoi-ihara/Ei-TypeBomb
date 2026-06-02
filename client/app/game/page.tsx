@@ -89,7 +89,6 @@ export default function Page() {
             setUserPositions(
                 userPositions.map((position, index) => {
                     if (roomInfo.length == 1 && index == 0) {
-                        const angle = (index / roomInfo.length) * 2 * Math.PI;
                         return {
                             x: 0,
                             y: 0,
@@ -100,8 +99,8 @@ export default function Page() {
                     } else if (index < roomInfo.length) {
                         const angle = (index / roomInfo.length) * 2 * Math.PI;
                         return {
-                            x: Math.cos(angle) * 25,
-                            y: Math.sin(angle) * 25,
+                            x: Math.cos(angle) * (room.length * 6 + 25),
+                            y: Math.sin(angle) * (room.length * 6 + 25),
                             w: 24,
                             h: 24,
                             opacity: 1,
@@ -121,10 +120,12 @@ export default function Page() {
 
         socket.on("bombExplosioned", (explosionedUserId) => {
             console.log("FAILED USERNAME", explosionedUserId, "Mine:", userId);
-            if (userIdRef.current == explosionedUserId) {
-                setResult(true);
-            } else {
-                setResult(false);
+            if (!isSpectator) {
+                if (userIdRef.current == explosionedUserId) {
+                    setResult(true);
+                } else {
+                    setResult(false);
+                }
             }
 
             const resultTimer = setTimeout(() => {
@@ -243,7 +244,7 @@ export default function Page() {
                                         {isStarted ? (
                                             currentWord == null ? (
                                                 <div
-                                                    className="font-mono font-bold text-2xl"
+                                                    className="font-mono w-fit font-bold text-2xl"
                                                     data-cursor="text"
                                                 >
                                                     Game started
@@ -341,12 +342,12 @@ export default function Page() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full w-full flex items-center">
+                            <div className="h-full w-full flex justify-center items-center">
                                 {room.length < 6 ? (
                                     isStarted ? (
                                         currentWord == null ? (
                                             <div
-                                                className="font-mono font-bold text-2xl"
+                                                className="font-mono w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
                                                 Game started
