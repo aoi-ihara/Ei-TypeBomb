@@ -167,7 +167,7 @@ export default function Page() {
         socket.on("pulse", (pulseUuid: string) => {
             console.log(pulseUuid);
 
-            if (userIdRef.current !== null) {
+            if (userIdRef.current !== "") {
                 console.log("Sent pulse response📡:", pulseUuid);
                 socket.emit("pulseResponse", {
                     userId: userIdRef.current,
@@ -197,8 +197,13 @@ export default function Page() {
         socketRef.current?.emit("startGame");
     };
 
+    const handleLeave = () => {
+        setUserId("");
+        userIdRef.current = "";
+    };
+
     return (
-        <div className="flex w-full h-full">
+        <div className="flex flex-col md:flex-row w-full h-full">
             {result !== null && (
                 <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
                     <div
@@ -209,17 +214,8 @@ export default function Page() {
                     </div>
                 </div>
             )}
-            <div className="w-full flex">
-                <UsersView
-                    users={room ?? []}
-                    positions={userPositions}
-                    userId={userId}
-                    currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
-                />
-            </div>
             <div
-                className={`w-2xl pr-4 gap-4 py-4 h-full justify-end flex flex-col`}
+                className={`max-w-2xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
             >
                 <div
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
@@ -334,6 +330,20 @@ export default function Page() {
                                                         }}
                                                     >
                                                         Start Game
+                                                    </button>
+                                                </div>
+                                                <div
+                                                    className="rounded-lg w-48 flex"
+                                                    data-cursor="button"
+                                                    data-cursor-shape="1"
+                                                >
+                                                    <button
+                                                        className="items-center text-center justify-center font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                        onClick={() =>
+                                                            handleLeave()
+                                                        }
+                                                    >
+                                                        Leave
                                                     </button>
                                                 </div>
                                             </>
@@ -470,6 +480,16 @@ export default function Page() {
                         </div>
                     )}
                 </div>
+            </div>
+
+            <div className="w-full flex md:order-1">
+                <UsersView
+                    users={room ?? []}
+                    positions={userPositions}
+                    userId={userId}
+                    currentTurn={isStarted ? currentTurn : null}
+                    bombStatus={bombStatus}
+                />
             </div>
         </div>
     );

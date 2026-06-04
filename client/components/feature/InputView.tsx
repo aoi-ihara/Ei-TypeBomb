@@ -29,9 +29,7 @@ export default function TypingView({
 
     useEffect(() => {
         if (!isReadonly) {
-            requestAnimationFrame(() => {
-                inputRef.current?.focus();
-            });
+            inputRef.current?.focus();
         }
     }, [isReadonly]);
 
@@ -89,7 +87,7 @@ export default function TypingView({
                 setCurrentSelection(0);
                 triggerFailAnimation();
                 onChangeInput("");
-                setMissCount(missCount + 1);
+                setMissCount(missCount + 3);
             }
         }
     };
@@ -114,6 +112,11 @@ export default function TypingView({
                             ? "animate-[wrongAnswer_400ms_ease-out]"
                             : ""
                     }`}
+                    onClick={() => {
+                        if (!isReadonly) {
+                            inputRef.current?.focus();
+                        }
+                    }}
                 >
                     <div className="absolute top-1 left-1 pointer-events-none">
                         {[...english].slice(0, missCount).map((char, index) => {
@@ -131,21 +134,11 @@ export default function TypingView({
                                     <button
                                         key={index}
                                         className={`font-bold opacity-25 w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out $${currentInput == null && "active:scale-95"}`}
-                                        onClick={
-                                            isReadonly
-                                                ? undefined
-                                                : () => {
-                                                      setCurrentSelection(
-                                                          index,
-                                                      );
-
-                                                      requestAnimationFrame(
-                                                          () => {
-                                                              inputRef.current?.focus();
-                                                          },
-                                                      );
-                                                  }
-                                        }
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentSelection(index);
+                                            inputRef.current?.focus();
+                                        }}
                                     >
                                         <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                             {char}
@@ -178,17 +171,11 @@ export default function TypingView({
                                     data-cursor-shape={
                                         currentInput == null ? "1" : "2"
                                     }
-                                    onClick={
-                                        isReadonly
-                                            ? undefined
-                                            : () => {
-                                                  setCurrentSelection(index);
-
-                                                  requestAnimationFrame(() => {
-                                                      inputRef.current?.focus();
-                                                  });
-                                              }
-                                    }
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setCurrentSelection(index);
+                                        inputRef.current?.focus();
+                                    }}
                                 >
                                     <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                         {displayChars?.[index] ?? ""}
@@ -272,10 +259,20 @@ export default function TypingView({
                                     onChangeInput(next.join(""));
                                 }
                             }}
-                            className="absolute opacity-0 pointer-events-none"
+                            onFocus={() => {
+                                setTimeout(() => {
+                                    inputRef.current?.scrollIntoView({
+                                        behavior: "smooth",
+                                        block: "center",
+                                    });
+                                }, 300);
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-[0.01] z-10"
                             autoCapitalize="off"
                             autoCorrect="off"
                             spellCheck={false}
+                            inputMode="text"
+                            enterKeyHint="next"
                         />
                     )}
                 </div>
