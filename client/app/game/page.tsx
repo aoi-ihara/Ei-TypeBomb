@@ -214,17 +214,8 @@ export default function Page() {
                     </div>
                 </div>
             )}
-            <div className="w-full flex">
-                <UsersView
-                    users={room ?? []}
-                    positions={userPositions}
-                    userId={userId}
-                    currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
-                />
-            </div>
             <div
-                className={`max-w-2xl w-full px-4 gap-4 pb-10 md:pb-4 pt-4 h-full justify-end flex flex-col`}
+                className={`max-w-2xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
             >
                 <div
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
@@ -489,6 +480,16 @@ export default function Page() {
                         </div>
                     )}
                 </div>
+            </div>
+
+            <div className="w-full flex md:order-1">
+                <UsersView
+                    users={room ?? []}
+                    positions={userPositions}
+                    userId={userId}
+                    currentTurn={isStarted ? currentTurn : null}
+                    bombStatus={bombStatus}
+                />
             </div>
         </div>
     );
