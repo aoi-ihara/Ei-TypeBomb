@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Cursor } from "@/components/ui/Cursor";
+import Cursor from "@/components/ui/Cursor";
 
 export const metadata: Metadata = {
     title: "Ei-Typing",

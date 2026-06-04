@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
-import { usePathname } from "next/navigation";
 
 type Button = {
     x: number;
@@ -21,7 +20,7 @@ type Text = {
     fontSize: number;
 };
 
-export function Cursor() {
+export default function Cursor() {
     const buttons = useRef<Button[]>([]);
     const texts = useRef<Text[]>([]);
 
