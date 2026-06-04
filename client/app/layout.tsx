@@ -3,7 +3,7 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 
 export const metadata: Metadata = {
-    title: "Ei-Typing",
+    title: "Ei-Typing - vgnz93hs",
 };
 
 export default function RootLayout({
