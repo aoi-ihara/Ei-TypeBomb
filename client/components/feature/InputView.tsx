@@ -89,7 +89,7 @@ export default function TypingView({
                 setCurrentSelection(0);
                 triggerFailAnimation();
                 onChangeInput("");
-                setMissCount(missCount + 1);
+                setMissCount(missCount + 3);
             }
         }
     };
@@ -272,7 +272,7 @@ export default function TypingView({
                                     onChangeInput(next.join(""));
                                 }
                             }}
-                            className="absolute opacity-0 pointer-events-none"
+                            className="absolute opacity-0"
                             autoCapitalize="off"
                             autoCorrect="off"
                             spellCheck={false}

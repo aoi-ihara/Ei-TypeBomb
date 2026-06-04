@@ -167,7 +167,7 @@ export default function Page() {
         socket.on("pulse", (pulseUuid: string) => {
             console.log(pulseUuid);
 
-            if (userIdRef.current !== null) {
+            if (userIdRef.current !== "") {
                 console.log("Sent pulse response📡:", pulseUuid);
                 socket.emit("pulseResponse", {
                     userId: userIdRef.current,
@@ -195,6 +195,11 @@ export default function Page() {
 
     const handleStartGame = () => {
         socketRef.current?.emit("startGame");
+    };
+
+    const handleLeave = () => {
+        setUserId("");
+        userIdRef.current = "";
     };
 
     return (
@@ -334,6 +339,20 @@ export default function Page() {
                                                         }}
                                                     >
                                                         Start Game
+                                                    </button>
+                                                </div>
+                                                <div
+                                                    className="rounded-lg w-48 flex"
+                                                    data-cursor="button"
+                                                    data-cursor-shape="1"
+                                                >
+                                                    <button
+                                                        className="items-center text-center justify-center font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                        onClick={() =>
+                                                            handleLeave()
+                                                        }
+                                                    >
+                                                        Leave
                                                     </button>
                                                 </div>
                                             </>
