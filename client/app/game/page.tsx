@@ -198,7 +198,7 @@ export default function Page() {
     };
 
     return (
-        <div className="flex w-full h-full">
+        <div className="flex flex-col md:flex-row w-full h-full">
             {result !== null && (
                 <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
                     <div
@@ -219,7 +219,7 @@ export default function Page() {
                 />
             </div>
             <div
-                className={`w-2xl pr-4 gap-4 py-4 h-full justify-end flex flex-col`}
+                className={`max-w-2xl w-full px-4 gap-4 pb-10 md:pb-4 pt-4 h-full justify-end flex flex-col`}
             >
                 <div
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${

@@ -20,7 +20,7 @@ export default function Home() {
     }, [router]);
 
     return (
-        <div className="flex flex-col justify-center h-full items-center gap-16">
+        <div className="flex flex-col justify-center h-dvh items-center gap-16">
             <div className="flex items-end">
                 <h1 className="font-mono font-bold text-2xl" data-cursor="text">
                     Ei Typing
