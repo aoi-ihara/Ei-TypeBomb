@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+    title: "404 Not Found - vgnz93hs",
+};
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
