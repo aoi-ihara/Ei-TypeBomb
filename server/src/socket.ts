@@ -1,7 +1,7 @@
 import type { Server } from "socket.io";
 import { Events } from "../../shared/events";
-import { room } from "./room";
-import { User } from "../../shared/types";
+import { room, addUser, removeUser } from "./room";
+import type { User, JoinRequest } from "../../shared/types";
 
 export function registerSocket(io: Server) {
     io.on("connection", (socket) => {
@@ -11,22 +11,18 @@ export function registerSocket(io: Server) {
             socket.emit(Events.ROOM_STATE, room);
         });
 
-        socket.on(Events.ROOM_JOIN, (data: User) => {
-            if (room.users.some((user) => user.userId === socket.id)) return;
-
-            const user = {
+        socket.on(Events.ROOM_JOIN, (data: JoinRequest) => {
+            const newUser: User = {
                 userId: socket.id,
                 displayName: data.displayName,
             };
 
-            room.users.push(user);
-
-            socket.emit(Events.USER_REGISTERED, user);
+            addUser(newUser);
             io.emit(Events.ROOM_STATE, room);
         });
 
         socket.on("disconnect", () => {
-            room.users = room.users.filter((user) => user.userId !== socket.id);
+            removeUser(socket.id);
             io.emit(Events.ROOM_STATE, room);
         });
     });

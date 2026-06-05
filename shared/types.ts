@@ -16,3 +16,7 @@ export type GameState = {
     users: User[]; // ユーザー
     remainingTime: number; // 爆弾のステータス変更までの時間
 };
+
+export type JoinRequest = {
+    displayName: string;
+};
