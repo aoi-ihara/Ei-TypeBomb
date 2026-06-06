@@ -1,4 +1,4 @@
-import type { GameState, User } from "../../shared/types";
+import type { GameState, User } from "../types";
 import { words } from "./words";
 
 export const room: GameState = {

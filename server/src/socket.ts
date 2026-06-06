@@ -1,7 +1,7 @@
 import type { Server } from "socket.io";
-import { Events } from "../../shared/events";
+import { Events } from "../events";
 import { room, addUser, removeUser } from "./room";
-import type { User, JoinRequest } from "../../shared/types";
+import type { User, JoinRequest } from "../types";
 
 export function registerSocket(io: Server) {
     io.on("connection", (socket) => {
