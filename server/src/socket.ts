@@ -9,6 +9,7 @@ export function registerSocket(io: Server) {
 
         socket.on(Events.ROOM_WATCH, () => {
             socket.emit(Events.ROOM_STATE, room);
+            console.log("Room Info Emitted");
         });
 
         socket.on(Events.ROOM_JOIN, (data: JoinRequest) => {
@@ -19,11 +20,13 @@ export function registerSocket(io: Server) {
 
             addUser(newUser);
             io.emit(Events.ROOM_STATE, room);
+            console.log("Room Joined");
         });
 
         socket.on("disconnect", () => {
             removeUser(socket.id);
             io.emit(Events.ROOM_STATE, room);
+            console.log("User Disconnected");
         });
     });
 }
