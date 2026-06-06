@@ -157,7 +157,7 @@ setInterval(() => {
     io.emit("pulse", sharedUUID);
     console.log("Pulse sent📡:", sharedUUID);
     previousPulse = sharedUUID;
-}, 2000);
+}, 5000);
 
 io.on("connection", (socket) => {
     const ip = socket.handshake.address;
@@ -178,6 +178,15 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         console.log("Disconnected:", socket.id);
+
+        if (isStarted && room.find((user) => user.userId == userId)) {
+            endGame();
+            room = [];
+        }
+
+        room = room.filter((item) => item.userId !== userId);
+
+        broadcastRoomInfo();
     });
 
     socket.on("joinRoom", (displayName: string) => {

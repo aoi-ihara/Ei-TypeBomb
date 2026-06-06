@@ -143,11 +143,23 @@ export default function Page() {
                         )
                     ) {
                         setResult(false);
+                        setLostDisplayName(
+                            currentRoom.find(
+                                (user) => user.userId == explosionedUserId,
+                            )?.displayName,
+                        );
+                    } else {
+                        setLostDisplayName(
+                            currentRoom.find(
+                                (user) => user.userId == explosionedUserId,
+                            )?.displayName,
+                        );
                     }
                 }
 
                 const resultTimer = setTimeout(() => {
                     setResult(null);
+                    setLostDisplayName(null);
                 }, 3000);
             },
         );
@@ -223,13 +235,15 @@ export default function Page() {
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
-            {result !== null && (
+            {(result !== null || lostDisplayName) && (
                 <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
                     <div
                         data-cursor="text"
                         className="font-bold text-4xl animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]"
                     >
-                        {result === false ? "You Survived" : "You Lose"}
+                        {result === true
+                            ? "You Lose"
+                            : `${lostDisplayName} Lose`}
                     </div>
                 </div>
             )}
