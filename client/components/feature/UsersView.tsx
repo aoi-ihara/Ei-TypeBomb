@@ -1,17 +1,20 @@
-import { User, GameState, Word } from "@/types";
+import { User, GameState } from "@/types";
 
 type Position = {
+    displayName: string;
     x: number;
     y: number;
     w: number;
     h: number;
     opacity: number;
-}
+};
 
 export default function UsersView({
     gameState,
+    myUser,
 }: Readonly<{
     gameState: GameState;
+    myUser: User;
 }>) {
     const bombStyles = [
         {
@@ -41,9 +44,18 @@ export default function UsersView({
         },
     ];
 
-    const style = bombStyles[gameState.bombStatus];
+    const style = bombStyles[gameState.bombStatus ?? 0];
 
-    const positions: Position[] = gameState.users.map(() => {})
+    const positions: Position[] = gameState.users.map((user, index) => {
+        return {
+            displayName: user.displayName,
+            x: Math.cos((index / gameState.users.length) * Math.PI * 2),
+            y: Math.sin((index / gameState.users.length) * Math.PI * 2),
+            w: 32,
+            h: 32,
+            opacity: 0,
+        };
+    });
 
     return (
         <div className="h-full w-full flex items-center justify-center">
@@ -68,7 +80,8 @@ export default function UsersView({
                                     bottom: `calc(${positions[index].h}px + 4px)`,
                                 }}
                             >
-                                {users[index]?.userId == userId && (
+                                {gameState.users[index].userId ==
+                                    myUser.userId && (
                                     <svg
                                         className="w-fit"
                                         xmlns="http://www.w3.org/2000/svg"
@@ -80,7 +93,7 @@ export default function UsersView({
                                         <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
                                     </svg>
                                 )}
-                                {users[index]?.displayName ?? ""}
+                                {gameState.users[index].displayName ?? ""}
                             </div>
                         </div>
                     </div>
@@ -88,15 +101,15 @@ export default function UsersView({
 
                 <div
                     className="absolute flex transition-all duration-500 w-8 h-8 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full animate-[bombBounce_400ms_ease-out]"
-                    key={bombStatus}
+                    key={gameState.bombStatus}
                     style={{
-                        opacity: `${currentTurn !== null ? 1 : 0}`,
-                        left: `calc(${currentTurn !== null ? positions[currentTurn].x + 50 : 50}% - ${currentTurn !== null ? positions[currentTurn].w / 2 + 16 : 16}px)`,
-                        top: `calc(${currentTurn !== null ? positions[currentTurn].y + 50 : 50}% - ${currentTurn !== null ? positions[currentTurn].h / 2 + 8 : 16}px)`,
+                        opacity: `${gameState.status !== "playing" ? 1 : 0}`,
+                        left: `calc(${gameState.status !== "playing" && gameState.bombHolder ? positions[gameState.bombHolder].x + 50 : 50}% - ${gameState.status !== "playing" && gameState.bombHolder ? positions[gameState.bombHolder].w / 2 + 16 : 16}px)`,
+                        top: `calc(${gameState.status !== "playing" && gameState.bombHolder ? positions[gameState.bombHolder].y + 50 : 50}% - ${gameState.status !== "playing" && gameState.bombHolder ? positions[gameState.bombHolder].h / 2 + 8 : 16}px)`,
                     }}
                 >
                     <svg
-                        key={bombStatus}
+                        key={gameState.bombStatus}
                         width="32"
                         height="32"
                         viewBox="0 0 128 128"

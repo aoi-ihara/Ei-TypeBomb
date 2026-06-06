@@ -34,6 +34,7 @@ export default function Client() {
         socket.on("connect", () => {
             console.log("connected:", socket.id);
             setMyUser({ displayName: "vgnz93hs", userId: socket.id as string });
+            socket.emit(Events.ROOM_WATCH);
         });
 
         socket.on(Events.ROOM_STATE, (data: GameState) => {
@@ -54,9 +55,9 @@ export default function Client() {
                     className={`max-w-2xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
                 >
                     <div
-                        className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${"h-fit"} rounded-2xl p-2 w-full`}
+                        className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${!!gameState ? "h-fit" : "h-32"} rounded-2xl p-2 w-full`}
                     >
-                        {!!gameState ? (
+                        {false ? (
                             gameState?.status == "waiting" ? (
                                 <LobbyView gameState={gameState} />
                             ) : (
@@ -69,7 +70,9 @@ export default function Client() {
                 </div>
 
                 <div className="w-full flex md:order-1">
-                    <UsersView gameState={gameState} />
+                    {gameState && myUser && (
+                        <UsersView gameState={gameState} myUser={myUser} />
+                    )}
                 </div>
             </div>
         </>

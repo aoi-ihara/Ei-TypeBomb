@@ -5,7 +5,7 @@ export const room: GameState = {
     status: "waiting",
     bombHolder: null,
     wordIndex: null,
-    bombStatus: 0,
+    bombStatus: null,
     users: [],
     remainingTime: 0,
 };
