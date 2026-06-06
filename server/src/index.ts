@@ -118,7 +118,7 @@ const startGame = () => {
 const scheduleBombTick = () => {
     if (!isStarted) return;
 
-    const delay = 1000 + Math.random() * 1000;
+    const delay = 10000 + Math.random() * 10000;
 
     bombTimer = setTimeout(() => {
         if (!isStarted) return;
