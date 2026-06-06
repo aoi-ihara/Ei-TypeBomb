@@ -7,8 +7,12 @@ import { DEFAULT_SERVER_URL } from "@/constants/config";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { stringifyCookie } from "next/dist/compiled/@edge-runtime/cookies";
+
 import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
+
+import LobbyView from "./LobbyView";
+import LoadingView from "./LoadingView";
 
 export default function Client() {
     const router = useRouter();
@@ -50,12 +54,22 @@ export default function Client() {
                     className={`max-w-2xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
                 >
                     <div
-                        className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${"h-full"} rounded-2xl p-2 w-full`}
-                    ></div>
+                        className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${"h-fit"} rounded-2xl p-2 w-full`}
+                    >
+                        {!!gameState ? (
+                            gameState?.status == "waiting" ? (
+                                <LobbyView gameState={gameState} />
+                            ) : (
+                                <div></div>
+                            )
+                        ) : (
+                            <LoadingView message="Connecting to Server…" />
+                        )}
+                    </div>
                 </div>
 
                 <div className="w-full flex md:order-1">
-                    <div>UserView</div>
+                    <UsersView gameState={gameState} />
                 </div>
             </div>
         </>

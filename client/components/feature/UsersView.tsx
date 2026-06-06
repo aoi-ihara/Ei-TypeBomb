@@ -1,8 +1,4 @@
-type User = {
-    displayName: string;
-    userId: string;
-    pulse: string;
-};
+import { User, GameState, Word } from "@/types";
 
 type Position = {
     x: number;
@@ -10,20 +6,12 @@ type Position = {
     w: number;
     h: number;
     opacity: number;
-};
+}
 
 export default function UsersView({
-    users,
-    positions,
-    userId,
-    currentTurn,
-    bombStatus,
+    gameState,
 }: Readonly<{
-    users: User[];
-    positions: Position[];
-    userId: string;
-    currentTurn: number | null;
-    bombStatus: number;
+    gameState: GameState;
 }>) {
     const bombStyles = [
         {
@@ -53,12 +41,14 @@ export default function UsersView({
         },
     ];
 
-    const style = bombStyles[bombStatus];
+    const style = bombStyles[gameState.bombStatus];
+
+    const positions: Position[] = gameState.users.map(() => {})
 
     return (
         <div className="h-full w-full flex items-center justify-center">
             <div className="w-96 h-96 flex relative">
-                {positions.map((position, index) => (
+                {gameState.users.map((user, index) => (
                     <div
                         key={index}
                         className="absolute flex transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full"
