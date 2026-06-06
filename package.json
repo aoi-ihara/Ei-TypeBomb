@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "cd client && npm run build"
+  },
+  "dependencies": {
+    "next": "16.2.6"
+  }
+}
