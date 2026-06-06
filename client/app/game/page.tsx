@@ -46,6 +46,7 @@ export default function Page() {
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
+    const [lostDisplayName, setLostDisplayName] = useState<string | null>();
     const [userPositions, setUserPositions] = useState<Position[]>(
         Array.from({ length: 6 }, () => ({
             x: 0,
@@ -118,20 +119,38 @@ export default function Page() {
             );
         });
 
-        socket.on("bombExplosioned", (explosionedUserId) => {
-            console.log("FAILED USERNAME", explosionedUserId, "Mine:", userId);
-            if (!isSpectator) {
-                if (userIdRef.current == explosionedUserId) {
-                    setResult(true);
-                } else {
-                    setResult(false);
+        socket.on(
+            "bombExplosioned",
+            ({
+                explosionedUserId,
+                currentRoom,
+            }: {
+                explosionedUserId: string;
+                currentRoom: User[];
+            }) => {
+                console.log(
+                    "FAILED USERNAME",
+                    explosionedUserId,
+                    "Mine:",
+                    userId,
+                );
+                if (!isSpectator) {
+                    if (userIdRef.current == explosionedUserId) {
+                        setResult(true);
+                    } else if (
+                        currentRoom.find(
+                            (item) => userIdRef.current == item.userId,
+                        )
+                    ) {
+                        setResult(false);
+                    }
                 }
-            }
 
-            const resultTimer = setTimeout(() => {
-                setResult(null);
-            }, 3000);
-        });
+                const resultTimer = setTimeout(() => {
+                    setResult(null);
+                }, 3000);
+            },
+        );
 
         socket.on("joined", (myUuid: string) => {
             userIdRef.current = myUuid;
