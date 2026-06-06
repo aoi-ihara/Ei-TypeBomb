@@ -39,7 +39,10 @@ const io = new Server(httpServer, {
 const bombExplosioned = () => {
     console.log("💥 BOMB EXPLODED");
 
-    io.emit("bombExplosioned", room[currentTurn].userId);
+    io.emit("bombExplosioned", {
+        explosionedUserId: room[currentTurn].userId,
+        currentRoom: room,
+    });
 
     isStarted = false;
     currentTurn = 0;
@@ -115,7 +118,7 @@ const startGame = () => {
 const scheduleBombTick = () => {
     if (!isStarted) return;
 
-    const delay = 10000 + Math.random() * 10000;
+    const delay = 1000 + Math.random() * 1000;
 
     bombTimer = setTimeout(() => {
         if (!isStarted) return;
