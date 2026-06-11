@@ -80,6 +80,10 @@ export default function TypingView({
 
                 setMissCount(0);
                 onChangeInput(next.join(""));
+
+                const audio = new Audio("/Blip_select_36.wav");
+                audio.volume = 1;
+                audio.play();
             } else {
                 console.log("Wrong answer. Query:", result);
 
