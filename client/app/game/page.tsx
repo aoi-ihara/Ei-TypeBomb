@@ -41,6 +41,7 @@ export default function Page() {
     });
     const [bombStatus, setBombStatus] = useState<number>(0);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
@@ -60,6 +61,35 @@ export default function Page() {
     const currentTurnUser = room[currentTurn] as User | undefined;
 
     useEffect(() => {
+        audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
+        audioRef.current.loop = true;
+
+        const startAudio = () => {
+            if (audioRef.current) {
+                audioRef.current
+                    .play()
+                    .then(() => {
+                        removeListeners();
+                    })
+                    .catch(() => {});
+            }
+        };
+
+        const addListeners = () => {
+            window.addEventListener("click", startAudio);
+            window.addEventListener("touchstart", startAudio);
+            window.addEventListener("keydown", startAudio);
+        };
+
+        const removeListeners = () => {
+            window.removeEventListener("click", startAudio);
+            window.removeEventListener("touchstart", startAudio);
+            window.removeEventListener("keydown", startAudio);
+        };
+
+        startAudio();
+        addListeners();
+
         const url = localStorage.getItem("server-url") ?? "";
 
         const socket = io(
@@ -213,6 +243,10 @@ export default function Page() {
             socket.disconnect();
             clearInterval(intervalId);
             clearInterval(intervalId2);
+            removeListeners();
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
         };
     }, [router]);
 
