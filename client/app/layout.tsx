@@ -4,6 +4,16 @@ import Cursor from "@/components/ui/Cursor";
 
 export const metadata: Metadata = {
     title: "Ei-Typing - vgnz93hs",
+    icons: {
+        icon: [
+            {
+                url: "/favicon.png",
+                sizes: "any",
+                type: "image/png",
+            },
+        ],
+        apple: "/apple-icon.png",
+    },
 };
 
 export default function RootLayout({
