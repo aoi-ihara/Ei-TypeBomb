@@ -222,7 +222,11 @@ io.on("connection", (socket) => {
                 currentTurn += 1;
             }
             currentInput = "";
+            const previousWord = currentWord;
             currentWord = words[Math.floor(Math.random() * words.length)];
+            do {
+                currentWord = words[Math.floor(Math.random() * words.length)];
+            } while (currentWord == previousWord);
 
             broadcastRoomInfo();
         }
