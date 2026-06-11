@@ -61,6 +61,18 @@ export default function Page() {
     const currentTurnUser = room[currentTurn] as User | undefined;
 
     useEffect(() => {
+        const audio = new Audio("/Blip_select_8.wav");
+        audio.volume = 1;
+        audio.play();
+    }, [room.length]);
+
+    useEffect(() => {
+        const audio = new Audio("/Powerup_1.wav");
+        audio.volume = 1;
+        audio.play();
+    }, [bombStatus]);
+
+    useEffect(() => {
         audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
         audioRef.current.loop = true;
 
@@ -164,6 +176,9 @@ export default function Page() {
                     "Mine:",
                     userId,
                 );
+                const audio = new Audio("/Explosion_7.wav");
+                audio.volume = 1;
+                audio.play();
                 if (!isSpectator) {
                     if (userIdRef.current == explosionedUserId) {
                         setResult(true);
