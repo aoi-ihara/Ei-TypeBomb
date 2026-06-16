@@ -6,13 +6,13 @@ export default async function SettingsPage() {
 
     const backgroundMusic =
         cookieStore.get("background-music")?.value !== "false";
-    const soundEffect = cookieStore.get("sound-effect")?.value !== "false";
+    const sounDeffects = cookieStore.get("sound-effects")?.value !== "false";
 
     const serverUrl = cookieStore.get("server-url")?.value ?? "";
 
     return (
         <Settings
-            initialSoundEffect={soundEffect}
+            initialSounDeffects={sounDeffects}
             initialBackgroundMusic={backgroundMusic}
             initialServerUrl={serverUrl}
         />

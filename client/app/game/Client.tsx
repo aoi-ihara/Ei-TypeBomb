@@ -27,13 +27,13 @@ type Position = {
 
 type Props = {
     initialBackgroundMusic: boolean;
-    initialSoundEffect: boolean;
+    initialSounDeffects: boolean;
     initialServerUrl: string;
 };
 
 export default function Clinet({
     initialBackgroundMusic,
-    initialSoundEffect,
+    initialSounDeffects,
     initialServerUrl,
 }: Props) {
     const [userId, setUserId] = useState("");
@@ -92,7 +92,7 @@ export default function Clinet({
             return;
         }
 
-        if (!initialSoundEffect) return;
+        if (!initialSounDeffects) return;
 
         const audio = blipAudioRef.current;
         if (audio) {
@@ -104,7 +104,7 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [room.length, initialSoundEffect]);
+    }, [room.length, initialSounDeffects]);
 
     const isFirstBombRender = useRef(true);
     useEffect(() => {
@@ -113,7 +113,7 @@ export default function Clinet({
             return;
         }
 
-        if (!initialSoundEffect) return;
+        if (!initialSounDeffects) return;
 
         const audio = powerupAudioRef.current;
         if (audio) {
@@ -125,7 +125,7 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [bombStatus, initialSoundEffect]);
+    }, [bombStatus, initialSounDeffects]);
 
     useEffect(() => {
         audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
@@ -237,7 +237,7 @@ export default function Clinet({
                 explosionedUserId: string;
                 currentRoom: User[];
             }) => {
-                if (initialSoundEffect) {
+                if (initialSounDeffects) {
                     const audio = new Audio("/Explosion_7.wav");
                     audio.volume = 1;
                     audio.play().catch(() => {});
@@ -319,7 +319,7 @@ export default function Clinet({
                 audioRef.current.pause();
             }
         };
-    }, [router, initialBackgroundMusic, initialSoundEffect]);
+    }, [router, initialBackgroundMusic, initialSounDeffects]);
 
     const handleConnect = () => {
         socketRef.current?.emit("joinRoom", displayName);

@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { RetchedInput } from "@/components/ui/RetchedInput";
 
 type Props = {
-    initialSoundEffect: boolean;
+    initialSounDeffects: boolean;
     initialBackgroundMusic: boolean;
     initialServerUrl: string;
 };
 
 export default function Settings({
-    initialSoundEffect,
+    initialSounDeffects,
     initialBackgroundMusic,
     initialServerUrl,
 }: Props) {
@@ -20,7 +20,7 @@ export default function Settings({
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
     );
-    const [soundEffect, setSoundEffect] = useState(initialSoundEffect);
+    const [sounDeffects, setSounDeffects] = useState(initialSounDeffects);
 
     const [serverUrl, setServerUrl] = useState(initialServerUrl);
 
@@ -59,20 +59,20 @@ export default function Settings({
                 </div>
             </div>
             <div className="mb-4 w-full items-center flex justify-between">
-                <div data-cursor="text">Sound Effect</div>
+                <div data-cursor="text">Sound Effects</div>
                 <div data-cursor="button" className="rounded-full flex">
                     <button
-                        className={`w-16 ${soundEffect ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                        className={`w-16 ${sounDeffects ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
                         onClick={() => {
-                            const next = !soundEffect;
+                            const next = !sounDeffects;
 
-                            setSoundEffect(next);
+                            setSounDeffects(next);
 
-                            setCookie("sound-effect", String(next));
+                            setCookie("sound-effects", String(next));
                         }}
                     >
                         <div
-                            className={`h-6 w-8 rounded-full bg-(--color-foreground) ${soundEffect && "ml-6"} transition-all duration-200 ease-out`}
+                            className={`h-6 w-8 rounded-full bg-(--color-foreground) ${sounDeffects && "ml-6"} transition-all duration-200 ease-out`}
                         ></div>
                     </button>
                 </div>
