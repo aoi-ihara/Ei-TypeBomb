@@ -29,7 +29,7 @@ export default function Settings({
     };
 
     return (
-        <div className="flex flex-col h-full items-start pt-16 w-md">
+        <div className="flex flex-col h-full items-start pt-16 px-4 max-w-md w-full">
             <h1
                 data-cursor="text"
                 className="font-mono w-full text-center mb-16 font-bold text-2xl"
