@@ -22,24 +22,13 @@ export default function Home() {
 
     return (
         <div className="flex flex-col justify-center h-dvh items-center gap-16">
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-4 rounded-2xl overflow-clip">
                 <Image
                     src={"/favicon.svg"}
                     alt="page-logo"
                     width={150}
                     height={150}
                 ></Image>
-                {/*<div className="flex items-end">
-                    <h1
-                        className="font-mono font-bold text-2xl"
-                        data-cursor="text"
-                    >
-                        Ei Typing
-                    </h1>
-                    <div
-                        className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
-                    />
-                </div>*/}
             </div>
 
             <div

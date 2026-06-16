@@ -1,79 +1,20 @@
-"use client";
+import { cookies } from "next/headers";
+import Settings from "./Settings";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+export default async function SettingsPage() {
+    const cookieStore = await cookies();
 
-export default function Settings() {
-    const router = useRouter();
-    const [serverUrl, setServerUrl] = useState<string>(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("server-url") || "";
-        }
-        return "";
-    });
-    const [displayName, setDisplayName] = useState<string>(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("display-name") || "";
-        }
-        return "";
-    });
+    const backgroundMusic =
+        cookieStore.get("background-music")?.value !== "false";
+    const soundEffect = cookieStore.get("sound-effect")?.value !== "false";
 
-    const handleSave = (serverUrlInput: string, displayNameInput: string) => {
-        localStorage.setItem("server-url", serverUrlInput);
-        localStorage.setItem("display-name", displayNameInput);
-    };
+    const serverUrl = cookieStore.get("server-url")?.value ?? "";
 
     return (
-        <div className="h-full flex flex-col gap-4 pt-16">
-            <h1 data-cursor="text" className="font-bold">
-                Settings
-            </h1>
-            <div data-cursor="text">Overwrite Connection</div>
-            <div className="flex">
-                <input
-                    placeholder="Server URL"
-                    type="url"
-                    value={serverUrl}
-                    data-cursor="text"
-                    onChange={(e) => {
-                        setServerUrl(e.target.value);
-                        handleSave(e.target.value, displayName);
-                    }}
-                    className="outline-1"
-                />
-                <button
-                    className="bg-cyan-600"
-                    data-cursor="button"
-                    data-cursor-shape="0"
-                    onClick={() => {
-                        setServerUrl("");
-                        handleSave("", displayName);
-                    }}
-                >
-                    Use Default
-                </button>
-            </div>
-
-            <input
-                placeholder="Display Name"
-                type="text"
-                value={displayName}
-                data-cursor="text"
-                onChange={(e) => {
-                    setDisplayName(e.target.value);
-                    handleSave(serverUrl, e.target.value);
-                }}
-                className="outline-1"
-            />
-
-            <button
-                className="bg-cyan-600"
-                data-cursor="button"
-                data-cursor-shape="0"
-                onClick={() => router.push("/")}
-            >
-                Home
-            </button>
-        </div>
+        <Settings
+            initialSoundEffect={soundEffect}
+            initialBackgroundMusic={backgroundMusic}
+            initialServerUrl={serverUrl}
+        />
     );
 }
