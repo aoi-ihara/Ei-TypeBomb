@@ -41,10 +41,15 @@ export default function Page() {
     });
     const [bombStatus, setBombStatus] = useState<number>(0);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
+
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const blipAudioRef = useRef<HTMLAudioElement | null>(null);
+    const powerupAudioRef = useRef<HTMLAudioElement | null>(null);
+
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
+    const [connectionAlert, setConnectionAlert] = useState<null | number>(null);
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
@@ -61,15 +66,49 @@ export default function Page() {
     const currentTurnUser = room[currentTurn] as User | undefined;
 
     useEffect(() => {
-        const audio = new Audio("/Blip_select_8.wav");
-        audio.volume = 1;
-        audio.play();
+        blipAudioRef.current = new Audio("/Blip_select_8.wav");
+        powerupAudioRef.current = new Audio("/Powerup_1.wav");
+
+        return () => {
+            blipAudioRef.current?.pause();
+            powerupAudioRef.current?.pause();
+        };
+    }, []);
+
+    const isFirstRoomRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRoomRender.current) {
+            isFirstRoomRender.current = false;
+            return;
+        }
+        const audio = blipAudioRef.current;
+        if (audio) {
+            audio.currentTime = 0;
+            audio.volume = 1;
+            audio
+                .play()
+                .catch(() =>
+                    console.log("Audio playback prevented by browser policy."),
+                );
+        }
     }, [room.length]);
 
+    const isFirstBombRender = useRef(true);
     useEffect(() => {
-        const audio = new Audio("/Powerup_1.wav");
-        audio.volume = 1;
-        audio.play();
+        if (isFirstBombRender.current) {
+            isFirstBombRender.current = false;
+            return;
+        }
+        const audio = powerupAudioRef.current;
+        if (audio) {
+            audio.currentTime = 0;
+            audio.volume = 1;
+            audio
+                .play()
+                .catch(() =>
+                    console.log("Audio playback prevented by browser policy."),
+                );
+        }
     }, [bombStatus]);
 
     useEffect(() => {
@@ -110,7 +149,6 @@ export default function Page() {
                 : url,
         );
 
-        console.log(url);
         socketRef.current = socket;
 
         const intervalId = setInterval(() => {
@@ -121,7 +159,22 @@ export default function Page() {
             socket.emit("fetch", "");
         }, 1000);
 
-        socket.on("connect", () => {});
+        const showConnectionAlert = (alert: number) => {
+            setConnectionAlert(alert);
+
+            const alertIntervalId = setInterval(() => {
+                setConnectionAlert(null);
+            }, 4000);
+
+            return () => {
+                clearInterval(alertIntervalId);
+            };
+        };
+
+        socket.on("endGame", () => {
+            console.log("game end");
+            showConnectionAlert(1);
+        });
 
         socket.on("roomInfo", (roomInfo: User[]) => {
             setIsConnected(true);
@@ -170,15 +223,10 @@ export default function Page() {
                 explosionedUserId: string;
                 currentRoom: User[];
             }) => {
-                console.log(
-                    "FAILED USERNAME",
-                    explosionedUserId,
-                    "Mine:",
-                    userId,
-                );
                 const audio = new Audio("/Explosion_7.wav");
                 audio.volume = 1;
-                audio.play();
+                audio.play().catch(() => {});
+
                 if (!isSpectator) {
                     if (userIdRef.current == explosionedUserId) {
                         setResult(true);
@@ -212,7 +260,6 @@ export default function Page() {
         socket.on("joined", (myUuid: string) => {
             userIdRef.current = myUuid;
             setUserId(myUuid);
-            console.log("Joined:", myUuid);
         });
 
         socket.on(
@@ -235,22 +282,15 @@ export default function Page() {
                 setCurrentWord(currentWord);
                 setBombStatus(bombStatus);
                 setCurrentInput(currentInput);
-
-                console.log("bomb: ", bombStatus);
             },
         );
 
         socket.on("pulse", (pulseUuid: string) => {
-            console.log(pulseUuid);
-
             if (userIdRef.current !== "") {
-                console.log("Sent pulse response📡:", pulseUuid);
                 socket.emit("pulseResponse", {
                     userId: userIdRef.current,
                     newPulse: pulseUuid,
                 });
-            } else {
-                console.log("not connected");
             }
         });
 
@@ -280,10 +320,29 @@ export default function Page() {
     const handleLeave = () => {
         setUserId("");
         userIdRef.current = "";
+        socketRef.current?.disconnect();
+        socketRef.current?.connect();
     };
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
+            <div
+                className={`${connectionAlert == null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    height="24px"
+                    viewBox="0 -960 960 960"
+                    width="24px"
+                    fill="currentColor"
+                >
+                    <path d="m696-80-56-56 84-84-84-84 56-56 84 84 84-84 56 56-83 84 83 84-56 56-84-83-84 83Zm-216 0q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 10-.5 20t-1.5 20h-81q2-10 2.5-20t.5-20q0-20-2.5-40t-7.5-40H654q3 20 4.5 40t1.5 40v20q0 10-1 20h-80q1-10 1-20v-20q0-20-1.5-40t-4.5-40H386q-3 20-4.5 40t-1.5 40q0 20 1.5 40t4.5 40h174v80H404q12 43 31 82.5t45 75.5q18 0 35.5-2t35.5-4l18 78q-23 5-44.5 7.5T480-80ZM170-400h136q-3-20-4.5-40t-1.5-40q0-20 1.5-40t4.5-40H170q-5 20-7.5 40t-2.5 40q0 20 2.5 40t7.5 40Zm34-240h118q9-37 22.5-72.5T376-782q-55 18-99 54.5T204-640Zm172 462q-18-34-31.5-69.5T322-320H204q29 51 73 87.5t99 54.5Zm28-462h152q-12-43-31-82.5T480-798q-26 36-45 75.5T404-640Zm234 0h118q-29-51-73-87.5T584-782q18 34 31.5 69.5T638-640Z" />
+                </svg>
+                <div className="flex flex-col">
+                    <span className="font-bold">Disconnected</span>A player has
+                    left the room.
+                </div>
+            </div>
             {(result !== null || lostDisplayName) && (
                 <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
                     <div
