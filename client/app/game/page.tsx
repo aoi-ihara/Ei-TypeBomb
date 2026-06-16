@@ -41,7 +41,11 @@ export default function Page() {
     });
     const [bombStatus, setBombStatus] = useState<number>(0);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
+
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const blipAudioRef = useRef<HTMLAudioElement | null>(null);
+    const powerupAudioRef = useRef<HTMLAudioElement | null>(null);
+
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
@@ -62,15 +66,49 @@ export default function Page() {
     const currentTurnUser = room[currentTurn] as User | undefined;
 
     useEffect(() => {
-        const audio = new Audio("/Blip_select_8.wav");
-        audio.volume = 1;
-        audio.play();
+        blipAudioRef.current = new Audio("/Blip_select_8.wav");
+        powerupAudioRef.current = new Audio("/Powerup_1.wav");
+
+        return () => {
+            blipAudioRef.current?.pause();
+            powerupAudioRef.current?.pause();
+        };
+    }, []);
+
+    const isFirstRoomRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRoomRender.current) {
+            isFirstRoomRender.current = false;
+            return;
+        }
+        const audio = blipAudioRef.current;
+        if (audio) {
+            audio.currentTime = 0;
+            audio.volume = 1;
+            audio
+                .play()
+                .catch(() =>
+                    console.log("Audio playback prevented by browser policy."),
+                );
+        }
     }, [room.length]);
 
+    const isFirstBombRender = useRef(true);
     useEffect(() => {
-        const audio = new Audio("/Powerup_1.wav");
-        audio.volume = 1;
-        audio.play();
+        if (isFirstBombRender.current) {
+            isFirstBombRender.current = false;
+            return;
+        }
+        const audio = powerupAudioRef.current;
+        if (audio) {
+            audio.currentTime = 0;
+            audio.volume = 1;
+            audio
+                .play()
+                .catch(() =>
+                    console.log("Audio playback prevented by browser policy."),
+                );
+        }
     }, [bombStatus]);
 
     useEffect(() => {
@@ -111,7 +149,6 @@ export default function Page() {
                 : url,
         );
 
-        console.log(url);
         socketRef.current = socket;
 
         const intervalId = setInterval(() => {
@@ -177,15 +214,10 @@ export default function Page() {
                 explosionedUserId: string;
                 currentRoom: User[];
             }) => {
-                console.log(
-                    "FAILED USERNAME",
-                    explosionedUserId,
-                    "Mine:",
-                    userId,
-                );
                 const audio = new Audio("/Explosion_7.wav");
                 audio.volume = 1;
-                audio.play();
+                audio.play().catch(() => {});
+
                 if (!isSpectator) {
                     if (userIdRef.current == explosionedUserId) {
                         setResult(true);
@@ -219,7 +251,6 @@ export default function Page() {
         socket.on("joined", (myUuid: string) => {
             userIdRef.current = myUuid;
             setUserId(myUuid);
-            console.log("Joined:", myUuid);
         });
 
         socket.on(
@@ -242,22 +273,15 @@ export default function Page() {
                 setCurrentWord(currentWord);
                 setBombStatus(bombStatus);
                 setCurrentInput(currentInput);
-
-                console.log("bomb: ", bombStatus);
             },
         );
 
         socket.on("pulse", (pulseUuid: string) => {
-            console.log(pulseUuid);
-
             if (userIdRef.current !== "") {
-                console.log("Sent pulse response📡:", pulseUuid);
                 socket.emit("pulseResponse", {
                     userId: userIdRef.current,
                     newPulse: pulseUuid,
                 });
-            } else {
-                console.log("not connected");
             }
         });
 
@@ -287,6 +311,8 @@ export default function Page() {
     const handleLeave = () => {
         setUserId("");
         userIdRef.current = "";
+        socketRef.current?.disconnect();
+        socketRef.current?.connect();
     };
 
     return (
