@@ -36,7 +36,7 @@
 :root {
     --color-background: hsl(0, 0%, 100%);
     --color-foreground: hsl(0, 0%, 15%);
-    --color-background-secondary: hsl(0, 0%, 94%);
+    --color-background-secondary: hsl(0, 0%, 90%);
     --color-border: hsl(0, 0%, 0%, 0.25);
 }
 
