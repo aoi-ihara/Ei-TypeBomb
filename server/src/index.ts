@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
+import { s } from "framer-motion/client";
 
 const words: Word[] = JSON.parse(
     fs.readFileSync("src/words/demo.json", "utf8"),
@@ -148,6 +149,7 @@ setInterval(() => {
                 if (isStarted) {
                     endGame();
                     room = [];
+                    io.emit("endGame");
                 }
             }
         }
@@ -182,6 +184,7 @@ io.on("connection", (socket) => {
         if (isStarted && room.find((user) => user.userId == userId)) {
             endGame();
             room = [];
+            socket.broadcast.emit("endGame");
         }
 
         room = room.filter((item) => item.userId !== userId);
