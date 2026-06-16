@@ -157,7 +157,7 @@ setInterval(() => {
     io.emit("pulse", sharedUUID);
     console.log("Pulse sent📡:", sharedUUID);
     previousPulse = sharedUUID;
-}, 5000);
+}, 3000);
 
 io.on("connection", (socket) => {
     const ip = socket.handshake.address;

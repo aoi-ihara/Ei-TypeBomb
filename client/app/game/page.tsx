@@ -45,6 +45,7 @@ export default function Page() {
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
+    const [connectionAlert, setConnectionAlert] = useState<null | number>(null);
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
@@ -121,7 +122,13 @@ export default function Page() {
             socket.emit("fetch", "");
         }, 1000);
 
-        socket.on("connect", () => {});
+        socket.on("connect", () => {
+            setConnectionAlert(0);
+        });
+
+        socket.on("disconnected", () => {
+            setConnectionAlert(1);
+        });
 
         socket.on("roomInfo", (roomInfo: User[]) => {
             setIsConnected(true);
