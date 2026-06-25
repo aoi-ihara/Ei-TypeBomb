@@ -208,6 +208,8 @@ io.on("connection", (socket) => {
     });
 
     socket.on("cuttentInput", (newCurrentInput) => {
+        if (!room[currentTurn]) return;
+
         if (userId == room[currentTurn].userId) {
             currentInput = newCurrentInput;
         }
