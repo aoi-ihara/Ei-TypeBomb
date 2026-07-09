@@ -1,8 +1,8 @@
-# Ei-Typing
+# Ei-TypeBomb
 
 ## Overview
 
-Ei-Typing is a real-time multiplayer typing game built with Next.js, Node.js, and Socket.IO.
+Ei-TypeBomb is a real-time multiplayer typing game built with Next.js, Node.js, and Socket.IO.
 
 ![Screenshot of the home screen](./docs/screenshots/0.png)
 ![Screenshot of the game screen](./docs/screenshots/1.png)
@@ -11,7 +11,7 @@ Ei-Typing is a real-time multiplayer typing game built with Next.js, Node.js, an
 
 **Playing on a PC is strongly recommended.**
 
-1. Visit [ei-typing.vgnz93hs.com](https://ei-typing.vgnz93hs.com)
+1. Visit [ei-typebomb.vgnz93hs.com](https://ei-typebomb.vgnz93hs.com)
 2. Choose a display name.
 3. Click **Join** to enter the room.
 4. Wait for other players to join.
@@ -37,5 +37,5 @@ Ei-Typing is a real-time multiplayer typing game built with Next.js, Node.js, an
 
 ### Deployment
 
-- Vercel: [ei-typing.vgnz93hs.com](https://ei-typing.vgnz93hs.com)
-- Render: [ei-typing.onrender.com](https://ei-typing.onrender.com)
+- Vercel: [ei-typebomb.vgnz93hs.com](https://ei-typebomb.vgnz93hs.com)
+- Render: [ei-typebomb.onrender.com](https://ei-typebomb.onrender.com)
