@@ -4,7 +4,7 @@
 
 Ei-TypeBomb is a real-time multiplayer typing game built with Next.js, Node.js, and Socket.IO.
 
-![Screenshot of the home screen](./docs/screenshots/0.png)
+![Screenshot of the home screen](./docs/screenshots/0.jpeg)
 ![Screenshot of the game screen](./docs/screenshots/1.png)
 
 ## How to Play
