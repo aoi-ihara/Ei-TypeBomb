@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
