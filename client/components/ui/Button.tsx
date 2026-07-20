@@ -59,19 +59,21 @@ export default function Button({
                 : "rounded-lg px-5 py-4";
 
     return (
-        <button
-            type={type}
-            disabled={isDisabled || loading}
-            onClick={onClick}
-            className={`${baseStyles} ${currentVariantStyle} ${paddingStyle}`}
-        >
-            <div
-                className={`transition-all duration-200 ease-out ${
-                    loading ? "gradient-text w-fit" : ""
-                }`}
+        <div className="rounded-lg" data-cursor="button">
+            <button
+                type={type}
+                disabled={isDisabled || loading}
+                onClick={onClick}
+                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle}`}
             >
-                {loading ? loadingText : children}
-            </div>
-        </button>
+                <div
+                    className={`transition-all duration-200 ease-out ${
+                        loading ? "gradient-text w-fit" : ""
+                    }`}
+                >
+                    {loading ? loadingText : children}
+                </div>
+            </button>
+        </div>
     );
 }

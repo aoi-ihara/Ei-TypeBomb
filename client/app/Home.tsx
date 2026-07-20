@@ -50,7 +50,7 @@ export default function Home() {
                             data-cursor-shape="1"
                         >
                             <button
-                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all duration-200 ease-out"
+                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all duration-400 ease-[linear(0,0.009_0.7%,0.038_1.5%,0.145_3.1%,0.763_9.1%,0.99_11.8%,1.13_14.4%,1.17_15.7%,1.194_17.1%,1.2_18.7%,1.186_20.5%,1.01_29.6%,0.977_32.4%,0.961_35.3%,0.963_38.9%,0.997_47.8%,1.008_53.3%,0.999_71.2%,1)]"
                                 onClick={() => setShowPopUp(!showPopUp)}
                             >
                                 <svg
@@ -65,10 +65,10 @@ export default function Home() {
                             </button>
 
                             <div
-                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-200 ease-out`}
+                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
                             >
                                 <div
-                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-200 ease-out`}
+                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
                                 >
                                     <div
                                         className="rounded-sm w-full"
@@ -101,7 +101,7 @@ export default function Home() {
                                     </div>
                                 </div>
                                 <div
-                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-200 ease-out bg-(--color-background-secondary)`}
+                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)] bg-(--color-background-secondary)`}
                                 />
                             </div>
                         </div>
