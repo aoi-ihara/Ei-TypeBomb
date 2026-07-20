@@ -1,6 +1,6 @@
 "use client";
 
-import { AuthShell } from "@/components/layout/Shell";
+import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useState } from "react";
@@ -44,7 +44,7 @@ export default function SignInPage() {
     };
 
     return (
-        <AuthShell title="Sign In">
+        <Shell title="Sign In">
             <Input
                 value={email}
                 font="mono"
@@ -106,6 +106,6 @@ export default function SignInPage() {
                     }}
                 />
             </PopUp>
-        </AuthShell>
+        </Shell>
     );
 }

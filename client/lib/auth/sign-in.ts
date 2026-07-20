@@ -17,15 +17,13 @@ export const signIn = async (
     if (passwordError) return passwordError;
 
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
         options: {
             captchaToken: turnstileToken,
         },
     });
-
-    console.log("auth user", data);
 
     if (error) {
         return error.message;

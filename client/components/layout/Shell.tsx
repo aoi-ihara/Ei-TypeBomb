@@ -2,12 +2,14 @@ type AuthShellProps = {
     title: string;
     children: React.ReactNode;
     className?: string;
+    size?: "large" | "small" | "medium";
 };
 
-export function AuthShell({
+export default function Shell({
     title,
     children,
     className = "flex flex-col gap-4 items-center",
+    size = "medium",
 }: AuthShellProps) {
     return (
         <>
@@ -17,7 +19,11 @@ export function AuthShell({
             >
                 {title}
             </h1>
-            <div className={`max-w-md w-full ${className}`}>{children}</div>
+            <div
+                className={`px-4 max-w-${size == "medium" ? "md" : size == "large" ? "2xl" : "xs"} w-full ${className}`}
+            >
+                {children}
+            </div>
         </>
     );
 }
