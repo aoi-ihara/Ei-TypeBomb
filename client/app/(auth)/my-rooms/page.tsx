@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getSession } from "@/lib/auth/session";
 import { useRouter } from "next/navigation";
 import { getMyRooms } from "@/lib/room/get";
 import { Room } from "@/type";
@@ -47,12 +46,40 @@ export default function Profile() {
                                 data-cursor="button"
                                 className="rounded-lg"
                             >
-                                <button className="flex w-full active:scale-95 transition-all duration-200 ease-out flex-col gap-2 px-4 py-3 h-64 rounded-lg bg-(--color-background-secondary)">
-                                    <div
-                                        className="font-bold flex font-mono text-lg"
-                                        data-cursor="text"
-                                    >
-                                        {room.title}
+                                <button
+                                    className="flex w-full active:scale-95 transition-all duration-200 ease-out flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
+                                    onClick={() =>
+                                        router.push(`/my-rooms/${room.id}`)
+                                    }
+                                >
+                                    <div className="flex gap-1 items-center">
+                                        {room.password ? (
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                height="20px"
+                                                viewBox="0 -960 960 960"
+                                                width="20px"
+                                                fill="currentColor"
+                                            >
+                                                <path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm296.5-223.5Q560-327 560-360t-23.5-56.5Q513-440 480-440t-56.5 23.5Q400-393 400-360t23.5 56.5Q447-280 480-280t56.5-23.5ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z" />
+                                            </svg>
+                                        ) : (
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                height="20px"
+                                                viewBox="0 -960 960 960"
+                                                width="20px"
+                                                fill="currentColor"
+                                            >
+                                                <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-7-.5-14.5T799-507q-5 29-27 48t-52 19h-80q-33 0-56.5-23.5T560-520v-40H400v-80q0-33 23.5-56.5T480-720h40q0-23 12.5-40.5T563-789q-20-5-40.5-8t-42.5-3q-134 0-227 93t-93 227h200q66 0 113 47t47 113v40H400v110q20 5 39.5 7.5T480-160Z" />
+                                            </svg>
+                                        )}
+                                        <div
+                                            className="font-bold flex font-mono text-lg"
+                                            data-cursor="text"
+                                        >
+                                            {room.title}
+                                        </div>
                                     </div>
                                     <div className="flex">
                                         {room.explanation}
