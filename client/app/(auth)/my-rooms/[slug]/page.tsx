@@ -21,7 +21,6 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { updateRoomFromId } from "@/lib/room/update";
 
 type Word = {
     jp: string;
@@ -93,22 +92,6 @@ export default function Page({
         setWords(arrayMove(words, oldIndex, newIndex));
     };
 
-    const clearPassword = async () => {
-        const updateError = await updateRoomFromId({
-            id: slug,
-            password: null,
-        });
-
-        if (updateError) {
-            console.error(updateError);
-            return;
-        }
-
-        setPassword("");
-
-        router.refresh();
-    };
-
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
@@ -145,13 +128,36 @@ export default function Page({
             <div className={`px-4 flex flex-col max-w-2xl gap-4 w-full pb-64`}>
                 {id ? (
                     <>
-                        <input
-                            className={`w-full outline-none text-2xl mt-16 mb-8 font-bold font-mono`}
-                            value={title}
-                            placeholder="Room Title"
-                            data-cursor="text"
-                            onChange={(e) => setTitle(e.target.value)}
-                        />
+                        <div className="flex mt-16 mb-8 gap-4 items-center">
+                            {password ? (
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    height="20px"
+                                    viewBox="0 -960 960 960"
+                                    width="20px"
+                                    fill="currentColor"
+                                >
+                                    <path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm296.5-223.5Q560-327 560-360t-23.5-56.5Q513-440 480-440t-56.5 23.5Q400-393 400-360t23.5 56.5Q447-280 480-280t56.5-23.5ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z" />
+                                </svg>
+                            ) : (
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    height="20px"
+                                    viewBox="0 -960 960 960"
+                                    width="20px"
+                                    fill="currentColor"
+                                >
+                                    <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-7-.5-14.5T799-507q-5 29-27 48t-52 19h-80q-33 0-56.5-23.5T560-520v-40H400v-80q0-33 23.5-56.5T480-720h40q0-23 12.5-40.5T563-789q-20-5-40.5-8t-42.5-3q-134 0-227 93t-93 227h200q66 0 113 47t47 113v40H400v110q20 5 39.5 7.5T480-160Z" />
+                                </svg>
+                            )}
+                            <input
+                                className={`w-full outline-none text-2xl font-bold font-mono`}
+                                value={title}
+                                placeholder="Room Title"
+                                data-cursor="text"
+                                onChange={(e) => setTitle(e.target.value)}
+                            />
+                        </div>
 
                         <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <Input
@@ -365,6 +371,7 @@ export default function Page({
                                     ])
                                 }
                                 className="w-full"
+                                padding="large"
                             >
                                 Add
                             </Button>

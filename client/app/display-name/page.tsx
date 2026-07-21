@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RetchedInput } from "@/components/ui/RetchedInput";
 import { useRouter } from "next/navigation";
+import Button from "@/components/ui/Button";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
@@ -26,8 +27,8 @@ export default function Loading() {
     });
 
     return (
-        <div className="flex flex-col w-fit h-full gap-8 items-center pt-16">
-            <div className="flex items-end">
+        <div className="flex flex-col w-full max-w-md gap-4 items-center pt-16">
+            <div className="flex items-end mb-4">
                 <h1 className="font-mono font-bold text-2xl" data-cursor="text">
                     Choose a Display Name
                 </h1>
@@ -43,20 +44,17 @@ export default function Loading() {
                 />
             </div>
 
-            <div
-                className="rounded-lg w-48 flex"
-                data-cursor="button"
-                data-cursor-shape={!!displayName ? "0" : "2"}
+            <Button
+                onClick={() => {
+                    if (displayName) handleContinue();
+                }}
+                padding="large"
+                className="w-full"
+                variant="primary"
+                disabled={!displayName}
             >
-                <button
-                    className={`text-lg ${!displayName ? "opacity-50" : "active:scale-95"} items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white flex transition-all duration-200 ease-out`}
-                    onClick={() => {
-                        if (displayName) handleContinue();
-                    }}
-                >
-                    <div className="mr-1">Continue</div>
-                </button>
-            </div>
+                Continue
+            </Button>
         </div>
     );
 }

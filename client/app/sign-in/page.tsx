@@ -66,37 +66,22 @@ export default function SignInPage() {
                 }}
             />
             {error && <a className="text-red-500">{error}</a>}
-            <div
-                className="rounded-lg w-full"
-                data-cursor="button"
-                data-cursor-shape={loading ? "2" : "0"}
+            <Button
+                onClick={() => {
+                    setLoading(true);
+                    setError("");
+                    setTurnstile(true);
+                }}
+                padding="middle"
+                loading={loading}
+                className="w-full"
+                variant="primary"
             >
-                <Button
-                    onClick={() => {
-                        setLoading(true);
-                        setError("");
-                        setTurnstile(true);
-                    }}
-                    padding="middle"
-                    loading={loading}
-                    className="w-full"
-                    variant="primary"
-                >
-                    Sign In
-                </Button>
-            </div>
-            <div
-                className="rounded-lg w-full"
-                data-cursor="button"
-                data-cursor-shape={loading ? "2" : "0"}
-            >
-                <Button
-                    className="w-full"
-                    onClick={() => router.push("/sign-up")}
-                >
-                    Create rcAccount
-                </Button>
-            </div>
+                Sign In
+            </Button>
+            <Button className="w-full" onClick={() => router.push("/sign-up")}>
+                Create rcAccount
+            </Button>
             <PopUp show={turnstile}>
                 <Turnstile
                     siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}

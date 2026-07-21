@@ -22,7 +22,6 @@ export default function Page({
     const [error, setError] = useState("");
     const [isFournd, setIsFound] = useState(true);
     const [conformPassword, setConformPassword] = useState("");
-    const [id, setId] = useState<string | null>(null);
     const [isPrivate, setIsPrivate] = useState(false);
 
     const handleUpdate = async () => {
