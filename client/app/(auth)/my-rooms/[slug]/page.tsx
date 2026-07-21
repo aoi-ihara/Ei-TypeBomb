@@ -21,7 +21,6 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { updateRoomFromId } from "@/lib/room/update";
 
 type Word = {
     jp: string;
@@ -91,22 +90,6 @@ export default function Page({
         const newIndex = words.findIndex((w) => w.id === over.id);
 
         setWords(arrayMove(words, oldIndex, newIndex));
-    };
-
-    const clearPassword = async () => {
-        const updateError = await updateRoomFromId({
-            id: slug,
-            password: null,
-        });
-
-        if (updateError) {
-            console.error(updateError);
-            return;
-        }
-
-        setPassword("");
-
-        router.refresh();
     };
 
     useEffect(() => {
