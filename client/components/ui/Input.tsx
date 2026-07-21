@@ -47,7 +47,7 @@ export default function Input({
 
     return (
         <div
-            className={`relative transition-all duration-200 ease-out ${className}`}
+            className={`relative transition-all duration-200 ease-out ${className} ${disabled && "opacity-50 pointer-events-none"}`}
         >
             <input
                 id={inputId}
@@ -57,8 +57,8 @@ export default function Input({
                 onChange={onChange}
                 max={max}
                 min={min}
-                data-cursor="text"
-                disabled={disabled}
+                data-cursor={disabled ? "button" : "text"}
+                data-cursor-shape="2"
                 autoComplete={autoComplete}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}

@@ -62,13 +62,12 @@ export default function Button({
         <div
             className="rounded-lg"
             data-cursor="button"
-            data-cursor-shape={variant == "text" ? "1" : "0"}
+            data-cursor-shape={disabled ? "2" : variant == "text" ? "1" : "0"}
         >
             <button
                 type={type}
-                disabled={isDisabled || loading}
                 onClick={onClick}
-                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle}`}
+                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"}`}
             >
                 <div
                     className={`transition-all duration-200 ease-out ${

@@ -93,6 +93,22 @@ export default function Page({
         setWords(arrayMove(words, oldIndex, newIndex));
     };
 
+    const clearPassword = async () => {
+        const updateError = await updateRoomFromId({
+            id: slug,
+            password: null,
+        });
+
+        if (updateError) {
+            console.error(updateError);
+            return;
+        }
+
+        setPassword("");
+
+        router.refresh();
+    };
+
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
@@ -126,7 +142,7 @@ export default function Page({
 
     return (
         <>
-            <div className={`px-4 flex flex-col max-w-2xl gap-4 w-full`}>
+            <div className={`px-4 flex flex-col max-w-2xl gap-4 w-full pb-64`}>
                 {id ? (
                     <>
                         <input
@@ -137,7 +153,7 @@ export default function Page({
                             onChange={(e) => setTitle(e.target.value)}
                         />
 
-                        <div className="w-full grid gap-5 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <Input
                                 onChange={(e) => setExplanation(e.target.value)}
                                 label="Explanation"
@@ -145,7 +161,7 @@ export default function Page({
                             />
                         </div>
 
-                        <div className="w-full grid gap-5 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <div className="flex flex-col gap-4">
                                 <Input
                                     onChange={(e) =>
@@ -168,31 +184,16 @@ export default function Page({
                                     </div>
                                 )}
                             </div>
-                            {password ? (
-                                <Button
-                                    padding="large"
-                                    className="w-full"
-                                    onClick={() =>
-                                        router.push(
-                                            `/my-rooms/${slug}/password`,
-                                        )
-                                    }
-                                >
-                                    Change Password
-                                </Button>
-                            ) : (
-                                <Button
-                                    padding="large"
-                                    className="w-full"
-                                    onClick={() =>
-                                        router.push(
-                                            `/my-rooms/${slug}/password`,
-                                        )
-                                    }
-                                >
-                                    Set Password
-                                </Button>
-                            )}
+
+                            <Button
+                                padding="large"
+                                className="w-full"
+                                onClick={() =>
+                                    router.push(`/my-rooms/${slug}/visibility`)
+                                }
+                            >
+                                Change Visibility
+                            </Button>
                         </div>
 
                         <div
@@ -218,7 +219,7 @@ export default function Page({
                                             id={word.id}
                                         >
                                             <div className="flex gap-4 w-full">
-                                                <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                                <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                     <div className="flex flex-col gap-4">
                                                         <Input
                                                             label="Label"
@@ -248,8 +249,13 @@ export default function Page({
                                                         {word.jp.length >
                                                             32 && (
                                                             <div className="text-red-500">
-                                                                Explanation is
-                                                                too long.
+                                                                It is too long.
+                                                            </div>
+                                                        )}
+                                                        {!word.jp && (
+                                                            <div className="text-red-500">
+                                                                This field is
+                                                                required.
                                                             </div>
                                                         )}
                                                     </div>
@@ -297,6 +303,18 @@ export default function Page({
                                                                     and -.
                                                                 </div>
                                                             )}
+                                                        {word.en.length >
+                                                            32 && (
+                                                            <div className="text-red-500">
+                                                                It is too long.
+                                                            </div>
+                                                        )}
+                                                        {!word.en && (
+                                                            <div className="text-red-500">
+                                                                This field is
+                                                                required.
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 

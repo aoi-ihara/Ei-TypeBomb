@@ -24,7 +24,7 @@ export const updateRoomFromId = async (room: Room) => {
         if (validatorResult) return validatorResult;
     }
 
-    if (room.password) {
+    if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
 
         if (validatorResult) return validatorResult;

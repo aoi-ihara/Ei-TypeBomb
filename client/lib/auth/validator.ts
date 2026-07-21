@@ -1,3 +1,5 @@
+import type { Word } from "@/type";
+
 export const validateEmail = (email?: string) => {
     const MAX_EMAIL_LENGTH = 254;
 
@@ -28,6 +30,31 @@ export const validateEmail = (email?: string) => {
 
     if (local.length === 0 || dot <= 0 || dot === domain.length - 1) {
         return "Email is wrong";
+    }
+
+    return null;
+};
+
+export const validateWords = (words?: Word[]) => {
+    const MAX_WORD_LENGTH = 32;
+    const MAX_ARRAY_LENGTH = 512;
+
+    if (!words || words.length === 0) {
+        return "Words are required";
+    }
+
+    if (words.length > MAX_ARRAY_LENGTH) {
+        return "Too many words";
+    }
+
+    for (const item of words) {
+        if (item.jp.length > MAX_WORD_LENGTH) {
+            return "Japanese text is too long";
+        }
+
+        if (item.en.length > MAX_WORD_LENGTH) {
+            return "English text is too long";
+        }
     }
 
     return null;

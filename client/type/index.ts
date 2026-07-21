@@ -10,7 +10,7 @@ export type Room = {
     explanation?: string;
     words?: Word[];
     maxPlayers?: number;
-    password?: string;
+    password?: string | null;
     createdAt?: string;
     updatedAt?: string;
 };
