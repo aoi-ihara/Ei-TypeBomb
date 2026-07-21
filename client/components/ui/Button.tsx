@@ -36,7 +36,7 @@ export default function Button({
     disabled = false,
     loading = false,
     loadingText = "Loading…",
-    className = "",
+    className = "w-fit",
     type = "button",
     variant = "default",
     padding = "middle",
@@ -59,7 +59,11 @@ export default function Button({
                 : "rounded-lg px-5 py-4";
 
     return (
-        <div className="rounded-lg" data-cursor="button">
+        <div
+            className="rounded-lg"
+            data-cursor="button"
+            data-cursor-shape={variant == "text" ? "1" : "0"}
+        >
             <button
                 type={type}
                 disabled={isDisabled || loading}

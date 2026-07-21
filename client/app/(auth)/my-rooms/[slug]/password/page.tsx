@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
+import { useRouter } from "next/navigation";
 
 export default function Page({
     params,
@@ -14,6 +15,8 @@ export default function Page({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = use(params);
+
+    const router = useRouter();
 
     const [newPassword, setNewPassword] = useState("");
     const [error, setError] = useState("");
@@ -34,6 +37,7 @@ export default function Page({
         const error = await updateRoomFromId(request);
 
         if (error) setError(error);
+        else router.push(`/my-rooms/${slug}`);
     };
 
     if (error) {
@@ -41,11 +45,11 @@ export default function Page({
     }
 
     return (
-        <Shell title="Change Password" className="flex flex-col gap-4">
+        <Shell title="Change Room Password" className="flex flex-col gap-4">
             <Input
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                label="New Password"
+                label="New Room Password"
                 type="password"
             />
 
