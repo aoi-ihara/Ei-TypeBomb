@@ -21,13 +21,12 @@ const variantStyles = (
     variant: ButtonVariant,
     loading: boolean,
     disabled: boolean,
-    className: string,
 ) => {
     return variant == "text"
-        ? `${!loading && "underline"} w-fit px-1 rounded-md active:no-underline active:scale-95 ${className ?? ""}`
+        ? `${!loading && "underline"} w-fit px-1 rounded-md active:no-underline active:scale-95`
         : variant == "default" || loading
-          ? `bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold ${className ?? ""}`
-          : `bg-cyan-600 text-(--color-background) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold ${className ?? ""}`;
+          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
+          : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
 };
 
 export default function Button({
@@ -41,14 +40,7 @@ export default function Button({
     variant = "default",
     padding = "middle",
 }: ButtonProps) {
-    const isDisabled = disabled || loading;
-
-    const currentVariantStyle = variantStyles(
-        variant,
-        loading,
-        disabled,
-        className,
-    );
+    const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant == "text"
             ? ""
@@ -60,7 +52,7 @@ export default function Button({
 
     return (
         <div
-            className="rounded-lg"
+            className={`rounded-lg ${className}`}
             data-cursor="button"
             data-cursor-shape={disabled ? "2" : variant == "text" ? "1" : "0"}
         >
