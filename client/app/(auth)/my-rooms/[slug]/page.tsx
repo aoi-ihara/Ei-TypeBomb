@@ -1,12 +1,66 @@
 "use client";
 
+import {
+    DndContext,
+    PointerSensor,
+    closestCenter,
+    useSensor,
+    useSensors,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use } from "react";
 import { getRoomFromId } from "@/lib/room/get";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound } from "next/navigation";
 import { useRouter } from "next/navigation";
-import type { Word } from "@/type";
+
+type Word = {
+    jp: string;
+    en: string;
+};
+
+type WordWithId = Word & {
+    id: string;
+};
+
+function SortableItem({
+    id,
+    children,
+}: {
+    id: string;
+    children: React.ReactNode;
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition } =
+        useSortable({ id });
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                transform: CSS.Transform.toString(transform),
+                transition,
+            }}
+            className="flex gap-4"
+        >
+            <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing flex items-center px-2 select-none"
+            >
+                ☰
+            </div>
+
+            {children}
+        </div>
+    );
+}
 
 export default function Page({
     params,
@@ -21,7 +75,18 @@ export default function Page({
     const [explanation, setExplanation] = useState("");
     const [title, setTitle] = useState("");
     const [id, setId] = useState<string | null>(null);
-    const [words, setWords] = useState<Word[] | null>(null);
+    const [words, setWords] = useState<WordWithId[] | null>(null);
+
+    const sensors = useSensors(useSensor(PointerSensor));
+
+    const handleDragEnd = ({ active, over }: any) => {
+        if (!over || active.id === over.id || !words) return;
+
+        const oldIndex = words.findIndex((w) => w.id === active.id);
+        const newIndex = words.findIndex((w) => w.id === over.id);
+
+        setWords(arrayMove(words, oldIndex, newIndex));
+    };
 
     useEffect(() => {
         const getRoomInfo = async () => {
@@ -35,7 +100,14 @@ export default function Page({
             setId(room.id);
             setTitle(room.title ?? "");
             setExplanation(room.explanation ?? "");
-            setWords(room.words ?? []);
+
+            const wordsWithId: WordWithId[] = (room.words ?? []).map(
+                (w: Word) => ({
+                    ...w,
+                    id: crypto.randomUUID(),
+                }),
+            );
+            setWords(wordsWithId);
         };
 
         getRoomInfo();
@@ -85,95 +157,126 @@ export default function Page({
                     Words
                 </div>
 
-                {words &&
-                    words.map((word, index) => (
-                        <div className="flex gap-4" key={index}>
-                            <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
-                                <div className="flex flex-col gap-4">
-                                    <Input
-                                        label="Label"
-                                        value={word.jp}
-                                        onChange={(e) => {
-                                            const newWords = words.map(
-                                                (w, i) =>
-                                                    i === index
-                                                        ? {
-                                                              ...w,
-                                                              jp: e.target
-                                                                  .value,
-                                                          }
-                                                        : w,
-                                            );
-                                            setWords(newWords);
-                                        }}
-                                    />
-                                    {word.jp.length > 32 && (
-                                        <div className="text-red-500">
-                                            Explanation is too long.
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex flex-col gap-4">
-                                    <Input
-                                        label="Correct Answer"
-                                        font="mono"
-                                        value={word.en}
-                                        onChange={(e) => {
-                                            const newWords = words.map(
-                                                (w, i) =>
-                                                    i === index
-                                                        ? {
-                                                              ...w,
-                                                              en: e.target
-                                                                  .value,
-                                                          }
-                                                        : w,
-                                            );
-                                            setWords(newWords);
-                                        }}
-                                    />
-                                    {!/^[a-zA-Z0-9.,?!\- ]+$/.test(word.en) &&
-                                        word.en && (
-                                            <div className="text-red-500">
-                                                You can use only letters,
-                                                numbers, spaces, and the
-                                                following punctuation: ., ,, !,
-                                                ?, and -.
+                {words && (
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={words.map((w) => w.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {words.map((word, index) => (
+                                <SortableItem key={word.id} id={word.id}>
+                                    <div className="flex gap-4 w-full">
+                                        <div className="grid gap-5 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                            <div className="flex flex-col gap-4">
+                                                <Input
+                                                    label="Label"
+                                                    value={word.jp}
+                                                    onChange={(e) => {
+                                                        const newWords =
+                                                            words.map((w, i) =>
+                                                                i === index
+                                                                    ? {
+                                                                          ...w,
+                                                                          jp: e
+                                                                              .target
+                                                                              .value,
+                                                                      }
+                                                                    : w,
+                                                            );
+                                                        setWords(newWords);
+                                                    }}
+                                                />
+                                                {word.jp.length > 32 && (
+                                                    <div className="text-red-500">
+                                                        Explanation is too long.
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                </div>
-                            </div>
+                                            <div className="flex flex-col gap-4">
+                                                <Input
+                                                    label="Correct Answer"
+                                                    font="mono"
+                                                    value={word.en}
+                                                    onChange={(e) => {
+                                                        const newWords =
+                                                            words.map((w, i) =>
+                                                                i === index
+                                                                    ? {
+                                                                          ...w,
+                                                                          en: e
+                                                                              .target
+                                                                              .value,
+                                                                      }
+                                                                    : w,
+                                                            );
+                                                        setWords(newWords);
+                                                    }}
+                                                />
+                                                {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
+                                                    word.en,
+                                                ) &&
+                                                    word.en && (
+                                                        <div className="text-red-500">
+                                                            You can use only
+                                                            letters, numbers,
+                                                            spaces, and the
+                                                            following
+                                                            punctuation: ., ,,
+                                                            !, ?, and -.
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        </div>
 
-                            <div>
-                                <Button
-                                    onClick={() => {
-                                        const newWords = words.filter(
-                                            (w, i) => i !== index,
-                                        );
-                                        setWords(newWords);
-                                    }}
-                                    variant="text"
-                                    className="h-full"
-                                >
-                                    <div className="w-13 h-14 flex justify-center items-center">
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            height="32px"
-                                            viewBox="0 -960 960 960"
-                                            width="32px"
-                                            fill="currentColor"
-                                        >
-                                            <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z" />
-                                        </svg>
+                                        <div>
+                                            <Button
+                                                onClick={() => {
+                                                    const newWords =
+                                                        words.filter(
+                                                            (_, i) =>
+                                                                i !== index,
+                                                        );
+                                                    setWords(newWords);
+                                                }}
+                                                variant="text"
+                                                className="h-full"
+                                            >
+                                                <div className="w-13 h-14 flex justify-center items-center">
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        height="32px"
+                                                        viewBox="0 -960 960 960"
+                                                        width="32px"
+                                                        fill="currentColor"
+                                                    >
+                                                        <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z" />
+                                                    </svg>
+                                                </div>
+                                            </Button>
+                                        </div>
                                     </div>
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
+                                </SortableItem>
+                            ))}
+                        </SortableContext>
+                    </DndContext>
+                )}
 
                 {words && (
                     <Button
-                        onClick={() => setWords([...words, { en: "", jp: "" }])}
+                        onClick={() =>
+                            setWords([
+                                ...words,
+                                {
+                                    id: crypto.randomUUID(),
+                                    en: "",
+                                    jp: "",
+                                },
+                            ])
+                        }
                         className="w-full"
                     >
                         Add
