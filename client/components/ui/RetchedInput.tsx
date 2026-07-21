@@ -26,7 +26,7 @@ export const RetchedInput = ({
     return (
         <div className={`relative transition-all duration-200 ease-out`}>
             <input
-                className={`w-full appearance-none outline-none px-5 py-4 rounded-2xl shadow-[inset_0_0_0_1px_var(--color-border)] focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] transition-shadow duration-200 ease-out ${className ?? ""}`}
+                className={`w-full appearance-none outline-none px-5 py-4 rounded-lg shadow-[inset_0_0_0_1px_var(--color-border)] focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] transition-shadow duration-200 ease-out ${className ?? ""}`}
                 value={value}
                 onChange={onChange}
                 type={type ?? "text"}

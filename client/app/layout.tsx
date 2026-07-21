@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
+import { Footer } from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
     title: "Ei-TypeBomb - vgnz93hs",
@@ -26,10 +27,8 @@ export default function RootLayout({
             <body className="min-h-full flex flex-col">
                 <main className="flex flex-col h-dvh w-full items-center">
                     {children}
-                    <div className="text-xs w-full pointer-events-none flex fixed left-4 opacity-25 justify-center md:justify-start bottom-3">
-                        <div data-cursor="text" className="flex w-fit">
-                            © 2026 vgnz93hs. All rights reserved.
-                        </div>
+                    <div className="text-xs w-full flex fixed left-4 opacity-50 justify-center md:justify-start bottom-3">
+                        <Footer />
                     </div>
                 </main>
 

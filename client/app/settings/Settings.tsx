@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RetchedInput } from "@/components/ui/RetchedInput";
+import Shell from "@/components/layout/Shell";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -29,13 +30,7 @@ export default function Settings({
     };
 
     return (
-        <div className="flex flex-col h-full items-start pt-16 px-4 max-w-md w-full">
-            <h1
-                data-cursor="text"
-                className="font-mono w-full text-center mb-16 font-bold text-2xl"
-            >
-                Settings
-            </h1>
+        <Shell title="Settings" className="items-start flex flex-col">
             <div data-cursor="text" className="font-bold text-lg mb-4">
                 Sound
             </div>
@@ -127,6 +122,6 @@ export default function Settings({
                     </button>
                 </div>
             </div>
-        </div>
+        </Shell>
     );
 }
