@@ -11,7 +11,7 @@ export const updateRoomFromId = async (room: Room) => {
 
     const supabase = await createAdminClient();
 
-    const { selectError, error } = await supabase
+    const { data, error: selectError } = await supabase
         .from("ei_typebomb_rooms")
         .select("user_id")
         .eq("id", room.id)
@@ -22,17 +22,17 @@ export const updateRoomFromId = async (room: Room) => {
         return;
     }
 
-    if (!selectError) {
+    if (!data) {
         console.error("Counld not find this room.");
         return;
     }
 
-    if (selectError.user_id !== userId) {
+    if (data.user_id !== userId) {
         console.error("You do not have access to this room.");
         return;
     }
 
-    const { updateError } = await supabase
+    const { error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update({
             id: room.id,
@@ -57,4 +57,8 @@ export const updateRoomFromId = async (room: Room) => {
             updated_at: Date.now(),
         })
         .eq("id", room.id);
+
+    if (updateError) {
+        console.error(updateError.message);
+    }
 };
