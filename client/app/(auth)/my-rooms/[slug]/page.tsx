@@ -1,8 +1,6 @@
 "use client";
 
-import Shell from "@/components/layout/Shell";
 import { useState, useEffect, use } from "react";
-import type { Room } from "@/type";
 import { getRoomFromId } from "@/lib/room/get";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
