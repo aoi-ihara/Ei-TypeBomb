@@ -52,6 +52,48 @@ export const validatePassword = (password?: string) => {
     return null;
 };
 
+export const validateMaxPlayers = (maxPlayers?: number) => {
+    const MAX_MAX_PLAYERS_LENGTH = 16;
+
+    if (!maxPlayers) {
+        return "Explanation is required";
+    }
+
+    if (maxPlayers > MAX_MAX_PLAYERS_LENGTH) {
+        return "Explanation is too long";
+    }
+
+    return null;
+};
+
+export const validateExplanation = (explanation?: string) => {
+    const MAX_EXPLANATION_LENGTH = 512;
+
+    if (!explanation) {
+        return "Explanation is required";
+    }
+
+    if (explanation.length > MAX_EXPLANATION_LENGTH) {
+        return "Explanation is too long";
+    }
+
+    return null;
+};
+
+export const validateTitle = (title?: string) => {
+    const MAX_TITLE_LENGTH = 64;
+
+    if (!title) {
+        return "Title is required";
+    }
+
+    if (title.length > MAX_TITLE_LENGTH) {
+        return "Title is too long";
+    }
+
+    return null;
+};
+
 export const validateUsername = (username?: string) => {
     const MIN_USERNAME_LENGTH = 3;
     const MAX_USERNAME_LENGTH = 16;

@@ -22,7 +22,7 @@ export default function Shell({
                 {title}
             </h1>
             <div
-                className={`px-4 max-w-${size == "medium" ? "md" : size == "large" ? "2xl" : "xs"} w-full ${className}`}
+                className={`px-4 ${size == "medium" ? "max-w-md" : size == "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
             >
                 {children}
             </div>

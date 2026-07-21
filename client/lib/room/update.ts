@@ -4,8 +4,38 @@ import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
 import type { Room } from "@/type";
+import {
+    validateExplanation,
+    validateMaxPlayers,
+    validatePassword,
+    validateTitle,
+} from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
+    if (room.title) {
+        const validatorResult = validateTitle(room.title);
+
+        if (validatorResult) return validatorResult;
+    }
+
+    if (room.explanation) {
+        const validatorResult = validateExplanation(room.explanation);
+
+        if (validatorResult) return validatorResult;
+    }
+
+    if (room.password) {
+        const validatorResult = validatePassword(room.password);
+
+        if (validatorResult) return validatorResult;
+    }
+
+    if (room.maxPlayers) {
+        const validatorResult = validateMaxPlayers(room.maxPlayers);
+
+        if (validatorResult) return validatorResult;
+    }
+
     const userId = await getUser();
     if (!userId) redirect("/sign-in");
 
@@ -32,6 +62,8 @@ export const updateRoomFromId = async (room: Room) => {
         return;
     }
 
+    const now = new Date();
+
     const { error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update({
@@ -54,7 +86,7 @@ export const updateRoomFromId = async (room: Room) => {
             ...(room.password !== undefined && {
                 password: room.password,
             }),
-            updated_at: Date.now(),
+            updated_at: now,
         })
         .eq("id", room.id);
 
