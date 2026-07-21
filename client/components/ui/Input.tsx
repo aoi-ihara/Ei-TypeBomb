@@ -1,6 +1,6 @@
 import React, { useId, useState } from "react";
 
-type InputType = "text" | "email" | "url" | "password";
+type InputType = "text" | "email" | "url" | "password" | "number";
 
 type InputProps = {
     value: string;
@@ -17,6 +17,8 @@ type InputProps = {
     autoComplete?: string;
     font?: "default" | "mono";
     disableLabelAnimation?: boolean;
+    max?: number;
+    min?: number;
 };
 
 export default function Input({
@@ -34,6 +36,8 @@ export default function Input({
     autoComplete,
     font,
     disableLabelAnimation,
+    max,
+    min,
 }: InputProps) {
     const [isFocused, setIsFocused] = useState(false);
     const generatedId = useId();
@@ -51,6 +55,8 @@ export default function Input({
                 type={type}
                 value={value}
                 onChange={onChange}
+                max={max}
+                min={min}
                 data-cursor="text"
                 disabled={disabled}
                 autoComplete={autoComplete}

@@ -56,11 +56,11 @@ export const validateMaxPlayers = (maxPlayers?: number) => {
     const MAX_MAX_PLAYERS_LENGTH = 16;
 
     if (!maxPlayers) {
-        return "Explanation is required";
+        return "Max Players is required";
     }
 
     if (maxPlayers > MAX_MAX_PLAYERS_LENGTH) {
-        return "Explanation is too long";
+        return "Max Players is too long";
     }
 
     return null;
@@ -69,11 +69,7 @@ export const validateMaxPlayers = (maxPlayers?: number) => {
 export const validateExplanation = (explanation?: string) => {
     const MAX_EXPLANATION_LENGTH = 512;
 
-    if (!explanation) {
-        return "Explanation is required";
-    }
-
-    if (explanation.length > MAX_EXPLANATION_LENGTH) {
+    if (explanation && explanation.length > MAX_EXPLANATION_LENGTH) {
         return "Explanation is too long";
     }
 

@@ -3,7 +3,6 @@
 import { useState, use } from "react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-import { notFound } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
@@ -20,6 +19,13 @@ export default function Page({
 
     const [newPassword, setNewPassword] = useState("");
     const [error, setError] = useState("");
+
+    const clearPassword = async () => {
+        const error = await updateRoomFromId({ id: slug, password: "" });
+
+        if (error) setError(error);
+        else router.push(`/my-rooms/${slug}`);
+    };
 
     const handleUpdate = async () => {
         if (!slug) {
@@ -40,10 +46,6 @@ export default function Page({
         else router.push(`/my-rooms/${slug}`);
     };
 
-    if (error) {
-        notFound();
-    }
-
     return (
         <Shell title="Change Room Password" className="flex flex-col gap-4">
             <Input
@@ -62,6 +64,13 @@ export default function Page({
                 Change
             </Button>
             {error && <div className="text-red-500">{error}</div>}
+            <Button
+                padding="large"
+                className="w-full"
+                onClick={() => clearPassword()}
+            >
+                Clear Password
+            </Button>
         </Shell>
     );
 }

@@ -12,13 +12,13 @@ import {
 } from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
-    if (room.title) {
+    if (room.title !== undefined) {
         const validatorResult = validateTitle(room.title);
 
         if (validatorResult) return validatorResult;
     }
 
-    if (room.explanation) {
+    if (room.explanation !== undefined) {
         const validatorResult = validateExplanation(room.explanation);
 
         if (validatorResult) return validatorResult;
@@ -30,7 +30,7 @@ export const updateRoomFromId = async (room: Room) => {
         if (validatorResult) return validatorResult;
     }
 
-    if (room.maxPlayers) {
+    if (room.maxPlayers !== undefined) {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
 
         if (validatorResult) return validatorResult;
