@@ -73,13 +73,13 @@ export default function Profile() {
                                             </svg>
                                         )}
                                         <div
-                                            className="font-bold flex font-mono text-lg"
+                                            className="font-bold line-clamp-1 font-mono text-lg"
                                             data-cursor="text"
                                         >
                                             {room.title}
                                         </div>
                                     </div>
-                                    <div className="flex">
+                                    <div className="flex text-start line-clamp-2">
                                         {room.explanation}
                                     </div>
                                     <div className="flex items-center gap-1">
