@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
-import { getRoomStatusFromId } from "@/lib/room/get";
+import { getRoomStatusFromId, getPasswordAccuracy } from "@/lib/room/get";
+import { Turnstile } from "@marsidev/react-turnstile";
+import { PopUp } from "@/components/ui/PopUp";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
@@ -13,10 +15,32 @@ export default function Loading() {
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [loading, setLoading] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
+    const [turnstile, setTurnstile] = useState(false);
 
     const router = useRouter();
 
+    const handleSignIn = async (turnstileToken: string) => {
+        const result = await getPasswordAccuracy(
+            {
+                id: roomId,
+                password: roomPassword,
+            },
+            turnstileToken,
+        );
+
+        if (result) {
+            console.log("Success!!");
+        } else {
+            setError("Incorrect password.");
+        }
+    };
+
     const handleContinue = async () => {
+        if (showPasswordField) {
+            setTurnstile(true);
+            return;
+        }
+
         setLoading(true);
         const result = await getRoomStatusFromId(roomId);
         setLoading(false);
@@ -27,7 +51,8 @@ export default function Loading() {
         }
 
         if (result == false) {
-            setError("this room is public");
+            localStorage.setItem("room-visibility", "public");
+            router.push("/display-name");
             return;
         }
 
@@ -71,13 +96,11 @@ export default function Loading() {
             )}
 
             <Button
-                onClick={() => {
-                    if (roomId) handleContinue();
-                }}
+                onClick={() => handleContinue()}
                 padding="large"
                 className="w-full"
                 variant="primary"
-                disabled={!roomId}
+                disabled={!roomId || (showPasswordField && !roomPassword)}
                 loading={loading}
             >
                 Continue
@@ -87,6 +110,16 @@ export default function Loading() {
                     {error}
                 </a>
             )}
+
+            <PopUp show={turnstile}>
+                <Turnstile
+                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                    onSuccess={(turnstileToken: string) => {
+                        setTurnstile(false);
+                        handleSignIn(turnstileToken);
+                    }}
+                />
+            </PopUp>
         </div>
     );
 }
