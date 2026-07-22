@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RetchedInput } from "@/components/ui/RetchedInput";
+import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { getRoomStatusFromId } from "@/lib/room/get";
@@ -10,11 +10,16 @@ export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
     const [roomId, setRoomId] = useState("");
     const [error, setError] = useState("");
+    const [showPasswordField, setShowPasswordField] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [roomPassword, setRoomPassword] = useState("");
 
     const router = useRouter();
 
     const handleContinue = async () => {
+        setLoading(true);
         const result = await getRoomStatusFromId(roomId);
+        setLoading(false);
 
         if (result == null) {
             setError("Room not found.");
@@ -26,7 +31,7 @@ export default function Loading() {
             return;
         }
 
-        setError("this room is private");
+        setShowPasswordField(true);
     };
 
     useEffect(() => {
@@ -49,13 +54,21 @@ export default function Loading() {
                     className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
                 />
             </div>
-            <div data-cursor="text" className="w-full rounded-2xl">
-                <RetchedInput
-                    value={roomId}
-                    onChange={(e) => setRoomId(e.target.value)}
-                    placeholder="Room ID"
+
+            <Input
+                disabled={showPasswordField}
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                label="Room ID"
+            />
+
+            {showPasswordField && (
+                <Input
+                    value={roomPassword}
+                    onChange={(e) => setRoomPassword(e.target.value)}
+                    label="Room Password"
                 />
-            </div>
+            )}
 
             <Button
                 onClick={() => {
@@ -65,6 +78,7 @@ export default function Loading() {
                 className="w-full"
                 variant="primary"
                 disabled={!roomId}
+                loading={loading}
             >
                 Continue
             </Button>
