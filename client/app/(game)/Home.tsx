@@ -139,7 +139,7 @@ export default function Home() {
                         onMouseLeave={() => {
                             setIsSelected(false);
                         }}
-                        onClick={() => router.push("/display-name")}
+                        onClick={() => router.push("/room")}
                     >
                         <div
                             className={`${isSelected ? "w-6" : "w-0 opacity-0"} transition-all hidden duration-200 ease-out md:flex overflow-hidden`}
