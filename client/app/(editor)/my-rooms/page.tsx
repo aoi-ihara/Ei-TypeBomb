@@ -9,12 +9,10 @@ import Shell from "@/components/layout/Shell";
 export default function Profile() {
     const router = useRouter();
     const [rooms, setRooms] = useState<Room[] | null>(null);
-    const [userId, setUserId] = useState<string | null>("");
 
     useEffect(() => {
         const fetchUser = async () => {
             const result = await getMyRooms();
-            setUserId(result?.userId ?? null);
             if (!result?.rooms) return;
 
             setRooms(result.rooms);
