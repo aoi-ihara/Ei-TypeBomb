@@ -52,7 +52,7 @@ export default function Profile() {
                                         router.push(`/my-rooms/${room.id}`)
                                     }
                                 >
-                                    <div className="flex gap-1 items-center">
+                                    <div className="flex gap-2 items-center">
                                         {room.password ? (
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -75,13 +75,13 @@ export default function Profile() {
                                             </svg>
                                         )}
                                         <div
-                                            className="font-bold flex font-mono text-lg"
+                                            className="font-bold font-mono truncate text-lg"
                                             data-cursor="text"
                                         >
                                             {room.title}
                                         </div>
                                     </div>
-                                    <div className="flex">
+                                    <div className="text-start line-clamp-2">
                                         {room.explanation}
                                     </div>
                                     <div className="flex items-center gap-1">
