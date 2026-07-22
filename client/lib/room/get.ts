@@ -5,36 +5,6 @@ import { getUser } from "../auth/session";
 import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
-import { validatePassword } from "../auth/validator";
-import { verifyTurnstile } from "../auth/turnstile";
-
-export const getPasswordAccuracy = async (
-    room: Room,
-    turnstileToken: string,
-) => {
-    if (!isUUID(room.id, 4)) return false;
-    if (!room.password) return false;
-    if (validatePassword(room.password)) return false;
-
-    const turnstileResult = await verifyTurnstile(turnstileToken);
-    if (!turnstileResult) return false;
-
-    const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("*")
-        .eq("id", room.id)
-        .maybeSingle();
-
-    if (error) {
-        console.error(error.message);
-        return false;
-    }
-    if (!data?.password) return false;
-
-    if (data.password !== room.password) return false;
-    return true;
-};
 
 export const getRoomStatusFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;

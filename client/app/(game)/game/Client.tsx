@@ -159,7 +159,7 @@ export default function Clinet({
 
         const socket = io(
             typeof window === "undefined" || initialServerUrl === ""
-                ? "https://ei-typebomb.onrender.com"
+                ? process.env.NEXT_PUBLIC_RENDER_URL
                 : initialServerUrl,
         );
 

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
-import { getRoomStatusFromId, getPasswordAccuracy } from "@/lib/room/get";
+import { getRoomStatusFromId } from "@/lib/room/get";
+import { signInToRoom } from "@/lib/room/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
 
@@ -20,21 +21,23 @@ export default function Loading() {
     const router = useRouter();
 
     const handleSignIn = async (turnstileToken: string) => {
-        const result = await getPasswordAccuracy(
+        setLoading(true);
+        const result = await signInToRoom(
             {
                 id: roomId,
                 password: roomPassword,
             },
             turnstileToken,
         );
+        setLoading(false);
 
-        if (result) {
+        if (result == null) {
+            setError("Incorrect password.");
+        } else {
             localStorage.setItem("room-visibility", "private");
-            localStorage.setItem("token", "private");
+            localStorage.setItem("token", result);
             router.push("/display-name");
             return;
-        } else {
-            setError("Incorrect password.");
         }
     };
 
@@ -60,6 +63,7 @@ export default function Loading() {
         }
 
         setShowPasswordField(true);
+        setError("");
     };
 
     useEffect(() => {
@@ -93,6 +97,7 @@ export default function Loading() {
             {showPasswordField && (
                 <Input
                     value={roomPassword}
+                    type="password"
                     onChange={(e) => setRoomPassword(e.target.value)}
                     label="Room Password"
                 />
