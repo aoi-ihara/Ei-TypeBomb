@@ -3,7 +3,29 @@
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import type { Room } from "@/type";
+import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
+
+export const getRoomStatusFromId = async (id: string) => {
+    if (!id) return null;
+    if (!isUUID(id, 4)) return null;
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (error) {
+        console.error(error.message);
+        return null;
+    }
+    if (!data) return null;
+
+    if (data.password) return true;
+    return false;
+};
 
 export const getRoomFromId = async (id: string) => {
     const userId = await getUser();
