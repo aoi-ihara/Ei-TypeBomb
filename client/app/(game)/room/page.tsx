@@ -29,7 +29,10 @@ export default function Loading() {
         );
 
         if (result) {
-            console.log("Success!!");
+            localStorage.setItem("room-visibility", "private");
+            localStorage.setItem("token", "private");
+            router.push("/display-name");
+            return;
         } else {
             setError("Incorrect password.");
         }
