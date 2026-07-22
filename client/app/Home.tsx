@@ -8,17 +8,12 @@ import { signOut } from "@/lib/auth/sign-out";
 
 export default function Home() {
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
-    const [showCursor, setShowCursor] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
     const [showPopUp, setShowPopUp] = useState(false);
 
     const router = useRouter();
 
     useEffect(() => {
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
         const fetchUserData = async () => {
             const userId = await getSession();
             if (!userId) return;
@@ -27,10 +22,6 @@ export default function Home() {
         };
 
         fetchUserData();
-
-        return () => {
-            clearInterval(intervalId);
-        };
     }, [router]);
 
     return (
