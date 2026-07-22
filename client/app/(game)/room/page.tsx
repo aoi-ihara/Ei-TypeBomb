@@ -9,11 +9,24 @@ import { getRoomStatusFromId } from "@/lib/room/get";
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
     const [roomId, setRoomId] = useState("");
+    const [error, setError] = useState("");
 
     const router = useRouter();
 
     const handleContinue = async () => {
         const result = await getRoomStatusFromId(roomId);
+
+        if (result == null) {
+            setError("Room not found.");
+            return;
+        }
+
+        if (result == false) {
+            setError("this room is public");
+            return;
+        }
+
+        setError("this room is private");
     };
 
     useEffect(() => {
@@ -55,6 +68,11 @@ export default function Loading() {
             >
                 Continue
             </Button>
+            {error && (
+                <a className="text-red-500" data-cursor="text">
+                    {error}
+                </a>
+            )}
         </div>
     );
 }

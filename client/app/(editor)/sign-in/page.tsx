@@ -65,7 +65,11 @@ export default function SignInPage() {
                     setPassword(e.target.value);
                 }}
             />
-            {error && <a className="text-red-500">{error}</a>}
+            {error && (
+                <a className="text-red-500" data-cursor="text">
+                    {error}
+                </a>
+            )}
             <Button
                 onClick={() => {
                     setLoading(true);
