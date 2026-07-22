@@ -15,8 +15,10 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef, useCallback } from "react";
 import { getRoomFromId } from "@/lib/room/get";
+import { updateRoomFromId } from "@/lib/room/update";
+import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound } from "next/navigation";
@@ -79,6 +81,11 @@ export default function Page({
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
     const [id, setId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
+    const [showCopiedText, setShowCopiedText] = useState(false);
+
+    const isLoadedRef = useRef(false);
+    const lastSaveTimeRef = useRef<number>(0);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -114,10 +121,62 @@ export default function Page({
                 }),
             );
             setWords(wordsWithId);
+
+            lastSaveTimeRef.current = Date.now();
+            isLoadedRef.current = true;
         };
 
         getRoomInfo();
     }, [slug]);
+
+    const saveRoomData = useCallback(async () => {
+        if (!id || !words) return;
+
+        try {
+            const updatedRoom: Room = {
+                id,
+                title,
+                explanation,
+                password,
+                maxPlayers: Number(maxPlayers),
+                words: words.map(({ jp, en }) => ({ jp, en })),
+            };
+
+            await updateRoomFromId(updatedRoom);
+
+            lastSaveTimeRef.current = Date.now();
+        } catch (err) {
+            console.error("Failed to auto-save room:", err);
+        }
+    }, [id, title, explanation, password, maxPlayers, words]);
+
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(slug);
+
+        setShowCopiedText(true);
+
+        setTimeout(() => {
+            setShowCopiedText(false);
+        }, 3000);
+    };
+
+    useEffect(() => {
+        if (!isLoadedRef.current || !id || words === null) return;
+
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+
+        timerRef.current = setTimeout(() => {
+            saveRoomData();
+        }, 2000);
+
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+        };
+    }, [title, explanation, password, maxPlayers, words, saveRoomData, id]);
 
     if (error) {
         notFound();
@@ -128,7 +187,7 @@ export default function Page({
             <div className={`px-4 flex flex-col max-w-2xl gap-4 w-full pb-64`}>
                 {id ? (
                     <>
-                        <div className="flex mt-16 mb-8 items-center">
+                        <div className="flex mt-16 mb-4 items-center">
                             <Button
                                 onClick={() =>
                                     router.push(`/my-rooms/${slug}/visibility`)
@@ -169,6 +228,13 @@ export default function Page({
                             />
                         </div>
 
+                        <div
+                            data-cursor="text"
+                            className="font-bold flex w-fit text-lg"
+                        >
+                            Settings
+                        </div>
+
                         <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <Input
                                 onChange={(e) => setExplanation(e.target.value)}
@@ -191,14 +257,42 @@ export default function Page({
                                 />
                                 {Number(maxPlayers) > 8 && (
                                     <div className="text-red-500">
-                                        Mex Players must be 8 or less.
+                                        Max Players must be 8 or less.
                                     </div>
                                 )}
                                 {Number(maxPlayers) < 2 && (
                                     <div className="text-red-500">
-                                        Mex Players must be 2 or more.
+                                        Max Players must be 2 or more.
                                     </div>
                                 )}
+                            </div>
+                            <div className="flex flex-col gap-4">
+                                <button
+                                    onClick={() => handleCopy()}
+                                    data-cursor="button"
+                                    className="rounded-lg relative"
+                                >
+                                    <div
+                                        className={`transition-all duration-200 ease-out active:scale-95 ${showCopiedText && "opacity-25"}`}
+                                    >
+                                        <Input
+                                            onChange={() => {}}
+                                            label="Room Code"
+                                            disabled={true}
+                                            type="url"
+                                            font="mono"
+                                            value={slug}
+                                        />
+                                    </div>
+
+                                    <div className="absolute pointer-events-none top-0 left-0 w-full h-full flex justify-center items-center font-bold font-mono">
+                                        <div
+                                            className={`transition-all relative duration-200 ease-out text-cyan-600 ${!showCopiedText && "opacity-0"}`}
+                                        >
+                                            Copied
+                                        </div>
+                                    </div>
+                                </button>
                             </div>
                         </div>
 
@@ -336,7 +430,7 @@ export default function Page({
                                                             setWords(newWords);
                                                         }}
                                                         variant="text"
-                                                        className="h-full"
+                                                        className="h-fit"
                                                     >
                                                         <div className="w-12 h-14 flex justify-center items-center">
                                                             <svg
