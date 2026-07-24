@@ -26,38 +26,45 @@ io.on("connection", (socket) => {
     let roomId: null | string = null;
 
     console.log("Connected👍:", userId);
-    socket.emit("token:request");
 
-    // TOKEN
+    // AUTH
 
-    socket.on("token:response", (token: string) => {
-        const getRoomId = async () => {
-            console.log("JWT Token:", token);
+    socket.emit("auth:request");
 
-            const jwtResult = await verifyToken(token);
-            console.log("room id:", jwtResult);
-            if (!jwtResult) return;
-            roomId = jwtResult;
+    socket.on(
+        "auth:response",
+        (response: { jwtToken: string; displayName: string }) => {
+            const getRoomId = async () => {
+                console.log("JWT Token:", response.jwtToken);
 
-            let index = rooms.findIndex((item) => item.id == jwtResult);
-            console.log("room index:", index);
+                const jwtResult = await verifyToken(response.jwtToken);
+                console.log("room id:", jwtResult);
+                if (!jwtResult) return;
+                roomId = jwtResult;
 
-            if (index == -1) {
-                console.log("searching room info…");
-                const room = await getRoomFromId(jwtResult);
-                console.log("room:", room);
-                if (!room) return;
-                rooms.push({ ...room, users: [] });
-                index = rooms.length - 1;
-            }
-            console.log(rooms);
+                let index = rooms.findIndex((item) => item.id == jwtResult);
+                console.log("room index:", index);
 
-            rooms[index].users?.push({ id: userId });
-            console.log(rooms);
-        };
+                if (index == -1) {
+                    console.log("searching room info…");
+                    const room = await getRoomFromId(jwtResult);
+                    console.log("room:", room);
+                    if (!room) return;
+                    rooms.push({ ...room, users: [] });
+                    index = rooms.length - 1;
+                }
+                console.log(rooms);
 
-        getRoomId();
-    });
+                rooms[index].users?.push({
+                    id: userId,
+                    displayName: response.displayName,
+                });
+                console.log(rooms[0]);
+            };
+
+            getRoomId();
+        },
+    );
 });
 
 httpServer.listen(3001, () => {
