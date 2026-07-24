@@ -29,16 +29,13 @@ export default function Loading() {
             },
             turnstileToken,
         );
-        setLoading(false);
 
         if (result == null) {
-            setError("Incorrect password.");
-        } else {
-            localStorage.setItem("room-visibility", "private");
-            localStorage.setItem("token", result);
             router.push("/display-name");
-            return;
+        } else {
+            setError(result);
         }
+        setLoading(false);
     };
 
     const handleContinue = async () => {
@@ -49,7 +46,6 @@ export default function Loading() {
 
         setLoading(true);
         const result = await getRoomStatusFromId(roomId);
-        setLoading(false);
 
         if (result == null) {
             setError("Room not found.");
@@ -57,13 +53,22 @@ export default function Loading() {
         }
 
         if (result == false) {
-            localStorage.setItem("room-visibility", "public");
-            router.push("/display-name");
-            return;
+            const result = await signInToRoom({
+                id: roomId,
+                password: roomPassword,
+            });
+
+            if (result == null) {
+                router.push("/display-name");
+            } else {
+                setError(result);
+            }
+        } else {
+            setShowPasswordField(true);
+            setError("");
         }
 
-        setShowPasswordField(true);
-        setError("");
+        setLoading(false);
     };
 
     useEffect(() => {
