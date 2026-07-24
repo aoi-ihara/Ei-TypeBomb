@@ -16,24 +16,28 @@ export const updateRoomFromId = async (room: Room) => {
     if (room.title !== undefined) {
         const validatorResult = validateTitle(room.title);
         if (validatorResult) {
-            console.warn("Title validation failed:", validatorResult);
-            return;
+            return "validatorResult";
         }
     }
 
     if (room.explanation !== undefined && room.explanation !== "") {
         const validatorResult = validateExplanation(room.explanation);
         if (validatorResult) {
-            console.warn("Explanation validation failed:", validatorResult);
-            return;
+            return validatorResult;
         }
     }
 
     if (room.maxPlayers !== undefined) {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
         if (validatorResult) {
-            console.warn("MaxPlayers validation failed:", validatorResult);
-            return;
+            return validatorResult;
+        }
+    }
+
+    if (room.password !== undefined && room.password !== null) {
+        const validatorResult = validatePassword(room.password);
+        if (validatorResult) {
+            return validatorResult;
         }
     }
 
@@ -49,26 +53,23 @@ export const updateRoomFromId = async (room: Room) => {
         .maybeSingle();
 
     if (selectError) {
-        console.error("Select Error:", selectError.message);
-        throw new Error(selectError.message);
+        return selectError.message;
     }
 
     if (!data) {
-        console.error("Could not find this room.");
-        throw new Error("Room not found");
+        return "Could not find this room.";
     }
 
     if (data.user_id !== userId) {
-        console.error(" You do not have access to this room.");
-        throw new Error("Unauthorized");
+        return "You do not have access to this room.";
     }
 
     let newHashedPassword = undefined;
-    if (room.password && room.password !== data.password) {
-        const validatorResult = validatePassword(room.password);
-        if (!validatorResult) {
-            newHashedPassword = await hashPassword(room.password);
-        }
+
+    if (room.password) {
+        newHashedPassword = await hashPassword(room.password);
+    } else {
+        newHashedPassword = room.password;
     }
 
     const timeStamp = new Date();
@@ -90,9 +91,8 @@ export const updateRoomFromId = async (room: Room) => {
         .eq("id", room.id);
 
     if (updateError) {
-        console.error("Update Error:", updateError.message);
-        throw new Error(updateError.message);
+        return updateError.message;
     }
 
-    return { success: true };
+    return null;
 };
