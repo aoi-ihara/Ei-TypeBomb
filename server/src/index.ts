@@ -6,7 +6,6 @@ import type { Word, Room } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { randomUUID, UUID } from "crypto";
-import { User } from "@supabase/supabase-js";
 
 let rooms: Room[] = [];
 
@@ -26,7 +25,7 @@ io.on("connection", (socket) => {
     let userId = socket.id;
     let roomId: null | string = null;
 
-    console.log("Connected👍:", socket.id);
+    console.log("Connected👍:", userId);
     socket.emit("token:request");
 
     // TOKEN
@@ -40,21 +39,20 @@ io.on("connection", (socket) => {
             if (!jwtResult) return;
             roomId = jwtResult;
 
-            const room = await getRoomFromId(jwtResult);
-            console.log("room:", room);
-            if (!room) return;
+            let index = rooms.findIndex((item) => item.id == jwtResult);
+            console.log("room index:", index);
 
-            let index = rooms.findIndex((item) => item.id == room?.id);
-            console.log("room:", index);
             if (index == -1) {
+                console.log("searching room info…");
+                const room = await getRoomFromId(jwtResult);
+                console.log("room:", room);
+                if (!room) return;
                 rooms.push({ ...room, users: [] });
                 index = rooms.length;
             }
-
             console.log(rooms);
 
             rooms[index].users?.push({ id: userId });
-
             console.log(rooms);
         };
 
