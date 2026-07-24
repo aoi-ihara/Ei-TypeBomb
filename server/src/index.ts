@@ -25,14 +25,6 @@ io.on("connection", (socket) => {
     console.log("Connected👍:", socket.id);
     socket.emit("token:request");
 
-    socket.emit("request");
-
-    socket.on("fetch", () => {
-        console.log("Room Info Requested:", ip);
-        socket.emit("roomInfo");
-        socket.emit("isStarted");
-    });
-
     socket.on("token:response", (token: string) => {
         const getRoomId = async () => {
             console.log("JWT Token:", token);
