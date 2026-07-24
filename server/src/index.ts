@@ -48,7 +48,7 @@ io.on("connection", (socket) => {
                 console.log("room:", room);
                 if (!room) return;
                 rooms.push({ ...room, users: [] });
-                index = rooms.length;
+                index = rooms.length - 1;
             }
             console.log(rooms);
 
