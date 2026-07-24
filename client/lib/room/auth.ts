@@ -8,9 +8,9 @@ import { verifyTurnstile } from "../auth/turnstile";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-export const getCookieValue = async () => {
+export const getAuthToken = async () => {
     const cookieStore = await cookies();
-    const authToken = cookieStore.get("auth-token")?.value;
+    const authToken = cookieStore.get("jwt_token")?.value;
     return authToken;
 };
 
@@ -66,7 +66,7 @@ const setAuthCookie = async (id: string) => {
 
     const cookieStore = await cookies();
 
-    cookieStore.set("auth-token", token, {
+    cookieStore.set("jwt_token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",

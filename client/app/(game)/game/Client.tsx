@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
 import { Room } from "@/type";
+import { getAuthToken } from "@/lib/room/auth";
 
 type Word = {
     jp: string;
@@ -80,11 +81,32 @@ export default function Clinet({
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
+        const socket = io(
+            typeof window === "undefined" || initialServerUrl === ""
+                ? process.env.NEXT_PUBLIC_RENDER_URL
+                : initialServerUrl,
+        );
+
+        socketRef.current = socket;
+
+        socket.on("token:request", () => {
+            const sendToken = async () => {
+                const authToken = await getAuthToken();
+                if (!authToken) return;
+
+                console.log("Auth Token:", authToken);
+                socket.emit("token:response", authToken);
+            };
+
+            sendToken();
+        });
+
         return () => {
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
+            socket.disconnect();
         };
-    }, []);
+    });
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -158,22 +180,7 @@ export default function Clinet({
         startAudio();
         addListeners();
 
-        const socket = io(
-            typeof window === "undefined" || initialServerUrl === ""
-                ? process.env.NEXT_PUBLIC_RENDER_URL
-                : initialServerUrl,
-        );
-
-        socketRef.current = socket;
-
-        socket.on("token:request", () => {
-            socket.emit("token:response", {
-                token: "1234567890",
-            });
-        });
-
         return () => {
-            socket.disconnect();
             removeListeners();
             if (audioRef.current) {
                 audioRef.current.pause();
