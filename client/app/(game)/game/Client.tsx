@@ -89,13 +89,16 @@ export default function Clinet({
 
         socketRef.current = socket;
 
-        socket.on("token:request", () => {
+        socket.on("auth:request", () => {
             const sendToken = async () => {
                 const authToken = await getAuthToken();
                 if (!authToken) return;
 
                 console.log("Auth Token:", authToken);
-                socket.emit("token:response", authToken);
+                socket.emit("auth:response", {
+                    jwtToken: authToken,
+                    displayName: displayName,
+                });
             };
 
             sendToken();
