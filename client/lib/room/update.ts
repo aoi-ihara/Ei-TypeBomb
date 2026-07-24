@@ -15,26 +15,26 @@ import {
 export const updateRoomFromId = async (room: Room) => {
     if (room.title !== undefined) {
         const validatorResult = validateTitle(room.title);
-
-        if (validatorResult) return validatorResult;
+        if (validatorResult) {
+            console.warn("Title validation failed:", validatorResult);
+            return;
+        }
     }
 
-    if (room.explanation !== undefined) {
+    if (room.explanation !== undefined && room.explanation !== "") {
         const validatorResult = validateExplanation(room.explanation);
-
-        if (validatorResult) return validatorResult;
-    }
-
-    if (room.password !== undefined && room.password !== null) {
-        const validatorResult = validatePassword(room.password);
-
-        if (validatorResult) return validatorResult;
+        if (validatorResult) {
+            console.warn("Explanation validation failed:", validatorResult);
+            return;
+        }
     }
 
     if (room.maxPlayers !== undefined) {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
-
-        if (validatorResult) return validatorResult;
+        if (validatorResult) {
+            console.warn("MaxPlayers validation failed:", validatorResult);
+            return;
+        }
     }
 
     const userId = await getUser();
@@ -44,54 +44,55 @@ export const updateRoomFromId = async (room: Room) => {
 
     const { data, error: selectError } = await supabase
         .from("ei_typebomb_rooms")
-        .select("user_id")
+        .select("user_id, password")
         .eq("id", room.id)
         .maybeSingle();
 
     if (selectError) {
-        console.error(selectError.message);
-        return;
+        console.error("Select Error:", selectError.message);
+        throw new Error(selectError.message);
     }
 
     if (!data) {
-        console.error("Counld not find this room.");
-        return;
+        console.error("Could not find this room.");
+        throw new Error("Room not found");
     }
 
     if (data.user_id !== userId) {
-        console.error("You do not have access to this room.");
-        return;
+        console.error(" You do not have access to this room.");
+        throw new Error("Unauthorized");
     }
 
-    const now = new Date();
+    let newHashedPassword = undefined;
+    if (room.password && room.password !== data.password) {
+        const validatorResult = validatePassword(room.password);
+        if (!validatorResult) {
+            newHashedPassword = await hashPassword(room.password);
+        }
+    }
+
+    const timeStamp = new Date();
 
     const { error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update({
-            id: room.id,
-            ...(room.title !== undefined && {
-                title: room.title,
-            }),
+            ...(room.title !== undefined && { title: room.title }),
             ...(room.explanation !== undefined && {
                 explanation: room.explanation,
             }),
             ...(room.maxPlayers !== undefined && {
                 max_players: room.maxPlayers,
             }),
-            ...(room.words !== undefined && {
-                words: room.words,
-            }),
-            ...(room.userId !== undefined && {
-                user_id: room.userId,
-            }),
-            ...(room.password && {
-                password: await hashPassword(room.password),
-            }),
-            updated_at: now,
+            ...(room.words !== undefined && { words: room.words }),
+            ...(newHashedPassword && { password: newHashedPassword }),
+            updated_at: timeStamp,
         })
         .eq("id", room.id);
 
     if (updateError) {
-        console.error(updateError.message);
+        console.error("Update Error:", updateError.message);
+        throw new Error(updateError.message);
     }
+
+    return { success: true };
 };
