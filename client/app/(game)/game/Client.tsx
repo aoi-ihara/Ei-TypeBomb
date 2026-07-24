@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
+import { Room } from "@/type";
 
 type Word = {
     jp: string;
@@ -39,10 +40,8 @@ export default function Clinet({
     const [userId, setUserId] = useState("");
     const userIdRef = useRef("");
 
-    const [showCursor, setShowCursor] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [room, setRoom] = useState<User[]>([]);
-    const [cameraAngle, setCameraAngle] = useState(1);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
     const [displayName, setDisplayName] = useState<string>(() => {
@@ -74,6 +73,8 @@ export default function Clinet({
     );
 
     const currentTurnUser = room[currentTurn] as User | undefined;
+
+    const roomRef = useRef<Room>(null);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -165,155 +166,14 @@ export default function Clinet({
 
         socketRef.current = socket;
 
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        const intervalId2 = setInterval(() => {
-            socket.emit("fetch", "");
-        }, 1000);
-
-        const showConnectionAlert = (alert: number) => {
-            setConnectionAlert(alert);
-
-            const alertIntervalId = setInterval(() => {
-                setConnectionAlert(null);
-            }, 4000);
-
-            return () => {
-                clearInterval(alertIntervalId);
-            };
-        };
-
-        socket.on("endGame", () => {
-            console.log("game end");
-            showConnectionAlert(1);
-        });
-
-        socket.on("roomInfo", (roomInfo: User[]) => {
-            setIsConnected(true);
-            setRoom(roomInfo);
-            setCameraAngle(
-                roomInfo.length == 1 || roomInfo.length == 0 ? 3 : 1,
-            );
-            setUserPositions(
-                userPositions.map((position, index) => {
-                    if (roomInfo.length == 1 && index == 0) {
-                        return {
-                            x: 0,
-                            y: 0,
-                            w: 64,
-                            h: 64,
-                            opacity: 1,
-                        };
-                    } else if (index < roomInfo.length) {
-                        const angle = (index / roomInfo.length) * 2 * Math.PI;
-                        return {
-                            x: Math.cos(angle) * (room.length * 6 + 25),
-                            y: Math.sin(angle) * (room.length * 6 + 25),
-                            w: 24,
-                            h: 24,
-                            opacity: 1,
-                        };
-                    } else {
-                        return {
-                            x: 0,
-                            y: 0,
-                            w: 24,
-                            h: 24,
-                            opacity: 0,
-                        };
-                    }
-                }),
-            );
-        });
-
-        socket.on(
-            "bombExplosioned",
-            ({
-                explosionedUserId,
-                currentRoom,
-            }: {
-                explosionedUserId: string;
-                currentRoom: User[];
-            }) => {
-                if (initialSounDeffects) {
-                    const audio = new Audio("/Explosion_7.wav");
-                    audio.volume = 1;
-                    audio.play().catch(() => {});
-                }
-
-                if (!isSpectator) {
-                    if (userIdRef.current == explosionedUserId) {
-                        setResult(true);
-                    } else if (
-                        currentRoom.find(
-                            (item) => userIdRef.current == item.userId,
-                        )
-                    ) {
-                        setResult(false);
-                        setLostDisplayName(
-                            currentRoom.find(
-                                (user) => user.userId == explosionedUserId,
-                            )?.displayName,
-                        );
-                    } else {
-                        setLostDisplayName(
-                            currentRoom.find(
-                                (user) => user.userId == explosionedUserId,
-                            )?.displayName,
-                        );
-                    }
-                }
-
-                const resultTimer = setTimeout(() => {
-                    setResult(null);
-                    setLostDisplayName(null);
-                }, 3000);
-            },
-        );
-
-        socket.on("joined", (myUuid: string) => {
-            userIdRef.current = myUuid;
-            setUserId(myUuid);
-        });
-
-        socket.on(
-            "gameStatus",
-            ({
-                isStarted,
-                currentTurn,
-                currentWord,
-                bombStatus,
-                currentInput,
-            }: {
-                isStarted: boolean;
-                currentTurn: number;
-                currentWord: Word;
-                bombStatus: number;
-                currentInput: string;
-            }) => {
-                setIsStarted(isStarted);
-                setCurrentTurn(currentTurn);
-                setCurrentWord(currentWord);
-                setBombStatus(bombStatus);
-                setCurrentInput(currentInput);
-            },
-        );
-
-        socket.on("pulse", (pulseUuid: string) => {
-            if (userIdRef.current !== "") {
-                socket.emit("pulseResponse", {
-                    userId: userIdRef.current,
-                    newPulse: pulseUuid,
-                });
-            }
+        socket.on("token:request", () => {
+            socket.emit("token:response", {
+                token: "1234567890",
+            });
         });
 
         return () => {
             socket.disconnect();
-            clearInterval(intervalId);
-            clearInterval(intervalId2);
             removeListeners();
             if (audioRef.current) {
                 audioRef.current.pause();

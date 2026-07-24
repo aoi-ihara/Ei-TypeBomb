@@ -18,6 +18,7 @@
         "socket.io": "^4.8.3"
     },
     "devDependencies": {
+        "@types/express": "^5.0.6",
         "@types/node": "^26.1.1",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3"

@@ -13,4 +13,11 @@ export type Room = {
     password?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    users?: User[];
+};
+
+export type User = {
+    id: string;
+    displayName?: string;
+    pulse?: string;
 };

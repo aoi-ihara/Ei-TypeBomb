@@ -18,5 +18,13 @@ export const getRoomFromId = async (id: string) => {
 
     return {
         id: data.id,
+        title: data.title,
+        userId: data.user_id,
+        explanation: data.explanation,
+        maxPlayers: data.max_players,
+        password: data.password,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        words: data.words,
     } as Room;
 };
