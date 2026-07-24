@@ -4,6 +4,7 @@ import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
 import type { Room } from "@/type";
+import { hashPassword } from "../auth/hash";
 import {
     validateExplanation,
     validateMaxPlayers,
@@ -83,8 +84,8 @@ export const updateRoomFromId = async (room: Room) => {
             ...(room.userId !== undefined && {
                 user_id: room.userId,
             }),
-            ...(room.password !== undefined && {
-                password: room.password,
+            ...(room.password && {
+                password: await hashPassword(room.password),
             }),
             updated_at: now,
         })

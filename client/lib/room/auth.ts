@@ -12,7 +12,6 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
     if (!isUUID(room.id, 4)) return "Incorrect Room ID.";
 
     if (room.password) {
-        if (!room.password) return "Password is required.";
         if (validatePassword(room.password)) return "Incorrect password.";
 
         if (!turnstileToken) return "Turnstile token is required.";
@@ -32,26 +31,6 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         if (!data?.password) return "Cannot get the password.";
 
         if (data.password !== room.password) return "Incorrect password.";
-
-        const token = jwt.sign(
-            {
-                roomId: room.id,
-            },
-            process.env.JWT_SECRET!,
-            {
-                expiresIn: "6h",
-            },
-        );
-
-        const cookieStore = await cookies();
-
-        cookieStore.set("auth-token", token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 6,
-            path: "/",
-        });
 
         setAuthCookie(room.id);
     } else {
