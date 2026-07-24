@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
 import type { Word, Room } from "./type";
+import { verifyToken } from "./lib/auth";
 
 let rooms: Room[] = [];
 
@@ -30,6 +31,17 @@ io.on("connection", (socket) => {
         console.log("Room Info Requested:", ip);
         socket.emit("roomInfo");
         socket.emit("isStarted");
+    });
+
+    socket.on("token:response", (token: string) => {
+        const getRoomId = async () => {
+            console.log("JWT Token:", token);
+
+            const result = await verifyToken(token);
+            console.log("result:", result);
+        };
+
+        getRoomId();
     });
 });
 
