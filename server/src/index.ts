@@ -53,18 +53,34 @@ io.on("connection", (socket) => {
                     rooms.push({ ...room, users: [] });
                     index = rooms.length - 1;
                 }
-                console.log(rooms);
+                console.log("room:", rooms[0]);
 
                 rooms[index].users?.push({
                     id: userId,
                     displayName: response.displayName,
                 });
-                console.log(rooms[0]);
+                console.log("room:", rooms[0]);
             };
 
             getRoomId();
         },
     );
+
+    socket.on("disconnect", () => {
+        console.log("disconnected", userId);
+        if (!roomId) return;
+
+        const roomIndex = rooms.findIndex((item) => item.id == roomId);
+        const newUsers = rooms[roomIndex].users?.filter(
+            (item) => item.id !== userId,
+        );
+
+        if (newUsers?.length == 0)
+            rooms = rooms.filter((item) => item.id !== roomId);
+        else rooms[roomIndex] = { ...rooms[roomIndex], users: newUsers };
+
+        console.log("rooms:", rooms);
+    });
 });
 
 httpServer.listen(3001, () => {
