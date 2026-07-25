@@ -318,7 +318,7 @@ export default function Clinet({
                                                                 "Success! Emitting to server...",
                                                             );
                                                             socketRef.current?.emit(
-                                                                "success",
+                                                                "word:success",
                                                             );
                                                         }}
                                                         onChangeInput={(

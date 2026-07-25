@@ -7,6 +7,7 @@ import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { randomUUID, UUID } from "crypto";
 import { useDeprecatedInvertedScale } from "framer-motion";
+import { send } from "process";
 
 let rooms: Room[] = [];
 
@@ -102,9 +103,35 @@ io.on("connection", (socket) => {
         },
     );
 
+    socket.on("word:success", () => {
+        const roomIndex = rooms.findIndex((item) => item.id == roomId);
+
+        console.log("success!!");
+
+        if (rooms[roomIndex].bombHolder == undefined) return;
+        rooms[roomIndex] = {
+            ...rooms[roomIndex],
+            bombHolder:
+                rooms[roomIndex].bombHolder + 1 ==
+                rooms[roomIndex].users?.length
+                    ? 0
+                    : rooms[roomIndex].bombHolder + 1,
+            wordIndex: Math.floor(
+                Math.random() * rooms[roomIndex].words?.length!,
+            ),
+        };
+
+        sendRoomInfo(roomId);
+    });
+
     socket.on("game:start", () => {
         const index = rooms.findIndex((item) => item.id == roomId);
-        rooms[index] = { ...rooms[index], isStart: true, bombHolder: 0 };
+        rooms[index] = {
+            ...rooms[index],
+            isStart: true,
+            bombHolder: 0,
+            wordIndex: undefined,
+        };
 
         sendRoomInfo(roomId);
 
