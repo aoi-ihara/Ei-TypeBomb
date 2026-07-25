@@ -48,6 +48,15 @@ io.on("connection", (socket) => {
         let index = rooms.findIndex((item) => item.id == roomId);
         console.log("room index:", index);
 
+        const maxPlayers: number | undefined = rooms[index].maxPlayers;
+        if (!maxPlayers) return;
+        console.log("max players:", maxPlayers);
+        if (
+            rooms[index].users?.length == undefined ||
+            rooms[index].users?.length >= maxPlayers
+        )
+            return;
+
         rooms[index].users?.push({
             id: user.id,
             displayName: user.displayName,
