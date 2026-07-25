@@ -79,11 +79,15 @@ export default function Clinet({
 
         socketRef.current = socket;
 
-        socket.on("room:broadcast", (newRoom: Room & { users: User[] }) => {
-            console.log(newRoom);
-            setRoom(newRoom);
-            setUsers(newRoom.users);
-        });
+        socket.on(
+            "room:broadcast",
+            (newRoom: Room & { users: User[]; isStart: boolean }) => {
+                console.log(newRoom);
+                setRoom(newRoom);
+                setUsers(newRoom.users);
+                setIsStarted(newRoom.isStart);
+            },
+        );
 
         socket.on("auth:request", () => {
             setUserId(socket.id ?? null);
@@ -198,7 +202,7 @@ export default function Clinet({
     };
 
     const handleStartGame = () => {
-        socketRef.current?.emit("startGame");
+        socketRef.current?.emit("game:start");
     };
 
     const handleLeave = () => {

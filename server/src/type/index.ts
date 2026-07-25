@@ -14,6 +14,7 @@ export type Room = {
     createdAt?: string;
     updatedAt?: string;
     users?: User[];
+    isStart?: boolean;
 };
 
 export type User = {

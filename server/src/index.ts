@@ -90,7 +90,7 @@ io.on("connection", (socket) => {
                     const room = await getRoomFromId(roomId);
                     console.log("room:", room);
                     if (!room) return;
-                    rooms.push({ ...room, users: [] });
+                    rooms.push({ ...room, users: [], isStart: false });
                     index = rooms.length - 1;
                 }
 
@@ -101,16 +101,30 @@ io.on("connection", (socket) => {
         },
     );
 
+    socket.on("game:start", () => {
+        const index = rooms.findIndex((item) => item.id == roomId);
+        rooms[index].isStart = true;
+
+        sendRoomInfo(roomId);
+    });
+
     const deleteUser = (userId: string) => {
         if (!roomId) return;
 
         const roomIndex = rooms.findIndex((item) => item.id == roomId);
         if (roomIndex == -1) return;
 
-        const newUsers = rooms[roomIndex].users?.filter(
-            (item) => item.id !== userId,
-        );
-        rooms[roomIndex] = { ...rooms[roomIndex], users: newUsers };
+        if (rooms[roomIndex].users?.find((item) => item.id == userId)) {
+            const newUsers = rooms[roomIndex].users?.filter(
+                (item) => item.id !== userId,
+            );
+
+            rooms[roomIndex] = {
+                ...rooms[roomIndex],
+                users: rooms[roomIndex].isStart ? [] : newUsers,
+                isStart: false,
+            };
+        }
 
         const room = io.sockets.adapter.rooms.get(roomId);
         if (!room || room.size === 0) {
