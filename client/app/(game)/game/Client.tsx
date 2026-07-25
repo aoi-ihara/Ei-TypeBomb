@@ -9,6 +9,7 @@ import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
+import { number } from "framer-motion";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -80,6 +81,7 @@ export default function Clinet({
                     users: User[];
                     isStart: boolean;
                     bombHolder: number;
+                    wordIndex: number;
                 },
             ) => {
                 console.log(newRoom);
@@ -91,6 +93,9 @@ export default function Clinet({
                 );
                 setIsStarted(newRoom.isStart);
                 setCurrentTurn(newRoom.bombHolder);
+                if (newRoom.wordIndex !== undefined && newRoom.words)
+                    setCurrentWord(newRoom.words[newRoom.wordIndex]);
+                else setCurrentWord(null);
 
                 setUserPositions(newPositions(newRoom.users, userPositions));
             },
