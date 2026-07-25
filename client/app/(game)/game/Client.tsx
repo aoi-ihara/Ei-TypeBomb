@@ -81,11 +81,22 @@ export default function Clinet({
 
         socket.on(
             "room:broadcast",
-            (newRoom: Room & { users: User[]; isStart: boolean }) => {
+            (
+                newRoom: Room & {
+                    users: User[];
+                    isStart: boolean;
+                    bombHolder: number;
+                },
+            ) => {
                 console.log(newRoom);
                 setRoom(newRoom);
-                setUsers(newRoom.users);
+                setUsers(
+                    newRoom.users.map((item) => {
+                        return { id: item.id, displayName: item.displayName };
+                    }),
+                );
                 setIsStarted(newRoom.isStart);
+                setCurrentTurn(newRoom.bombHolder);
             },
         );
 

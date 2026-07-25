@@ -15,6 +15,7 @@ export type Room = {
     updatedAt?: string;
     users?: User[];
     isStart?: boolean;
+    bombHolder?: number;
 };
 
 export type User = {

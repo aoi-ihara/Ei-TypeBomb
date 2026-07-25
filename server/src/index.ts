@@ -46,6 +46,7 @@ io.on("connection", (socket) => {
 
     socket.on("room:join", () => {
         let index = rooms.findIndex((item) => item.id == roomId);
+        if (index == -1) return;
         console.log("room index:", index);
 
         const maxPlayers: number | undefined = rooms[index].maxPlayers;
@@ -103,7 +104,7 @@ io.on("connection", (socket) => {
 
     socket.on("game:start", () => {
         const index = rooms.findIndex((item) => item.id == roomId);
-        rooms[index].isStart = true;
+        rooms[index] = { ...rooms[index], isStart: true, bombHolder: 0 };
 
         sendRoomInfo(roomId);
     });
@@ -123,6 +124,7 @@ io.on("connection", (socket) => {
                 ...rooms[roomIndex],
                 users: rooms[roomIndex].isStart ? [] : newUsers,
                 isStart: false,
+                bombHolder: 0,
             };
         }
 
