@@ -39,6 +39,10 @@ io.on("connection", (socket) => {
     let user: User = { id: socket.id };
     let roomId: null | string = null;
 
+    const getRoomIndex = () => {
+        return rooms.findIndex((item) => item.id == roomId);
+    };
+
     console.log("Connected👍:", user.id);
 
     // AUTH
@@ -85,15 +89,13 @@ io.on("connection", (socket) => {
                 user = { ...user, displayName: response.displayName };
                 socket.join(roomId);
 
-                let index = rooms.findIndex((item) => item.id == roomId);
-
-                if (index == -1) {
+                if (getRoomIndex() == -1) {
                     console.log("searching room info…");
                     const room = await getRoomFromId(roomId);
                     console.log("room:", room);
                     if (!room) return;
-                    rooms.push({ ...room, users: [], isStart: false });
-                    index = rooms.length - 1;
+                    rooms.push(room);
+                    resetRoom();
                 }
 
                 sendRoomInfo(roomId);
@@ -104,7 +106,7 @@ io.on("connection", (socket) => {
     );
 
     socket.on("word:success", () => {
-        const roomIndex = rooms.findIndex((item) => item.id == roomId);
+        const roomIndex = getRoomIndex();
 
         console.log("success!!");
 
@@ -125,49 +127,86 @@ io.on("connection", (socket) => {
     });
 
     socket.on("game:start", () => {
-        const index = rooms.findIndex((item) => item.id == roomId);
-        rooms[index] = {
-            ...rooms[index],
-            isStart: true,
-            bombHolder: 0,
-            wordIndex: undefined,
-        };
+        const index = getRoomIndex();
+        if (rooms[index].users)
+            rooms[index] = {
+                ...rooms[index],
+                isStart: true,
+                bombHolder: Math.floor(
+                    Math.random() * rooms[index].users?.length,
+                ),
+                wordIndex: undefined,
+                bombStatus: 0,
+            };
 
         sendRoomInfo(roomId);
 
         setTimeout(() => {
-            rooms = rooms.map((item) =>
-                item.id == roomId
-                    ? {
-                          ...item,
-                          wordIndex: Math.floor(
-                              Math.random() * item.words?.length!,
-                          ),
-                      }
-                    : item,
-            );
+            const roomIndex = getRoomIndex();
+            rooms[roomIndex] = {
+                ...rooms[roomIndex],
+                wordIndex: Math.floor(
+                    Math.random() * rooms[roomIndex].words?.length!,
+                ),
+            };
 
             sendRoomInfo(roomId);
         }, 3000);
+
+        const changeBombStatus = () => {
+            const duration = Math.random() * 1000 + 2000;
+
+            setTimeout(() => {
+                const roomIndex = getRoomIndex();
+                if (rooms[roomIndex].bombStatus == undefined) return;
+
+                if (rooms[roomIndex].bombStatus == 4) {
+                    // ゲーム終了時の処理を記述。
+                } else {
+                    rooms[roomIndex] = {
+                        ...rooms[roomIndex],
+                        bombStatus: rooms[roomIndex].bombStatus + 1,
+                    };
+
+                    sendRoomInfo(roomId);
+
+                    changeBombStatus();
+                }
+            }, duration);
+        };
+
+        changeBombStatus();
     });
+
+    const resetRoom = () => {
+        const roomIndex = getRoomIndex();
+        rooms[roomIndex] = {
+            ...rooms[roomIndex],
+            users: [],
+            isStart: false,
+            bombStatus: 0,
+            bombHolder: 0,
+        };
+    };
 
     const deleteUser = (userId: string) => {
         if (!roomId) return;
 
-        const roomIndex = rooms.findIndex((item) => item.id == roomId);
+        const roomIndex = getRoomIndex();
         if (roomIndex == -1) return;
 
         if (rooms[roomIndex].users?.find((item) => item.id == userId)) {
-            const newUsers = rooms[roomIndex].users?.filter(
-                (item) => item.id !== userId,
-            );
+            if (rooms[roomIndex].isStart) resetRoom();
+            else {
+                const newUsers = rooms[roomIndex].users?.filter(
+                    (item) => item.id !== userId,
+                );
 
-            rooms[roomIndex] = {
-                ...rooms[roomIndex],
-                users: rooms[roomIndex].isStart ? [] : newUsers,
-                isStart: false,
-                bombHolder: 0,
-            };
+                rooms[roomIndex] = {
+                    ...rooms[roomIndex],
+                    users: newUsers,
+                };
+            }
         }
 
         const room = io.sockets.adapter.rooms.get(roomId);

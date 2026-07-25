@@ -33,7 +33,7 @@ export default function Clinet({
         if (typeof window === "undefined") return "";
         return localStorage.getItem("display-name") ?? "";
     });
-    const [bombStatus, setBombStatus] = useState<number>(0);
+    const [bombStatus, setBombStatus] = useState<number | null>(0);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -82,6 +82,7 @@ export default function Clinet({
                     isStart: boolean;
                     bombHolder: number;
                     wordIndex: number;
+                    bombStatus: number;
                 },
             ) => {
                 console.log(newRoom);
@@ -96,7 +97,7 @@ export default function Clinet({
                 if (newRoom.wordIndex !== undefined && newRoom.words)
                     setCurrentWord(newRoom.words[newRoom.wordIndex]);
                 else setCurrentWord(null);
-
+                setBombStatus(newRoom.bombStatus);
                 setUserPositions(newPositions(newRoom.users, userPositions));
             },
         );

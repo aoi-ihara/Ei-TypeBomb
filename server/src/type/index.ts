@@ -17,6 +17,7 @@ export type Room = {
     isStart?: boolean;
     bombHolder?: number;
     wordIndex?: number;
+    bombStatus: number;
 };
 
 export type User = {
