@@ -16,6 +16,7 @@ export type Room = {
     users?: User[];
     isStart?: boolean;
     bombHolder?: number;
+    wordIndex?: number;
 };
 
 export type User = {

@@ -12,7 +12,11 @@ export const getRoomFromId = async (id: string) => {
         password: "data.password",
         createdAt: "2026-01-01",
         updatedAt: "2026-01-01",
-        words: [{ jp: "りんご", en: "Apple" }],
+        words: [
+            { jp: "りんご", en: "apple" },
+            { jp: "エラー", en: "error" },
+            { jp: "暗号 / コード", en: "code" },
+        ],
     } as Room;
 };
 

@@ -107,6 +107,21 @@ io.on("connection", (socket) => {
         rooms[index] = { ...rooms[index], isStart: true, bombHolder: 0 };
 
         sendRoomInfo(roomId);
+
+        setTimeout(() => {
+            rooms = rooms.map((item) =>
+                item.id == roomId
+                    ? {
+                          ...item,
+                          wordIndex: Math.floor(
+                              Math.random() * item.words?.length!,
+                          ),
+                      }
+                    : item,
+            );
+
+            sendRoomInfo(roomId);
+        }, 3000);
     });
 
     const deleteUser = (userId: string) => {
