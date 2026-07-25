@@ -202,10 +202,7 @@ export default function Clinet({
     };
 
     const handleLeave = () => {
-        setUserId("");
-        userIdRef.current = "";
-        socketRef.current?.disconnect();
-        socketRef.current?.connect();
+        socketRef.current?.emit("room:leave");
     };
 
     return (

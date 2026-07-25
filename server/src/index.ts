@@ -6,6 +6,7 @@ import type { Word, Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { randomUUID, UUID } from "crypto";
+import { useDeprecatedInvertedScale } from "framer-motion";
 
 let rooms: Room[] = [];
 
@@ -55,6 +56,10 @@ io.on("connection", (socket) => {
         sendRoomInfo(roomId);
     });
 
+    socket.on("room:leave", () => {
+        deleteUser(user.id);
+    });
+
     socket.on(
         "auth:response",
         (response: { jwtToken: string; displayName: string }) => {
@@ -87,22 +92,28 @@ io.on("connection", (socket) => {
         },
     );
 
-    socket.on("disconnect", () => {
-        console.log("disconnected", user.id);
+    const deleteUser = (userId: string) => {
         if (!roomId) return;
 
         const roomIndex = rooms.findIndex((item) => item.id == roomId);
         if (roomIndex == -1) return;
 
         const newUsers = rooms[roomIndex].users?.filter(
-            (item) => item.id !== user.id,
+            (item) => item.id !== userId,
         );
+        rooms[roomIndex] = { ...rooms[roomIndex], users: newUsers };
 
-        if (newUsers?.length == 0)
+        const room = io.sockets.adapter.rooms.get(roomId);
+        if (!room || room.size === 0) {
             rooms = rooms.filter((item) => item.id !== roomId);
-        else rooms[roomIndex] = { ...rooms[roomIndex], users: newUsers };
+            console.log("room deleted");
+        }
 
         sendRoomInfo(roomId);
+    };
+
+    socket.on("disconnect", () => {
+        deleteUser(user.id);
     });
 });
 
