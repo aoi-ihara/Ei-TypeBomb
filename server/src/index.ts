@@ -169,6 +169,7 @@ io.on("connection", (socket) => {
 
                     const lostUser =
                         rooms[roomIndex].users[rooms[roomIndex].bombHolder];
+                    if (!lostUser) return;
                     io.to(roomId).emit("game:end", {
                         holderUserId: lostUser.id,
                         holderDisplayName: lostUser.displayName,
@@ -208,8 +209,10 @@ io.on("connection", (socket) => {
         if (roomIndex == -1) return;
 
         if (rooms[roomIndex].users?.find((item) => item.id == userId)) {
-            if (rooms[roomIndex].isStart) resetRoom();
-            else {
+            if (rooms[roomIndex].isStart) {
+                resetRoom();
+                io.to(roomId).emit("game:quited");
+            } else {
                 const newUsers = rooms[roomIndex].users?.filter(
                     (item) => item.id !== userId,
                 );
