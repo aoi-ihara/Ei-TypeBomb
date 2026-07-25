@@ -20,3 +20,11 @@ export type User = {
     displayName?: string;
     pulse?: string;
 };
+
+export type Position = {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    opacity: number;
+};

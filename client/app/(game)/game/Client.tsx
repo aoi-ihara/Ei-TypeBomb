@@ -7,14 +7,8 @@ import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
-
-type Position = {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    opacity: number;
-};
+import { Position } from "@/type";
+import { newPositions } from "@/lib/ui/position";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -97,6 +91,8 @@ export default function Clinet({
                 );
                 setIsStarted(newRoom.isStart);
                 setCurrentTurn(newRoom.bombHolder);
+
+                setUserPositions(newPositions(newRoom.users, userPositions));
             },
         );
 
