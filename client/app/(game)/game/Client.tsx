@@ -102,6 +102,15 @@ export default function Clinet({
             },
         );
 
+        socket.on("game:quited", () => {
+            setConnectionAlert(1);
+            console.log("game quited");
+
+            setTimeout(() => {
+                setConnectionAlert(null);
+            }, 3000);
+        });
+
         socket.on("auth:request", () => {
             setUserId(socket.id ?? null);
             userIdRef.current = socket.id ?? null;
@@ -277,7 +286,7 @@ export default function Clinet({
                 </div>
             )}
             <div
-                className={`max-w-2xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
+                className={`max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
             >
                 <div
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
@@ -546,7 +555,14 @@ export default function Clinet({
                 </div>
             </div>
 
-            <div className="w-full flex md:order-1">
+            <div className="w-full relative flex md:order-1">
+                <h1
+                    className="absolute top-0 left-4 md:top-3 w-full block truncate line-clamp-1 font-bold font-mono text-lg"
+                    data-cursor="text"
+                >
+                    {room?.title}
+                </h1>
+
                 <UsersView
                     users={users ?? []}
                     positions={userPositions}
