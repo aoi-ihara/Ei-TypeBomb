@@ -95,6 +95,7 @@ export default function Loading() {
             <Input
                 disabled={showPasswordField}
                 value={roomId}
+                font="mono"
                 onChange={(e) => setRoomId(e.target.value)}
                 label="Room ID"
             />

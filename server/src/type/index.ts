@@ -13,4 +13,15 @@ export type Room = {
     password?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    users?: User[];
+    isStart?: boolean;
+    bombHolder?: number;
+    wordIndex?: number;
+    bombStatus: number;
+};
+
+export type User = {
+    id: string;
+    displayName?: string;
+    pulse?: string;
 };

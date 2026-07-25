@@ -14,3 +14,17 @@ export type Room = {
     createdAt?: string;
     updatedAt?: string;
 };
+
+export type User = {
+    id: string;
+    displayName?: string;
+    pulse?: string;
+};
+
+export type Position = {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    opacity: number;
+};

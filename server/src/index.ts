@@ -2,31 +2,14 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
-import { s } from "framer-motion/client";
+import type { Word, Room, User } from "./type";
+import { verifyToken } from "./lib/auth";
+import { getRoomFromId } from "./lib/get";
+import { randomUUID, UUID } from "crypto";
+import { useDeprecatedInvertedScale } from "framer-motion";
+import { send } from "process";
 
-const words: Word[] = JSON.parse(
-    fs.readFileSync("src/words/demo.json", "utf8"),
-) as Word[];
-
-type User = {
-    displayName: string;
-    userId: string;
-    pulse?: string;
-};
-
-type Word = {
-    jp: string;
-    en: string;
-};
-
-let room: User[] = [];
-let isStarted = false;
-let previousPulse: string = "";
-let currentTurn = 0;
-let bombTimer: NodeJS.Timeout | null = null;
-let currentWord: Word | null = null;
-let bombStatus: number = 0;
-let currentInput = "";
+let rooms: Room[] = [];
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,236 +20,219 @@ const io = new Server(httpServer, {
     },
 });
 
-const bombExplosioned = () => {
-    console.log("💥 BOMB EXPLODED");
+const sendRoomInfo = (roomId: string | null) => {
+    if (!roomId) return;
 
-    io.emit("bombExplosioned", {
-        explosionedUserId: room[currentTurn].userId,
-        currentRoom: room,
-    });
+    const room = rooms.find((item) => item.id === roomId);
+    if (!room) return;
 
-    isStarted = false;
-    currentTurn = 0;
-    currentWord = null;
-    bombStatus = 0;
-    room = [];
-    currentInput = "";
-
-    if (bombTimer) {
-        clearTimeout(bombTimer);
-        bombTimer = null;
-    }
-
-    broadcastRoomInfo();
+    io.to(roomId).emit("room:broadcast", { ...room, password: undefined });
+    console.log("room:", room);
 };
 
-const broadcastRoomInfo = () => {
-    io.emit("roomInfo", room);
-    io.emit("gameStatus", {
-        isStarted: isStarted,
-        currentTurn: currentTurn,
-        currentWord: currentWord,
-        bombStatus: bombStatus,
-        currentInput: currentInput,
-    });
-
-    console.log(
-        "Room status:",
-        isStarted,
-        currentTurn,
-        currentWord,
-        bombStatus,
-    );
-};
-
-const updateRoom = (fn: (room: User[]) => void) => {
-    fn(room);
-    broadcastRoomInfo();
-};
-
-const endGame = () => {
-    isStarted = false;
-    currentWord = null;
-    currentTurn = 0;
-    bombStatus = 0;
-    currentInput = "";
-
-    if (bombTimer) {
-        clearTimeout(bombTimer);
-        bombTimer = null;
-    }
-};
-
-const startGame = () => {
-    isStarted = true;
-    console.log("Game Started 🎮");
-
-    bombStatus = 0;
-    currentTurn = 0;
-    currentInput = "";
-
-    broadcastRoomInfo();
-
-    setTimeout(() => {
-        currentWord = words[Math.floor(Math.random() * words.length)];
-        broadcastRoomInfo();
-        console.log("Word Changed");
-    }, 3000);
-
-    scheduleBombTick();
-};
-
-const scheduleBombTick = () => {
-    if (!isStarted) return;
-
-    const delay = 10000 + Math.random() * 10000;
-
-    bombTimer = setTimeout(() => {
-        if (!isStarted) return;
-
-        if (bombStatus >= 4) {
-            bombExplosioned();
-            return;
-        } else {
-            bombStatus += 1;
-        }
-
-        console.log("💣 bombStatus:", bombStatus);
-
-        broadcastRoomInfo();
-
-        scheduleBombTick();
-    }, delay);
-};
-
-setInterval(() => {
-    updateRoom((r) => {
-        for (let i = r.length - 1; i >= 0; i--) {
-            if (r[i].pulse !== previousPulse) {
-                console.log("user kicked:", previousPulse, "!=", r[i].pulse);
-                r.splice(i, 1);
-
-                if (isStarted) {
-                    endGame();
-                    room = [];
-                    io.emit("endGame");
-                }
-            }
-        }
-    });
-
-    const sharedUUID = crypto.randomUUID();
-    io.emit("pulse", sharedUUID);
-    console.log("Pulse sent📡:", sharedUUID);
-    previousPulse = sharedUUID;
-}, 1000);
+// MAIN
 
 io.on("connection", (socket) => {
     const ip = socket.handshake.address;
     const origin = socket.handshake.headers.origin;
     const userAgent = socket.handshake.headers["user-agent"];
-    let userId: string | null = null;
+    let user: User = { id: socket.id };
+    let roomId: null | string = null;
 
-    console.log("Connected👍:", socket.id);
-    console.log("IP:", ip);
-    console.log("Origin:", origin);
-    console.log("UA:", userAgent);
+    const getRoomIndex = () => {
+        return rooms.findIndex((item) => item.id == roomId);
+    };
 
-    socket.on("fetch", () => {
-        console.log("Room Info Requested:", ip);
-        socket.emit("roomInfo", room);
-        socket.emit("isStarted", isStarted);
-    });
+    console.log("Connected👍:", user.id);
 
-    socket.on("disconnect", () => {
-        console.log("Disconnected:", socket.id);
+    // AUTH
 
-        if (isStarted && room.find((user) => user.userId == userId)) {
-            endGame();
-            room = [];
-            socket.broadcast.emit("endGame");
-        }
+    socket.emit("auth:request");
 
-        room = room.filter((item) => item.userId !== userId);
+    socket.on("room:join", () => {
+        let index = rooms.findIndex((item) => item.id == roomId);
+        if (index == -1) return;
+        console.log("room index:", index);
 
-        broadcastRoomInfo();
-    });
-
-    socket.on("joinRoom", (displayName: string) => {
-        if (room.length < 6 && !isStarted) {
-            const uuid = crypto.randomUUID();
-            updateRoom((r) =>
-                r.push({ displayName, userId: uuid, pulse: previousPulse }),
-            );
-            socket.emit("joined", uuid);
-            userId = uuid;
-
-            if (room.length == 6) {
-                startGame();
-            }
-        }
-    });
-
-    socket.on("cuttentInput", (newCurrentInput) => {
-        if (!room[currentTurn]) return;
-
-        if (userId == room[currentTurn].userId) {
-            currentInput = newCurrentInput;
-        }
-
-        broadcastRoomInfo();
-    });
-
-    socket.on("success", () => {
-        console.log("success 💻");
-
-        if (userId == room[currentTurn].userId) {
-            if (currentTurn == room.length - 1) {
-                currentTurn = 0;
-            } else {
-                currentTurn += 1;
-            }
-            currentInput = "";
-            const previousWord = currentWord;
-            currentWord = words[Math.floor(Math.random() * words.length)];
-            do {
-                currentWord = words[Math.floor(Math.random() * words.length)];
-            } while (currentWord == previousWord);
-
-            broadcastRoomInfo();
-        }
-    });
-
-    socket.on("startGame", () => {
+        const maxPlayers: number | undefined = rooms[index].maxPlayers;
+        if (!maxPlayers) return;
+        console.log("max players:", maxPlayers);
         if (
-            userId &&
-            room.map((user) => user.userId).includes(userId) &&
-            room.length <= 6 &&
-            room.length > 1 &&
-            !isStarted
-        ) {
-            startGame();
-        }
+            rooms[index].users?.length == undefined ||
+            rooms[index].users?.length >= maxPlayers
+        )
+            return;
+
+        rooms[index].users?.push({
+            id: user.id,
+            displayName: user.displayName,
+        });
+
+        sendRoomInfo(roomId);
+    });
+
+    socket.on("room:leave", () => {
+        deleteUser(user.id);
     });
 
     socket.on(
-        "pulseResponse",
-        (response: { userId: string; newPulse: string }) => {
-            updateRoom((r) => {
-                for (let i = r.length - 1; i >= 0; i--) {
-                    if (r[i].userId == userId) {
-                        r[i].pulse = response.newPulse;
-                    }
+        "auth:response",
+        (response: { jwtToken: string; displayName: string }) => {
+            const getRoomId = async () => {
+                console.log("JWT Token:", response.jwtToken);
+
+                const jwtResult = await verifyToken(response.jwtToken);
+                console.log("room id:", jwtResult);
+                if (!jwtResult) return;
+
+                roomId = jwtResult;
+                user = { ...user, displayName: response.displayName };
+                socket.join(roomId);
+
+                if (getRoomIndex() == -1) {
+                    console.log("searching room info…");
+                    const room = await getRoomFromId(roomId);
+                    console.log("room:", room);
+                    if (!room) return;
+                    rooms.push(room);
+                    resetRoom();
                 }
-            });
-            console.log(
-                "Pulse response received📡:",
-                response.newPulse,
-                "Current Users",
-                room,
-            );
+
+                sendRoomInfo(roomId);
+            };
+
+            getRoomId();
         },
     );
+
+    socket.on("word:success", () => {
+        const roomIndex = getRoomIndex();
+
+        console.log("success!!");
+
+        if (rooms[roomIndex].bombHolder == undefined) return;
+        rooms[roomIndex] = {
+            ...rooms[roomIndex],
+            bombHolder:
+                rooms[roomIndex].bombHolder + 1 ==
+                rooms[roomIndex].users?.length
+                    ? 0
+                    : rooms[roomIndex].bombHolder + 1,
+            wordIndex: Math.floor(
+                Math.random() * rooms[roomIndex].words?.length!,
+            ),
+        };
+
+        sendRoomInfo(roomId);
+    });
+
+    socket.on("game:start", () => {
+        const index = getRoomIndex();
+        if (rooms[index].users)
+            rooms[index] = {
+                ...rooms[index],
+                isStart: true,
+                bombHolder: Math.floor(
+                    Math.random() * rooms[index].users?.length,
+                ),
+                wordIndex: undefined,
+                bombStatus: 0,
+            };
+
+        sendRoomInfo(roomId);
+
+        setTimeout(() => {
+            const roomIndex = getRoomIndex();
+            rooms[roomIndex] = {
+                ...rooms[roomIndex],
+                wordIndex: Math.floor(
+                    Math.random() * rooms[roomIndex].words?.length!,
+                ),
+            };
+
+            sendRoomInfo(roomId);
+        }, 3000);
+
+        const changeBombStatus = () => {
+            const duration = Math.random() * 1000 + 2000;
+
+            setTimeout(() => {
+                const roomIndex = getRoomIndex();
+                if (rooms[roomIndex].bombStatus == undefined) return;
+
+                if (rooms[roomIndex].bombStatus == 4) {
+                    if (!roomId) return;
+
+                    const roomIndex = getRoomIndex();
+                    if (!rooms[roomIndex].users) return;
+                    if (rooms[roomIndex].bombHolder == undefined) return;
+
+                    const lostUser =
+                        rooms[roomIndex].users[rooms[roomIndex].bombHolder];
+                    io.to(roomId).emit("game:end", {
+                        holderUserId: lostUser.id,
+                        holderDisplayName: lostUser.displayName,
+                    });
+                    resetRoom();
+                    sendRoomInfo(roomId);
+                } else {
+                    rooms[roomIndex] = {
+                        ...rooms[roomIndex],
+                        bombStatus: rooms[roomIndex].bombStatus + 1,
+                    };
+
+                    sendRoomInfo(roomId);
+                    changeBombStatus();
+                }
+            }, duration);
+        };
+
+        changeBombStatus();
+    });
+
+    const resetRoom = () => {
+        const roomIndex = getRoomIndex();
+        rooms[roomIndex] = {
+            ...rooms[roomIndex],
+            users: [],
+            isStart: false,
+            bombStatus: 0,
+            bombHolder: 0,
+        };
+    };
+
+    const deleteUser = (userId: string) => {
+        if (!roomId) return;
+
+        const roomIndex = getRoomIndex();
+        if (roomIndex == -1) return;
+
+        if (rooms[roomIndex].users?.find((item) => item.id == userId)) {
+            if (rooms[roomIndex].isStart) resetRoom();
+            else {
+                const newUsers = rooms[roomIndex].users?.filter(
+                    (item) => item.id !== userId,
+                );
+
+                rooms[roomIndex] = {
+                    ...rooms[roomIndex],
+                    users: newUsers,
+                };
+            }
+        }
+
+        const room = io.sockets.adapter.rooms.get(roomId);
+        if (!room || room.size === 0) {
+            rooms = rooms.filter((item) => item.id !== roomId);
+            console.log("room deleted");
+        }
+
+        sendRoomInfo(roomId);
+    };
+
+    socket.on("disconnect", () => {
+        deleteUser(user.id);
+    });
 });
 
 httpServer.listen(3001, () => {

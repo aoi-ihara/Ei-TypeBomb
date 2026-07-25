@@ -5,25 +5,11 @@ import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
-
-type Word = {
-    jp: string;
-    en: string;
-};
-
-type User = {
-    displayName: string;
-    userId: string;
-    pulse: string;
-};
-
-type Position = {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    opacity: number;
-};
+import { Room, Word, User } from "@/type";
+import { getAuthToken } from "@/lib/room/auth";
+import { Position } from "@/type";
+import { newPositions } from "@/lib/ui/position";
+import { number } from "framer-motion";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -36,20 +22,18 @@ export default function Clinet({
     initialSounDeffects,
     initialServerUrl,
 }: Props) {
-    const [userId, setUserId] = useState("");
-    const userIdRef = useRef("");
+    const [userId, setUserId] = useState<string | null>(null);
+    const userIdRef = useRef<string | null>(null);
 
-    const [showCursor, setShowCursor] = useState(false);
-    const [isConnected, setIsConnected] = useState(false);
-    const [room, setRoom] = useState<User[]>([]);
-    const [cameraAngle, setCameraAngle] = useState(1);
+    const [room, setRoom] = useState<Room | null>(null);
+    const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
     const [displayName, setDisplayName] = useState<string>(() => {
         if (typeof window === "undefined") return "";
         return localStorage.getItem("display-name") ?? "";
     });
-    const [bombStatus, setBombStatus] = useState<number>(0);
+    const [bombStatus, setBombStatus] = useState<number | null>(0);
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -73,15 +57,91 @@ export default function Clinet({
         })),
     );
 
-    const currentTurnUser = room[currentTurn] as User | undefined;
+    const currentTurnUser = users[currentTurn] as User | undefined;
+    const roomRef = useRef<Room>(null);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
+        // SOCKET
+
+        const socket = io(
+            typeof window === "undefined" || initialServerUrl === ""
+                ? process.env.NEXT_PUBLIC_RENDER_URL
+                : initialServerUrl,
+        );
+
+        socketRef.current = socket;
+
+        socket.on(
+            "room:broadcast",
+            (
+                newRoom: Room & {
+                    users: User[];
+                    isStart: boolean;
+                    bombHolder: number;
+                    wordIndex: number;
+                    bombStatus: number;
+                },
+            ) => {
+                console.log(newRoom);
+                setRoom(newRoom);
+                setUsers(
+                    newRoom.users.map((item) => {
+                        return { id: item.id, displayName: item.displayName };
+                    }),
+                );
+                setIsStarted(newRoom.isStart);
+                setCurrentTurn(newRoom.bombHolder);
+                if (newRoom.wordIndex !== undefined && newRoom.words)
+                    setCurrentWord(newRoom.words[newRoom.wordIndex]);
+                else setCurrentWord(null);
+                setBombStatus(newRoom.bombStatus);
+                setUserPositions(newPositions(newRoom.users, userPositions));
+            },
+        );
+
+        socket.on("auth:request", () => {
+            setUserId(socket.id ?? null);
+            userIdRef.current = socket.id ?? null;
+            const sendToken = async () => {
+                const authToken = await getAuthToken();
+                if (!authToken) return;
+
+                console.log("Auth Token:", authToken);
+                socket.emit("auth:response", {
+                    jwtToken: authToken,
+                    displayName: displayName,
+                });
+            };
+
+            sendToken();
+        });
+
+        socket.on(
+            "game:end",
+            ({
+                holderUserId,
+                holderDisplayName,
+            }: {
+                holderUserId: string;
+                holderDisplayName: string;
+            }) => {
+                setResult(userIdRef.current == holderUserId);
+                setLostDisplayName(holderDisplayName);
+
+                setTimeout(() => {
+                    setResult(null);
+                    setLostDisplayName(null);
+                }, 3000);
+            },
+        );
+
         return () => {
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
+            socket.disconnect();
         };
     }, []);
 
@@ -104,7 +164,7 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [room.length, initialSounDeffects]);
+    }, [users?.length, initialSounDeffects]);
 
     const isFirstBombRender = useRef(true);
     useEffect(() => {
@@ -157,163 +217,7 @@ export default function Clinet({
         startAudio();
         addListeners();
 
-        const socket = io(
-            typeof window === "undefined" || initialServerUrl === ""
-                ? process.env.NEXT_PUBLIC_RENDER_URL
-                : initialServerUrl,
-        );
-
-        socketRef.current = socket;
-
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        const intervalId2 = setInterval(() => {
-            socket.emit("fetch", "");
-        }, 1000);
-
-        const showConnectionAlert = (alert: number) => {
-            setConnectionAlert(alert);
-
-            const alertIntervalId = setInterval(() => {
-                setConnectionAlert(null);
-            }, 4000);
-
-            return () => {
-                clearInterval(alertIntervalId);
-            };
-        };
-
-        socket.on("endGame", () => {
-            console.log("game end");
-            showConnectionAlert(1);
-        });
-
-        socket.on("roomInfo", (roomInfo: User[]) => {
-            setIsConnected(true);
-            setRoom(roomInfo);
-            setCameraAngle(
-                roomInfo.length == 1 || roomInfo.length == 0 ? 3 : 1,
-            );
-            setUserPositions(
-                userPositions.map((position, index) => {
-                    if (roomInfo.length == 1 && index == 0) {
-                        return {
-                            x: 0,
-                            y: 0,
-                            w: 64,
-                            h: 64,
-                            opacity: 1,
-                        };
-                    } else if (index < roomInfo.length) {
-                        const angle = (index / roomInfo.length) * 2 * Math.PI;
-                        return {
-                            x: Math.cos(angle) * (room.length * 6 + 25),
-                            y: Math.sin(angle) * (room.length * 6 + 25),
-                            w: 24,
-                            h: 24,
-                            opacity: 1,
-                        };
-                    } else {
-                        return {
-                            x: 0,
-                            y: 0,
-                            w: 24,
-                            h: 24,
-                            opacity: 0,
-                        };
-                    }
-                }),
-            );
-        });
-
-        socket.on(
-            "bombExplosioned",
-            ({
-                explosionedUserId,
-                currentRoom,
-            }: {
-                explosionedUserId: string;
-                currentRoom: User[];
-            }) => {
-                if (initialSounDeffects) {
-                    const audio = new Audio("/Explosion_7.wav");
-                    audio.volume = 1;
-                    audio.play().catch(() => {});
-                }
-
-                if (!isSpectator) {
-                    if (userIdRef.current == explosionedUserId) {
-                        setResult(true);
-                    } else if (
-                        currentRoom.find(
-                            (item) => userIdRef.current == item.userId,
-                        )
-                    ) {
-                        setResult(false);
-                        setLostDisplayName(
-                            currentRoom.find(
-                                (user) => user.userId == explosionedUserId,
-                            )?.displayName,
-                        );
-                    } else {
-                        setLostDisplayName(
-                            currentRoom.find(
-                                (user) => user.userId == explosionedUserId,
-                            )?.displayName,
-                        );
-                    }
-                }
-
-                const resultTimer = setTimeout(() => {
-                    setResult(null);
-                    setLostDisplayName(null);
-                }, 3000);
-            },
-        );
-
-        socket.on("joined", (myUuid: string) => {
-            userIdRef.current = myUuid;
-            setUserId(myUuid);
-        });
-
-        socket.on(
-            "gameStatus",
-            ({
-                isStarted,
-                currentTurn,
-                currentWord,
-                bombStatus,
-                currentInput,
-            }: {
-                isStarted: boolean;
-                currentTurn: number;
-                currentWord: Word;
-                bombStatus: number;
-                currentInput: string;
-            }) => {
-                setIsStarted(isStarted);
-                setCurrentTurn(currentTurn);
-                setCurrentWord(currentWord);
-                setBombStatus(bombStatus);
-                setCurrentInput(currentInput);
-            },
-        );
-
-        socket.on("pulse", (pulseUuid: string) => {
-            if (userIdRef.current !== "") {
-                socket.emit("pulseResponse", {
-                    userId: userIdRef.current,
-                    newPulse: pulseUuid,
-                });
-            }
-        });
-
         return () => {
-            socket.disconnect();
-            clearInterval(intervalId);
-            clearInterval(intervalId2);
             removeListeners();
             if (audioRef.current) {
                 audioRef.current.pause();
@@ -321,8 +225,9 @@ export default function Clinet({
         };
     }, [router, initialBackgroundMusic, initialSounDeffects]);
 
-    const handleConnect = () => {
-        socketRef.current?.emit("joinRoom", displayName);
+    const handleJoin = () => {
+        console.log("join request");
+        socketRef.current?.emit("room:join");
     };
 
     const handleWatch = () => {
@@ -330,14 +235,11 @@ export default function Clinet({
     };
 
     const handleStartGame = () => {
-        socketRef.current?.emit("startGame");
+        socketRef.current?.emit("game:start");
     };
 
     const handleLeave = () => {
-        setUserId("");
-        userIdRef.current = "";
-        socketRef.current?.disconnect();
-        socketRef.current?.connect();
+        socketRef.current?.emit("room:leave");
     };
 
     return (
@@ -381,9 +283,9 @@ export default function Clinet({
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
                         isSpectator && !isStarted
                             ? "opacity-0 scale-95"
-                            : room.some((user) => user.userId === userId)
+                            : users.some((user) => user.id === userId)
                               ? isStarted
-                                  ? currentTurnUser?.userId == userId
+                                  ? currentTurnUser?.id == userId
                                       ? "h-full"
                                       : "h-64"
                                   : "h-48"
@@ -392,8 +294,8 @@ export default function Clinet({
                                 : "h-14"
                     } rounded-2xl p-2 w-full`}
                 >
-                    {isConnected ? (
-                        room.some((user) => user.userId === userId) ? (
+                    {room ? (
+                        users.some((user) => user.id === userId) ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
@@ -407,7 +309,7 @@ export default function Clinet({
                                                 </div>
                                             ) : (
                                                 <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                    {currentTurnUser?.userId ==
+                                                    {currentTurnUser?.id ==
                                                     userId ? (
                                                         <>
                                                             <div
@@ -437,7 +339,7 @@ export default function Clinet({
                                                                 "Success! Emitting to server...",
                                                             );
                                                             socketRef.current?.emit(
-                                                                "success",
+                                                                "word:success",
                                                             );
                                                         }}
                                                         onChangeInput={(
@@ -445,7 +347,7 @@ export default function Clinet({
                                                         ) => {
                                                             if (
                                                                 userId ==
-                                                                currentTurnUser?.userId
+                                                                currentTurnUser?.id
                                                             ) {
                                                                 socketRef.current?.emit(
                                                                     "cuttentInput",
@@ -455,7 +357,7 @@ export default function Clinet({
                                                         }}
                                                         currentInput={
                                                             userId ==
-                                                            currentTurnUser?.userId
+                                                            currentTurnUser?.id
                                                                 ? null
                                                                 : currentInput
                                                         }
@@ -474,16 +376,16 @@ export default function Clinet({
                                                     className="rounded-lg w-48 flex"
                                                     data-cursor="button"
                                                     data-cursor-shape={
-                                                        room.length < 2
+                                                        users.length < 2
                                                             ? "2"
                                                             : "0"
                                                     }
                                                 >
                                                     <button
-                                                        className={`items-center font-bold ${room.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
+                                                        className={`items-center font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
                                                         onClick={() => {
                                                             if (
-                                                                room.length > 1
+                                                                users.length > 1
                                                             ) {
                                                                 handleStartGame();
                                                             }
@@ -513,7 +415,7 @@ export default function Clinet({
                             </div>
                         ) : (
                             <div className="h-full w-full flex justify-center items-center">
-                                {room.length < 6 ? (
+                                {users.length < room.maxPlayers! ? (
                                     isStarted ? (
                                         currentWord == null ? (
                                             <div
@@ -524,7 +426,7 @@ export default function Clinet({
                                             </div>
                                         ) : (
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                {currentTurnUser?.userId ==
+                                                {currentTurnUser?.id ==
                                                 userId ? (
                                                     <>
                                                         <div
@@ -558,7 +460,7 @@ export default function Clinet({
                                                     onChangeInput={(input) => {
                                                         if (
                                                             userId ==
-                                                            currentTurnUser?.userId
+                                                            currentTurnUser?.id
                                                         ) {
                                                             socketRef.current?.emit(
                                                                 "cuttentInput",
@@ -568,7 +470,7 @@ export default function Clinet({
                                                     }}
                                                     currentInput={
                                                         userId ==
-                                                        currentTurnUser?.userId
+                                                        currentTurnUser?.id
                                                             ? null
                                                             : currentInput
                                                     }
@@ -609,7 +511,7 @@ export default function Clinet({
                                                         <button
                                                             className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
                                                             onClick={() =>
-                                                                handleConnect()
+                                                                handleJoin()
                                                             }
                                                         >
                                                             Join
@@ -620,11 +522,13 @@ export default function Clinet({
                                         )
                                     )
                                 ) : (
-                                    <div
-                                        className="font-mono opacity-50 w-fit pl-4 font-bold"
-                                        data-cursor="text"
-                                    >
-                                        This room is full
+                                    <div className="flex justify-start w-full">
+                                        <div
+                                            className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                            data-cursor="text"
+                                        >
+                                            This room is full
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -644,11 +548,11 @@ export default function Clinet({
 
             <div className="w-full flex md:order-1">
                 <UsersView
-                    users={room ?? []}
+                    users={users ?? []}
                     positions={userPositions}
                     userId={userId}
                     currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
+                    bombStatus={bombStatus ?? 0}
                 />
             </div>
         </div>

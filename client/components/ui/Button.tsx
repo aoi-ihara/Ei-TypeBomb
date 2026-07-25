@@ -54,7 +54,9 @@ export default function Button({
         <div
             className={`rounded-lg ${className}`}
             data-cursor="button"
-            data-cursor-shape={disabled ? "2" : variant == "text" ? "1" : "0"}
+            data-cursor-shape={
+                disabled || loading ? "2" : variant == "text" ? "1" : "0"
+            }
         >
             <button
                 type={type}
