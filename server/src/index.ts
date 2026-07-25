@@ -18,6 +18,16 @@ const io = new Server(httpServer, {
     },
 });
 
+const sendRoomInfo = (roomId: string) => {
+    const room = rooms.find((item) => item.id === roomId);
+    if (!room) return;
+
+    io.to(roomId).emit("room:broadcast", room);
+    console.log("room:", room);
+};
+
+// MAIN
+
 io.on("connection", (socket) => {
     const ip = socket.handshake.address;
     const origin = socket.handshake.headers.origin;
@@ -42,12 +52,16 @@ io.on("connection", (socket) => {
                 if (!jwtResult) return;
                 roomId = jwtResult;
 
-                let index = rooms.findIndex((item) => item.id == jwtResult);
+                joinToRoom(jwtResult); // テスト用に、接続時に自動的に参加するようにしている。
+            };
+
+            const joinToRoom = async (roomId: string) => {
+                let index = rooms.findIndex((item) => item.id == roomId);
                 console.log("room index:", index);
 
                 if (index == -1) {
                     console.log("searching room info…");
-                    const room = await getRoomFromId(jwtResult);
+                    const room = await getRoomFromId(roomId);
                     console.log("room:", room);
                     if (!room) return;
                     rooms.push({ ...room, users: [] });
@@ -59,7 +73,9 @@ io.on("connection", (socket) => {
                     id: userId,
                     displayName: response.displayName,
                 });
-                console.log("room:", rooms[0]);
+                socket.join(roomId);
+
+                sendRoomInfo(roomId);
             };
 
             getRoomId();
@@ -79,7 +95,7 @@ io.on("connection", (socket) => {
             rooms = rooms.filter((item) => item.id !== roomId);
         else rooms[roomIndex] = { ...rooms[roomIndex], users: newUsers };
 
-        console.log("rooms:", rooms);
+        sendRoomInfo(roomId);
     });
 });
 
