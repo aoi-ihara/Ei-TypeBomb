@@ -2,7 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import fs from "fs";
-import type { Word, Room } from "./type";
+import type { Word, Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { randomUUID, UUID } from "crypto";
@@ -18,7 +18,9 @@ const io = new Server(httpServer, {
     },
 });
 
-const sendRoomInfo = (roomId: string) => {
+const sendRoomInfo = (roomId: string | null) => {
+    if (!roomId) return;
+    
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
 
@@ -32,14 +34,26 @@ io.on("connection", (socket) => {
     const ip = socket.handshake.address;
     const origin = socket.handshake.headers.origin;
     const userAgent = socket.handshake.headers["user-agent"];
-    let userId = socket.id;
+    let user: User = { id: socket.id };
     let roomId: null | string = null;
 
-    console.log("Connected👍:", userId);
+    console.log("Connected👍:", user.id);
 
     // AUTH
 
     socket.emit("auth:request");
+
+    socket.on("room:join", () => {
+        let index = rooms.findIndex((item) => item.id == roomId);
+        console.log("room index:", index);
+
+        rooms[index].users?.push({
+            id: user.id,
+            displayName: user.displayName,
+        });
+
+        sendRoomInfo(roomId);
+    });
 
     socket.on(
         "auth:response",
@@ -50,14 +64,12 @@ io.on("connection", (socket) => {
                 const jwtResult = await verifyToken(response.jwtToken);
                 console.log("room id:", jwtResult);
                 if (!jwtResult) return;
+
                 roomId = jwtResult;
+                user = { ...user, displayName: response.displayName };
+                socket.join(roomId);
 
-                joinToRoom(jwtResult); // テスト用に、接続時に自動的に参加するようにしている。
-            };
-
-            const joinToRoom = async (roomId: string) => {
                 let index = rooms.findIndex((item) => item.id == roomId);
-                console.log("room index:", index);
 
                 if (index == -1) {
                     console.log("searching room info…");
@@ -67,13 +79,6 @@ io.on("connection", (socket) => {
                     rooms.push({ ...room, users: [] });
                     index = rooms.length - 1;
                 }
-                console.log("room:", rooms[0]);
-
-                rooms[index].users?.push({
-                    id: userId,
-                    displayName: response.displayName,
-                });
-                socket.join(roomId);
 
                 sendRoomInfo(roomId);
             };
@@ -83,12 +88,14 @@ io.on("connection", (socket) => {
     );
 
     socket.on("disconnect", () => {
-        console.log("disconnected", userId);
+        console.log("disconnected", user.id);
         if (!roomId) return;
 
         const roomIndex = rooms.findIndex((item) => item.id == roomId);
+        if (roomIndex == -1) return;
+
         const newUsers = rooms[roomIndex].users?.filter(
-            (item) => item.id !== userId,
+            (item) => item.id !== user.id,
         );
 
         if (newUsers?.length == 0)

@@ -41,9 +41,8 @@ export default function Clinet({
     const [userId, setUserId] = useState("");
     const userIdRef = useRef("");
 
-    const [isConnected, setIsConnected] = useState(false);
     const [room, setRoom] = useState<Room | null>(null);
-    const [users, setUsers] = useState<User[]>(null);
+    const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
     const [displayName, setDisplayName] = useState<string>(() => {
@@ -75,12 +74,13 @@ export default function Clinet({
     );
 
     const currentTurnUser = users[currentTurn] as User | undefined;
-
     const roomRef = useRef<Room>(null);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
+
+        // SOCKET
 
         const socket = io(
             typeof window === "undefined" || initialServerUrl === ""
@@ -92,6 +92,7 @@ export default function Clinet({
 
         socket.on("room:broadcast", (newRoom: Room) => {
             console.log(newRoom);
+            setRoom(newRoom);
         });
 
         socket.on("auth:request", () => {
@@ -114,7 +115,7 @@ export default function Clinet({
             powerupAudioRef.current?.pause();
             socket.disconnect();
         };
-    });
+    }, []);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -196,8 +197,9 @@ export default function Clinet({
         };
     }, [router, initialBackgroundMusic, initialSounDeffects]);
 
-    const handleConnect = () => {
-        socketRef.current?.emit("joinRoom", displayName);
+    const handleJoin = () => {
+        console.log("join request");
+        socketRef.current?.emit("room:join");
     };
 
     const handleWatch = () => {
@@ -267,7 +269,7 @@ export default function Clinet({
                                 : "h-14"
                     } rounded-2xl p-2 w-full`}
                 >
-                    {isConnected ? (
+                    {room ? (
                         users.some((user) => user.userId === userId) ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
@@ -484,7 +486,7 @@ export default function Clinet({
                                                         <button
                                                             className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
                                                             onClick={() =>
-                                                                handleConnect()
+                                                                handleJoin()
                                                             }
                                                         >
                                                             Join
