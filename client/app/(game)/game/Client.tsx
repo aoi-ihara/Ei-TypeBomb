@@ -23,7 +23,7 @@ export default function Clinet({
     initialServerUrl,
 }: Props) {
     const [userId, setUserId] = useState<string | null>(null);
-    const userIdRef = useRef("");
+    const userIdRef = useRef<string | null>(null);
 
     const [room, setRoom] = useState<Room | null>(null);
     const [users, setUsers] = useState<User[]>([]);
@@ -104,6 +104,7 @@ export default function Clinet({
 
         socket.on("auth:request", () => {
             setUserId(socket.id ?? null);
+            userIdRef.current = socket.id ?? null;
             const sendToken = async () => {
                 const authToken = await getAuthToken();
                 if (!authToken) return;
@@ -117,6 +118,25 @@ export default function Clinet({
 
             sendToken();
         });
+
+        socket.on(
+            "game:end",
+            ({
+                holderUserId,
+                holderDisplayName,
+            }: {
+                holderUserId: string;
+                holderDisplayName: string;
+            }) => {
+                setResult(userIdRef.current == holderUserId);
+                setLostDisplayName(holderDisplayName);
+
+                setTimeout(() => {
+                    setResult(null);
+                    setLostDisplayName(null);
+                }, 3000);
+            },
+        );
 
         return () => {
             blipAudioRef.current?.pause();
@@ -532,7 +552,7 @@ export default function Clinet({
                     positions={userPositions}
                     userId={userId}
                     currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
+                    bombStatus={bombStatus ?? 0}
                 />
             </div>
         </div>
