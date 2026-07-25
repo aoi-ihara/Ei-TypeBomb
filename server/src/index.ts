@@ -161,7 +161,20 @@ io.on("connection", (socket) => {
                 if (rooms[roomIndex].bombStatus == undefined) return;
 
                 if (rooms[roomIndex].bombStatus == 4) {
-                    // ゲーム終了時の処理を記述。
+                    if (!roomId) return;
+
+                    const roomIndex = getRoomIndex();
+                    if (!rooms[roomIndex].users) return;
+                    if (rooms[roomIndex].bombHolder == undefined) return;
+
+                    const lostUser =
+                        rooms[roomIndex].users[rooms[roomIndex].bombHolder];
+                    io.to(roomId).emit("game:end", {
+                        holderUserId: lostUser.id,
+                        holderDisplayName: lostUser.displayName,
+                    });
+                    resetRoom();
+                    sendRoomInfo(roomId);
                 } else {
                     rooms[roomIndex] = {
                         ...rooms[roomIndex],
@@ -169,7 +182,6 @@ io.on("connection", (socket) => {
                     };
 
                     sendRoomInfo(roomId);
-
                     changeBombStatus();
                 }
             }, duration);
