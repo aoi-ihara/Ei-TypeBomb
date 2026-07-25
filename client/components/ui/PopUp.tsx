@@ -7,7 +7,7 @@ type TurnstileModalProps = {
 
 export const PopUp = ({ show, children }: TurnstileModalProps) => (
     <div
-        className={`flex justify-center transition-all duration-200 ease-out items-center top-0 left-0 w-full h-full fixed ${
+        className={`flex z-1000 justify-center transition-all duration-200 ease-out items-center top-0 left-0 w-full h-full fixed ${
             show
                 ? "bg-(--color-background)/50"
                 : "bg-transparent pointer-events-none"

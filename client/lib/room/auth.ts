@@ -5,7 +5,8 @@ import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
-import { SignJWT, jwtVerify } from "jose";
+import argon2 from "argon2";
+import { SignJWT } from "jose";
 import { cookies } from "next/headers";
 
 export const getAuthToken = async () => {
@@ -18,7 +19,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
     if (!isUUID(room.id, 4)) return "Incorrect Room ID.";
 
     if (room.password) {
-        if (!validatePassword(room.password)) return "Incorrect password.";
+        if (validatePassword(room.password)) return "Incorrect password.";
 
         if (!turnstileToken) return "Turnstile token is required.";
         const turnstileResult = await verifyTurnstile(turnstileToken);
@@ -33,7 +34,9 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
 
         if (error) return error.message;
         if (!data?.password) return "Cannot get the password.";
-        if (data.password !== room.password) return "Incorrect password.";
+
+        const isValid = await argon2.verify(data.password, room.password);
+        if (!isValid) return "Incorrect password.";
 
         await setAuthCookie(room.id);
     } else {

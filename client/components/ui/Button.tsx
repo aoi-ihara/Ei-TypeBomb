@@ -64,7 +64,7 @@ export default function Button({
                 className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"}`}
             >
                 <div
-                    className={`transition-all z-100 duration-200 ease-out ${
+                    className={`transition-all duration-200 ease-out ${
                         loading ? "gradient-text w-fit" : ""
                     }`}
                 >
