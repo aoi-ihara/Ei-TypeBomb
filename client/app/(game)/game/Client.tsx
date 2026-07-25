@@ -42,7 +42,8 @@ export default function Clinet({
     const userIdRef = useRef("");
 
     const [isConnected, setIsConnected] = useState(false);
-    const [room, setRoom] = useState<User[]>([]);
+    const [room, setRoom] = useState<Room | null>(null);
+    const [users, setUsers] = useState<User[]>(null);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
     const [displayName, setDisplayName] = useState<string>(() => {
@@ -73,7 +74,7 @@ export default function Clinet({
         })),
     );
 
-    const currentTurnUser = room[currentTurn] as User | undefined;
+    const currentTurnUser = users[currentTurn] as User | undefined;
 
     const roomRef = useRef<Room>(null);
 
@@ -88,6 +89,10 @@ export default function Clinet({
         );
 
         socketRef.current = socket;
+
+        socket.on("room:broadcast", (newRoom: Room) => {
+            console.log(newRoom);
+        });
 
         socket.on("auth:request", () => {
             const sendToken = async () => {
@@ -130,7 +135,7 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [room.length, initialSounDeffects]);
+    }, [users?.length, initialSounDeffects]);
 
     const isFirstBombRender = useRef(true);
     useEffect(() => {
@@ -251,7 +256,7 @@ export default function Clinet({
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
                         isSpectator && !isStarted
                             ? "opacity-0 scale-95"
-                            : room.some((user) => user.userId === userId)
+                            : users.some((user) => user.userId === userId)
                               ? isStarted
                                   ? currentTurnUser?.userId == userId
                                       ? "h-full"
@@ -263,7 +268,7 @@ export default function Clinet({
                     } rounded-2xl p-2 w-full`}
                 >
                     {isConnected ? (
-                        room.some((user) => user.userId === userId) ? (
+                        users.some((user) => user.userId === userId) ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
@@ -344,16 +349,16 @@ export default function Clinet({
                                                     className="rounded-lg w-48 flex"
                                                     data-cursor="button"
                                                     data-cursor-shape={
-                                                        room.length < 2
+                                                        users.length < 2
                                                             ? "2"
                                                             : "0"
                                                     }
                                                 >
                                                     <button
-                                                        className={`items-center font-bold ${room.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
+                                                        className={`items-center font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
                                                         onClick={() => {
                                                             if (
-                                                                room.length > 1
+                                                                users.length > 1
                                                             ) {
                                                                 handleStartGame();
                                                             }
@@ -383,7 +388,7 @@ export default function Clinet({
                             </div>
                         ) : (
                             <div className="h-full w-full flex justify-center items-center">
-                                {room.length < 6 ? (
+                                {users.length < 6 ? (
                                     isStarted ? (
                                         currentWord == null ? (
                                             <div
@@ -514,7 +519,7 @@ export default function Clinet({
 
             <div className="w-full flex md:order-1">
                 <UsersView
-                    users={room ?? []}
+                    users={users ?? []}
                     positions={userPositions}
                     userId={userId}
                     currentTurn={isStarted ? currentTurn : null}
