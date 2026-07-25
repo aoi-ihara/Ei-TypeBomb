@@ -154,7 +154,7 @@ io.on("connection", (socket) => {
         }, 3000);
 
         const changeBombStatus = () => {
-            const duration = Math.random() * 1000 + 2000;
+            const duration = Math.random() * 10000 + 20000;
 
             setTimeout(() => {
                 const roomIndex = getRoomIndex();
