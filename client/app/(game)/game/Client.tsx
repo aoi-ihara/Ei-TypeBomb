@@ -5,19 +5,8 @@ import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
-import { Room } from "@/type";
+import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
-
-type Word = {
-    jp: string;
-    en: string;
-};
-
-type User = {
-    displayName: string;
-    userId: string;
-    pulse: string;
-};
 
 type Position = {
     x: number;
@@ -38,7 +27,7 @@ export default function Clinet({
     initialSounDeffects,
     initialServerUrl,
 }: Props) {
-    const [userId, setUserId] = useState("");
+    const [userId, setUserId] = useState<string | null>(null);
     const userIdRef = useRef("");
 
     const [room, setRoom] = useState<Room | null>(null);
@@ -90,12 +79,14 @@ export default function Clinet({
 
         socketRef.current = socket;
 
-        socket.on("room:broadcast", (newRoom: Room) => {
+        socket.on("room:broadcast", (newRoom: Room & { users: User[] }) => {
             console.log(newRoom);
             setRoom(newRoom);
+            setUsers(newRoom.users);
         });
 
         socket.on("auth:request", () => {
+            setUserId(socket.id ?? null);
             const sendToken = async () => {
                 const authToken = await getAuthToken();
                 if (!authToken) return;
@@ -258,9 +249,9 @@ export default function Clinet({
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
                         isSpectator && !isStarted
                             ? "opacity-0 scale-95"
-                            : users.some((user) => user.userId === userId)
+                            : users.some((user) => user.id === userId)
                               ? isStarted
-                                  ? currentTurnUser?.userId == userId
+                                  ? currentTurnUser?.id == userId
                                       ? "h-full"
                                       : "h-64"
                                   : "h-48"
@@ -270,7 +261,7 @@ export default function Clinet({
                     } rounded-2xl p-2 w-full`}
                 >
                     {room ? (
-                        users.some((user) => user.userId === userId) ? (
+                        users.some((user) => user.id === userId) ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
@@ -284,7 +275,7 @@ export default function Clinet({
                                                 </div>
                                             ) : (
                                                 <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                    {currentTurnUser?.userId ==
+                                                    {currentTurnUser?.id ==
                                                     userId ? (
                                                         <>
                                                             <div
@@ -322,7 +313,7 @@ export default function Clinet({
                                                         ) => {
                                                             if (
                                                                 userId ==
-                                                                currentTurnUser?.userId
+                                                                currentTurnUser?.id
                                                             ) {
                                                                 socketRef.current?.emit(
                                                                     "cuttentInput",
@@ -332,7 +323,7 @@ export default function Clinet({
                                                         }}
                                                         currentInput={
                                                             userId ==
-                                                            currentTurnUser?.userId
+                                                            currentTurnUser?.id
                                                                 ? null
                                                                 : currentInput
                                                         }
@@ -401,7 +392,7 @@ export default function Clinet({
                                             </div>
                                         ) : (
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                {currentTurnUser?.userId ==
+                                                {currentTurnUser?.id ==
                                                 userId ? (
                                                     <>
                                                         <div
@@ -435,7 +426,7 @@ export default function Clinet({
                                                     onChangeInput={(input) => {
                                                         if (
                                                             userId ==
-                                                            currentTurnUser?.userId
+                                                            currentTurnUser?.id
                                                         ) {
                                                             socketRef.current?.emit(
                                                                 "cuttentInput",
@@ -445,7 +436,7 @@ export default function Clinet({
                                                     }}
                                                     currentInput={
                                                         userId ==
-                                                        currentTurnUser?.userId
+                                                        currentTurnUser?.id
                                                             ? null
                                                             : currentInput
                                                     }

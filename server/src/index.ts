@@ -20,11 +20,11 @@ const io = new Server(httpServer, {
 
 const sendRoomInfo = (roomId: string | null) => {
     if (!roomId) return;
-    
+
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
 
-    io.to(roomId).emit("room:broadcast", room);
+    io.to(roomId).emit("room:broadcast", { ...room, password: undefined });
     console.log("room:", room);
 };
 

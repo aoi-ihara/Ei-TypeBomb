@@ -1,8 +1,4 @@
-type User = {
-    displayName: string;
-    userId: string;
-    pulse: string;
-};
+import type { User } from "@/type";
 
 type Position = {
     x: number;
@@ -21,7 +17,7 @@ export default function UsersView({
 }: Readonly<{
     users: User[];
     positions: Position[];
-    userId: string;
+    userId: string | null;
     currentTurn: number | null;
     bombStatus: number;
 }>) {
@@ -78,7 +74,7 @@ export default function UsersView({
                                     bottom: `calc(${positions[index].h}px + 4px)`,
                                 }}
                             >
-                                {users[index]?.userId == userId && (
+                                {users[index]?.id == userId && (
                                     <svg
                                         className="w-fit"
                                         xmlns="http://www.w3.org/2000/svg"
