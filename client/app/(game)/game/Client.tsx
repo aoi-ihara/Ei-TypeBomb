@@ -378,7 +378,7 @@ export default function Clinet({
                             </div>
                         ) : (
                             <div className="h-full w-full flex justify-center items-center">
-                                {users.length < 6 ? (
+                                {users.length < room.maxPlayers! ? (
                                     isStarted ? (
                                         currentWord == null ? (
                                             <div
@@ -485,11 +485,13 @@ export default function Clinet({
                                         )
                                     )
                                 ) : (
-                                    <div
-                                        className="font-mono opacity-50 w-fit pl-4 font-bold"
-                                        data-cursor="text"
-                                    >
-                                        This room is full
+                                    <div className="flex justify-start w-full">
+                                        <div
+                                            className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                            data-cursor="text"
+                                        >
+                                            This room is full
+                                        </div>
                                     </div>
                                 )}
                             </div>
