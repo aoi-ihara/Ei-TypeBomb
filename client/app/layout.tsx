@@ -10,7 +10,7 @@ const lineSeedJp = LINE_Seed_JP({
 });
 
 export const metadata: Metadata = {
-    title: "Ei-TypeBomb - vgnz93hs",
+    title: "Ei-TypeBomb",
     icons: {
         icon: [
             {
