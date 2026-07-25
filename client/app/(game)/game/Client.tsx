@@ -58,7 +58,6 @@ export default function Clinet({
     );
 
     const currentTurnUser = users[currentTurn] as User | undefined;
-    const roomRef = useRef<Room>(null);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
