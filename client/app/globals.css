@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme inline {
+    --font-sans: var(--font-line-seed-jp);
+    --font-mono: var(--jetbrains-mono);
+}
+
 :root {
     --color-background: hsl(0, 0%, 100%);
     --color-foreground: hsl(0, 0%, 15%);
@@ -23,7 +28,7 @@
 }
 
 body {
-    @apply bg-(--color-background) text-(--color-foreground) flex flex-col items-center;
+    @apply bg-(--color-background) text-(--color-foreground) font-sans flex flex-col items-center;
 }
 
 .no-scrollbar {
