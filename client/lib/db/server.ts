@@ -3,6 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { cookieOptions } from "./cookie-options";
 
 export const createClient = async (
     cacheOptions?: Pick<RequestInit, "next">,
@@ -13,6 +14,7 @@ export const createClient = async (
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
+            cookieOptions,
             cookies: {
                 getAll() {
                     return cookieStore.getAll();

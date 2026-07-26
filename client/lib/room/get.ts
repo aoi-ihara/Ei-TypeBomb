@@ -28,7 +28,7 @@ export const getRoomStatusFromId = async (id: string) => {
 
 export const getRoomFromId = async (id: string) => {
     const userId = await getUser();
-    if (!userId) redirect("/sign-in");
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     const supabase = await createAdminClient();
     const { data, error } = await supabase
@@ -66,7 +66,7 @@ export const getRoomFromId = async (id: string) => {
 
 export const getMyRooms = async () => {
     const userId = await getUser();
-    if (!userId) redirect("/sign-in");
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     console.log("User ID", userId);
 

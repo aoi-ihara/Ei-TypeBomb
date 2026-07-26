@@ -15,7 +15,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, use, useRef, useCallback } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { getRoomFromId } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
