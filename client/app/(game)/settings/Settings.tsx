@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -107,22 +108,13 @@ export default function Settings({
                 </Input>
             </div>
 
-            <div className="w-full flex justify-end">
-                <div
-                    className="rounded-lg w-24 flex"
-                    data-cursor="button"
-                    data-cursor-shape="0"
-                >
-                    <button
-                        className={`text-lg active:scale-95 items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white flex transition-all duration-200 ease-out`}
-                        onClick={() => {
-                            router.push("/");
-                        }}
-                    >
-                        <div className="mr-1">Done</div>
-                    </button>
-                </div>
-            </div>
+            <Button
+                onClick={() => router.push("/")}
+                className="w-full mt-4"
+                variant="primary"
+            >
+                Done
+            </Button>
         </Shell>
     );
 }

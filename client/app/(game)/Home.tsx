@@ -155,13 +155,13 @@ export default function Home() {
                 </div>
 
                 <div
-                    className="rounded-lg w-64 flex"
+                    className="rounded-lg flex"
                     data-cursor="button"
                     data-cursor-shape="1"
                 >
                     <button
                         data-cursor="button"
-                        className="group justify-center pr-2 pl-1.5 w-full flex items-center py-3 text-cyan-600 rounded-md font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
+                        className="group justify-center pr-2 pl-1.5 w-full flex items-center py-1 text-cyan-600 rounded-lg font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
                         data-cursor-shape="1"
                         onClick={() => router.push("/settings")}
                     >
