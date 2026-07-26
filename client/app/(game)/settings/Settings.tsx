@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RetchedInput } from "@/components/ui/RetchedInput";
 import Shell from "@/components/layout/Shell";
+import Input from "@/components/ui/Input";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -76,7 +77,7 @@ export default function Settings({
                 Connection
             </div>
             <div className="inline w-full relative mb-4" data-cursor="text">
-                <RetchedInput
+                <Input
                     value={serverUrl}
                     onChange={(e) => {
                         const value = e.target.value;
@@ -86,8 +87,9 @@ export default function Settings({
                         setCookie("server-url", value);
                     }}
                     type="url"
-                    className="font-mono pr-32"
-                    placeholder="Server URL"
+                    className="font-mono relative w-full"
+                    inputClassName="pr-33"
+                    label="Server URL"
                 >
                     <button
                         className="top-3 right-3 px-2 py-1 bg-(--color-background) rounded-md absolute"
@@ -103,7 +105,7 @@ export default function Settings({
                             Use Default
                         </div>
                     </button>
-                </RetchedInput>
+                </Input>
             </div>
 
             <div className="w-full flex justify-end">
