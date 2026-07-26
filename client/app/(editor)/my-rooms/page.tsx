@@ -82,7 +82,7 @@ export default function Profile() {
                                                 </svg>
                                             )}
                                             <div
-                                                className="font-bold font-mono truncate text-lg"
+                                                className="font-bold w-full text-start font-mono truncate text-lg"
                                                 data-cursor="text"
                                             >
                                                 {room.title}

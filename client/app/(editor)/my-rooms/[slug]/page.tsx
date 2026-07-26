@@ -22,7 +22,6 @@ import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound, useRouter } from "next/navigation";
-import { PopUp } from "@/components/ui/PopUp";
 import {
     validateExplanation,
     validateMaxPlayers,
@@ -294,16 +293,14 @@ export default function Page({
                                 className="rounded-lg relative"
                             >
                                 <div
-                                    className={`transition-all duration-200 ease-out active:scale-95 ${
-                                        showCopiedText ? "opacity-25" : ""
-                                    }`}
+                                    className={`transition-all duration-200 ease-out active:scale-95`}
                                 >
                                     <Input
                                         onChange={() => {}}
                                         label="Room Code"
-                                        disabled={true}
                                         type="url"
                                         font="mono"
+                                        className={`pointer-events-none transition-all duration-200 ease-out ${showCopiedText && "text-transparent"}`}
                                         value={slug}
                                     />
                                 </div>
@@ -311,7 +308,7 @@ export default function Page({
                                 <div className="absolute pointer-events-none top-0 left-0 w-full h-full flex justify-center items-center font-bold font-mono">
                                     <div
                                         className={`transition-all relative duration-200 ease-out text-cyan-600 ${
-                                            !showCopiedText ? "opacity-0" : ""
+                                            !showCopiedText && "opacity-0"
                                         }`}
                                     >
                                         Copied
