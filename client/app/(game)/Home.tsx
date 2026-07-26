@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
 
 export default function Home() {
+    const [showCursor, setShowCursor] = useState(true);
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
     const [userId, setUserId] = useState<string | null>(null);
     const [showPopUp, setShowPopUp] = useState(false);
@@ -23,6 +24,16 @@ export default function Home() {
 
         fetchUserData();
     }, [router]);
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            setShowCursor((prev) => !prev);
+        }, 500);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    });
 
     return (
         <div className="flex flex-col h-dvh w-dvw">
@@ -119,9 +130,9 @@ export default function Home() {
                 )}
             </div>
             <div className="flex h-full flex-col justify-center items-center gap-4">
-                <div className="items-center mb-24 rounded-2xl overflow-clip">
+                <div className="items-center mb-12 rounded-2xl overflow-clip">
                     <Image
-                        src={"/favicon.svg"}
+                        src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
                         alt="page-logo"
                         width={150}
                         height={150}
