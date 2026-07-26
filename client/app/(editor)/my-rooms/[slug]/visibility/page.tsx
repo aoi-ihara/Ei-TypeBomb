@@ -108,7 +108,6 @@ export default function Page({
             />
 
             <Button
-                padding="large"
                 variant="primary"
                 onClick={() => handleUpdate()}
                 className="w-full"
