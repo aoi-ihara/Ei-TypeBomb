@@ -42,7 +42,7 @@ export const updateRoomFromId = async (room: Room) => {
     }
 
     const userId = await getUser();
-    if (!userId) redirect("/sign-in");
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     const supabase = await createAdminClient();
 

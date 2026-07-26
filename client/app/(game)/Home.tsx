@@ -106,7 +106,11 @@ export default function Home() {
                         >
                             <button
                                 className="flex h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
-                                onClick={() => router.push("/sign-in")}
+                                onClick={() =>
+                                    router.push(
+                                        process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                    )
+                                }
                             >
                                 Sign In
                             </button>
