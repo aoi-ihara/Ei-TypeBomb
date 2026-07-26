@@ -27,7 +27,7 @@ export default function Loading() {
     });
 
     return (
-        <div className="flex flex-col w-full max-w-md gap-4 items-center pt-16">
+        <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">
             <div className="flex items-end mb-4">
                 <h1 className="font-mono font-bold text-2xl" data-cursor="text">
                     Choose a Display Name
@@ -48,7 +48,6 @@ export default function Loading() {
                 onClick={() => {
                     if (displayName) handleContinue();
                 }}
-                padding="large"
                 className="w-full"
                 variant="primary"
                 disabled={!displayName}

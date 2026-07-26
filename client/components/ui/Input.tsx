@@ -68,7 +68,7 @@ export default function Input({
             {label && (
                 <label
                     htmlFor={inputId}
-                    className={`pointer-events-none absolute text-(--color-foreground) transition-all duration-200 ease-out ${
+                    className={`pointer-events-none whitespace-nowrap absolute text-(--color-foreground) transition-all duration-200 ease-out ${
                         shouldFloat || disableLabelAnimation
                             ? "-top-3.5 left-5 bg-(--color-background) p-1 text-sm opacity-100"
                             : "top-4 left-5 opacity-50"
