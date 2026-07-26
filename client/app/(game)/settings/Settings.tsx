@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { RetchedInput } from "@/components/ui/RetchedInput";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 
