@@ -10,6 +10,7 @@ import {
     validateMaxPlayers,
     validatePassword,
     validateTitle,
+    validateWords,
 } from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
@@ -36,6 +37,13 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
+        if (validatorResult) {
+            return validatorResult;
+        }
+    }
+
+    if (room.words !== undefined) {
+        const validatorResult = validateWords(room.words);
         if (validatorResult) {
             return validatorResult;
         }

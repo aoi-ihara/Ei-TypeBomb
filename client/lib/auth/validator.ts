@@ -39,7 +39,7 @@ export const validateWords = (words?: Word[]) => {
     const MAX_WORD_LENGTH = 32;
     const MAX_ARRAY_LENGTH = 512;
 
-    if (!words || words.length === 0) {
+    if (!words) {
         return "Words are required";
     }
 
@@ -79,15 +79,20 @@ export const validatePassword = (password?: string) => {
     return null;
 };
 
-export const validateMaxPlayers = (maxPlayers?: number) => {
-    const MAX_MAX_PLAYERS_LENGTH = 16;
+export const validateMaxPlayers = (maxPlayers: number) => {
+    const MAX_MAX_PLAYERS = 8;
+    const MIN_MAX_PLAYERS = 2;
 
     if (!maxPlayers) {
         return "Max Players is required";
     }
 
-    if (maxPlayers > MAX_MAX_PLAYERS_LENGTH) {
-        return "Max Players is too long";
+    if (maxPlayers < MIN_MAX_PLAYERS) {
+        return "Max Players is too small";
+    }
+
+    if (maxPlayers > MAX_MAX_PLAYERS) {
+        return "Max Players is too large";
     }
 
     return null;

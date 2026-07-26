@@ -68,7 +68,11 @@ export default function Page({
     }
 
     return (
-        <Shell title="Visibility Settings" className="flex flex-col gap-4">
+        <Shell
+            title="Visibility Settings"
+            size="medium"
+            className="flex flex-col gap-4"
+        >
             <div className="w-full items-center flex justify-between">
                 <div data-cursor="text">Set to Private</div>
                 <div data-cursor="button" className="rounded-full flex">

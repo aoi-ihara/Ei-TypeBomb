@@ -1,6 +1,6 @@
 import React from "react";
 
-type ButtonVariant = "default" | "primary" | "text";
+type ButtonVariant = "default" | "primary" | "text" | "danger";
 
 type ButtonProps = {
     children: React.ReactNode;
@@ -26,7 +26,9 @@ const variantStyles = (
         ? `${!loading && "underline"} w-fit px-1 rounded-md active:no-underline active:scale-95`
         : variant == "default" || loading
           ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
-          : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
+          : variant == "danger"
+            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
+            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
 };
 
 export default function Button({
