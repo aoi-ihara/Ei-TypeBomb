@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { getMyRooms } from "@/lib/room/get";
 import { Room } from "@/type";
 import Shell from "@/components/layout/Shell";
+import Button from "@/components/ui/Button";
+import { createNewRoom } from "@/lib/room/create";
 
 export default function Profile() {
     const router = useRouter();
@@ -20,6 +22,11 @@ export default function Profile() {
 
         fetchUser();
     }, []);
+
+    const addRoom = async () => {
+        const roomId = await createNewRoom();
+        router.push(`/my-rooms/${roomId}`);
+    };
 
     return (
         <Shell title="My Rooms" size="large">
@@ -99,6 +106,9 @@ export default function Profile() {
                         ))}
                 </div>
             )}
+            <Button onClick={() => addRoom()} className="w-full">
+                Add
+            </Button>
         </Shell>
     );
 }

@@ -145,7 +145,7 @@ export default function Page({
     }, [slug]);
 
     const saveRoomData = async () => {
-        const { id, title, explanation, password, maxPlayers, words } =
+        const { id, title, explanation, maxPlayers, words } =
             roomDataRef.current;
 
         if (!id || !words) return;
@@ -155,13 +155,12 @@ export default function Page({
                 id,
                 title,
                 explanation,
-                password,
                 maxPlayers: Number(maxPlayers),
                 words: words.map(({ jp, en }) => ({ jp, en })),
             };
 
-            await updateRoomFromId(updatedRoom);
-            console.log("Auto-saved successfully");
+            const result = await updateRoomFromId(updatedRoom);
+            console.log("Auto-saved successfully", result);
         } catch (err) {
             console.error("Failed to auto-save room:", err);
         }
@@ -177,7 +176,7 @@ export default function Page({
         timerRef.current = setTimeout(() => {
             saveRoomData();
         }, 2000);
-    }, [title, explanation, password, maxPlayers, words, id]);
+    }, [title, explanation, maxPlayers, words, id]);
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(slug);
