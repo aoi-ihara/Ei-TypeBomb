@@ -46,6 +46,7 @@ export default function Loading() {
 
         setLoading(true);
         const result = await getRoomStatusFromId(roomId);
+        setLoading(false);
 
         if (result == null) {
             setError("Room not found.");
@@ -67,8 +68,6 @@ export default function Loading() {
             setShowPasswordField(true);
             setError("");
         }
-
-        setLoading(false);
     };
 
     useEffect(() => {
