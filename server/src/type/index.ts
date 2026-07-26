@@ -18,6 +18,7 @@ export type Room = {
     bombHolder?: number;
     wordIndex?: number;
     bombStatus: number;
+    bombTimer?: NodeJS.Timeout;
 };
 
 export type User = {

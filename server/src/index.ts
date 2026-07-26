@@ -154,32 +154,38 @@ io.on("connection", (socket) => {
         }, 3000);
 
         const changeBombStatus = () => {
+            const roomIndex = getRoomIndex();
+            if (roomIndex === -1) return;
+
             const duration = Math.random() * 10000 + 20000;
 
-            setTimeout(() => {
-                const roomIndex = getRoomIndex();
-                if (rooms[roomIndex].bombStatus == undefined) return;
+            rooms[roomIndex].bombTimer = setTimeout(() => {
+                const currentRoomIndex = getRoomIndex();
+                if (
+                    currentRoomIndex === -1 ||
+                    !rooms[currentRoomIndex]?.isStart
+                )
+                    return;
 
-                if (rooms[roomIndex].bombStatus == 4) {
+                if (rooms[currentRoomIndex].bombStatus === 4) {
                     if (!roomId) return;
-
-                    const roomIndex = getRoomIndex();
-                    if (!rooms[roomIndex].users) return;
-                    if (rooms[roomIndex].bombHolder == undefined) return;
-
                     const lostUser =
-                        rooms[roomIndex].users[rooms[roomIndex].bombHolder];
-                    if (!lostUser) return;
-                    io.to(roomId).emit("game:end", {
-                        holderUserId: lostUser.id,
-                        holderDisplayName: lostUser.displayName,
-                    });
+                        rooms[currentRoomIndex].users?.[
+                            rooms[currentRoomIndex].bombHolder!
+                        ];
+                    if (lostUser) {
+                        io.to(roomId).emit("game:end", {
+                            holderUserId: lostUser.id,
+                            holderDisplayName: lostUser.displayName,
+                        });
+                    }
                     resetRoom();
                     sendRoomInfo(roomId);
                 } else {
-                    rooms[roomIndex] = {
-                        ...rooms[roomIndex],
-                        bombStatus: rooms[roomIndex].bombStatus + 1,
+                    rooms[currentRoomIndex] = {
+                        ...rooms[currentRoomIndex],
+                        bombStatus:
+                            (rooms[currentRoomIndex].bombStatus ?? 0) + 1,
                     };
 
                     sendRoomInfo(roomId);
@@ -193,12 +199,19 @@ io.on("connection", (socket) => {
 
     const resetRoom = () => {
         const roomIndex = getRoomIndex();
+        if (roomIndex === -1) return;
+
+        if (rooms[roomIndex].bombTimer) {
+            clearTimeout(rooms[roomIndex].bombTimer);
+        }
+
         rooms[roomIndex] = {
             ...rooms[roomIndex],
             users: [],
             isStart: false,
             bombStatus: 0,
             bombHolder: 0,
+            bombTimer: undefined,
         };
     };
 
