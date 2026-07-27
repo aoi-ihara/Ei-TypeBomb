@@ -3,6 +3,7 @@
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const createNewRoom = async () => {
     const userId = await getUser();
@@ -22,6 +23,14 @@ export const createNewRoom = async () => {
     }
 
     if (!data.id) return null;
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+        distinctId: userId,
+        event: "room_created",
+        properties: { room_id: data.id },
+    });
+    await posthog.shutdown();
 
     return data.id;
 };

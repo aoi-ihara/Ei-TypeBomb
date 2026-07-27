@@ -10,6 +10,7 @@ import { PopUp } from "@/components/ui/PopUp";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { useEffect } from "react";
 import { getSession } from "@/lib/auth/session";
+import posthog from "posthog-js";
 
 export default function SignInPage() {
     const [email, setEmail] = useState("");
@@ -34,10 +35,12 @@ export default function SignInPage() {
         password: string,
         turnstileToken: string,
     ) => {
+        posthog.capture("sign_in_submitted");
         const data = await signIn(email, password, turnstileToken);
 
         if (data) {
             setError(data);
+            posthog.capture("sign_in_failed", { error: data });
         }
 
         setLoading(false);

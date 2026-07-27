@@ -8,6 +8,7 @@ import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
+import posthog from "posthog-js";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
@@ -31,6 +32,7 @@ export default function Loading() {
         );
 
         if (result == null) {
+            posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
             setError(result);
@@ -60,6 +62,7 @@ export default function Loading() {
             });
 
             if (result == null) {
+                posthog.capture("room_entered", { room_id: roomId });
                 router.push("/display-name");
             } else {
                 setError(result);

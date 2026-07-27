@@ -9,6 +9,7 @@ import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
+import posthog from "posthog-js";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -135,8 +136,15 @@ export default function Clinet({
                 holderUserId: string;
                 holderDisplayName: string;
             }) => {
-                setResult(userIdRef.current == holderUserId);
+                const didLose = userIdRef.current == holderUserId;
+                setResult(didLose);
                 setLostDisplayName(holderDisplayName);
+
+                if (didLose) {
+                    posthog.capture("game_lost");
+                } else {
+                    posthog.capture("game_won");
+                }
 
                 setTimeout(() => {
                     setResult(null);
@@ -234,18 +242,22 @@ export default function Clinet({
 
     const handleJoin = () => {
         console.log("join request");
+        posthog.capture("room_join_clicked");
         socketRef.current?.emit("room:join");
     };
 
     const handleWatch = () => {
+        posthog.capture("room_watch_clicked");
         setIsSpectator(true);
     };
 
     const handleStartGame = () => {
+        posthog.capture("game_started", { player_count: users.length });
         socketRef.current?.emit("game:start");
     };
 
     const handleLeave = () => {
+        posthog.capture("game_left");
         socketRef.current?.emit("room:leave");
     };
 
@@ -345,6 +357,7 @@ export default function Clinet({
                                                             console.log(
                                                                 "Success! Emitting to server...",
                                                             );
+                                                            posthog.capture("word_succeeded");
                                                             socketRef.current?.emit(
                                                                 "word:success",
                                                             );
