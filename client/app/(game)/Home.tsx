@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSession } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
+import posthog from "posthog-js";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
@@ -20,6 +21,7 @@ export default function Home() {
             if (!userId) return;
 
             setUserId(userId);
+            posthog.identify(userId);
         };
 
         fetchUserData();
@@ -94,6 +96,8 @@ export default function Home() {
                                         <button
                                             className="flex w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
                                             onClick={() => {
+                                                posthog.capture("signed_out");
+                                                posthog.reset();
                                                 signOut();
                                                 setUserId(null);
                                             }}
@@ -154,7 +158,10 @@ export default function Home() {
                         onMouseLeave={() => {
                             setIsSelected(false);
                         }}
-                        onClick={() => router.push("/room")}
+                        onClick={() => {
+                            posthog.capture("play_clicked");
+                            router.push("/room");
+                        }}
                     >
                         <div
                             className={`${isSelected ? "w-6" : "w-0 opacity-0"} transition-all hidden duration-200 ease-out md:flex overflow-hidden`}

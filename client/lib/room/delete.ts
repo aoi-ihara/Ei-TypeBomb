@@ -3,6 +3,7 @@
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const deleteRoom = async (roomId: string) => {
     const userId = await getUser();
@@ -36,6 +37,14 @@ export const deleteRoom = async (roomId: string) => {
     if (error) {
         return error.message;
     }
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+        distinctId: userId,
+        event: "room_deleted",
+        properties: { room_id: roomId },
+    });
+    await posthog.shutdown();
 
     return null;
 };
