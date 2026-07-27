@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
 
 export default function Home() {
+    const [showCursor, setShowCursor] = useState(true);
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
     const [userId, setUserId] = useState<string | null>(null);
     const [showPopUp, setShowPopUp] = useState(false);
@@ -23,6 +24,16 @@ export default function Home() {
 
         fetchUserData();
     }, [router]);
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            setShowCursor((prev) => !prev);
+        }, 500);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    });
 
     return (
         <div className="flex flex-col h-dvh w-dvw">
@@ -118,24 +129,24 @@ export default function Home() {
                     </>
                 )}
             </div>
-            <div className="flex h-full flex-col justify-center items-center gap-16">
-                <div className="flex flex-col items-center gap-4 rounded-2xl overflow-clip">
+            <div className="flex h-full flex-col justify-center items-center gap-4">
+                <div className="items-center mb-12 rounded-2xl overflow-clip">
                     <Image
-                        src={"/favicon.svg"}
+                        src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
                         alt="page-logo"
                         width={150}
                         height={150}
-                    ></Image>
+                    />
                 </div>
 
                 <div
-                    className="rounded-lg w-48 flex"
+                    className="rounded-lg w-64 flex"
                     data-cursor="button"
                     data-cursor-shape="0"
                 >
                     <button
                         data-cursor="button"
-                        className="text-lg items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
+                        className="text-lg items-center font-bold bg-cyan-600 w-full justify-center py-3 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
                         data-cursor-shape="0"
                         onMouseEnter={() => {
                             setIsSelected(true);
@@ -155,13 +166,13 @@ export default function Home() {
                 </div>
 
                 <div
-                    className="rounded-lg w-fit flex"
+                    className="rounded-lg flex"
                     data-cursor="button"
                     data-cursor-shape="1"
                 >
                     <button
                         data-cursor="button"
-                        className="group w-full justify-center pr-2 pl-1.5 flex items-center py-1 text-cyan-600 rounded-md font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
+                        className="group justify-center pr-2 pl-1.5 w-full flex items-center py-1 text-cyan-600 rounded-lg font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
                         data-cursor-shape="1"
                         onClick={() => router.push("/settings")}
                     >
