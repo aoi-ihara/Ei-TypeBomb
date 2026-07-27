@@ -87,6 +87,7 @@ export default function Settings({
                         setCookie("server-url", value);
                     }}
                     type="url"
+                    font="mono"
                     className="relative w-full"
                     inputClassName="pr-33"
                     label="Server URL"
