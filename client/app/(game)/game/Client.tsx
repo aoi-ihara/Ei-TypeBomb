@@ -9,7 +9,6 @@ import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
-import { number } from "framer-motion";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -29,7 +28,7 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName, setDisplayName] = useState<string>(() => {
+    const [displayName] = useState<string>(() => {
         if (typeof window === "undefined") return "";
         return localStorage.getItem("display-name") ?? "";
     });
