@@ -3,6 +3,7 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
 import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 const lineSeedJp = LINE_Seed_JP({
     subsets: ["latin"],
@@ -50,6 +51,8 @@ export default function RootLayout({
                 <div className="hidden md:block">
                     <Cursor />
                 </div>
+
+                <Analytics />
             </body>
         </html>
     );
