@@ -5,6 +5,7 @@ import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
 import type { Room } from "@/type";
 import { hashPassword } from "../auth/hash";
+import { getPostHogClient } from "@/lib/posthog-server";
 import {
     validateExplanation,
     validateMaxPlayers,
@@ -101,6 +102,14 @@ export const updateRoomFromId = async (room: Room) => {
     if (updateError) {
         return updateError.message;
     }
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+        distinctId: userId,
+        event: "room_updated",
+        properties: { room_id: room.id },
+    });
+    await posthog.shutdown();
 
     return null;
 };

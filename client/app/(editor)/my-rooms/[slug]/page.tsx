@@ -27,6 +27,7 @@ import {
     validateMaxPlayers,
     validateTitle,
 } from "@/lib/auth/validator";
+import posthog from "posthog-js";
 
 type Word = {
     jp: string;
@@ -185,6 +186,7 @@ export default function Page({
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(slug);
+        posthog.capture("room_code_copied", { room_id: slug });
         setShowCopiedText(true);
         setTimeout(() => {
             setShowCopiedText(false);

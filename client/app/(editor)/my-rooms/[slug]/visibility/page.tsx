@@ -8,6 +8,7 @@ import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
 import { useRouter, notFound } from "next/navigation";
 import { getRoomFromId } from "@/lib/room/get";
+import posthog from "posthog-js";
 
 export default function Page({
     params,
@@ -45,7 +46,13 @@ export default function Page({
         const error = await updateRoomFromId(request);
 
         if (error) setError(error);
-        else router.push(`/my-rooms/${slug}`);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
+            router.push(`/my-rooms/${slug}`);
+        }
     };
 
     useEffect(() => {

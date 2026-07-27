@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import posthog from "posthog-js";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -46,6 +47,11 @@ export default function Settings({
                             setBackgroundMusic(next);
 
                             setCookie("background-music", String(next));
+
+                            posthog.capture("settings_changed", {
+                                setting: "background_music",
+                                value: next,
+                            });
                         }}
                     >
                         <div
@@ -65,6 +71,11 @@ export default function Settings({
                             setSounDeffects(next);
 
                             setCookie("sound-effects", String(next));
+
+                            posthog.capture("settings_changed", {
+                                setting: "sound_effects",
+                                value: next,
+                            });
                         }}
                     >
                         <div
