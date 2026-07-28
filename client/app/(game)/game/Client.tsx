@@ -137,7 +137,7 @@ export default function Clinet({
                 holderUserId: string;
                 holderDisplayName: string;
             }) => {
-                const didLose = userIdRef.current == holderUserId;
+                const didLose = userIdRef.current === holderUserId;
                 setResult(didLose);
                 setLostDisplayName(holderDisplayName);
 
@@ -264,7 +264,7 @@ export default function Clinet({
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
             <div
-                className={`${connectionAlert == null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
+                className={`${connectionAlert === null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -304,7 +304,7 @@ export default function Clinet({
                             ? "opacity-0 scale-95"
                             : users.some((user) => user.id === userId)
                               ? isStarted
-                                  ? currentTurnUser?.id == userId
+                                  ? currentTurnUser?.id === userId
                                       ? "h-full"
                                       : "h-64"
                                   : "h-48"
@@ -319,7 +319,7 @@ export default function Clinet({
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
-                                            currentWord == null ? (
+                                            currentWord === null ? (
                                                 <div
                                                     className="font-mono w-fit font-bold text-2xl"
                                                     data-cursor="text"
@@ -439,7 +439,7 @@ export default function Clinet({
                             <div className="h-full w-full flex justify-center items-center">
                                 {users.length < room.maxPlayers! ? (
                                     isStarted ? (
-                                        currentWord == null ? (
+                                        currentWord === null ? (
                                             <div
                                                 className="font-mono w-fit font-bold text-2xl"
                                                 data-cursor="text"

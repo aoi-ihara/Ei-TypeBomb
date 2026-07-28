@@ -22,11 +22,11 @@ const variantStyles = (
     loading: boolean,
     disabled: boolean,
 ) => {
-    return variant == "text"
+    return variant === "text"
         ? `${!loading && "underline"} w-fit px-1 rounded-md active:no-underline active:scale-95`
-        : variant == "default" || loading
+        : variant === "default" || loading
           ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
-          : variant == "danger"
+          : variant === "danger"
             ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
             : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
 };
@@ -44,11 +44,11 @@ export default function Button({
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
-        variant == "text"
+        variant === "text"
             ? ""
-            : padding == "small"
+            : padding === "small"
               ? "rounded-lg px-2 py-1"
-              : padding == "middle"
+              : padding === "middle"
                 ? "rounded-lg px-4 py-3"
                 : "rounded-lg px-5 py-4";
 
@@ -57,7 +57,7 @@ export default function Button({
             className={`rounded-lg ${className}`}
             data-cursor="button"
             data-cursor-shape={
-                disabled || loading ? "2" : variant == "text" ? "1" : "0"
+                disabled || loading ? "2" : variant === "text" ? "1" : "0"
             }
         >
             <button

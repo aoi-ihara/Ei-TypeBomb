@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="d388d2b1-171d-443e-9716-438a3fc87301" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/client/components/ui/Input.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/client/components/ui/Input.tsx" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "git-widget-placeholder": "feature/json-import",
+    "javascript.preferred.runtime.type.id": "node",
+    "ts.external.directory.path": "/Users/vgnz93hs/Documents/0 GitHub/Ei-TypeBomb/server/node_modules/typescript/lib"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <servers />
+  </component>
+</project>

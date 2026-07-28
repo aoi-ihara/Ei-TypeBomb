@@ -124,7 +124,7 @@ export default function TypingView({
                 >
                     <div className="absolute top-1 left-1 pointer-events-none">
                         {[...english].slice(0, missCount).map((char, index) => {
-                            if (char == " ") {
+                            if (char === " ") {
                                 return (
                                     <button
                                         key={index}
@@ -137,7 +137,7 @@ export default function TypingView({
                                 return (
                                     <button
                                         key={index}
-                                        className={`font-bold opacity-25 w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out $${currentInput == null && "active:scale-95"}`}
+                                        className={`font-bold opacity-25 w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out $${currentInput === null && "active:scale-95"}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setCurrentSelection(index);
@@ -157,7 +157,7 @@ export default function TypingView({
                         const isSelected =
                             !isReadonly && index === currentSelection;
 
-                        if (char == " ") {
+                        if (char === " ") {
                             return (
                                 <button
                                     key={index}
@@ -173,7 +173,7 @@ export default function TypingView({
                                     className={`font-bold w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null && "active:scale-95"}`}
                                     data-cursor="button"
                                     data-cursor-shape={
-                                        currentInput == null ? "1" : "2"
+                                        currentInput === null ? "1" : "2"
                                     }
                                     onClick={(e) => {
                                         e.stopPropagation();

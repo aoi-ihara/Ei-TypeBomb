@@ -136,7 +136,7 @@ export default function Cursor() {
             });
 
             if (selectedButtons.length > 0) {
-                if (selectedButtons[0].shape == 0) {
+                if (selectedButtons[0].shape === 0) {
                     target.current = {
                         x: selectedButtons[0].x + selectedButtons[0].width / 2,
 
@@ -164,7 +164,7 @@ export default function Cursor() {
 
                         borderRadius: selectedButtons[0].borderRadius,
                     };
-                } else if (selectedButtons[0].shape == 2) {
+                } else if (selectedButtons[0].shape === 2) {
                     target.current = {
                         x,
                         y,

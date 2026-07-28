@@ -74,7 +74,7 @@ export default function UsersView({
                                     bottom: `calc(${positions[index].h}px + 4px)`,
                                 }}
                             >
-                                {users[index]?.id == userId && (
+                                {users[index]?.id === userId && (
                                     <svg
                                         className="w-fit"
                                         xmlns="http://www.w3.org/2000/svg"
