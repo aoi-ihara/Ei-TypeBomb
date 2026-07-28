@@ -1,7 +1,7 @@
 import { PostHog } from "posthog-node";
 
 export function getPostHogClient(): PostHog {
-    const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+    const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
 
     if (!token && process.env.NODE_ENV !== "production") {

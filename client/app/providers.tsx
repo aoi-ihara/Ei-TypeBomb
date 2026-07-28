@@ -11,7 +11,7 @@ if (typeof window !== "undefined" && !posthog.__loaded) {
             process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
         capture_pageview: false,
     });
-    posthog.register({ app: "ei-typebomb" });
+    posthog.register({ app: "homepage" });
 }
 
 function PostHogPageView() {
