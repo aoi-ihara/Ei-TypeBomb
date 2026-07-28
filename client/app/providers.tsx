@@ -7,11 +7,12 @@ import { PostHogProvider as PHProvider } from "posthog-js/react";
 
 if (typeof window !== "undefined" && !posthog.__loaded) {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+        capture_pageview: false,
+        disable_session_recording: false,
         api_host:
             process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-        capture_pageview: false,
     });
-    posthog.register({ app: "ei-typebomb" });
+    posthog.register({ app: "homepage" });
 }
 
 function PostHogPageView() {
