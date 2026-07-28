@@ -471,7 +471,7 @@ export default function Page({
 
                     {words && (
                         <Button
-                            onClick={() =>
+                            onClick={() => {
                                 setWords([
                                     ...words,
                                     {
@@ -479,8 +479,10 @@ export default function Page({
                                         en: "",
                                         jp: "",
                                     },
-                                ])
-                            }
+                                ]);
+
+                                posthog.capture("word_added");
+                            }}
                             className="w-full"
                             padding="large"
                             variant="primary"

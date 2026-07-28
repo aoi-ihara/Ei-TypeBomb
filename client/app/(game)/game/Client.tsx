@@ -104,7 +104,7 @@ export default function Clinet({
         socket.on("game:quited", () => {
             setConnectionAlert(1);
             console.log("game quited");
-            posthog.capture("word_quited");
+            posthog.capture("game_quited");
 
             setTimeout(() => {
                 setConnectionAlert(null);
@@ -258,7 +258,6 @@ export default function Clinet({
     };
 
     const handleLeave = () => {
-        posthog.capture("game_left");
         socketRef.current?.emit("room:leave");
     };
 
