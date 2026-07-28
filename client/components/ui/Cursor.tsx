@@ -304,6 +304,7 @@ export default function Cursor() {
                 ${isMouseDown && "scale-95"}
 
                 transition-transform
+                z-10
                 duration-200
                 ease-out
 

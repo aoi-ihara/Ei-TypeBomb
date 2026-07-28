@@ -5,6 +5,7 @@ import { Footer } from "@/components/layout/Footer";
 import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
+import PopUp from "./PopUp";
 
 const lineSeedJp = LINE_Seed_JP({
     subsets: ["latin"],
@@ -55,6 +56,8 @@ export default function RootLayout({
                     </div>
 
                     <Analytics />
+
+                    <PopUp />
                 </PostHogProvider>
             </body>
         </html>
