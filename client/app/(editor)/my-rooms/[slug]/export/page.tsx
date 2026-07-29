@@ -62,7 +62,7 @@ export default function Import({
                 >
                     <Input
                         onChange={() => {}}
-                        label="Room Code"
+                        label="JSON Data"
                         font="mono"
                         variant="textarea"
                         inputClassName="h-96 resize-none"
