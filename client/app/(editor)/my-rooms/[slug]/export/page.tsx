@@ -5,9 +5,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { useState, use, useEffect } from "react";
 import { getRoomFromId } from "@/lib/room/get";
-import { Word } from "@/type";
 import { notFound, useRouter } from "next/navigation";
-import { updateRoomFromId } from "@/lib/room/update";
 import posthog from "posthog-js";
 
 export default function Import({
@@ -19,11 +17,8 @@ export default function Import({
     const router = useRouter();
 
     const [json, setJson] = useState("");
-    const [navigation, setNavigation] = useState(false);
     const [isFournd, setIsFound] = useState(true);
     const [roomId, setRoomId] = useState<string | null>(null);
-    const [words, setWords] = useState<Word[]>([]);
-    const [error, setError] = useState("");
     const [showCopiedText, setShowCopiedText] = useState(false);
 
     const handleCopy = async () => {
