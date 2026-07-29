@@ -198,7 +198,7 @@ export default function Page({
     }
 
     return (
-        <div className="px-4 flex flex-col max-w-2xl gap-4 w-full pb-64">
+        <div className="px-4 flex flex-col max-w-2xl gap-4 w-full pb-4">
             {id ? (
                 <>
                     <div>
@@ -516,6 +516,14 @@ export default function Page({
                             className=""
                         >
                             Change Visibility
+                        </Button>
+                        <Button
+                            onClick={() =>
+                                router.push(`/my-rooms/${slug}/export`)
+                            }
+                            className=""
+                        >
+                            Export
                         </Button>
                         <Button
                             onClick={() =>
