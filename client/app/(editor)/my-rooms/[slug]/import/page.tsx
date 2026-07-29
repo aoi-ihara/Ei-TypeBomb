@@ -6,7 +6,8 @@ import Input from "@/components/ui/Input";
 import { useState, use, useEffect } from "react";
 import { getRoomFromId } from "@/lib/room/get";
 import { Word } from "@/type";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
+import { updateRoomFromId } from "@/lib/room/update";
 
 export default function Import({
     params,
@@ -14,14 +15,29 @@ export default function Import({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = use(params);
+    const router = useRouter();
 
     const [json, setJson] = useState("");
     const [navigation, setNavigation] = useState(false);
     const [isFournd, setIsFound] = useState(true);
     const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<Word[]>([]);
+    const [error, setError] = useState("");
 
-    const importJson = async (json: string, overwrite: boolean) => {};
+    const importJson = async () => {
+        if (!roomId) return;
+        if (!json) {
+            setError("JSON data is required.");
+        }
+
+        const parsedJson: Word[] = JSON.parse(json);
+        const newWords = [...words, ...parsedJson];
+
+        const result = await updateRoomFromId({ id: roomId, words: newWords });
+
+        if (result) setError(result);
+        else router.push(`/my-rooms/${roomId}`);
+    };
 
     useEffect(() => {
         const getRoomInfo = async () => {
@@ -73,7 +89,18 @@ export default function Import({
                         Cancel
                     </Button>
                     <Button
-                        onClick={() => {}}
+                        onClick={async () => {
+                            if (!roomId) return;
+                            const parsedJson: Word[] = JSON.parse(json);
+
+                            const result = await updateRoomFromId({
+                                id: roomId,
+                                words: parsedJson,
+                            });
+
+                            if (result) setError(result);
+                            else router.push(`/my-rooms/${roomId}`);
+                        }}
                         className="w-full"
                         variant="danger"
                     >
@@ -127,7 +154,11 @@ export default function Import({
                 >
                     Import & Overwrite
                 </Button>
-                <Button variant="primary" onClick={() => {}} className="w-full">
+                <Button
+                    variant="primary"
+                    onClick={() => importJson()}
+                    className="w-full"
+                >
                     Import & Add
                 </Button>
             </div>
