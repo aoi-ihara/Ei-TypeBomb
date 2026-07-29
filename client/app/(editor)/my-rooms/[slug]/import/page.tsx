@@ -8,6 +8,7 @@ import { getRoomFromId } from "@/lib/room/get";
 import { Word } from "@/type";
 import { notFound, useRouter } from "next/navigation";
 import { updateRoomFromId } from "@/lib/room/update";
+import posthog from "posthog-js";
 
 export default function Import({
     params,
@@ -25,6 +26,7 @@ export default function Import({
     const [error, setError] = useState("");
 
     const importJson = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
         if (!roomId) return;
         if (!json) {
             setError("JSON data is required.");
@@ -90,6 +92,9 @@ export default function Import({
                     </Button>
                     <Button
                         onClick={async () => {
+                            posthog.capture("words_imported_and_overwrited", {
+                                room_id: slug,
+                            });
                             if (!roomId) return;
                             const parsedJson: Word[] = JSON.parse(json);
 
