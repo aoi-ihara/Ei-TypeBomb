@@ -470,25 +470,36 @@ export default function Page({
                     )}
 
                     {words && (
-                        <Button
-                            onClick={() => {
-                                setWords([
-                                    ...words,
-                                    {
-                                        id: crypto.randomUUID(),
-                                        en: "",
-                                        jp: "",
-                                    },
-                                ]);
+                        <div className="w-full flex gap-4">
+                            <Button
+                                onClick={() => {
+                                    setWords([
+                                        ...words,
+                                        {
+                                            id: crypto.randomUUID(),
+                                            en: "",
+                                            jp: "",
+                                        },
+                                    ]);
 
-                                posthog.capture("word_added");
-                            }}
-                            className="w-full"
-                            padding="large"
-                            variant="primary"
-                        >
-                            Add
-                        </Button>
+                                    posthog.capture("word_added");
+                                }}
+                                className="w-full"
+                                padding="large"
+                                variant="primary"
+                            >
+                                Add
+                            </Button>
+
+                            <Button
+                                onClick={() =>
+                                    router.push(`/my-rooms/${slug}/import`)
+                                }
+                                padding="large"
+                            >
+                                Import
+                            </Button>
+                        </div>
                     )}
 
                     <div

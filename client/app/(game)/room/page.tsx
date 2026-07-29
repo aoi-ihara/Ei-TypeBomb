@@ -31,7 +31,7 @@ export default function Loading() {
             turnstileToken,
         );
 
-        if (result == null) {
+        if (result === null) {
             posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
@@ -50,18 +50,18 @@ export default function Loading() {
         const result = await getRoomStatusFromId(roomId);
         setLoading(false);
 
-        if (result == null) {
+        if (result === null) {
             setError("Room not found.");
             return;
         }
 
-        if (result == false) {
+        if (result === false) {
             const result = await signInToRoom({
                 id: roomId,
                 password: roomPassword,
             });
 
-            if (result == null) {
+            if (result === null) {
                 posthog.capture("room_entered", { room_id: roomId });
                 router.push("/display-name");
             } else {

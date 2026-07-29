@@ -45,7 +45,7 @@ export const getRoomFromId = async (id: string) => {
     if (data.user_id !== userId) {
         console.error(
             "You do not have access to this room.",
-            `${data.user_id} != ${userId}`,
+            `${data.user_id} !== ${userId}`,
         );
         return null;
     }

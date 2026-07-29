@@ -30,7 +30,7 @@ export default function Profile() {
 
     return (
         <Shell title="My Rooms" size="large">
-            {rooms == null ? (
+            {rooms === null ? (
                 <div
                     className="gradient-text fonr-mono font-bold"
                     data-cursor="text"
