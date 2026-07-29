@@ -51,7 +51,7 @@ export default function Import({
     }
 
     return (
-        <Shell title="Export to JSON" size="large">
+        <Shell title="Export to JSON">
             <button
                 onClick={handleCopy}
                 data-cursor="button"
