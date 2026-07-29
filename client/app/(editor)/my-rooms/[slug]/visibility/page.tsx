@@ -121,7 +121,11 @@ export default function Page({
             >
                 Done
             </Button>
-            {error && <div className="text-red-500">{error}</div>}
+            {error && (
+                <div className="text-red-500" data-cursor="text">
+                    {error}
+                </div>
+            )}
         </Shell>
     );
 }

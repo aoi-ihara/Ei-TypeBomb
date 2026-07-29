@@ -162,6 +162,11 @@ export default function Import({
                     Import & Add
                 </Button>
             </div>
+            {error && (
+                <div className="text-red-500" data-cursor="text">
+                    {error}
+                </div>
+            )}
         </Shell>
     );
 }
