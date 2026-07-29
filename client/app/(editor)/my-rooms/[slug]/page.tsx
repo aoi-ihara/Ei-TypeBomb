@@ -300,7 +300,6 @@ export default function Page({
                                     <Input
                                         onChange={() => {}}
                                         label="Room Code"
-                                        type="url"
                                         font="mono"
                                         className={`pointer-events-none transition-all duration-200 ease-out ${showCopiedText && "text-transparent"}`}
                                         value={slug}
