@@ -19,13 +19,15 @@ export default function Shell({
                 className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${loading && "gradient-text"}`}
                 data-cursor="text"
             >
-                {title}
+                {loading ? "Loading…" : title}
             </h1>
-            <div
-                className={`px-4 pb-4 ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
-            >
-                {children}
-            </div>
+            {!loading && (
+                <div
+                    className={`px-4 pb-4 ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
+                >
+                    {children}
+                </div>
+            )}
         </>
     );
 }

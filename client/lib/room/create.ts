@@ -4,7 +4,6 @@ import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { redirect } from "next/navigation";
 import { getPostHogClient } from "@/lib/posthog-server";
-import { line } from "framer-motion/m";
 
 export const createNewRoom = async () => {
     const userId = await getUser();
