@@ -10,10 +10,11 @@ export const createNewRoom = async () => {
     if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     const supabase = await createAdminClient();
+    const uuid = crypto.randomUUID();
 
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .insert({ user_id: userId })
+        .insert({ id: uuid, user_id: userId, link: uuid })
         .select("id")
         .single();
 

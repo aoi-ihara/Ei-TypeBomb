@@ -8,6 +8,7 @@ import { hashPassword } from "../auth/hash";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
     validateExplanation,
+    validateLink,
     validateMaxPlayers,
     validatePassword,
     validateTitle,
@@ -15,39 +16,36 @@ import {
 } from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
+    // VALIDATE
+
     if (room.title !== undefined) {
         const validatorResult = validateTitle(room.title);
-        if (validatorResult) {
-            return "validatorResult";
-        }
+        if (validatorResult) return validatorResult;
     }
 
     if (room.explanation !== undefined && room.explanation !== "") {
         const validatorResult = validateExplanation(room.explanation);
-        if (validatorResult) {
-            return validatorResult;
-        }
+        if (validatorResult) return validatorResult;
     }
 
     if (room.maxPlayers !== undefined) {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
-        if (validatorResult) {
-            return validatorResult;
-        }
+        if (validatorResult) return validatorResult;
     }
 
     if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
-        if (validatorResult) {
-            return validatorResult;
-        }
+        if (validatorResult) return validatorResult;
     }
 
     if (room.words !== undefined) {
         const validatorResult = validateWords(room.words);
-        if (validatorResult) {
-            return validatorResult;
-        }
+        if (validatorResult) return validatorResult;
+    }
+
+    if (room.link !== undefined) {
+        const validatorResult = validateLink(room.link);
+        if (validatorResult) return validatorResult;
     }
 
     const userId = await getUser();
@@ -61,25 +59,16 @@ export const updateRoomFromId = async (room: Room) => {
         .eq("id", room.id)
         .maybeSingle();
 
-    if (selectError) {
-        return selectError.message;
-    }
+    if (selectError) return selectError.message;
 
-    if (!data) {
-        return "Could not find this room.";
-    }
+    if (!data) return "Could not find this room.";
 
-    if (data.user_id !== userId) {
-        return "You do not have access to this room.";
-    }
+    if (data.user_id !== userId) return "You do not have access to this room.";
 
     let newHashedPassword = undefined;
 
-    if (room.password) {
-        newHashedPassword = await hashPassword(room.password);
-    } else {
-        newHashedPassword = room.password;
-    }
+    if (room.password) newHashedPassword = await hashPassword(room.password);
+    else newHashedPassword = room.password;
 
     const timeStamp = new Date();
 
@@ -94,14 +83,15 @@ export const updateRoomFromId = async (room: Room) => {
                 max_players: room.maxPlayers,
             }),
             ...(room.words !== undefined && { words: room.words }),
-            ...(newHashedPassword && { password: newHashedPassword }),
+            ...(newHashedPassword !== undefined && {
+                password: newHashedPassword,
+            }),
+            ...(room.link !== undefined && { link: room.link }),
             updated_at: timeStamp,
         })
         .eq("id", room.id);
 
-    if (updateError) {
-        return updateError.message;
-    }
+    if (updateError) return updateError.message;
 
     const posthog = getPostHogClient();
     posthog.capture({
