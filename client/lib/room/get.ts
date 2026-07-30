@@ -61,6 +61,7 @@ export const getRoomFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         words: data.words,
+        link: data.link,
     } as Room;
 };
 
@@ -89,6 +90,7 @@ export const getMyRooms = async () => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         words: room.words,
+        link: room.link,
     }));
 
     console.log(rooms);

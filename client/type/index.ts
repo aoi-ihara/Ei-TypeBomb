@@ -13,6 +13,7 @@ export type Room = {
     password?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    link?: string;
 };
 
 export type User = {
