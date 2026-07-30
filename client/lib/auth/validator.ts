@@ -161,8 +161,8 @@ export const validateLink = (link?: string) => {
         return "Link is too long";
     }
 
-    if (!/^[a-z0-9]+(?:\.[a-z0-9]+)*$/.test(link)) {
-        return "Link can contain lowercase letters, numbers, and periods only";
+    if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(link)) {
+        return "Link can contain lowercase letters, numbers, periods, and hyphens only";
     }
 
     return null;
