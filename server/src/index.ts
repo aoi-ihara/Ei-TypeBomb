@@ -22,7 +22,6 @@ const sendRoomInfo = (roomId: string | null) => {
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
 
-    // クライアントに送るデータ（timerオブジェクトなどを除く等の調整をしておくと安全）
     io.to(roomId).emit("room:broadcast", {
         ...room,
         password: undefined,
@@ -32,7 +31,6 @@ const sendRoomInfo = (roomId: string | null) => {
 };
 
 // MAIN
-
 io.on("connection", (socket) => {
     let user: User = { id: socket.id };
     let roomId: null | string = null;
@@ -67,13 +65,16 @@ io.on("connection", (socket) => {
     });
 
     socket.on("room:leave", () => {
+        if (roomId) {
+            socket.leave(roomId);
+        }
         deleteUser(user.id);
     });
 
     socket.on(
         "auth:response",
-        (response: { jwtToken: string; displayName: string }) => {
-            const getRoomId = async () => {
+        async (response: { jwtToken: string; displayName: string }) => {
+            try {
                 console.log("JWT Token:", response.jwtToken);
 
                 const jwtResult = await verifyToken(response.jwtToken);
@@ -90,19 +91,21 @@ io.on("connection", (socket) => {
                     console.log("room:", room);
                     if (!room) return;
 
-                    rooms.push({
-                        ...room,
-                        users: [],
-                        isStart: false,
-                        bombStatus: 0,
-                        bombHolder: 0,
-                    });
+                    if (getRoomIndex() === -1) {
+                        rooms.push({
+                            ...room,
+                            users: [],
+                            isStart: false,
+                            bombStatus: 0,
+                            bombHolder: 0,
+                        });
+                    }
                 }
 
                 sendRoomInfo(roomId);
-            };
-
-            getRoomId();
+            } catch (error) {
+                console.error("Auth or Room Fetch Error:", error);
+            }
         },
     );
 
@@ -133,9 +136,8 @@ io.on("connection", (socket) => {
         if (index === -1) return;
 
         const room = rooms[index];
-        if (!room.users || room.users.length === 0) return;
+        if (!room.users || room.users.length < 2 || room.isStart) return;
 
-        // 既存のタイマーがあれば事前にクリア（二重起動防止）
         if (room.bombTimer) {
             clearTimeout(room.bombTimer);
             room.bombTimer = undefined;
@@ -148,7 +150,6 @@ io.on("connection", (socket) => {
 
         sendRoomInfo(roomId);
 
-        // 3秒後に最初の単語をセット
         setTimeout(() => {
             const currentRoomIndex = getRoomIndex();
             if (currentRoomIndex === -1) return;
@@ -230,11 +231,9 @@ io.on("connection", (socket) => {
                 io.to(roomId).emit("game:quited");
             }
 
-            // ユーザーを除外
             room.users = room.users.filter((item) => item.id !== userId);
         }
 
-        // 部屋に誰もいなくなったら削除
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
         if (!socketRoom || socketRoom.size === 0) {
             if (room.bombTimer) {
