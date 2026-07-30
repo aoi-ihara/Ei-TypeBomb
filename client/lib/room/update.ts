@@ -83,7 +83,9 @@ export const updateRoomFromId = async (room: Room) => {
                 max_players: room.maxPlayers,
             }),
             ...(room.words !== undefined && { words: room.words }),
-            ...(newHashedPassword && { password: newHashedPassword }),
+            ...(newHashedPassword !== undefined && {
+                password: newHashedPassword,
+            }),
             ...(room.link !== undefined && { link: room.link }),
             updated_at: timeStamp,
         })
