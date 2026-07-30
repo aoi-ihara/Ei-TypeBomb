@@ -542,7 +542,7 @@ export default function Page({
                         Settings
                     </div>
 
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                         <Button
                             onClick={() =>
                                 router.push(`/my-rooms/${slug}/visibility`)
