@@ -197,7 +197,8 @@ export default function Page({
     }, [title, explanation, maxPlayers, words, id, link]);
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(slug);
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
+        await navigator.clipboard.writeText(joinLink);
         posthog.capture("room_code_copied", { room_id: slug });
         setShowCopiedText(true);
         setTimeout(() => {
