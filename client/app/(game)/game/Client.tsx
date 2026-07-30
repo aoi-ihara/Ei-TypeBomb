@@ -9,7 +9,7 @@ import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
-import { number } from "framer-motion";
+import posthog from "posthog-js";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -29,7 +29,7 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName, setDisplayName] = useState<string>(() => {
+    const [displayName] = useState<string>(() => {
         if (typeof window === "undefined") return "";
         return localStorage.getItem("display-name") ?? "";
     });
@@ -104,6 +104,7 @@ export default function Clinet({
         socket.on("game:quited", () => {
             setConnectionAlert(1);
             console.log("game quited");
+            posthog.capture("game_quited");
 
             setTimeout(() => {
                 setConnectionAlert(null);
@@ -136,8 +137,15 @@ export default function Clinet({
                 holderUserId: string;
                 holderDisplayName: string;
             }) => {
-                setResult(userIdRef.current == holderUserId);
+                const didLose = userIdRef.current === holderUserId;
+                setResult(didLose);
                 setLostDisplayName(holderDisplayName);
+
+                if (didLose) {
+                    posthog.capture("game_lost");
+                } else {
+                    posthog.capture("game_won");
+                }
 
                 setTimeout(() => {
                     setResult(null);
@@ -235,14 +243,17 @@ export default function Clinet({
 
     const handleJoin = () => {
         console.log("join request");
+        posthog.capture("room_join_clicked");
         socketRef.current?.emit("room:join");
     };
 
     const handleWatch = () => {
+        posthog.capture("room_watch_clicked");
         setIsSpectator(true);
     };
 
     const handleStartGame = () => {
+        posthog.capture("game_started", { player_count: users.length });
         socketRef.current?.emit("game:start");
     };
 
@@ -253,7 +264,7 @@ export default function Clinet({
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
             <div
-                className={`${connectionAlert == null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
+                className={`${connectionAlert === null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -293,7 +304,7 @@ export default function Clinet({
                             ? "opacity-0 scale-95"
                             : users.some((user) => user.id === userId)
                               ? isStarted
-                                  ? currentTurnUser?.id == userId
+                                  ? currentTurnUser?.id === userId
                                       ? "h-full"
                                       : "h-64"
                                   : "h-48"
@@ -308,7 +319,7 @@ export default function Clinet({
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
-                                            currentWord == null ? (
+                                            currentWord === null ? (
                                                 <div
                                                     className="font-mono w-fit font-bold text-2xl"
                                                     data-cursor="text"
@@ -345,6 +356,9 @@ export default function Clinet({
                                                         onSuccess={() => {
                                                             console.log(
                                                                 "Success! Emitting to server...",
+                                                            );
+                                                            posthog.capture(
+                                                                "word_succeeded",
                                                             );
                                                             socketRef.current?.emit(
                                                                 "word:success",
@@ -425,7 +439,7 @@ export default function Clinet({
                             <div className="h-full w-full flex justify-center items-center">
                                 {users.length < room.maxPlayers! ? (
                                     isStarted ? (
-                                        currentWord == null ? (
+                                        currentWord === null ? (
                                             <div
                                                 className="font-mono w-fit font-bold text-2xl"
                                                 data-cursor="text"

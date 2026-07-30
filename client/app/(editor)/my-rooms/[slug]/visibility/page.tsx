@@ -8,6 +8,7 @@ import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
 import { useRouter, notFound } from "next/navigation";
 import { getRoomFromId } from "@/lib/room/get";
+import posthog from "posthog-js";
 
 export default function Page({
     params,
@@ -45,7 +46,13 @@ export default function Page({
         const error = await updateRoomFromId(request);
 
         if (error) setError(error);
-        else router.push(`/my-rooms/${slug}`);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
+            router.push(`/my-rooms/${slug}`);
+        }
     };
 
     useEffect(() => {
@@ -108,14 +115,17 @@ export default function Page({
             />
 
             <Button
-                padding="large"
                 variant="primary"
                 onClick={() => handleUpdate()}
                 className="w-full"
             >
                 Done
             </Button>
-            {error && <div className="text-red-500">{error}</div>}
+            {error && (
+                <div className="text-red-500" data-cursor="text">
+                    {error}
+                </div>
+            )}
         </Shell>
     );
 }

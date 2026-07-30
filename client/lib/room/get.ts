@@ -6,6 +6,22 @@ import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 
+export const getRoomFromLink = async (link: string) => {
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("*")
+        .eq("link", link)
+        .maybeSingle();
+
+    if (error) {
+        console.error(error);
+        return null;
+    }
+    if (!data) return null;
+    return (data.id as string) ?? null;
+};
+
 export const getRoomStatusFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
@@ -45,7 +61,7 @@ export const getRoomFromId = async (id: string) => {
     if (data.user_id !== userId) {
         console.error(
             "You do not have access to this room.",
-            `${data.user_id} != ${userId}`,
+            `${data.user_id} !== ${userId}`,
         );
         return null;
     }
@@ -61,6 +77,7 @@ export const getRoomFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         words: data.words,
+        link: data.link,
     } as Room;
 };
 
@@ -89,6 +106,7 @@ export const getMyRooms = async () => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         words: room.words,
+        link: room.link,
     }));
 
     console.log(rooms);

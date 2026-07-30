@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { RetchedInput } from "@/components/ui/RetchedInput";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
+import posthog from "posthog-js";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
@@ -13,6 +14,7 @@ export default function Loading() {
 
     const handleContinue = () => {
         localStorage.setItem("display-name", displayName);
+        posthog.capture("display_name_set");
         router.push("/game");
     };
 

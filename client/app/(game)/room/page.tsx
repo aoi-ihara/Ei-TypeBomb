@@ -4,19 +4,21 @@ import { useEffect, useState } from "react";
 import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
-import { getRoomStatusFromId } from "@/lib/room/get";
+import { getRoomFromLink, getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
+import posthog from "posthog-js";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
-    const [roomId, setRoomId] = useState("");
+    const [link, setLink] = useState("");
     const [error, setError] = useState("");
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [loading, setLoading] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
     const [turnstile, setTurnstile] = useState(false);
+    const [roomId, setRoomId] = useState("");
 
     const router = useRouter();
 
@@ -30,7 +32,8 @@ export default function Loading() {
             turnstileToken,
         );
 
-        if (result == null) {
+        if (result === null) {
+            posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
             setError(result);
@@ -45,24 +48,39 @@ export default function Loading() {
         }
 
         setLoading(true);
-        const result = await getRoomStatusFromId(roomId);
+        const roomIdResult = await getRoomFromLink(
+            link.replace(process.env.NEXT_PUBLIC_JOIN_LINK!, ""),
+        );
+        if (!roomIdResult) {
+            setError("Room not found.");
+            setLoading(false);
+            return;
+        }
+        setRoomId(roomIdResult);
+
+        const result = await getRoomStatusFromId(roomIdResult);
         setLoading(false);
 
-        if (result == null) {
+        if (result === null) {
             setError("Room not found.");
+            setLoading(false);
             return;
         }
 
-        if (result == false) {
+        if (result === false) {
             const result = await signInToRoom({
-                id: roomId,
+                id: roomIdResult,
                 password: roomPassword,
             });
 
-            if (result == null) {
+            if (result === null) {
+                posthog.capture("room_entered", { room_id: roomIdResult });
                 router.push("/display-name");
+                setLoading(false);
             } else {
                 setError(result);
+                setLoading(false);
+                return;
             }
         } else {
             setShowPasswordField(true);
@@ -93,10 +111,10 @@ export default function Loading() {
 
             <Input
                 disabled={showPasswordField}
-                value={roomId}
+                value={link}
                 font="mono"
-                onChange={(e) => setRoomId(e.target.value)}
-                label="Room ID"
+                onChange={(e) => setLink(e.target.value)}
+                label="Invite Link"
             />
 
             {showPasswordField && (
@@ -112,7 +130,7 @@ export default function Loading() {
                 onClick={() => handleContinue()}
                 className="w-full"
                 variant="primary"
-                disabled={!roomId || (showPasswordField && !roomPassword)}
+                disabled={!link || (showPasswordField && !roomPassword)}
                 loading={loading}
             >
                 Continue

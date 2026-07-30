@@ -2,7 +2,7 @@ import { User, Position } from "@/type";
 
 export const newPositions = (users: User[], positions: Position[]) => {
     return positions.map((position, index) => {
-        if (users.length == 1 && index == 0) {
+        if (users.length === 1 && index === 0) {
             return {
                 x: 0,
                 y: 0,

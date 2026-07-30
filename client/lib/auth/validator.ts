@@ -144,3 +144,26 @@ export const validateUsername = (username?: string) => {
 
     return null;
 };
+
+const MAX_LINK_LENGTH = 64;
+const MIN_LINK_LENGTH = 3;
+
+export const validateLink = (link?: string) => {
+    if (!link) {
+        return "Link is required";
+    }
+
+    if (link.length < MIN_LINK_LENGTH) {
+        return "Link is too short";
+    }
+
+    if (link.length > MAX_LINK_LENGTH) {
+        return "Link is too long";
+    }
+
+    if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(link)) {
+        return "Link can contain lowercase letters, numbers, periods, and hyphens only";
+    }
+
+    return null;
+};

@@ -2,11 +2,9 @@ import React, { useId, useState } from "react";
 
 type InputType = "text" | "email" | "url" | "password" | "number";
 
-type InputProps = {
+type BaseProps = {
     value: string;
-    onChange: React.ChangeEventHandler<HTMLInputElement>;
     label?: string;
-    type?: InputType;
     disabled?: boolean;
     className?: string;
     inputClassName?: string;
@@ -21,24 +19,40 @@ type InputProps = {
     min?: number;
 };
 
-export default function Input({
-    value,
-    onChange,
-    label,
-    type = "text",
-    disabled = false,
-    className = "w-full",
-    inputClassName = "",
-    children,
-    alwaysFloatLabel = false,
-    name,
-    id,
-    autoComplete,
-    font,
-    disableLabelAnimation,
-    max,
-    min,
-}: InputProps) {
+type TextInputProps = BaseProps & {
+    variant?: "input";
+    type?: InputType;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+};
+
+// 3. textarea 用の Props
+type TextareaProps = BaseProps & {
+    variant: "textarea";
+    type?: never;
+    onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
+};
+
+// 4. ユニオン型で結合
+type InputProps = TextInputProps | TextareaProps;
+
+export default function Input(props: InputProps) {
+    const {
+        value,
+        label,
+        disabled = false,
+        className = "w-full",
+        inputClassName = "",
+        children,
+        alwaysFloatLabel = false,
+        name,
+        id,
+        autoComplete,
+        font,
+        disableLabelAnimation,
+        max,
+        min,
+    } = props;
+
     const [isFocused, setIsFocused] = useState(false);
     const generatedId = useId();
     const inputId = id ?? generatedId;
@@ -47,23 +61,43 @@ export default function Input({
 
     return (
         <div
-            className={`relative transition-all duration-200 ease-out ${className} ${disabled && "opacity-50 pointer-events-none"}`}
+            className={`relative flex flex-col transition-all duration-200 ease-out ${className} ${
+                disabled ? "opacity-50 pointer-events-none" : ""
+            }`}
         >
-            <input
-                id={inputId}
-                name={name}
-                type={type}
-                value={value}
-                onChange={onChange}
-                max={max}
-                min={min}
-                data-cursor={disabled ? "button" : "text"}
-                data-cursor-shape="2"
-                autoComplete={autoComplete}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-200 ease-out focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font == "mono" && "font-mono"} ${inputClassName}`}
-            />
+            {props.variant === "textarea" ? (
+                <textarea
+                    id={inputId}
+                    name={name}
+                    value={value}
+                    onChange={props.onChange}
+                    maxLength={max}
+                    minLength={min}
+                    disabled={disabled}
+                    data-cursor={disabled ? "button" : "text"}
+                    data-cursor-shape="2"
+                    autoComplete={autoComplete}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-200 ease-out focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                />
+            ) : (
+                <input
+                    id={inputId}
+                    name={name}
+                    type={props.type ?? "text"}
+                    value={value}
+                    onChange={props.onChange}
+                    max={max}
+                    min={min}
+                    data-cursor={disabled ? "button" : "text"}
+                    data-cursor-shape="2"
+                    autoComplete={autoComplete}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-200 ease-out focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                />
+            )}
 
             {label && (
                 <label

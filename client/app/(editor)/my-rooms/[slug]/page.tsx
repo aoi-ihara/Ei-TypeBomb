@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use, useRef } from "react";
-import { getRoomFromId } from "@/lib/room/get";
+import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import { Room } from "@/type";
 import Input from "@/components/ui/Input";
@@ -24,9 +24,11 @@ import Button from "@/components/ui/Button";
 import { notFound, useRouter } from "next/navigation";
 import {
     validateExplanation,
+    validateLink,
     validateMaxPlayers,
     validateTitle,
 } from "@/lib/auth/validator";
+import posthog from "posthog-js";
 
 type Word = {
     jp: string;
@@ -84,6 +86,8 @@ export default function Page({
     const [id, setId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
     const [showCopiedText, setShowCopiedText] = useState(false);
+    const [link, setLink] = useState("");
+    const [linkError, setLinkError] = useState("");
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,7 +110,7 @@ export default function Page({
             words,
             id,
         };
-    }, [title, explanation, password, maxPlayers, words, id]);
+    }, [title, explanation, password, maxPlayers, words, id, link]);
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -134,6 +138,7 @@ export default function Page({
             setExplanation(room.explanation ?? "");
             setPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
+            setLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
                 (w: Word) => ({
@@ -150,6 +155,13 @@ export default function Page({
     }, [slug]);
 
     const saveRoomData = async () => {
+        const roomLinkResult = await getRoomFromLink(link);
+        if (roomLinkResult && roomLinkResult !== slug) {
+            setLinkError("Link has already taken.");
+        } else {
+            setLinkError("");
+        }
+
         const { id, title, explanation, maxPlayers, words } =
             roomDataRef.current;
 
@@ -162,6 +174,7 @@ export default function Page({
                 explanation,
                 maxPlayers: Number(maxPlayers),
                 words: words.map(({ jp, en }) => ({ jp, en })),
+                link,
             };
 
             const result = await updateRoomFromId(updatedRoom);
@@ -181,10 +194,12 @@ export default function Page({
         timerRef.current = setTimeout(() => {
             saveRoomData();
         }, 2000);
-    }, [title, explanation, maxPlayers, words, id]);
+    }, [title, explanation, maxPlayers, words, id, link]);
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(slug);
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
+        await navigator.clipboard.writeText(joinLink);
+        posthog.capture("room_code_copied", { room_id: slug });
         setShowCopiedText(true);
         setTimeout(() => {
             setShowCopiedText(false);
@@ -196,7 +211,7 @@ export default function Page({
     }
 
     return (
-        <div className="px-4 flex flex-col max-w-2xl gap-4 w-full pb-64">
+        <div className="px-4 flex flex-col max-w-2xl gap-4 w-full pb-4">
             {id ? (
                 <>
                     <div>
@@ -254,20 +269,22 @@ export default function Page({
                         General
                     </div>
 
-                    <div>
-                        <Input
-                            onChange={(e) => setExplanation(e.target.value)}
-                            label="Explanation"
-                            value={explanation}
-                        />
-                        {validateExplanation(explanation) && (
-                            <div className="text-red-500" data-cursor="text">
-                                {validateExplanation(explanation)}
-                            </div>
-                        )}
-                    </div>
-
                     <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                        <div className="flex flex-col gap-4">
+                            <Input
+                                onChange={(e) => setExplanation(e.target.value)}
+                                label="Explanation"
+                                value={explanation}
+                            />
+                            {validateExplanation(explanation) && (
+                                <div
+                                    className="text-red-500"
+                                    data-cursor="text"
+                                >
+                                    {validateExplanation(explanation)}
+                                </div>
+                            )}
+                        </div>
                         <div className="flex flex-col gap-4">
                             <Input
                                 onChange={(e) => setMaxPlayers(e.target.value)}
@@ -286,36 +303,54 @@ export default function Page({
                                 </div>
                             )}
                         </div>
-                        <div className="flex flex-col gap-4">
-                            <button
-                                onClick={handleCopy}
-                                data-cursor="button"
-                                className="rounded-lg relative"
-                            >
-                                <div
-                                    className={`transition-all duration-200 ease-out active:scale-95`}
-                                >
-                                    <Input
-                                        onChange={() => {}}
-                                        label="Room Code"
-                                        type="url"
-                                        font="mono"
-                                        className={`pointer-events-none transition-all duration-200 ease-out ${showCopiedText && "text-transparent"}`}
-                                        value={slug}
-                                    />
-                                </div>
+                    </div>
 
-                                <div className="absolute pointer-events-none top-0 left-0 w-full h-full flex justify-center items-center font-bold font-mono">
-                                    <div
-                                        className={`transition-all relative duration-200 ease-out text-cyan-600 ${
-                                            !showCopiedText && "opacity-0"
-                                        }`}
-                                    >
-                                        Copied
-                                    </div>
+                    <div className="flex gap-4">
+                        <div className="w-full flex flex-col gap-4">
+                            <Input
+                                onChange={(e) => setLink(e.target.value)}
+                                label="Invite Link"
+                                font="mono"
+                                inputClassName="pl-19.5"
+                                className={`transition-all w-full duration-200 ease-out`}
+                                value={link}
+                                disableLabelAnimation={true}
+                            >
+                                <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
+                                    /join/
                                 </div>
-                            </button>
+                            </Input>
+                            {validateLink(link) && (
+                                <div
+                                    className="text-red-500"
+                                    data-cursor="text"
+                                >
+                                    {validateLink(link)}
+                                </div>
+                            )}
+                            {linkError && (
+                                <div
+                                    className="text-red-500"
+                                    data-cursor="text"
+                                >
+                                    {linkError}
+                                </div>
+                            )}
                         </div>
+
+                        <Button
+                            className="w-fit shrink-0"
+                            onClick={handleCopy}
+                            padding="large"
+                        >
+                            {showCopiedText ? (
+                                <div className="font-mono font-bold text-cyan-600">
+                                    Copied
+                                </div>
+                            ) : (
+                                "Copy Link"
+                            )}
+                        </Button>
                     </div>
 
                     <div
@@ -468,23 +503,36 @@ export default function Page({
                     )}
 
                     {words && (
-                        <Button
-                            onClick={() =>
-                                setWords([
-                                    ...words,
-                                    {
-                                        id: crypto.randomUUID(),
-                                        en: "",
-                                        jp: "",
-                                    },
-                                ])
-                            }
-                            className="w-full"
-                            padding="large"
-                            variant="primary"
-                        >
-                            Add
-                        </Button>
+                        <div className="w-full flex gap-4">
+                            <Button
+                                onClick={() => {
+                                    setWords([
+                                        ...words,
+                                        {
+                                            id: crypto.randomUUID(),
+                                            en: "",
+                                            jp: "",
+                                        },
+                                    ]);
+
+                                    posthog.capture("word_added");
+                                }}
+                                className="w-full"
+                                padding="large"
+                                variant="primary"
+                            >
+                                Add
+                            </Button>
+
+                            <Button
+                                onClick={() =>
+                                    router.push(`/my-rooms/${slug}/import`)
+                                }
+                                padding="large"
+                            >
+                                Import
+                            </Button>
+                        </div>
                     )}
 
                     <div
@@ -502,6 +550,14 @@ export default function Page({
                             className=""
                         >
                             Change Visibility
+                        </Button>
+                        <Button
+                            onClick={() =>
+                                router.push(`/my-rooms/${slug}/export`)
+                            }
+                            className=""
+                        >
+                            Export
                         </Button>
                         <Button
                             onClick={() =>

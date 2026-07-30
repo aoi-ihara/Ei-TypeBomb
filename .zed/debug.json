@@ -1,0 +1,20 @@
+[
+    {
+        "label": "Next.js: server-side",
+        "adapter": "JavaScript",
+        "request": "launch",
+        "type": "node",
+        "program": "$ZED_WORKTREE_ROOT/client/node_modules/.bin/next",
+        "args": ["dev"],
+        "cwd": "$ZED_WORKTREE_ROOT/client",
+        "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+    },
+    {
+        "label": "Next.js: client-side (Chrome)",
+        "adapter": "JavaScript",
+        "request": "launch",
+        "type": "chrome",
+        "url": "http://localhost:3000",
+        "webRoot": "$ZED_WORKTREE_ROOT/client",
+    },
+]
