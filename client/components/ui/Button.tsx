@@ -1,9 +1,11 @@
 import React from "react";
+import { IconName } from "./Icon";
+import { Icon } from "./Icon";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
 type ButtonProps = {
-    children: React.ReactNode;
+    children?: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
     loading?: boolean;
@@ -12,6 +14,8 @@ type ButtonProps = {
     type?: "button" | "submit" | "reset";
     variant?: ButtonVariant;
     padding?: "small" | "middle" | "large";
+    iconName?: IconName;
+    alignment?: "left" | "center";
 };
 
 const baseStyles =
@@ -41,16 +45,18 @@ export default function Button({
     type = "button",
     variant = "default",
     padding = "middle",
+    iconName,
+    alignment = "center",
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant === "text"
-            ? ""
+            ? "gap-1"
             : padding === "small"
-              ? "rounded-lg px-2 py-1"
+              ? `rounded-lg ${iconName ? "pl-1.5" : "pl-2"} ${children ? "pr-2" : "pr-1.5"} py-1 gap-1`
               : padding === "middle"
-                ? "rounded-lg px-4 py-3"
-                : "rounded-lg px-5 py-4";
+                ? `rounded-lg ${iconName ? "pl-3.5" : "pl-4"} ${children ? "pr-4" : "pr-3.5"} py-3 gap-2`
+                : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-4`;
 
     return (
         <div
@@ -63,15 +69,18 @@ export default function Button({
             <button
                 type={type}
                 onClick={onClick}
-                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"}`}
+                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
-                <div
-                    className={`transition-all duration-200 ease-out ${
-                        loading ? "gradient-text w-fit" : ""
-                    }`}
-                >
-                    {loading ? loadingText : children}
-                </div>
+                {iconName && !loading && <Icon name={iconName} size={24} />}
+                {children && (
+                    <div
+                        className={`transition-all duration-200 ease-out ${
+                            loading ? "gradient-text w-fit" : ""
+                        }`}
+                    >
+                        {loading ? loadingText : children}
+                    </div>
+                )}
             </button>
         </div>
     );
