@@ -124,6 +124,7 @@ export default function Settings({
                 onClick={() => router.push("/")}
                 className="w-full mt-4"
                 variant="primary"
+                iconName="check"
             >
                 Done
             </Button>

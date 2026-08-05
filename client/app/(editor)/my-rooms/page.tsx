@@ -114,7 +114,11 @@ export default function Profile() {
                         </div>
                     )}
 
-                    <Button onClick={() => addRoom()} className="w-full">
+                    <Button
+                        onClick={() => addRoom()}
+                        className="w-full"
+                        iconName="plus"
+                    >
                         Add
                     </Button>
                 </>

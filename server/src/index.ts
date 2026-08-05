@@ -65,10 +65,10 @@ io.on("connection", (socket) => {
     });
 
     socket.on("room:leave", () => {
+        deleteUser(user.id);
         if (roomId) {
             socket.leave(roomId);
         }
-        deleteUser(user.id);
     });
 
     socket.on(
