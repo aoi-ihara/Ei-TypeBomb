@@ -118,6 +118,7 @@ export default function Page({
                 variant="primary"
                 onClick={() => handleUpdate()}
                 className="w-full"
+                iconName="check"
             >
                 Done
             </Button>

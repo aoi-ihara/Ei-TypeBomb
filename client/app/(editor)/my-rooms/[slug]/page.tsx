@@ -342,15 +342,8 @@ export default function Page({
                             className="w-fit shrink-0"
                             onClick={handleCopy}
                             padding="large"
-                        >
-                            {showCopiedText ? (
-                                <div className="font-mono font-bold text-cyan-600">
-                                    Copied
-                                </div>
-                            ) : (
-                                "Copy Link"
-                            )}
-                        </Button>
+                            iconName={showCopiedText ? "check" : "copy"}
+                        ></Button>
                     </div>
 
                     <div
@@ -479,21 +472,10 @@ export default function Page({
                                                             );
                                                         setWords(newWords);
                                                     }}
-                                                    variant="text"
                                                     className="h-fit"
-                                                >
-                                                    <div className="w-12 h-14 flex justify-center items-center">
-                                                        <svg
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                            height="32px"
-                                                            viewBox="0 -960 960 960"
-                                                            width="32px"
-                                                            fill="currentColor"
-                                                        >
-                                                            <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z" />
-                                                        </svg>
-                                                    </div>
-                                                </Button>
+                                                    padding="large"
+                                                    iconName="trash"
+                                                />
                                             </div>
                                         </div>
                                     </SortableItem>
@@ -519,7 +501,7 @@ export default function Page({
                                 }}
                                 className="w-full"
                                 padding="large"
-                                variant="primary"
+                                iconName="plus"
                             >
                                 Add
                             </Button>
@@ -528,10 +510,9 @@ export default function Page({
                                 onClick={() =>
                                     router.push(`/my-rooms/${slug}/import`)
                                 }
+                                iconName="upload"
                                 padding="large"
-                            >
-                                Import
-                            </Button>
+                            />
                         </div>
                     )}
 
@@ -548,14 +529,16 @@ export default function Page({
                                 router.push(`/my-rooms/${slug}/visibility`)
                             }
                             className=""
+                            iconName="eye"
                         >
-                            Change Visibility
+                            Visibility
                         </Button>
                         <Button
                             onClick={() =>
                                 router.push(`/my-rooms/${slug}/export`)
                             }
                             className=""
+                            iconName="download"
                         >
                             Export
                         </Button>
@@ -565,6 +548,7 @@ export default function Page({
                             }
                             variant="danger"
                             className=""
+                            iconName="trash"
                         >
                             Delete Room
                         </Button>

@@ -156,6 +156,7 @@ export default function Import({
                     variant="danger"
                     onClick={() => setNavigation(true)}
                     className="w-full"
+                    iconName="rotateCw"
                 >
                     Import & Overwrite
                 </Button>
@@ -163,6 +164,7 @@ export default function Import({
                     variant="primary"
                     onClick={() => importJson()}
                     className="w-full"
+                    iconName="plus"
                 >
                     Import & Add
                 </Button>
