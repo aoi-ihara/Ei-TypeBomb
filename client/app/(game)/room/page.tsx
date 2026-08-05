@@ -132,6 +132,7 @@ export default function Loading() {
                 variant="primary"
                 disabled={!link || (showPasswordField && !roomPassword)}
                 loading={loading}
+                iconName="arrowRight"
             >
                 Continue
             </Button>

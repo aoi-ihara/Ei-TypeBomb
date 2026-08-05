@@ -15,6 +15,15 @@ import {
     Pen,
     ArrowRight,
     Check,
+    Plus,
+    Copy,
+    Settings,
+    Trash,
+    Download,
+    Upload,
+    Eye,
+    X,
+    RotateCcw,
 } from "lucide-react";
 
 const icons = {
@@ -34,6 +43,15 @@ const icons = {
     pen: Pen,
     arrowRight: ArrowRight,
     check: Check,
+    plus: Plus,
+    copy: Copy,
+    settings: Settings,
+    trash: Trash,
+    download: Download,
+    upload: Upload,
+    eye: Eye,
+    x: X,
+    rotateCw: RotateCcw,
 };
 
 export type IconName = keyof typeof icons;

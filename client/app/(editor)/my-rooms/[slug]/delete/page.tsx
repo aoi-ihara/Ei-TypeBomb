@@ -62,6 +62,7 @@ export default function Page({
                 variant="danger"
                 className="w-full"
                 onClick={() => deleteCurrentRoom()}
+                iconName="trash"
             >
                 Delete
             </Button>
@@ -69,6 +70,7 @@ export default function Page({
                 padding="large"
                 className="w-full"
                 onClick={() => router.back()}
+                iconName="x"
             >
                 Cancel
             </Button>

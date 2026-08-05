@@ -53,6 +53,7 @@ export default function Loading() {
                 className="w-full"
                 variant="primary"
                 disabled={!displayName}
+                iconName="arrowRight"
             >
                 Continue
             </Button>

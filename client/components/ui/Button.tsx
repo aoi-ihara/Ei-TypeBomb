@@ -56,7 +56,7 @@ export default function Button({
               ? `rounded-lg ${iconName ? "pl-1.5" : "pl-2"} ${children ? "pr-2" : "pr-1.5"} py-1 gap-1`
               : padding === "middle"
                 ? `rounded-lg ${iconName ? "pl-3.5" : "pl-4"} ${children ? "pr-4" : "pr-3.5"} py-3 gap-2`
-                : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-4`;
+                : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-3`;
 
     return (
         <div
