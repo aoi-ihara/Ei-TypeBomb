@@ -26,9 +26,12 @@ import {
     RotateCcw,
     Link,
     Play,
+    Lock,
+    LucideIcon,
 } from "lucide-react";
 
-const icons = {
+// 3. Annotate with Record<string, LucideIcon>
+const icons: Record<string, LucideIcon> = {
     heart: Heart,
     comment: MessageCircle,
     share: Share,
@@ -56,6 +59,7 @@ const icons = {
     rotateCw: RotateCcw,
     link: Link,
     play: Play,
+    lock: Lock,
 };
 
 export type IconName = keyof typeof icons;
@@ -67,6 +71,8 @@ type Props = {
 
 export function Icon({ name, size = 24 }: Props) {
     const IconComponent = icons[name];
+
+    if (!IconComponent) return null;
 
     return <IconComponent size={size} strokeWidth={2.5} />;
 }
