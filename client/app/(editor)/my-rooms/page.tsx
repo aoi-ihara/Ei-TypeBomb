@@ -7,7 +7,7 @@ import { Room } from "@/type";
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
-import { Icon } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 
 export default function Profile() {
     const router = useRouter();
@@ -65,17 +65,9 @@ export default function Profile() {
                                             {rooms && (
                                                 <div className="flex shrink-0 gap-2 items-center">
                                                     {room.password ? (
-                                                        <Icon iconNode="lock" />
+                                                        <Icon name="lock" />
                                                     ) : (
-                                                        <svg
-                                                            xmlns="http://www.w3.org/2000/svg"
-                                                            height="20px"
-                                                            viewBox="0 -960 960 960"
-                                                            width="20px"
-                                                            fill="currentColor"
-                                                        >
-                                                            <path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-7-.5-14.5T799-507q-5 29-27 48t-52 19h-80q-33 0-56.5-23.5T560-520v-40H400v-80q0-33 23.5-56.5T480-720h40q0-23 12.5-40.5T563-789q-20-5-40.5-8t-42.5-3q-134 0-227 93t-93 227h200q66 0 113 47t47 113v40H400v110q20 5 39.5 7.5T480-160Z" />
-                                                        </svg>
+                                                        <Icon name="earth" />
                                                     )}
                                                     <div
                                                         className="font-bold w-full text-start font-mono truncate text-lg"
@@ -89,16 +81,10 @@ export default function Profile() {
                                                 {room.explanation}
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <svg
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    height="20px"
-                                                    viewBox="0 -960 960 960"
-                                                    width="20px"
-                                                    fill="currentColor"
-                                                >
-                                                    <path d="M40-160v-112q0-34 17.5-62.5T104-378q62-31 126-46.5T360-440q66 0 130 15.5T616-378q29 15 46.5 43.5T680-272v112H40Zm720 0v-120q0-44-24.5-84.5T666-434q51 6 96 20.5t84 35.5q36 20 55 44.5t19 53.5v120H760ZM247-527q-47-47-47-113t47-113q47-47 113-47t113 47q47 47 47 113t-47 113q-47 47-113 47t-113-47Zm466 0q-47 47-113 47-11 0-28-2.5t-28-5.5q27-32 41.5-71t14.5-81q0-42-14.5-81T544-792q14-5 28-6.5t28-1.5q66 0 113 47t47 113q0 66-47 113Z" />
-                                                </svg>
-                                                <div>{room.maxPlayers}</div>
+                                                <Icon name="usersRound" />
+                                                <div className="font-mono font-bold">
+                                                    {room.maxPlayers}
+                                                </div>
                                             </div>
                                         </button>
                                     </div>

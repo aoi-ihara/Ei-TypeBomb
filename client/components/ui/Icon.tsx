@@ -28,9 +28,10 @@ import {
     Play,
     Lock,
     LucideIcon,
+    Earth,
+    UsersRound,
 } from "lucide-react";
 
-// 3. Annotate with Record<string, LucideIcon>
 const icons: Record<string, LucideIcon> = {
     heart: Heart,
     comment: MessageCircle,
@@ -60,6 +61,8 @@ const icons: Record<string, LucideIcon> = {
     link: Link,
     play: Play,
     lock: Lock,
+    earth: Earth,
+    usersRound: UsersRound,
 };
 
 export type IconName = keyof typeof icons;
