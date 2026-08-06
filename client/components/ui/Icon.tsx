@@ -25,6 +25,7 @@ import {
     X,
     RotateCcw,
     Link,
+    Play,
 } from "lucide-react";
 
 const icons = {
@@ -54,6 +55,7 @@ const icons = {
     x: X,
     rotateCw: RotateCcw,
     link: Link,
+    play: Play,
 };
 
 export type IconName = keyof typeof icons;
