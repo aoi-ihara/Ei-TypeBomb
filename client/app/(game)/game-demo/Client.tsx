@@ -346,23 +346,18 @@ export default function Client({
                                             </div>
                                         ) : (
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                {currentTurnUser?.id ==
-                                                userId ? (
+                                                {currentTurnUser && (
                                                     <div
-                                                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                        className="font-bold opacity-50 px-2 pt-1 pb-1 w-fit flex"
                                                         data-cursor="text"
                                                     >
-                                                        YOUR TURN
+                                                        {currentTurnUser?.id !==
+                                                        userId
+                                                            ? currentTurnUser.displayName +
+                                                              "'s Turn"
+                                                            : "YOUR TURN"}
                                                     </div>
-                                                ) : currentTurnUser ? (
-                                                    <div
-                                                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                                                        data-cursor="text"
-                                                    >
-                                                        {currentTurnUser.displayName +
-                                                            "'s Turn"}
-                                                    </div>
-                                                ) : null}
+                                                )}
 
                                                 <TypingView
                                                     japanese={currentWord.jp}
