@@ -136,6 +136,17 @@ export default function Loading() {
             >
                 Continue
             </Button>
+
+            {!link && (
+                <Button
+                    onClick={() => router.push("/game-demo")}
+                    className={`w-full`}
+                    iconName="play"
+                >
+                    Play Demo
+                </Button>
+            )}
+
             {error && (
                 <a className="text-red-500" data-cursor="text">
                     {error}

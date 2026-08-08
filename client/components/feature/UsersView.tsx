@@ -49,56 +49,81 @@ export default function UsersView({
         },
     ];
 
-    const style = bombStyles[bombStatus];
+    // 0〜4 の bombStatus を安全にインデックス（0〜4）へ割り当て
+    const styleIndex = Math.min(Math.max(0, bombStatus), bombStyles.length - 1);
+    const style = bombStyles[styleIndex];
 
     return (
         <div className="h-full w-full flex items-center justify-center">
             <div className="w-96 h-96 flex relative">
-                {positions.map((position, index) => (
-                    <div
-                        key={index}
-                        className="absolute flex transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full"
-                        style={{
-                            opacity: `${positions[index].opacity}`,
-                            width: `${positions[index].w}px`,
-                            height: `${positions[index].h}px`,
-                            left: `calc(${positions[index].x + 50}% - ${positions[index].w / 2}px)`,
-                            top: `calc(${positions[index].y + 50}% - ${positions[index].h / 2}px)`,
-                        }}
-                    >
-                        <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-200 ease-out">
-                            <div
-                                className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] text-center items-center text-sm pb-2 w-32 flex justify-center"
-                                style={{
-                                    left: `calc(${positions[index].w / 2}px - 64px)`,
-                                    bottom: `calc(${positions[index].h}px + 4px)`,
-                                }}
-                            >
-                                {users[index]?.id === userId && (
-                                    <svg
-                                        className="w-fit"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        height="32px"
-                                        viewBox="0 -960 960 960"
-                                        width="32px"
-                                        fill="currentColor"
-                                    >
-                                        <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
-                                    </svg>
-                                )}
-                                {users[index]?.displayName ?? ""}
+                {positions.map((position, index) => {
+                    const posX = Number(position.x.toFixed(4));
+                    const posY = Number(position.y.toFixed(4));
+
+                    return (
+                        <div
+                            key={index}
+                            className="absolute flex transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full"
+                            style={{
+                                opacity: `${position.opacity}`,
+                                width: `${position.w}px`,
+                                height: `${position.h}px`,
+                                left: `calc(${posX + 50}% - ${position.w / 2}px)`,
+                                top: `calc(${posY + 50}% - ${position.h / 2}px)`,
+                            }}
+                        >
+                            <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-200 ease-out">
+                                <div
+                                    className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] text-center items-center text-sm pb-2 w-32 flex justify-center"
+                                    style={{
+                                        left: `calc(${position.w / 2}px - 64px)`,
+                                        bottom: `calc(${position.h}px + 4px)`,
+                                    }}
+                                >
+                                    {users[index]?.id === userId && (
+                                        <svg
+                                            className="w-fit"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            height="32px"
+                                            viewBox="0 -960 960 960"
+                                            width="32px"
+                                            fill="currentColor"
+                                        >
+                                            <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
+                                        </svg>
+                                    )}
+                                    {users[index]?.displayName ?? ""}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 <div
                     className="absolute flex transition-all duration-500 w-8 h-8 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full animate-[bombBounce_400ms_ease-out]"
                     key={bombStatus}
                     style={{
                         opacity: `${currentTurn !== null ? 1 : 0}`,
-                        left: `calc(${currentTurn !== null ? positions[currentTurn].x + 50 : 50}% - ${currentTurn !== null ? positions[currentTurn].w / 2 + 16 : 16}px)`,
-                        top: `calc(${currentTurn !== null ? positions[currentTurn].y + 50 : 50}% - ${currentTurn !== null ? positions[currentTurn].h / 2 + 8 : 16}px)`,
+                        left: `calc(${
+                            currentTurn !== null
+                                ? Number(positions[currentTurn]?.x.toFixed(4)) +
+                                  50
+                                : 50
+                        }% - ${
+                            currentTurn !== null
+                                ? positions[currentTurn]?.w / 2 + 16
+                                : 16
+                        }px)`,
+                        top: `calc(${
+                            currentTurn !== null
+                                ? Number(positions[currentTurn]?.y.toFixed(4)) +
+                                  50
+                                : 50
+                        }% - ${
+                            currentTurn !== null
+                                ? positions[currentTurn]?.h / 2 + 8
+                                : 16
+                        }px)`,
                     }}
                 >
                     <svg

@@ -27,7 +27,7 @@ const variantStyles = (
     disabled: boolean,
 ) => {
     return variant === "text"
-        ? `${!loading && "underline"} w-fit px-1 rounded-md active:no-underline active:scale-95`
+        ? `${!loading && "underline"} w-fit flex rounded-md active:no-underline active:scale-95`
         : variant === "default" || loading
           ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
           : variant === "danger"
@@ -51,7 +51,7 @@ export default function Button({
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant === "text"
-            ? "gap-1"
+            ? `gap-1 ${iconName ? "pl-0 pr-1" : "px-1"}`
             : padding === "small"
               ? `rounded-lg ${iconName ? "pl-1.5" : "pl-2"} ${children ? "pr-2" : "pr-1.5"} py-1 gap-1`
               : padding === "middle"

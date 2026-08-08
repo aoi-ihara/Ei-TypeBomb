@@ -24,9 +24,16 @@ import {
     Eye,
     X,
     RotateCcw,
+    Link,
+    Play,
+    Lock,
+    LucideIcon,
+    Earth,
+    UsersRound,
+    CircleUserRound,
 } from "lucide-react";
 
-const icons = {
+const icons: Record<string, LucideIcon> = {
     heart: Heart,
     comment: MessageCircle,
     share: Share,
@@ -52,6 +59,12 @@ const icons = {
     eye: Eye,
     x: X,
     rotateCw: RotateCcw,
+    link: Link,
+    play: Play,
+    lock: Lock,
+    earth: Earth,
+    usersRound: UsersRound,
+    circleUserRound: CircleUserRound,
 };
 
 export type IconName = keyof typeof icons;
@@ -63,6 +76,8 @@ type Props = {
 
 export function Icon({ name, size = 24 }: Props) {
     const IconComponent = icons[name];
+
+    if (!IconComponent) return null;
 
     return <IconComponent size={size} strokeWidth={2.5} />;
 }
