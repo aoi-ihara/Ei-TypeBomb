@@ -37,7 +37,6 @@ export default function Cursor() {
         weight: 4,
         opacity: 0,
         borderRadius: 12.5,
-        position: 0,
     });
 
     const [isMouseDown, setIsMouseDown] = useState(false);
@@ -60,8 +59,6 @@ export default function Cursor() {
     const cursorOpacity = useSpring(0, springConfig);
 
     const cursorBorderRadius = useSpring(12.5, springConfig);
-
-    const cursorPosition = useSpring(12.5, springConfig);
 
     const boxShadow = useTransform(
         cursorWeight,
@@ -152,8 +149,6 @@ export default function Cursor() {
                         opacity: 0.25,
 
                         borderRadius: selectedButtons[0].borderRadius + 8,
-
-                        position: 0,
                     };
                 } else if (selectedButtons[0].shape == 1) {
                     target.current = {
@@ -168,23 +163,19 @@ export default function Cursor() {
                         opacity: 0.15,
 
                         borderRadius: selectedButtons[0].borderRadius,
-
-                        position: 0,
                     };
                 } else if (selectedButtons[0].shape === 2) {
                     target.current = {
                         x,
                         y,
 
-                        width: 25,
-                        height: 25,
+                        width: 30,
+                        height: 30,
 
-                        weight: isMouseDownRef.current ? 8 : 4,
+                        weight: 15,
 
-                        opacity: 1,
-                        borderRadius: 12.5,
-
-                        position: 1,
+                        opacity: 0.5,
+                        borderRadius: 15,
                     };
                 }
             } else if (selectedTexts.length > 0) {
@@ -192,30 +183,28 @@ export default function Cursor() {
                     x,
                     y,
 
-                    width: 3,
-                    height: selectedTexts[0].fontSize + 10,
+                    width: 3 * (isMouseDownRef.current ? 2 : 1),
+                    height:
+                        (selectedTexts[0].fontSize + 10) *
+                        (isMouseDownRef.current ? 0.9 : 1),
 
-                    weight: 2,
+                    weight: 2 * (isMouseDownRef.current ? 2 : 1),
                     opacity: 0.5,
 
                     borderRadius: 12.5,
-
-                    position: 0,
                 };
             } else {
                 target.current = {
                     x,
                     y,
 
-                    width: 20,
-                    height: 20,
+                    width: 24,
+                    height: 24,
 
-                    weight: 1000,
+                    weight: isMouseDownRef.current ? 8 : 4,
                     opacity: 1,
 
-                    borderRadius: 10,
-
-                    position: 0,
+                    borderRadius: 12,
                 };
             }
 
@@ -224,7 +213,6 @@ export default function Cursor() {
             cursorW.set(target.current.width);
             cursorH.set(target.current.height);
             cursorOpacity.set(target.current.opacity);
-            cursorPosition.set(target.current.position);
 
             const minimumWeight = Math.min(
                 target.current.width,
@@ -245,7 +233,6 @@ export default function Cursor() {
             cursorOpacity,
             cursorWeight,
             cursorBorderRadius,
-            cursorPosition,
         ],
     );
 
@@ -336,8 +323,6 @@ export default function Cursor() {
                 style={{
                     left: cursorX,
                     top: cursorY,
-
-                    rotate: cursorPosition,
 
                     width: cursorW,
                     height: cursorH,
