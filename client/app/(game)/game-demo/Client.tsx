@@ -392,7 +392,7 @@ export default function Client({
 
             <div className="w-full md:order-1 flex justify-center items-center h-full">
                 <h1
-                    className="absolute top-0 left-4 md:top-3 w-full block truncate line-clamp-1 font-bold font-mono text-lg"
+                    className="absolute top-0 left-0 pl-4 md:top-3 w-full block truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     Demo Room
