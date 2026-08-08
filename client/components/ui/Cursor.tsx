@@ -169,13 +169,13 @@ export default function Cursor() {
                         x,
                         y,
 
-                        width: 25,
-                        height: 25,
+                        width: 30,
+                        height: 30,
 
-                        weight: isMouseDownRef.current ? 8 : 4,
+                        weight: 15,
 
-                        opacity: 1,
-                        borderRadius: 12.5,
+                        opacity: 0.5,
+                        borderRadius: 15,
                     };
                 }
             } else if (selectedTexts.length > 0) {
@@ -183,10 +183,12 @@ export default function Cursor() {
                     x,
                     y,
 
-                    width: 3,
-                    height: selectedTexts[0].fontSize + 10,
+                    width: 3 * (isMouseDownRef.current ? 2 : 1),
+                    height:
+                        (selectedTexts[0].fontSize + 10) *
+                        (isMouseDownRef.current ? 0.9 : 1),
 
-                    weight: 2,
+                    weight: 2 * (isMouseDownRef.current ? 2 : 1),
                     opacity: 0.5,
 
                     borderRadius: 12.5,
@@ -196,23 +198,20 @@ export default function Cursor() {
                     x,
                     y,
 
-                    width: 20,
-                    height: 20,
+                    width: 24,
+                    height: 24,
 
-                    weight: 1000,
+                    weight: isMouseDownRef.current ? 8 : 4,
                     opacity: 1,
 
-                    borderRadius: 10,
+                    borderRadius: 12,
                 };
             }
 
             cursorX.set(target.current.x - target.current.width / 2);
-
             cursorY.set(target.current.y - target.current.height / 2);
-
             cursorW.set(target.current.width);
             cursorH.set(target.current.height);
-
             cursorOpacity.set(target.current.opacity);
 
             const minimumWeight = Math.min(
@@ -300,32 +299,39 @@ export default function Cursor() {
 
     return (
         <motion.div
-            className={`
-                ${isMouseDown && "scale-95"}
-
-                transition-transform
-                z-10
-                duration-200
-                ease-out
-
-                pointer-events-none
-
-                fixed
-                rounded-full
-            `}
+            className={`z-10 pointer-events-none fixed`}
             style={{
                 opacity: cursorOpacity,
-
-                left: cursorX,
-                top: cursorY,
-
-                width: cursorW,
-                height: cursorH,
-
-                boxShadow,
-
-                borderRadius: cursorBorderRadius,
             }}
-        />
+        >
+            <motion.div
+                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
+                style={{
+                    left: cursorX,
+                    top: cursorY,
+
+                    width: cursorW,
+                    height: cursorH,
+
+                    boxShadow,
+
+                    borderRadius: cursorBorderRadius,
+                }}
+            />
+            <motion.div
+                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
+                style={{
+                    left: cursorX,
+                    top: cursorY,
+
+                    width: cursorW,
+                    height: cursorH,
+
+                    boxShadow,
+
+                    borderRadius: cursorBorderRadius,
+                }}
+            />
+        </motion.div>
     );
 }

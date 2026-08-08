@@ -102,7 +102,7 @@ export default function TypingView({
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
                 <div
-                    className="font-bold text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    className="font-bold text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
                     data-cursor="text"
                 >
                     {japanese}
@@ -122,14 +122,13 @@ export default function TypingView({
                         }
                     }}
                 >
-                    {/* ミス文字の表示用（pointer-events-none がついているので操作を邪魔しません） */}
-                    <div className="absolute top-1 left-1 pointer-events-none z-30">
+                    <div className="absolute top-1 left-1 pointer-events-none">
                         {[...english].slice(0, missCount).map((char, index) => {
                             if (char === " ") {
                                 return (
                                     <button
                                         key={index}
-                                        className="font-bold w-4 h-12 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out"
+                                        className="font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out"
                                     >
                                         <div className="flex items-center justify-center h-full w-full" />
                                     </button>
@@ -138,7 +137,7 @@ export default function TypingView({
                                 return (
                                     <button
                                         key={index}
-                                        className={`font-bold opacity-25 w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${currentInput === null ? "active:scale-95" : ""}`}
+                                        className={`font-bold font-mono opacity-25 w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${currentInput === null ? "active:scale-95" : ""}`}
                                     >
                                         <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                             {char}
@@ -149,7 +148,6 @@ export default function TypingView({
                         })}
                     </div>
 
-                    {/* 文字ボタン一覧（z-20 を追加して input より前面に配置） */}
                     {[...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
@@ -158,10 +156,12 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative z-20 font-bold w-4 h-12 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`relative z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setCurrentSelection(index);
+                                        if (currentInput === null) {
+                                            setCurrentSelection(index);
+                                        }
                                         inputRef.current?.focus();
                                     }}
                                 >
@@ -172,14 +172,16 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative z-20 font-bold w-6 h-12 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                    className={`relative z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
                                     data-cursor="button"
                                     data-cursor-shape={
                                         currentInput === null ? "1" : "2"
                                     }
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setCurrentSelection(index);
+                                        if (currentInput === null) {
+                                            setCurrentSelection(index);
+                                        }
                                         inputRef.current?.focus();
                                     }}
                                 >
@@ -191,7 +193,6 @@ export default function TypingView({
                         }
                     })}
 
-                    {/* 全面を覆う透明なインプット（z-10） */}
                     {!isReadonly && (
                         <input
                             ref={inputRef}
