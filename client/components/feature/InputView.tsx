@@ -149,7 +149,6 @@ export default function TypingView({
                         })}
                     </div>
 
-                    {/* 文字ボタン一覧（z-20 を追加して input より前面に配置） */}
                     {[...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
@@ -161,7 +160,9 @@ export default function TypingView({
                                     className={`relative z-20 font-bold w-4 h-12 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setCurrentSelection(index);
+                                        if (currentInput === null) {
+                                            setCurrentSelection(index);
+                                        }
                                         inputRef.current?.focus();
                                     }}
                                 >
@@ -179,7 +180,9 @@ export default function TypingView({
                                     }
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setCurrentSelection(index);
+                                        if (currentInput === null) {
+                                            setCurrentSelection(index);
+                                        }
                                         inputRef.current?.focus();
                                     }}
                                 >
@@ -191,7 +194,6 @@ export default function TypingView({
                         }
                     })}
 
-                    {/* 全面を覆う透明なインプット（z-10） */}
                     {!isReadonly && (
                         <input
                             ref={inputRef}
