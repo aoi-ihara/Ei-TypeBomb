@@ -569,12 +569,12 @@ export default function Clinet({
             </div>
 
             <div className="w-full relative flex md:order-1">
-                <h1
-                    className="absolute top-0 left-4 md:top-3 w-full block truncate line-clamp-1 font-bold font-mono text-lg"
+                <div
+                    className="absolute top-0 left-0 pl-4 md:top-3 w-fit flex truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     {room?.title}
-                </h1>
+                </div>
 
                 <UsersView
                     users={users ?? []}
