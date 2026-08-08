@@ -37,6 +37,7 @@ export default function Cursor() {
         weight: 4,
         opacity: 0,
         borderRadius: 12.5,
+        position: 0,
     });
 
     const [isMouseDown, setIsMouseDown] = useState(false);
@@ -59,6 +60,8 @@ export default function Cursor() {
     const cursorOpacity = useSpring(0, springConfig);
 
     const cursorBorderRadius = useSpring(12.5, springConfig);
+
+    const cursorPosition = useSpring(12.5, springConfig);
 
     const boxShadow = useTransform(
         cursorWeight,
@@ -149,6 +152,8 @@ export default function Cursor() {
                         opacity: 0.25,
 
                         borderRadius: selectedButtons[0].borderRadius + 8,
+
+                        position: 0,
                     };
                 } else if (selectedButtons[0].shape == 1) {
                     target.current = {
@@ -163,6 +168,8 @@ export default function Cursor() {
                         opacity: 0.15,
 
                         borderRadius: selectedButtons[0].borderRadius,
+
+                        position: 0,
                     };
                 } else if (selectedButtons[0].shape === 2) {
                     target.current = {
@@ -176,6 +183,8 @@ export default function Cursor() {
 
                         opacity: 1,
                         borderRadius: 12.5,
+
+                        position: 1,
                     };
                 }
             } else if (selectedTexts.length > 0) {
@@ -190,6 +199,8 @@ export default function Cursor() {
                     opacity: 0.5,
 
                     borderRadius: 12.5,
+
+                    position: 0,
                 };
             } else {
                 target.current = {
@@ -203,17 +214,17 @@ export default function Cursor() {
                     opacity: 1,
 
                     borderRadius: 10,
+
+                    position: 0,
                 };
             }
 
             cursorX.set(target.current.x - target.current.width / 2);
-
             cursorY.set(target.current.y - target.current.height / 2);
-
             cursorW.set(target.current.width);
             cursorH.set(target.current.height);
-
             cursorOpacity.set(target.current.opacity);
+            cursorPosition.set(target.current.position);
 
             const minimumWeight = Math.min(
                 target.current.width,
@@ -234,6 +245,7 @@ export default function Cursor() {
             cursorOpacity,
             cursorWeight,
             cursorBorderRadius,
+            cursorPosition,
         ],
     );
 
@@ -300,32 +312,41 @@ export default function Cursor() {
 
     return (
         <motion.div
-            className={`
-                ${isMouseDown && "scale-95"}
-
-                transition-transform
-                z-10
-                duration-200
-                ease-out
-
-                pointer-events-none
-
-                fixed
-                rounded-full
-            `}
+            className={`z-10 pointer-events-none fixed`}
             style={{
                 opacity: cursorOpacity,
-
-                left: cursorX,
-                top: cursorY,
-
-                width: cursorW,
-                height: cursorH,
-
-                boxShadow,
-
-                borderRadius: cursorBorderRadius,
             }}
-        />
+        >
+            <motion.div
+                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
+                style={{
+                    left: cursorX,
+                    top: cursorY,
+
+                    width: cursorW,
+                    height: cursorH,
+
+                    boxShadow,
+
+                    borderRadius: cursorBorderRadius,
+                }}
+            />
+            <motion.div
+                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
+                style={{
+                    left: cursorX,
+                    top: cursorY,
+
+                    rotate: cursorPosition,
+
+                    width: cursorW,
+                    height: cursorH,
+
+                    boxShadow,
+
+                    borderRadius: cursorBorderRadius,
+                }}
+            />
+        </motion.div>
     );
 }
