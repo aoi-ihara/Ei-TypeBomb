@@ -390,13 +390,13 @@ export default function Client({
                 </div>
             </div>
 
-            <div className="w-full md:order-1 flex justify-center items-center h-full">
-                <h1
-                    className="absolute top-0 left-0 pl-4 md:top-3 w-full block truncate line-clamp-1 font-bold font-mono text-lg"
+            <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+                <div
+                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     Demo Room
-                </h1>
+                </div>
                 <UsersView
                     users={users}
                     positions={userPositions}
