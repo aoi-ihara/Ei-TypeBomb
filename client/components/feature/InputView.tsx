@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
+import { getAuthToken } from "@/lib/room/auth";
 
 export default function TypingView({
     japanese,
@@ -24,13 +26,53 @@ export default function TypingView({
 
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
+    const [syncedInput, setSyncedInput] = useState("");
 
     const isReadonly = currentInput !== null;
 
     useEffect(() => {
         if (!isReadonly) {
             inputRef.current?.focus();
+            setSyncedInput("");
+            return;
         }
+
+        let socket: ReturnType<typeof io> | null = null;
+        let cancelled = false;
+
+        const connect = async () => {
+            const authToken = await getAuthToken();
+            if (!authToken || cancelled) return;
+
+            socket = io(
+                typeof window === "undefined"
+                    ? undefined
+                    : process.env.NEXT_PUBLIC_RENDER_URL,
+            );
+
+            socket.on("auth:request", () => {
+                socket?.emit("auth:response", {
+                    jwtToken: authToken,
+                    displayName: "",
+                });
+            });
+
+            socket.on(
+                "typing:input",
+                ({ input }: { input: string }) => {
+                    setSyncedInput(input);
+                },
+            );
+        };
+
+        setSyncedInput("");
+        connect();
+
+        return () => {
+            cancelled = true;
+            socket?.disconnect();
+            socket = null;
+        };
     }, [isReadonly]);
 
     const triggerFailAnimation = () => {
@@ -96,7 +138,8 @@ export default function TypingView({
         }
     };
 
-    const displayChars = isReadonly ? [...currentInput] : input;
+    const displayInput = isReadonly ? syncedInput : input.join("");
+    const displayChars = isReadonly ? [...displayInput] : input;
 
     return (
         <div className="flex flex-col gap-4">
@@ -253,6 +296,7 @@ export default function TypingView({
                                         next[currentSelection] = "";
 
                                         setInput(next);
+                                        onChangeInput(next.join(""));
                                         return;
                                     }
 
