@@ -92,20 +92,23 @@ export default function Settings({
                     inputClassName="pr-33"
                     label="Server URL"
                 >
-                    <button
-                        className="top-3 right-3 px-2 py-1 bg-(--color-background) rounded-md absolute"
+                    <div
+                        className="bg-(--color-background) absolute top-3 rounded-md right-3"
                         data-cursor="button"
                         data-cursor-shape="1"
-                        onClick={() => {
-                            setServerUrl("");
-
-                            setCookie("server-url", "");
-                        }}
                     >
-                        <div className="transition-all duration-200 ease-out active:scale-95 font-bold text-cyan-600">
-                            Use Default
-                        </div>
-                    </button>
+                        <button
+                            className="active:scale-95 px-2 py-1 transition-all duration-200 ease-out"
+                            onClick={() => {
+                                setServerUrl("");
+                                setCookie("server-url", "");
+                            }}
+                        >
+                            <div className="transition-all duration-200 ease-out font-bold text-cyan-600">
+                                Use Default
+                            </div>
+                        </button>
+                    </div>
                 </Input>
             </div>
 
