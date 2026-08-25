@@ -120,7 +120,7 @@ io.on("connection", (socket) => {
         },
     );
 
-    socket.on("currentInput", (input: unknown) => {
+    const handleCurrentInput = (input: unknown) => {
         if (typeof input !== "string") return;
 
         const roomIndex = getRoomIndex();
@@ -133,7 +133,11 @@ io.on("connection", (socket) => {
         if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
 
         sendInputUpdate(roomId, input.slice(0, 1000));
-    });
+    };
+
+    socket.on("currentInput", handleCurrentInput);
+    // Legacy typo kept temporarily so older clients are not broken during rollout.
+    socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
         const roomIndex = getRoomIndex();
