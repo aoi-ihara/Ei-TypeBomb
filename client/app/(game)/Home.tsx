@@ -7,12 +7,10 @@ import { getSession } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
-import Button from "@/components/ui/Button";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
-    const [userId, setUserId] = useState<string | null>(null);
     const [showPopUp, setShowPopUp] = useState(false);
 
     const router = useRouter();
@@ -22,7 +20,6 @@ export default function Home() {
             const userId = await getSession();
             if (!userId) return;
 
-            setUserId(userId);
             posthog.identify(userId);
         };
 
@@ -93,7 +90,6 @@ export default function Home() {
                                                 posthog.capture("signed_out");
                                                 posthog.reset();
                                                 signOut();
-                                                setUserId(null);
                                             }}
                                         >
                                             Sign Out

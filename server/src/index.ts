@@ -95,14 +95,10 @@ io.on("connection", (socket) => {
         const currentRoomId = roomId;
         if (!currentRoomId) return;
 
-        // Broadcast the updated room state before leaving the Socket.IO room so
-        // the player who clicked Leave also receives the state update.
         deleteUser(user.id);
 
         socket.leave(currentRoomId);
 
-        // deleteUser cannot remove an empty room yet because this socket is
-        // still a member at that point. Clean it up after leaving.
         const socketRoom = io.sockets.adapter.rooms.get(currentRoomId);
         if (!socketRoom || socketRoom.size === 0) {
             const room = rooms.find((item) => item.id === currentRoomId);
@@ -162,14 +158,12 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
 
-        // Only the player holding the bomb may publish typing state.
         if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
 
         sendInputUpdate(roomId, input.slice(0, 1000));
     };
 
     socket.on("currentInput", handleCurrentInput);
-    // Legacy typo kept temporarily so older clients are not broken during rollout.
     socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
@@ -179,7 +173,6 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
 
-        // Only the player holding the bomb may advance the turn.
         if (
             !room.isStart ||
             room.bombHolder === undefined ||
