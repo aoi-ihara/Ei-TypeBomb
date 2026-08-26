@@ -65,7 +65,7 @@ io.on("connection", (socket) => {
 
         if (!room.users.some((u) => u.id === user.id)) {
             room.users.push({
-                id: socket.id,
+                id: user.id,
                 displayName: user.displayName,
             });
         }
@@ -82,6 +82,18 @@ io.on("connection", (socket) => {
         deleteUser(user.id);
 
         socket.leave(currentRoomId);
+
+        // deleteUser cannot remove an empty room yet because this socket is
+        // still a member at that point. Clean it up after leaving.
+        const socketRoom = io.sockets.adapter.rooms.get(currentRoomId);
+        if (!socketRoom || socketRoom.size === 0) {
+            const room = rooms.find((item) => item.id === currentRoomId);
+            if (room?.bombTimer) {
+                clearTimeout(room.bombTimer);
+            }
+            rooms = rooms.filter((item) => item.id !== currentRoomId);
+        }
+
         roomId = null;
     };
 
