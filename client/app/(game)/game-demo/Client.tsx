@@ -374,10 +374,12 @@ export default function Client({
                                                         }
                                                     }}
                                                     currentInput={
-                                                        userId ==
-                                                        currentTurnUser?.id
-                                                            ? null
-                                                            : currentInput
+                                                        result !== null
+                                                            ? ""
+                                                            : userId ===
+                                                                currentTurnUser?.id
+                                                              ? null
+                                                              : currentInput
                                                     }
                                                 />
                                             </div>
