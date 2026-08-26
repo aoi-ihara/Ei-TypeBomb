@@ -13,7 +13,11 @@ type RoomSnapshot = {
     words?: Word[];
 };
 
-export default function TypingSyncOverlay({ serverUrl }: { serverUrl: string }) {
+export default function TypingSyncOverlay({
+    serverUrl,
+}: {
+    serverUrl: string;
+}) {
     const [currentInput, setCurrentInput] = useState("");
     const [room, setRoom] = useState<RoomSnapshot | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
@@ -50,10 +54,7 @@ export default function TypingSyncOverlay({ serverUrl }: { serverUrl: string }) 
         };
     }, [serverUrl]);
 
-    const currentUser = useMemo(
-        () => room?.users?.[room.bombHolder],
-        [room],
-    );
+    const currentUser = useMemo(() => room?.users?.[room.bombHolder], [room]);
 
     const currentWord = useMemo(() => {
         if (!room || room.wordIndex === undefined || !room.words) return null;
@@ -62,10 +63,10 @@ export default function TypingSyncOverlay({ serverUrl }: { serverUrl: string }) 
 
     const shouldShow = Boolean(
         room?.isStart &&
-            currentWord?.en &&
-            currentUser?.id &&
-            currentUser.id !== userId &&
-            currentInput,
+        currentWord?.en &&
+        currentUser?.id &&
+        currentUser.id !== userId &&
+        currentInput,
     );
 
     if (!shouldShow || !currentWord?.en) return null;
