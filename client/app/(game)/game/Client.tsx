@@ -10,6 +10,7 @@ import { getAuthToken } from "@/lib/room/auth";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
+import Button from "@/components/ui/Button";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -146,11 +147,6 @@ export default function Clinet({
                 } else {
                     posthog.capture("game_won");
                 }
-
-                setTimeout(() => {
-                    setResult(null);
-                    setLostDisplayName(null);
-                }, 3000);
             },
         );
 
@@ -257,6 +253,13 @@ export default function Clinet({
         socketRef.current?.emit("game:start");
     };
 
+    const handlePlayAgain = () => {
+        setResult(null);
+        setLostDisplayName(null);
+        setCurrentInput("");
+        handleStartGame();
+    };
+
     const handleLeave = () => {
         socketRef.current?.emit("room:leave");
     };
@@ -283,15 +286,35 @@ export default function Clinet({
                     left the room.
                 </div>
             </div>
-            {(result !== null || lostDisplayName) && (
-                <div className="fixed flex items-center justify-center bg-(--color-background)/50 z-1000 top-0 left-0 w-screen h-screen">
-                    <div
-                        data-cursor="text"
-                        className="font-bold text-4xl animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]"
-                    >
-                        {result === true
-                            ? "You Lose"
-                            : `${lostDisplayName} Lose`}
+            {result !== null && (
+                <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
+                    <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
+                        <div data-cursor="text" className="font-bold text-4xl">
+                            {result === true
+                                ? "You Lose"
+                                : `${lostDisplayName} Lose`}
+                        </div>
+
+                        <Button
+                            iconName="rotateCw"
+                            className="w-full"
+                            variant="primary"
+                            onClick={handlePlayAgain}
+                        >
+                            Play Again
+                        </Button>
+
+                        <Button
+                            iconName="plus"
+                            className="w-full"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
+                        >
+                            Create Your Room
+                        </Button>
                     </div>
                 </div>
             )}
