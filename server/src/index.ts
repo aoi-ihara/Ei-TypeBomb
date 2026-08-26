@@ -53,8 +53,24 @@ io.on("connection", (socket) => {
     // AUTH
     socket.emit("auth:request");
 
-    socket.on("room:join", () => {
-        const index = getRoomIndex();
+    socket.on("room:join", async () => {
+        if (!roomId) return;
+
+        let index = getRoomIndex();
+        if (index === -1) {
+            const room = await getRoomFromId(roomId);
+            if (!room) return;
+
+            rooms.push({
+                ...room,
+                users: [],
+                isStart: false,
+                bombStatus: 0,
+                bombHolder: 0,
+            });
+            index = getRoomIndex();
+        }
+
         if (index === -1) return;
 
         const room = rooms[index];
@@ -62,6 +78,8 @@ io.on("connection", (socket) => {
         if (!maxPlayers) return;
 
         if (!room.users || room.users.length >= maxPlayers) return;
+
+        socket.join(roomId);
 
         if (!room.users.some((u) => u.id === user.id)) {
             room.users.push({
@@ -74,10 +92,21 @@ io.on("connection", (socket) => {
     });
 
     const leaveRoom = () => {
-        if (roomId) {
-            socket.leave(roomId);
-        }
+        const currentRoomId = roomId;
+        if (!currentRoomId) return;
+
         deleteUser(user.id);
+
+        socket.leave(currentRoomId);
+
+        const socketRoom = io.sockets.adapter.rooms.get(currentRoomId);
+        if (!socketRoom || socketRoom.size === 0) {
+            const room = rooms.find((item) => item.id === currentRoomId);
+            if (room?.bombTimer) {
+                clearTimeout(room.bombTimer);
+            }
+            rooms = rooms.filter((item) => item.id !== currentRoomId);
+        }
     };
 
     socket.on("room:leave", leaveRoom);
@@ -129,14 +158,12 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
 
-        // Only the player holding the bomb may publish typing state.
         if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
 
         sendInputUpdate(roomId, input.slice(0, 1000));
     };
 
     socket.on("currentInput", handleCurrentInput);
-    // Legacy typo kept temporarily so older clients are not broken during rollout.
     socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
@@ -146,7 +173,6 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
 
-        // Only the player holding the bomb may advance the turn.
         if (
             !room.isStart ||
             room.bombHolder === undefined ||
