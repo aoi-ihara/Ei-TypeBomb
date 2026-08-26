@@ -260,7 +260,6 @@ export default function Clinet({
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
-        handleStartGame();
     };
 
     const handleLeave = () => {
