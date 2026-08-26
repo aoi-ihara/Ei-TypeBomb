@@ -65,7 +65,6 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-
         const socket = io(
             typeof window === "undefined" || initialServerUrl === ""
                 ? process.env.NEXT_PUBLIC_RENDER_URL
@@ -101,6 +100,10 @@ export default function Clinet({
                 setUserPositions(newPositions(newRoom.users, userPositions));
             },
         );
+
+        socket.on("typing:input", ({ input }: { input: string }) => {
+            setCurrentInput(input);
+        });
 
         socket.on("game:quited", () => {
             setConnectionAlert(1);
@@ -257,7 +260,6 @@ export default function Clinet({
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
-        handleStartGame();
     };
 
     const handleLeave = () => {
@@ -276,7 +278,7 @@ export default function Clinet({
                     width="24px"
                     fill="currentColor"
                 >
-                    <path d="m696-80-56-56 84-84-84-84 56-56 84 84 84-84 56 56-83 84 83 84-56 56-84-83-84 83Zm-216 0q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 10-.5 20t-1.5 20h-81q2-10 2.5-20t.5-20q0-20-2.5-40t-7.5-40H654q3 20 4.5 40t1.5 40v20q0 10-1 20h-80q1-10 1-20v-20q0-20-1.5-40t-4.5-40H386q-3 20-4.5 40t-1.5 40q0 20 1.5 40t4.5 40h174v80H404q12 43 31 82.5t45 75.5q18 0 35.5-2t35.5-4l18 78q-23 5-44.5 7.5T480-80ZM170-400h136q-3-20-4.5-40t-1.5-40q0-20 1.5-40t4.5-40H170q-5 20-7.5 40t-2.5 40q0 20 2.5 40t7.5 40Zm34-240h118q9-37 22.5-72.5T376-782q-55 18-99 54.5T204-640Zm172 462q-18-34-31.5-69.5T322-320H204q29 51 73 87.5t99 54.5Zm28-462h152q-12-43-31-82.5T480-798q-26 36-45 75.5T404-640Zm234 0h118q-29-51-73-87.5T584-782q18 34 31.5 69.5T638-640Z" />
+                    <path d="m696-80-56-56 84-84-84-84 56-56 84 84 84-84 56 56-83 84 83 84-56 56-84-83-84 83Zm-216 0q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 10-.5 20t-1.5 20h-81q2-10 2.5-20t.5-20q0-20-2.5-40t-7.5-40H654q3 20 4.5 40t1.5 40v20q0 10-1 20h-80q1-10 1-20v-20q0-20-1.5-40t-4.5-40H386q-3-20-4.5 40t-1.5 40q0 20 1.5 40t4.5 40h174v80H404q12 43 31 82.5t45 75.5q18 0 35.5-2t35.5-4l18 78q-23 5-44.5 7.5T480-80ZM170-400h136q-3-20-4.5-40t-1.5-40q0-20 1.5-40t4.5-40H170q-5 20-7.5 40t-2.5 40q0 20 2.5 40t7.5 40Zm34-240h118q9-37 22.5-72.5T376-782q-55 18-99 54.5T204-640Zm172 462q-18-34-31.5-69.5T322-320H204q29 51 73 87.5t99 54.5Zm28-462h152q-12-43-31-82.5T480-798q-26 36-45 75.5T404-640Zm234 0h118q-29-51-73-87.5T584-782q18 34 31.5 69.5T638-640Z" />
                 </svg>
                 <div
                     className="flex flex-col"
@@ -294,7 +296,6 @@ export default function Clinet({
                                 ? "You Lose"
                                 : `${lostDisplayName} Lose`}
                         </div>
-
                         <Button
                             iconName="rotateCw"
                             className="w-full"
@@ -303,7 +304,6 @@ export default function Clinet({
                         >
                             Play Again
                         </Button>
-
                         <Button
                             iconName="plus"
                             className="w-full"
@@ -318,23 +318,9 @@ export default function Clinet({
                     </div>
                 </div>
             )}
-            <div
-                className={`max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col`}
-            >
+            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${
-                        isSpectator && !isStarted
-                            ? "opacity-0 scale-95"
-                            : users.some((user) => user.id === userId)
-                              ? isStarted
-                                  ? currentTurnUser?.id === userId
-                                      ? "h-full"
-                                      : "h-64"
-                                  : "h-48"
-                              : isStarted
-                                ? "h-64"
-                                : "h-14"
-                    } rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room ? (
                         users.some((user) => user.id === userId) ? (
@@ -353,14 +339,12 @@ export default function Clinet({
                                                 <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
                                                     {currentTurnUser?.id ==
                                                     userId ? (
-                                                        <>
-                                                            <div
-                                                                className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                                                                data-cursor="text"
-                                                            >
-                                                                YOUR TURN
-                                                            </div>
-                                                        </>
+                                                        <div
+                                                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                            data-cursor="text"
+                                                        >
+                                                            YOUR TURN
+                                                        </div>
                                                     ) : currentTurnUser ? (
                                                         <div
                                                             className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -370,7 +354,6 @@ export default function Clinet({
                                                                 "'s Turn"}
                                                         </div>
                                                     ) : null}
-
                                                     <TypingView
                                                         japanese={
                                                             currentWord.jp
@@ -393,12 +376,11 @@ export default function Clinet({
                                                             if (
                                                                 userId ==
                                                                 currentTurnUser?.id
-                                                            ) {
+                                                            )
                                                                 socketRef.current?.emit(
                                                                     "cuttentInput",
                                                                     input,
                                                                 );
-                                                            }
                                                         }}
                                                         currentInput={
                                                             userId ==
@@ -431,9 +413,8 @@ export default function Clinet({
                                                         onClick={() => {
                                                             if (
                                                                 users.length > 1
-                                                            ) {
+                                                            )
                                                                 handleStartGame();
-                                                            }
                                                         }}
                                                     >
                                                         Start Game
@@ -473,14 +454,12 @@ export default function Clinet({
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
                                                 {currentTurnUser?.id ==
                                                 userId ? (
-                                                    <>
-                                                        <div
-                                                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                                                            data-cursor="text"
-                                                        >
-                                                            YOUR TURN
-                                                        </div>
-                                                    </>
+                                                    <div
+                                                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                        data-cursor="text"
+                                                    >
+                                                        YOUR TURN
+                                                    </div>
                                                 ) : currentTurnUser ? (
                                                     <div
                                                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -490,7 +469,6 @@ export default function Clinet({
                                                             "'s Turn"}
                                                     </div>
                                                 ) : null}
-
                                                 <TypingView
                                                     japanese={currentWord.jp}
                                                     english={currentWord.en}
@@ -506,12 +484,11 @@ export default function Clinet({
                                                         if (
                                                             userId ==
                                                             currentTurnUser?.id
-                                                        ) {
+                                                        )
                                                             socketRef.current?.emit(
                                                                 "cuttentInput",
                                                                 input,
                                                             );
-                                                        }
                                                     }}
                                                     currentInput={
                                                         userId ==
@@ -590,7 +567,6 @@ export default function Clinet({
                     )}
                 </div>
             </div>
-
             <div className="w-full relative md:order-1 flex justify-center items-center h-full">
                 <div
                     className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
@@ -598,7 +574,6 @@ export default function Clinet({
                 >
                     {room?.title}
                 </div>
-
                 <UsersView
                     users={users ?? []}
                     positions={userPositions}
