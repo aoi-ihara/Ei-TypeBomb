@@ -65,7 +65,7 @@ io.on("connection", (socket) => {
 
         if (!room.users.some((u) => u.id === user.id)) {
             room.users.push({
-                id: user.id,
+                id: socket.id,
                 displayName: user.displayName,
             });
         }
@@ -74,10 +74,15 @@ io.on("connection", (socket) => {
     });
 
     const leaveRoom = () => {
-        if (roomId) {
-            socket.leave(roomId);
-        }
+        const currentRoomId = roomId;
+        if (!currentRoomId) return;
+
+        // Broadcast the updated room state before leaving the Socket.IO room so
+        // the player who clicked Leave also receives the state update.
         deleteUser(user.id);
+
+        socket.leave(currentRoomId);
+        roomId = null;
     };
 
     socket.on("room:leave", leaveRoom);
