@@ -118,7 +118,9 @@ export default function TypingView({
     };
 
     const displayInput = isReadonly
-        ? currentInput || syncedInput
+        ? currentInput === ""
+            ? syncedInput
+            : currentInput
         : input.join("");
     const displayChars = isReadonly ? [...displayInput] : input;
 
