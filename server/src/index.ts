@@ -73,9 +73,14 @@ io.on("connection", (socket) => {
         sendRoomInfo(roomId);
     });
 
-    socket.on("room:leave", () => {
+    const leaveRoom = () => {
+        if (roomId) {
+            socket.leave(roomId);
+        }
         deleteUser(user.id);
-    });
+    };
+
+    socket.on("room:leave", leaveRoom);
 
     socket.on(
         "auth:response",
@@ -130,21 +135,27 @@ io.on("connection", (socket) => {
         sendInputUpdate(roomId, input.slice(0, 1000));
     };
 
-    // Keep the existing client event name for backwards compatibility.
-    socket.on("cuttentInput", handleCurrentInput);
     socket.on("currentInput", handleCurrentInput);
+    // Legacy typo kept temporarily so older clients are not broken during rollout.
+    socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
 
         const room = rooms[roomIndex];
+        const currentUser = room.users?.[room.bombHolder ?? 0];
+
+        // Only the player holding the bomb may advance the turn.
         if (
+            !room.isStart ||
             room.bombHolder === undefined ||
-            !room.users ||
-            room.users.length === 0
-        )
+            !currentUser ||
+            currentUser.id !== user.id ||
+            !room.users?.length
+        ) {
             return;
+        }
 
         console.log("success!!");
 
@@ -270,10 +281,10 @@ io.on("connection", (socket) => {
                 clearTimeout(room.bombTimer);
             }
             rooms = rooms.filter((item) => item.id !== roomId);
-            console.log("room deleted");
+        } else {
+            sendInputUpdate(roomId, "");
         }
 
-        sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
     };
 
