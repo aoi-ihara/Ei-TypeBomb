@@ -74,10 +74,27 @@ io.on("connection", (socket) => {
     });
 
     const leaveRoom = () => {
-        if (roomId) {
-            socket.leave(roomId);
-        }
+        const currentRoomId = roomId;
+        if (!currentRoomId) return;
+
+        // Broadcast the updated room state before leaving the Socket.IO room so
+        // the player who clicked Leave also receives the state update.
         deleteUser(user.id);
+
+        socket.leave(currentRoomId);
+
+        // deleteUser cannot remove an empty room yet because this socket is
+        // still a member at that point. Clean it up after leaving.
+        const socketRoom = io.sockets.adapter.rooms.get(currentRoomId);
+        if (!socketRoom || socketRoom.size === 0) {
+            const room = rooms.find((item) => item.id === currentRoomId);
+            if (room?.bombTimer) {
+                clearTimeout(room.bombTimer);
+            }
+            rooms = rooms.filter((item) => item.id !== currentRoomId);
+        }
+
+        roomId = null;
     };
 
     socket.on("room:leave", leaveRoom);
