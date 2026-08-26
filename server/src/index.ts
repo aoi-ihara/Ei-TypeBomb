@@ -30,6 +30,15 @@ const sendRoomInfo = (roomId: string | null) => {
     console.log("room:", room);
 };
 
+const sendInputUpdate = (roomId: string | null, input: string) => {
+    if (!roomId) return;
+
+    const room = rooms.find((item) => item.id === roomId);
+    if (!room?.isStart || !room.users?.length) return;
+
+    io.to(roomId).emit("typing:input", { input });
+};
+
 // MAIN
 io.on("connection", (socket) => {
     let user: User = { id: socket.id };
@@ -64,9 +73,14 @@ io.on("connection", (socket) => {
         sendRoomInfo(roomId);
     });
 
-    socket.on("room:leave", () => {
+    const leaveRoom = () => {
+        if (roomId) {
+            socket.leave(roomId);
+        }
         deleteUser(user.id);
-    });
+    };
+
+    socket.on("room:leave", leaveRoom);
 
     socket.on(
         "auth:response",
@@ -106,17 +120,42 @@ io.on("connection", (socket) => {
         },
     );
 
+    const handleCurrentInput = (input: unknown) => {
+        if (typeof input !== "string") return;
+
+        const roomIndex = getRoomIndex();
+        if (roomIndex === -1) return;
+
+        const room = rooms[roomIndex];
+        const currentUser = room.users?.[room.bombHolder ?? 0];
+
+        // Only the player holding the bomb may publish typing state.
+        if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
+
+        sendInputUpdate(roomId, input.slice(0, 1000));
+    };
+
+    socket.on("currentInput", handleCurrentInput);
+    // Legacy typo kept temporarily so older clients are not broken during rollout.
+    socket.on("cuttentInput", handleCurrentInput);
+
     socket.on("word:success", () => {
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
 
         const room = rooms[roomIndex];
+        const currentUser = room.users?.[room.bombHolder ?? 0];
+
+        // Only the player holding the bomb may advance the turn.
         if (
+            !room.isStart ||
             room.bombHolder === undefined ||
-            !room.users ||
-            room.users.length === 0
-        )
+            !currentUser ||
+            currentUser.id !== user.id ||
+            !room.users?.length
+        ) {
             return;
+        }
 
         console.log("success!!");
 
@@ -125,6 +164,7 @@ io.on("connection", (socket) => {
             room.wordIndex = Math.floor(Math.random() * room.words.length);
         }
 
+        sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
     });
 
@@ -145,6 +185,7 @@ io.on("connection", (socket) => {
         room.wordIndex = undefined;
         room.bombStatus = 0;
 
+        sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
 
         setTimeout(() => {
@@ -157,6 +198,7 @@ io.on("connection", (socket) => {
                     Math.random() * currentRoom.words.length,
                 );
             }
+            sendInputUpdate(roomId, "");
             sendRoomInfo(roomId);
         }, 3000);
 
@@ -184,6 +226,7 @@ io.on("connection", (socket) => {
                         });
                     }
                     resetGameStatus();
+                    sendInputUpdate(roomId, "");
                     sendRoomInfo(roomId);
                 } else {
                     currentRoom.bombStatus = (currentRoom.bombStatus ?? 0) + 1;
@@ -212,6 +255,7 @@ io.on("connection", (socket) => {
         room.bombStatus = 0;
         room.bombHolder = 0;
         room.wordIndex = undefined;
+        sendInputUpdate(roomId, "");
     };
 
     const deleteUser = (userId: string) => {
@@ -237,7 +281,8 @@ io.on("connection", (socket) => {
                 clearTimeout(room.bombTimer);
             }
             rooms = rooms.filter((item) => item.id !== roomId);
-            console.log("room deleted");
+        } else {
+            sendInputUpdate(roomId, "");
         }
 
         sendRoomInfo(roomId);

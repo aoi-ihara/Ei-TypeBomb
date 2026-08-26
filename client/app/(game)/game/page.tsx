@@ -1,4 +1,5 @@
 import Client from "./Client";
+import TypingSyncOverlay from "@/components/feature/TypingSyncOverlay";
 import { cookies } from "next/headers";
 
 export default async function SettingsPage() {
@@ -11,10 +12,13 @@ export default async function SettingsPage() {
     const serverUrl = cookieStore.get("server-url")?.value ?? "";
 
     return (
-        <Client
-            initialSounDeffects={sounDeffects}
-            initialBackgroundMusic={backgroundMusic}
-            initialServerUrl={serverUrl}
-        />
+        <>
+            <Client
+                initialSounDeffects={sounDeffects}
+                initialBackgroundMusic={backgroundMusic}
+                initialServerUrl={serverUrl}
+            />
+            <TypingSyncOverlay serverUrl={serverUrl} />
+        </>
     );
 }
