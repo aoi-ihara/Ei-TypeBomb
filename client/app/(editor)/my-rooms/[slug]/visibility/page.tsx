@@ -44,18 +44,14 @@ export default function Page({
             password: isPrivate ? newPassword : null,
         };
 
-        if (isPrivate || newPassword) {
-            const error = await updateRoomFromId(request);
+        const error = await updateRoomFromId(request);
 
-            if (error) setError(error);
-            else {
-                posthog.capture("room_visibility_changed", {
-                    room_id: slug,
-                    is_private: isPrivate,
-                });
-                router.push(`/my-rooms/${slug}`);
-            }
-        } else {
+        if (error) setError(error);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
             router.push(`/my-rooms/${slug}`);
         }
     };
@@ -119,6 +115,12 @@ export default function Page({
                 type="password"
             />
 
+            {error && (
+                <div className="text-red-500" data-cursor="text">
+                    {error}
+                </div>
+            )}
+
             <Button
                 variant="primary"
                 onClick={() => handleUpdate()}
@@ -127,11 +129,14 @@ export default function Page({
             >
                 Done
             </Button>
-            {error && (
-                <div className="text-red-500" data-cursor="text">
-                    {error}
-                </div>
-            )}
+
+            <Button
+                className="w-full"
+                onClick={() => router.back()}
+                iconName="x"
+            >
+                Cancel
+            </Button>
         </Shell>
     );
 }
