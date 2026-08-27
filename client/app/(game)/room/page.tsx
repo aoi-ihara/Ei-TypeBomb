@@ -56,9 +56,12 @@ export default function Loading() {
             setLoading(false);
             return;
         }
-        setRoomId(roomIdResult);
 
-        const result = await getRoomStatusFromId(roomIdResult);
+        // Room IDs are case-insensitive. Normalize before sending the ID to the backend.
+        const normalizedRoomId = roomIdResult.toLowerCase();
+        setRoomId(normalizedRoomId);
+
+        const result = await getRoomStatusFromId(normalizedRoomId);
         setLoading(false);
 
         if (result === null) {
@@ -69,12 +72,12 @@ export default function Loading() {
 
         if (result === false) {
             const result = await signInToRoom({
-                id: roomIdResult,
+                id: normalizedRoomId,
                 password: roomPassword,
             });
 
             if (result === null) {
-                posthog.capture("room_entered", { room_id: roomIdResult });
+                posthog.capture("room_entered", { room_id: normalizedRoomId });
                 router.push("/display-name");
                 setLoading(false);
             } else {
