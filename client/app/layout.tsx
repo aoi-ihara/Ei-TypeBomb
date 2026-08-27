@@ -9,7 +9,7 @@ import PopUp from "./PopUp";
 
 const lineSeedJp = LINE_Seed_JP({
     subsets: ["latin"],
-    weight: ["400", "700"],
+    weight: ["400", "700", "800"],
     variable: "--font-line-seed-jp",
 });
 
