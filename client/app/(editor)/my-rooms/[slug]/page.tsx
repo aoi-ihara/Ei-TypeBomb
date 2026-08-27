@@ -574,7 +574,7 @@ export default function Page({
             )}
 
             <div
-                className={`w-full h-full flex justify-center px-4 gap-16 items-center flex-col absolute top-0 left-0 bg-(--color-background) ${
+                className={`w-full h-full flex justify-center px-4 gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
                     !showRoomId && "opacity-0 pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
                 onClick={() => setShowRoomId(false)}
