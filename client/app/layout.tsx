@@ -48,7 +48,7 @@ export default function RootLayout({
                 <PostHogProvider>
                     <main className="flex flex-col h-dvh w-full items-center">
                         {children}
-                        <div className="text-xs w-full flex fixed left-4 opacity-50 justify-center md:justify-start bottom-3">
+                        <div className="text-xs w-full flex fixed opacity-50 justify-center md:justify-start bottom-3">
                             <Footer />
                         </div>
                     </main>
