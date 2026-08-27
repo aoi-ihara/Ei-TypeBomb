@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function Footer() {
     return (
-        <div className="flex w-fit">
+        <div className="flex w-fit md:px-4">
             <div data-cursor="text pointer-events-none">
                 © 2026 vgnz93hs. All rights reserved.
             </div>

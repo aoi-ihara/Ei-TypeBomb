@@ -22,6 +22,7 @@ import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound, useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
     validateLink,
@@ -89,9 +90,24 @@ export default function Page({
     const [showCopiedText, setShowCopiedText] = useState(false);
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
+    const [showRoomId, setShowRoomId] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setShowRoomId(false);
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, []);
 
     const roomDataRef = useRef({
         title,
@@ -325,6 +341,13 @@ export default function Page({
 
                         <Button
                             className="w-fit shrink-0"
+                            padding="large"
+                            iconName="qrCode"
+                            onClick={() => setShowRoomId(true)}
+                        ></Button>
+
+                        <Button
+                            className="w-fit shrink-0"
                             onClick={handleCopy}
                             padding="large"
                             iconName={showCopiedText ? "check" : "copy"}
@@ -549,6 +572,35 @@ export default function Page({
                     </h1>
                 </div>
             )}
+
+            <div
+                className={`w-full h-full flex justify-center px-4 gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
+                    !showRoomId && "opacity-0 pointer-events-none"
+                } z-100 transition-all overlay duration-200 ease-out`}
+                onClick={() => setShowRoomId(false)}
+            >
+                <div className="font-extrabold text-cyan-600 text-4xl">
+                    Ei-TypeBomb
+                </div>
+                <div className="w-full bg-(--color-background) gap-16 flex flex-col md:flex-row justify-center items-center">
+                    <QRCodeSVG
+                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
+                        size={256}
+                        fgColor="var(--color-foreground)"
+                        bgColor="var(--color-background)"
+                        className="text-(--color-foreground)"
+                    />
+                    <div className="w-64 md:w-0.5 h-0.5 md:h-64 bg-(--color-border)"></div>
+                    <div className="flex items-center justify-center">
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-4xl">
+                            {link}
+                        </div>
+                    </div>
+                </div>
+                <div className="opacity-50">
+                    Press escape or click to return.
+                </div>
+            </div>
         </div>
     );
 }
