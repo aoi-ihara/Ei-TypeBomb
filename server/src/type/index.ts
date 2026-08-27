@@ -15,6 +15,7 @@ export type Room = {
     updatedAt?: string;
     users?: User[];
     isStart?: boolean;
+    gameId?: string;
     bombHolder?: number;
     wordIndex?: number;
     bombStatus: number;
