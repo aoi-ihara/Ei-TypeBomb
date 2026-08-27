@@ -53,7 +53,7 @@ export default function Home() {
                             data-cursor-shape="1"
                         >
                             <button
-                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all duration-400 ease-[linear(0,0.009_0.7%,0.038_1.5%,0.145_3.1%,0.763_9.1%,0.99_11.8%,1.13_14.4%,1.17_15.7%,1.194_17.1%,1.2_18.7%,1.186_20.5%,1.01_29.6%,0.977_32.4%,0.961_35.3%,0.963_38.9%,0.997_47.8%,1.008_53.3%,0.999_71.2%,1)]"
+                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all cursor-pointer duration-400 ease-[linear(0,0.009_0.7%,0.038_1.5%,0.145_3.1%,0.763_9.1%,0.99_11.8%,1.13_14.4%,1.17_15.7%,1.194_17.1%,1.2_18.7%,1.186_20.5%,1.01_29.6%,0.977_32.4%,0.961_35.3%,0.963_38.9%,0.997_47.8%,1.008_53.3%,0.999_71.2%,1)]"
                                 onClick={() => setShowPopUp(!showPopUp)}
                             >
                                 <Icon name="circleUserRound" />
@@ -71,7 +71,7 @@ export default function Home() {
                                         data-cursor-shape="1"
                                     >
                                         <button
-                                            className="flex w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
                                             onClick={() =>
                                                 router.push("/my-rooms")
                                             }
@@ -85,7 +85,7 @@ export default function Home() {
                                         data-cursor-shape="1"
                                     >
                                         <button
-                                            className="flex w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
                                             onClick={() => {
                                                 posthog.capture("signed_out");
                                                 posthog.reset();
@@ -110,7 +110,7 @@ export default function Home() {
                             data-cursor-shape="1"
                         >
                             <button
-                                className="flex h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                                className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
                                 onClick={() =>
                                     router.push(
                                         process.env.NEXT_PUBLIC_SIGN_IN_URL!,
@@ -140,7 +140,7 @@ export default function Home() {
                 >
                     <button
                         data-cursor="button"
-                        className="text-lg items-center font-bold bg-cyan-600 w-full justify-center py-3 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
+                        className="text-lg cursor-pointer items-center font-bold bg-cyan-600 w-full justify-center py-3 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
                         data-cursor-shape="0"
                         onMouseEnter={() => {
                             setIsSelected(true);
@@ -166,7 +166,7 @@ export default function Home() {
                 >
                     <button
                         data-cursor="button"
-                        className="group justify-center pr-2 pl-1 w-full flex items-center py-1 gap-1 text-cyan-600 rounded-lg font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
+                        className="group cursor-pointer justify-center pr-2 pl-1 w-full flex items-center py-1 gap-1 text-cyan-600 rounded-lg font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
                         data-cursor-shape="1"
                         onClick={() => router.push("/settings")}
                     >
