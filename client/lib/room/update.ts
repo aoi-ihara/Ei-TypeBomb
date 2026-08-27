@@ -16,37 +16,58 @@ import {
 } from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
-    // VALIDATE
+    const validationErrors: string[] = [];
+    const updateData: Record<string, unknown> = {};
 
     if (room.title !== undefined) {
         const validatorResult = validateTitle(room.title);
-        if (validatorResult) return validatorResult;
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.title = room.title;
     }
 
-    if (room.explanation !== undefined && room.explanation !== "") {
-        const validatorResult = validateExplanation(room.explanation);
-        if (validatorResult) return validatorResult;
+    if (room.explanation !== undefined) {
+        const validatorResult =
+            room.explanation === "" ? null : validateExplanation(room.explanation);
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.explanation = room.explanation;
     }
 
     if (room.maxPlayers !== undefined) {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
-        if (validatorResult) return validatorResult;
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.max_players = room.maxPlayers;
     }
+
+    let shouldUpdatePassword = false;
+    let newHashedPassword: string | null | undefined;
 
     if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
-        if (validatorResult) return validatorResult;
+        if (validatorResult) validationErrors.push(validatorResult);
+        else {
+            shouldUpdatePassword = true;
+            newHashedPassword = room.password
+                ? await hashPassword(room.password)
+                : room.password;
+        }
+    } else if (room.password === null) {
+        shouldUpdatePassword = true;
+        newHashedPassword = null;
     }
 
     if (room.words !== undefined) {
         const validatorResult = validateWords(room.words);
-        if (validatorResult) return validatorResult;
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.words = room.words;
     }
 
     if (room.link !== undefined) {
         const validatorResult = validateLink(room.link);
-        if (validatorResult) return validatorResult;
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.link = room.link;
     }
+
+    if (shouldUpdatePassword) updateData.password = newHashedPassword;
 
     const userId = await getUser();
     if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
@@ -55,7 +76,7 @@ export const updateRoomFromId = async (room: Room) => {
 
     const { data, error: selectError } = await supabase
         .from("ei_typebomb_rooms")
-        .select("user_id, password")
+        .select("user_id")
         .eq("id", room.id)
         .maybeSingle();
 
@@ -65,30 +86,15 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (data.user_id !== userId) return "You do not have access to this room.";
 
-    let newHashedPassword = undefined;
+    if (Object.keys(updateData).length === 0) {
+        return validationErrors.length > 0 ? validationErrors.join("\n") : null;
+    }
 
-    if (room.password) newHashedPassword = await hashPassword(room.password);
-    else newHashedPassword = room.password;
-
-    const timeStamp = new Date();
+    updateData.updated_at = new Date();
 
     const { error: updateError } = await supabase
         .from("ei_typebomb_rooms")
-        .update({
-            ...(room.title !== undefined && { title: room.title }),
-            ...(room.explanation !== undefined && {
-                explanation: room.explanation,
-            }),
-            ...(room.maxPlayers !== undefined && {
-                max_players: room.maxPlayers,
-            }),
-            ...(room.words !== undefined && { words: room.words }),
-            ...(newHashedPassword !== undefined && {
-                password: newHashedPassword,
-            }),
-            ...(room.link !== undefined && { link: room.link }),
-            updated_at: timeStamp,
-        })
+        .update(updateData)
         .eq("id", room.id);
 
     if (updateError) return updateError.message;
@@ -101,5 +107,5 @@ export const updateRoomFromId = async (room: Room) => {
     });
     await posthog.shutdown();
 
-    return null;
+    return validationErrors.length > 0 ? validationErrors.join("\n") : null;
 };
