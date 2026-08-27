@@ -9,6 +9,7 @@ import { Room } from "@/type";
 import { useRouter, notFound } from "next/navigation";
 import { getRoomFromId } from "@/lib/room/get";
 import posthog from "posthog-js";
+import { PassThrough } from "stream";
 
 export default function Page({
     params,
@@ -114,6 +115,12 @@ export default function Page({
                 type="password"
             />
 
+            {error && (
+                <div className="text-red-500" data-cursor="text">
+                    {error}
+                </div>
+            )}
+
             <Button
                 variant="primary"
                 onClick={() => handleUpdate()}
@@ -122,11 +129,14 @@ export default function Page({
             >
                 Done
             </Button>
-            {error && (
-                <div className="text-red-500" data-cursor="text">
-                    {error}
-                </div>
-            )}
+
+            <Button
+                className="w-full"
+                onClick={() => router.back()}
+                iconName="x"
+            >
+                Cancel
+            </Button>
         </Shell>
     );
 }
