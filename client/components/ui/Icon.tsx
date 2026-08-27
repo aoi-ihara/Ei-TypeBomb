@@ -31,6 +31,7 @@ import {
     Earth,
     UsersRound,
     CircleUserRound,
+    QrCode,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -65,6 +66,7 @@ const icons: Record<string, LucideIcon> = {
     earth: Earth,
     usersRound: UsersRound,
     circleUserRound: CircleUserRound,
+    qrCode: QrCode,
 };
 
 export type IconName = keyof typeof icons;
