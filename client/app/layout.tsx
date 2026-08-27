@@ -21,14 +21,16 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
     title: "Ei-TypeBomb",
+    description:
+        "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
+    openGraph: {
+        title: "Ei-TypeBomb",
+        description:
+            "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
+        url: "ei-typebomb.vgnz93hs.com",
+        siteName: "Ei-TypeBomb",
+    },
     icons: {
-        icon: [
-            {
-                url: "/favicon.png",
-                sizes: "any",
-                type: "image/ico",
-            },
-        ],
         apple: "/apple-icon.png",
     },
 };
