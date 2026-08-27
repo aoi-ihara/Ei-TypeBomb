@@ -89,6 +89,7 @@ export default function Page({
     const [showCopiedText, setShowCopiedText] = useState(false);
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
+    const [showRoomId, setShowRoomId] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -325,6 +326,13 @@ export default function Page({
 
                         <Button
                             className="w-fit shrink-0"
+                            padding="large"
+                            iconName="qrCode"
+                            onClick={() => setShowRoomId(true)}
+                        ></Button>
+
+                        <Button
+                            className="w-fit shrink-0"
                             onClick={handleCopy}
                             padding="large"
                             iconName={showCopiedText ? "check" : "copy"}
@@ -549,6 +557,13 @@ export default function Page({
                     </h1>
                 </div>
             )}
+
+            <div
+                className={`w-full h-full absolute top-0 left-0 bg-(--color-border) ${!showRoomId && "opacity-0 pointer-events-none"} transition-all duration-200 ease-out`}
+                onClick={() => setShowRoomId(false)}
+            >
+                <div className=""></div>
+            </div>
         </div>
     );
 }
