@@ -9,6 +9,7 @@ import { Room } from "@/type";
 import { useRouter, notFound } from "next/navigation";
 import { getRoomFromId } from "@/lib/room/get";
 import posthog from "posthog-js";
+import { PassThrough } from "stream";
 
 export default function Page({
     params,
@@ -43,14 +44,18 @@ export default function Page({
             password: isPrivate ? newPassword : null,
         };
 
-        const error = await updateRoomFromId(request);
+        if (isPrivate || newPassword) {
+            const error = await updateRoomFromId(request);
 
-        if (error) setError(error);
-        else {
-            posthog.capture("room_visibility_changed", {
-                room_id: slug,
-                is_private: isPrivate,
-            });
+            if (error) setError(error);
+            else {
+                posthog.capture("room_visibility_changed", {
+                    room_id: slug,
+                    is_private: isPrivate,
+                });
+                router.push(`/my-rooms/${slug}`);
+            }
+        } else {
             router.push(`/my-rooms/${slug}`);
         }
     };
