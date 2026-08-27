@@ -55,6 +55,10 @@ export const validateWords = (words?: Word[]) => {
         if (item.en.length > MAX_WORD_LENGTH) {
             return "English text is too long";
         }
+
+        if (!/^[a-zA-Z0-9.,?!\- ]+$/.test(item.en)) {
+            return "English text can contain only letters, numbers, spaces, and the following punctuation: .,?!-";
+        }
     }
 
     return null;
