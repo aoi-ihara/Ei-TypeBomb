@@ -312,6 +312,7 @@ export default function Page({
                                 onChange={(e) => setLink(e.target.value)}
                                 label="Invite Link"
                                 font="mono"
+                                type="url"
                                 inputClassName="pl-19.5"
                                 className={`transition-all w-full duration-200 ease-out`}
                                 value={link}

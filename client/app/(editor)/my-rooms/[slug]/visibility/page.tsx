@@ -9,7 +9,6 @@ import { Room } from "@/type";
 import { useRouter, notFound } from "next/navigation";
 import { getRoomFromId } from "@/lib/room/get";
 import posthog from "posthog-js";
-import { PassThrough } from "stream";
 
 export default function Page({
     params,
