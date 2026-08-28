@@ -57,7 +57,6 @@ export default function Loading() {
             return;
         }
 
-        // Room IDs are case-insensitive. Normalize before sending the ID to the backend.
         const normalizedRoomId = roomIdResult.toLowerCase();
         setRoomId(normalizedRoomId);
 

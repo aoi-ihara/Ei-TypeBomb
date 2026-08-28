@@ -24,8 +24,6 @@ const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
     const room = await getRoomFromId(roomId);
     if (!room) return null;
 
-    // Another request may have created the room while the database request
-    // above was pending. Re-check before mutating the in-memory room list.
     const roomAfterFetch = rooms.find((item) => item.id === roomId);
     if (roomAfterFetch) return roomAfterFetch;
 
@@ -246,10 +244,7 @@ io.on("connection", (socket) => {
                 if (currentRoomIndex === -1) return;
 
                 const currentRoom = rooms[currentRoomIndex];
-                if (
-                    currentRoom.gameId !== gameId ||
-                    !currentRoom.isStart
-                ) {
+                if (currentRoom.gameId !== gameId || !currentRoom.isStart) {
                     return;
                 }
 
