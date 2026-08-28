@@ -46,18 +46,18 @@ const bar = (value: number, width = 12) => {
 const formatState = () =>
     [
         "",
-        "       +----------------------  +",
+        "       +------------------------+",
         "       |   Ei-TypeBomb Server   |",
         "       +------------------------+",
         "",
-        `          ${colorize("O ONLINE", ansi.green)}`,
+        `            ${colorize("[ ONLINE ]", ansi.green)}`,
         "",
         `       Rooms    ${bar(state.rooms)} ${state.rooms}`,
         `       Players  ${bar(state.players)} ${state.players}`,
         `       Games    ${bar(state.games)} ${state.games}`,
         "",
         "       +------------------------+",
-        `       | ${colorize("RECENT", ansi.blue)}                |`,
+        `       | ${colorize("RECENT", ansi.blue)}                 |`,
         "       +------------------------+",
     ].join("\n");
 
