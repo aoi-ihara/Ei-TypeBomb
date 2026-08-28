@@ -5,6 +5,7 @@ type ServerState = {
 };
 
 const isInteractive = Boolean(process.stdout.isTTY);
+const recentEvents: string[] = [];
 
 let state: ServerState = {
     rooms: 0,
@@ -14,7 +15,6 @@ let state: ServerState = {
 
 const formatState = () =>
     [
-        "",
         "Ei-TypeBomb Server",
         "",
         "● ONLINE",
@@ -22,15 +22,25 @@ const formatState = () =>
         `Rooms      ${state.rooms}`,
         `Players    ${state.players}`,
         `Games      ${state.games}`,
-        "",
     ].join("\n");
 
 const renderState = () => {
-    if (isInteractive) {
-        process.stdout.write("\x1b[2J\x1b[H");
+    if (!isInteractive) {
+        console.log(
+            `[STATE] rooms=${state.rooms} players=${state.players} games=${state.games}`,
+        );
+        return;
     }
 
-    process.stdout.write(`${formatState()}[0m\n`);
+    process.stdout.write("\x1b[2J\x1b[H");
+    process.stdout.write(`${formatState()}\n\n`);
+    process.stdout.write("Recent\n");
+    process.stdout.write(
+        recentEvents.length > 0
+            ? recentEvents.map((event) => `> ${event}`).join("\n")
+            : "> Server ready",
+    );
+    process.stdout.write("\n");
 };
 
 export const setServerState = (nextState: ServerState) => {
@@ -38,8 +48,20 @@ export const setServerState = (nextState: ServerState) => {
     renderState();
 };
 
-export const logEvent = (context: "ROOM" | "GAME" | "SERVER", message: string) => {
-    console.log(`> [${context}] ${message}`);
+export const logEvent = (
+    context: "ROOM" | "GAME" | "SERVER",
+    message: string,
+) => {
+    const event = `[${context}] ${message}`;
+    recentEvents.push(event);
+    if (recentEvents.length > 8) recentEvents.shift();
+
+    if (isInteractive) {
+        renderState();
+        return;
+    }
+
+    console.log(`> ${event}`);
 };
 
 export const logError = (message: string, error?: unknown) => {
