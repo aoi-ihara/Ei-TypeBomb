@@ -575,11 +575,11 @@ export default function Page({
 
             <div
                 className={`w-full h-full flex justify-center px-4 gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomId && "opacity-0 pointer-events-none"
+                    !showRoomId && "opacity-0 scale-95 pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
                 onClick={() => setShowRoomId(false)}
             >
-                <div className="font-extrabold text-cyan-600 text-4xl">
+                <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
                 </div>
                 <div className="w-full bg-(--color-background) gap-16 flex flex-col md:flex-row justify-center items-center">
