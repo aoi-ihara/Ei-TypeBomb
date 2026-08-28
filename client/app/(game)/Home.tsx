@@ -11,7 +11,6 @@ import Button from "@/components/ui/Button";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
-    const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
 
