@@ -5,15 +5,18 @@ type ServerState = {
 };
 
 type EventContext = "ROOM" | "GAME" | "SERVER";
+type ConsoleEvent = { context: EventContext; message: string };
 
 const isInteractive = Boolean(process.stdout.isTTY);
-const recentEvents: { context: EventContext; message: string }[] = [];
+const recentEvents: ConsoleEvent[] = [];
 
 let state: ServerState = {
     rooms: 0,
     players: 0,
     games: 0,
 };
+
+let renderScheduled = false;
 
 const ansi = {
     reset: "\x1b[0m",
@@ -32,7 +35,7 @@ const contextColor = (context: EventContext) => {
     return ansi.green;
 };
 
-const formatEvent = ({ context, message }: (typeof recentEvents)[number]) =>
+const formatEvent = ({ context, message }: ConsoleEvent) =>
     `${colorize(`[${context}]`, contextColor(context))} ${message}`;
 
 const formatState = () =>
@@ -47,6 +50,8 @@ const formatState = () =>
     ].join("\n");
 
 const renderState = () => {
+    renderScheduled = false;
+
     if (!isInteractive) {
         console.log(
             `[STATE] rooms=${state.rooms} players=${state.players} games=${state.games}`,
@@ -65,17 +70,33 @@ const renderState = () => {
     process.stdout.write("\n");
 };
 
+const scheduleRender = () => {
+    if (renderScheduled) return;
+
+    renderScheduled = true;
+    setImmediate(renderState);
+};
+
 export const setServerState = (nextState: ServerState) => {
     state = nextState;
-    renderState();
+    if (isInteractive) scheduleRender();
+    else renderState();
 };
 
 export const logEvent = (context: EventContext, message: string) => {
+    if (
+        (context === "SERVER" &&
+            (message === "client connected" || message === "client disconnected")) ||
+        (context === "ROOM" && message.startsWith("authenticated "))
+    ) {
+        return;
+    }
+
     recentEvents.push({ context, message });
     if (recentEvents.length > 8) recentEvents.shift();
 
     if (isInteractive) {
-        renderState();
+        scheduleRender();
         return;
     }
 
