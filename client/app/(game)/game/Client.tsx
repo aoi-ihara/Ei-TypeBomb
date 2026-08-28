@@ -409,7 +409,7 @@ export default function Clinet({
                                                     }
                                                 >
                                                     <button
-                                                        className={`items-center font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
+                                                        className={`items-center cursor-pointer font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
                                                         onClick={() => {
                                                             if (
                                                                 users.length > 1
@@ -426,7 +426,7 @@ export default function Clinet({
                                                     data-cursor-shape="1"
                                                 >
                                                     <button
-                                                        className="items-center text-center justify-center font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                        className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
                                                         onClick={() =>
                                                             handleLeave()
                                                         }
@@ -517,7 +517,7 @@ export default function Clinet({
                                                         data-cursor-shape="1"
                                                     >
                                                         <button
-                                                            className="items-center text-center justify-center font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                            className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
                                                             onClick={() =>
                                                                 handleWatch()
                                                             }
@@ -531,7 +531,7 @@ export default function Clinet({
                                                         data-cursor-shape="0"
                                                     >
                                                         <button
-                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-200 ease-out active:scale-95"
                                                             onClick={() =>
                                                                 handleJoin()
                                                             }

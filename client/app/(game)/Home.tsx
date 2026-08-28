@@ -7,10 +7,10 @@ import { getSession } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
+import Button from "@/components/ui/Button";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
-    const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
 
@@ -136,47 +136,46 @@ export default function Home() {
                     />
                 </div>
 
-                <div
-                    className="rounded-lg w-64 flex"
-                    data-cursor="button"
-                    data-cursor-shape="0"
-                >
-                    <button
-                        data-cursor="button"
-                        className="text-lg cursor-pointer items-center font-bold bg-cyan-600 w-full justify-center py-3 rounded-lg text-white flex transition-all duration-200 ease-out active:scale-95"
-                        data-cursor-shape="0"
-                        onMouseEnter={() => {
-                            setIsSelected(true);
-                        }}
-                        onMouseLeave={() => {
-                            setIsSelected(false);
-                        }}
+                <div className="w-64 gap-4 flex flex-col">
+                    <Button
+                        className="w-full"
+                        iconName="play"
                         onClick={() => router.push("/room")}
+                        variant="primary"
                     >
-                        <div
-                            className={`${isSelected ? "w-8" : "w-0 opacity-0"} transition-all hidden duration-200 ease-out md:flex overflow-hidden`}
+                        Play
+                    </Button>
+
+                    {userId ? (
+                        <Button
+                            className="w-full"
+                            iconName="layoutGrid"
+                            onClick={() => router.push("/my-rooms")}
                         >
-                            <Icon name="play" size={24} />
-                        </div>
-                        <div className="mr-1">Play</div>
-                    </button>
+                            My Rooms
+                        </Button>
+                    ) : (
+                        <Button
+                            className="w-full"
+                            iconName="layoutGrid"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
+                        >
+                            Create Your Room
+                        </Button>
+                    )}
                 </div>
 
-                <div
-                    className="rounded-lg flex"
-                    data-cursor="button"
-                    data-cursor-shape="1"
+                <Button
+                    variant="text"
+                    iconName="settings"
+                    onClick={() => router.push("/settings")}
                 >
-                    <button
-                        data-cursor="button"
-                        className="group cursor-pointer justify-center pr-2 pl-1 w-full flex items-center py-1 gap-1 text-cyan-600 rounded-lg font-bold transition-transform duration-200 ease-out active:scale-95 z-1000"
-                        data-cursor-shape="1"
-                        onClick={() => router.push("/settings")}
-                    >
-                        <Icon name="settings" />
-                        Settings
-                    </button>
-                </div>
+                    Settings
+                </Button>
             </div>
         </div>
     );
