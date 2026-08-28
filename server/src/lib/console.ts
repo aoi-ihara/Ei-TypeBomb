@@ -4,8 +4,10 @@ type ServerState = {
     games: number;
 };
 
+type EventContext = "ROOM" | "GAME" | "SERVER";
+
 const isInteractive = Boolean(process.stdout.isTTY);
-const recentEvents: string[] = [];
+const recentEvents: { context: EventContext; message: string }[] = [];
 
 let state: ServerState = {
     rooms: 0,
@@ -24,14 +26,14 @@ const ansi = {
 const colorize = (text: string, color: string) =>
     isInteractive ? `${color}${text}${ansi.reset}` : text;
 
-const colorEvent = (event: string) => {
-    if (!isInteractive) return event;
-
-    if (event.startsWith("[ROOM]")) return colorize(event, ansi.cyan);
-    if (event.startsWith("[GAME]")) return colorize(event, ansi.blue);
-    if (event.startsWith("[SERVER]")) return colorize(event, ansi.green);
-    return event;
+const contextColor = (context: EventContext) => {
+    if (context === "ROOM") return ansi.cyan;
+    if (context === "GAME") return ansi.blue;
+    return ansi.green;
 };
+
+const formatEvent = ({ context, message }: (typeof recentEvents)[number]) =>
+    `${colorize(`[${context}]`, contextColor(context))} ${message}`;
 
 const formatState = () =>
     [
@@ -52,12 +54,12 @@ const renderState = () => {
         return;
     }
 
-    process.stdout.write("\x1b[2J\x1b[H");
+    process.stdout.write("\x1b[H\x1b[0J");
     process.stdout.write(`${formatState()}\n\n`);
     process.stdout.write(`${colorize("Recent", ansi.blue)}\n`);
     process.stdout.write(
         recentEvents.length > 0
-            ? recentEvents.map((event) => `> ${colorEvent(event)}`).join("\n")
+            ? recentEvents.map((event) => `> ${formatEvent(event)}`).join("\n")
             : "> Server ready",
     );
     process.stdout.write("\n");
@@ -68,12 +70,8 @@ export const setServerState = (nextState: ServerState) => {
     renderState();
 };
 
-export const logEvent = (
-    context: "ROOM" | "GAME" | "SERVER",
-    message: string,
-) => {
-    const event = `[${context}] ${message}`;
-    recentEvents.push(event);
+export const logEvent = (context: EventContext, message: string) => {
+    recentEvents.push({ context, message });
     if (recentEvents.length > 8) recentEvents.shift();
 
     if (isInteractive) {
@@ -81,7 +79,7 @@ export const logEvent = (
         return;
     }
 
-    console.log(`> ${event}`);
+    console.log(`> [${context}] ${message}`);
 };
 
 export const logError = (message: string, error?: unknown) => {
