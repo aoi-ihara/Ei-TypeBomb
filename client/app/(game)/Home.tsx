@@ -157,7 +157,7 @@ export default function Home() {
                     ) : (
                         <Button
                             className="w-full"
-                            iconName="layoutGrid"
+                            iconName="plus"
                             onClick={() =>
                                 router.push(
                                     process.env.NEXT_PUBLIC_SIGN_IN_URL!,
