@@ -38,15 +38,27 @@ const contextColor = (context: EventContext) => {
 const formatEvent = ({ context, message }: ConsoleEvent) =>
     `${colorize(`[${context}]`, contextColor(context))} ${message}`;
 
+const bar = (value: number, width = 12) => {
+    const filled = Math.min(value, width);
+    return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`;
+};
+
 const formatState = () =>
     [
-        "Ei-TypeBomb Server",
         "",
-        colorize("● ONLINE", ansi.green),
+        "       +----------------------  +",
+        "       |   Ei-TypeBomb Server   |",
+        "       +------------------------+",
         "",
-        `${colorize("Rooms", ansi.cyan)}      ${state.rooms}`,
-        `${colorize("Players", ansi.cyan)}    ${state.players}`,
-        `${colorize("Games", ansi.cyan)}      ${state.games}`,
+        `          ${colorize("O ONLINE", ansi.green)}`,
+        "",
+        `       Rooms    ${bar(state.rooms)} ${state.rooms}`,
+        `       Players  ${bar(state.players)} ${state.players}`,
+        `       Games    ${bar(state.games)} ${state.games}`,
+        "",
+        "       +------------------------+",
+        `       | ${colorize("RECENT", ansi.blue)}                |`,
+        "       +------------------------+",
     ].join("\n");
 
 const renderState = () => {
@@ -60,12 +72,11 @@ const renderState = () => {
     }
 
     process.stdout.write("\x1b[H\x1b[0J");
-    process.stdout.write(`${formatState()}\n\n`);
-    process.stdout.write(`${colorize("Recent", ansi.blue)}\n`);
+    process.stdout.write(`${formatState()}\n`);
     process.stdout.write(
         recentEvents.length > 0
-            ? recentEvents.map((event) => `> ${formatEvent(event)}`).join("\n")
-            : "> Server ready",
+            ? recentEvents.map((event) => `       > ${formatEvent(event)}`).join("\n")
+            : "       > Server ready",
     );
     process.stdout.write("\n");
 };
@@ -95,12 +106,8 @@ export const logEvent = (context: EventContext, message: string) => {
     recentEvents.push({ context, message });
     if (recentEvents.length > 8) recentEvents.shift();
 
-    if (isInteractive) {
-        scheduleRender();
-        return;
-    }
-
-    console.log(`> [${context}] ${message}`);
+    if (isInteractive) scheduleRender();
+    else console.log(`> [${context}] ${message}`);
 };
 
 export const logError = (message: string, error?: unknown) => {
