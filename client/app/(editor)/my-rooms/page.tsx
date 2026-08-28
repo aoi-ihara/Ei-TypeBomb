@@ -41,7 +41,7 @@ export default function Profile() {
             ) : (
                 <>
                     {rooms && rooms.length !== 0 && (
-                        <div className="w-full grid gap-5 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                             {rooms
                                 .sort(
                                     (a, b) =>
