@@ -6,6 +6,7 @@ const ansi = {
     cyan: "\x1b[36m",
     blue: "\x1b[34m",
     yellow: "\x1b[33m",
+    red: "\x1b[31m",
 };
 
 const isInteractive = Boolean(process.stdout.isTTY);
@@ -42,7 +43,11 @@ export const serverError = (
     error?: unknown,
     context: Context = "SERVER",
 ) => {
-    console.error(`${isInteractive ? `${ansi.red}[ERROR]${ansi.reset}` : "[ERROR]"} ${label(context)} ${message}`);
+    const errorLabel = isInteractive
+        ? `${ansi.red}[ERROR]${ansi.reset}`
+        : "[ERROR]";
+
+    console.error(`${errorLabel} ${label(context)} ${message}`);
 
     if (error instanceof Error) {
         console.error(error.message);
