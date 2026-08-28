@@ -12,6 +12,7 @@ export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
     const [isSelected, setIsSelected] = useState(false); // Whether the play button is selected
     const [showPopUp, setShowPopUp] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
 
     const router = useRouter();
 
@@ -19,6 +20,8 @@ export default function Home() {
         const fetchUserData = async () => {
             const userId = await getSession();
             if (!userId) return;
+
+            setUserId(userId);
 
             posthog.identify(userId);
         };
@@ -45,7 +48,7 @@ export default function Home() {
                 />
             )}
             <div className="w-full flex justify-end p-2">
-                {true ? (
+                {userId ? (
                     <>
                         <div
                             className="relative rounded-lg"
