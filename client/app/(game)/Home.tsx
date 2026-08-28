@@ -93,6 +93,7 @@ export default function Home() {
                                                 posthog.capture("signed_out");
                                                 posthog.reset();
                                                 signOut();
+                                                setUserId(null);
                                             }}
                                         >
                                             Sign Out
