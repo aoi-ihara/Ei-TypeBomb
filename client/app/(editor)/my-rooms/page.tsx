@@ -55,7 +55,7 @@ export default function Profile() {
                                         className="rounded-lg"
                                     >
                                         <button
-                                            className="flex w-full active:scale-95 transition-all duration-200 ease-out flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
+                                            className="flex cursor-pointer w-full active:scale-95 transition-all duration-200 ease-out flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
                                             onClick={() =>
                                                 router.push(
                                                     `/my-rooms/${room.id}`,
