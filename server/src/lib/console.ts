@@ -13,15 +13,26 @@ let state: ServerState = {
     games: 0,
 };
 
+const ansi = {
+    reset: "\x1b[0m",
+    green: "\x1b[32m",
+    cyan: "\x1b[36m",
+    blue: "\x1b[34m",
+    yellow: "\x1b[33m",
+};
+
+const colorize = (text: string, color: string) =>
+    isInteractive ? `${color}${text}${ansi.reset}` : text;
+
 const formatState = () =>
     [
         "Ei-TypeBomb Server",
         "",
-        "● ONLINE",
+        `${colorize("● ONLINE", ansi.green)}`,
         "",
-        `Rooms      ${state.rooms}`,
-        `Players    ${state.players}`,
-        `Games      ${state.games}`,
+        `${colorize("Rooms", ansi.cyan)}      ${state.rooms}`,
+        `${colorize("Players", ansi.cyan)}    ${state.players}`,
+        `${colorize("Games", ansi.cyan)}      ${state.games}`,
     ].join("\n");
 
 const renderState = () => {
@@ -34,7 +45,7 @@ const renderState = () => {
 
     process.stdout.write("\x1b[2J\x1b[H");
     process.stdout.write(`${formatState()}\n\n`);
-    process.stdout.write("Recent\n");
+    process.stdout.write(`${colorize("Recent", ansi.blue)}\n`);
     process.stdout.write(
         recentEvents.length > 0
             ? recentEvents.map((event) => `> ${event}`).join("\n")
@@ -65,7 +76,7 @@ export const logEvent = (
 };
 
 export const logError = (message: string, error?: unknown) => {
-    console.error(`[ERROR] ${message}`);
+    console.error(`${colorize("[ERROR]", ansi.yellow)} ${message}`);
     if (error) console.error(error);
 };
 
