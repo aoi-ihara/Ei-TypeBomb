@@ -27,18 +27,35 @@ export default function Import({
 
     const importJson = async () => {
         posthog.capture("words_imported_and_added", { room_id: slug });
+
         if (!roomId) return;
+
         if (!json) {
             setError("JSON data is required.");
+            return;
         }
 
-        const parsedJson: Word[] = JSON.parse(json);
+        let parsedJson: Word[];
+
+        try {
+            parsedJson = JSON.parse(json);
+        } catch {
+            setError("Invalid JSON format.");
+            return;
+        }
+
         const newWords = [...words, ...parsedJson];
 
-        const result = await updateRoomFromId({ id: roomId, words: newWords });
+        const result = await updateRoomFromId({
+            id: roomId,
+            words: newWords,
+        });
 
-        if (result) setError(result);
-        else router.push(`/my-rooms/${roomId}`);
+        if (result) {
+            setError(result);
+        } else {
+            router.push(`/my-rooms/${roomId}`);
+        }
     };
 
     useEffect(() => {
