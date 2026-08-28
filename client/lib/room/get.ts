@@ -5,6 +5,7 @@ import { getUser } from "../auth/session";
 import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
+import { serverError, serverLog } from "../server-console";
 
 export const getRoomFromLink = async (link: string) => {
     const supabase = await createAdminClient();
@@ -15,7 +16,7 @@ export const getRoomFromLink = async (link: string) => {
         .maybeSingle();
 
     if (error) {
-        console.error(error);
+        serverError("failed to fetch room from link", error, "DB");
         return null;
     }
     if (!data) return null;
@@ -33,13 +34,12 @@ export const getRoomStatusFromId = async (id: string) => {
         .maybeSingle();
 
     if (error) {
-        console.error(error.message);
+        serverError("failed to fetch room status", error, "DB");
         return null;
     }
     if (!data) return null;
 
-    if (data.password) return true;
-    return false;
+    return Boolean(data.password);
 };
 
 export const getRoomFromId = async (id: string) => {
@@ -54,19 +54,16 @@ export const getRoomFromId = async (id: string) => {
         .maybeSingle();
 
     if (error) {
-        console.error(error);
+        serverError("failed to fetch room", error, "DB");
         return null;
     }
 
-    if (data.user_id !== userId) {
-        console.error(
-            "You do not have access to this room.",
-            `${data.user_id} !== ${userId}`,
-        );
+    if (!data || data.user_id !== userId) {
+        serverError("room access denied", undefined, "AUTH");
         return null;
     }
 
-    console.log("Success!!");
+    serverLog("DB", "room fetched");
     return {
         id: data.id,
         title: data.title,
@@ -85,16 +82,16 @@ export const getMyRooms = async () => {
     const userId = await getUser();
     if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
-    console.log("User ID", userId);
-
     const supabase = await createAdminClient();
-
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select("*")
         .eq("user_id", userId);
 
-    if (error) return;
+    if (error) {
+        serverError("failed to fetch user's rooms", error, "DB");
+        return;
+    }
 
     const rooms: Room[] = data.map((room) => ({
         id: room.id,
@@ -109,7 +106,6 @@ export const getMyRooms = async () => {
         link: room.link,
     }));
 
-    console.log(rooms);
-
+    serverLog("DB", "rooms fetched", { count: rooms.length });
     return { userId: userId, rooms: rooms };
 };
