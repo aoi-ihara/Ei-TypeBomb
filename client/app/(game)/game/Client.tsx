@@ -531,7 +531,7 @@ export default function Clinet({
                                                         data-cursor-shape="0"
                                                     >
                                                         <button
-                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-200 ease-out active:scale-95"
                                                             onClick={() =>
                                                                 handleJoin()
                                                             }
