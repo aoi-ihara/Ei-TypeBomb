@@ -116,6 +116,7 @@ export default function Loading() {
                 disabled={showPasswordField}
                 value={link}
                 font="mono"
+                type="url"
                 onChange={(e) => setLink(e.target.value)}
                 label="Invite Link"
             />
