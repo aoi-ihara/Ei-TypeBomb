@@ -312,6 +312,7 @@ export default function Page({
                                 onChange={(e) => setLink(e.target.value)}
                                 label="Invite Link"
                                 font="mono"
+                                type="url"
                                 inputClassName="pl-19.5"
                                 className={`transition-all w-full duration-200 ease-out`}
                                 value={link}
@@ -373,7 +374,7 @@ export default function Page({
                             >
                                 {words.map((word, index) => (
                                     <SortableItem key={word.id} id={word.id}>
-                                        <div className="flex gap-4 w-full">
+                                        <div className="flex items-center gap-4 w-full">
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
@@ -575,11 +576,11 @@ export default function Page({
 
             <div
                 className={`w-full h-full flex justify-center px-4 gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomId && "opacity-0 pointer-events-none"
+                    !showRoomId && "opacity-0 scale-95 pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
                 onClick={() => setShowRoomId(false)}
             >
-                <div className="font-extrabold text-cyan-600 text-4xl">
+                <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
                 </div>
                 <div className="w-full bg-(--color-background) gap-16 flex flex-col md:flex-row justify-center items-center">

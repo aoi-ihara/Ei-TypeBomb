@@ -1,5 +1,6 @@
 import express from "express";
 import { createServer } from "http";
+import { randomUUID } from "crypto";
 import { Server } from "socket.io";
 import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
@@ -15,6 +16,29 @@ const io = new Server(httpServer, {
         methods: ["GET", "POST"],
     },
 });
+
+const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
+    const existingRoom = rooms.find((item) => item.id === roomId);
+    if (existingRoom) return existingRoom;
+
+    const room = await getRoomFromId(roomId);
+    if (!room) return null;
+
+    const roomAfterFetch = rooms.find((item) => item.id === roomId);
+    if (roomAfterFetch) return roomAfterFetch;
+
+    const newRoom: Room = {
+        ...room,
+        users: [],
+        isStart: false,
+        gameId: undefined,
+        bombStatus: 0,
+        bombHolder: 0,
+    };
+
+    rooms.push(newRoom);
+    return newRoom;
+};
 
 const sendRoomInfo = (roomId: string | null) => {
     if (!roomId) return;
@@ -56,24 +80,12 @@ io.on("connection", (socket) => {
     socket.on("room:join", async () => {
         if (!roomId) return;
 
-        let index = getRoomIndex();
-        if (index === -1) {
-            const room = await getRoomFromId(roomId);
-            if (!room) return;
+        const room = await createRoomIfNeeded(roomId);
+        if (!room) return;
 
-            rooms.push({
-                ...room,
-                users: [],
-                isStart: false,
-                bombStatus: 0,
-                bombHolder: 0,
-            });
-            index = getRoomIndex();
-        }
-
+        const index = getRoomIndex();
         if (index === -1) return;
 
-        const room = rooms[index];
         const maxPlayers = room.maxPlayers;
         if (!maxPlayers) return;
 
@@ -125,22 +137,8 @@ io.on("connection", (socket) => {
                 user = { ...user, displayName: response.displayName };
                 socket.join(roomId);
 
-                if (getRoomIndex() === -1) {
-                    console.log("searching room info…");
-                    const room = await getRoomFromId(roomId);
-                    console.log("room:", room);
-                    if (!room) return;
-
-                    if (getRoomIndex() === -1) {
-                        rooms.push({
-                            ...room,
-                            users: [],
-                            isStart: false,
-                            bombStatus: 0,
-                            bombHolder: 0,
-                        });
-                    }
-                }
+                const room = await createRoomIfNeeded(roomId);
+                if (!room) return;
 
                 sendRoomInfo(roomId);
             } catch (error) {
@@ -206,6 +204,8 @@ io.on("connection", (socket) => {
             room.bombTimer = undefined;
         }
 
+        const gameId = randomUUID();
+        room.gameId = gameId;
         room.isStart = true;
         room.bombHolder = Math.floor(Math.random() * room.users.length);
         room.wordIndex = undefined;
@@ -218,6 +218,8 @@ io.on("connection", (socket) => {
             const currentRoomIndex = getRoomIndex();
             if (currentRoomIndex === -1) return;
             const currentRoom = rooms[currentRoomIndex];
+
+            if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
 
             if (currentRoom.words && currentRoom.words.length > 0) {
                 currentRoom.wordIndex = Math.floor(
@@ -232,14 +234,19 @@ io.on("connection", (socket) => {
             const roomIndex = getRoomIndex();
             if (roomIndex === -1) return;
 
+            const currentRoom = rooms[roomIndex];
+            if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
+
             const duration = Math.random() * 10000 + 20000;
 
-            rooms[roomIndex].bombTimer = setTimeout(() => {
+            currentRoom.bombTimer = setTimeout(() => {
                 const currentRoomIndex = getRoomIndex();
                 if (currentRoomIndex === -1) return;
 
                 const currentRoom = rooms[currentRoomIndex];
-                if (!currentRoom?.isStart) return;
+                if (currentRoom.gameId !== gameId || !currentRoom.isStart) {
+                    return;
+                }
 
                 if (currentRoom.bombStatus === 4) {
                     if (!roomId) return;
@@ -251,7 +258,7 @@ io.on("connection", (socket) => {
                             holderDisplayName: lostUser.displayName,
                         });
                     }
-                    resetGameStatus();
+                    resetGameStatus(gameId);
                     sendInputUpdate(roomId, "");
                     sendRoomInfo(roomId);
                 } else {
@@ -266,11 +273,12 @@ io.on("connection", (socket) => {
         changeBombStatus();
     });
 
-    const resetGameStatus = () => {
+    const resetGameStatus = (expectedGameId?: string) => {
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
 
         const room = rooms[roomIndex];
+        if (expectedGameId && room.gameId !== expectedGameId) return;
 
         if (room.bombTimer) {
             clearTimeout(room.bombTimer);
@@ -278,6 +286,7 @@ io.on("connection", (socket) => {
         }
 
         room.isStart = false;
+        room.gameId = undefined;
         room.bombStatus = 0;
         room.bombHolder = 0;
         room.wordIndex = undefined;

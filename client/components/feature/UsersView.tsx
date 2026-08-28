@@ -49,7 +49,6 @@ export default function UsersView({
         },
     ];
 
-    // 0〜4 の bombStatus を安全にインデックス（0〜4）へ割り当て
     const styleIndex = Math.min(Math.max(0, bombStatus), bombStyles.length - 1);
     const style = bombStyles[styleIndex];
 

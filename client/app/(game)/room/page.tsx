@@ -56,9 +56,11 @@ export default function Loading() {
             setLoading(false);
             return;
         }
-        setRoomId(roomIdResult);
 
-        const result = await getRoomStatusFromId(roomIdResult);
+        const normalizedRoomId = roomIdResult.toLowerCase();
+        setRoomId(normalizedRoomId);
+
+        const result = await getRoomStatusFromId(normalizedRoomId);
         setLoading(false);
 
         if (result === null) {
@@ -69,12 +71,12 @@ export default function Loading() {
 
         if (result === false) {
             const result = await signInToRoom({
-                id: roomIdResult,
+                id: normalizedRoomId,
                 password: roomPassword,
             });
 
             if (result === null) {
-                posthog.capture("room_entered", { room_id: roomIdResult });
+                posthog.capture("room_entered", { room_id: normalizedRoomId });
                 router.push("/display-name");
                 setLoading(false);
             } else {
@@ -113,6 +115,7 @@ export default function Loading() {
                 disabled={showPasswordField}
                 value={link}
                 font="mono"
+                type="url"
                 onChange={(e) => setLink(e.target.value)}
                 label="Invite Link"
             />
