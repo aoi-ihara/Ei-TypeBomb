@@ -25,14 +25,12 @@ type TextInputProps = BaseProps & {
     onChange?: React.ChangeEventHandler<HTMLInputElement>;
 };
 
-// 3. textarea 用の Props
 type TextareaProps = BaseProps & {
     variant: "textarea";
     type?: never;
     onChange?: React.ChangeEventHandler<HTMLTextAreaElement>;
 };
 
-// 4. ユニオン型で結合
 type InputProps = TextInputProps | TextareaProps;
 
 export default function Input(props: InputProps) {
