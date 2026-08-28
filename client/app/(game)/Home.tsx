@@ -127,7 +127,7 @@ export default function Home() {
                 )}
             </div>
             <div className="flex h-full flex-col justify-center items-center gap-4">
-                <div className="items-center mb-12 rounded-2xl overflow-clip">
+                <div className="items-center mb-12 rounded-lg overflow-clip">
                     <Image
                         src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
                         alt="page-logo"
@@ -157,7 +157,7 @@ export default function Home() {
                     ) : (
                         <Button
                             className="w-full"
-                            iconName="layoutGrid"
+                            iconName="plus"
                             onClick={() =>
                                 router.push(
                                     process.env.NEXT_PUBLIC_SIGN_IN_URL!,
