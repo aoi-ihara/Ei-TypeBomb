@@ -127,7 +127,7 @@ export default function Home() {
                 )}
             </div>
             <div className="flex h-full flex-col justify-center items-center gap-4">
-                <div className="items-center mb-12 rounded-2xl overflow-clip">
+                <div className="items-center mb-12 rounded-lg overflow-clip">
                     <Image
                         src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
                         alt="page-logo"
