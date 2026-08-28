@@ -146,21 +146,27 @@ export default function Home() {
                         Play
                     </Button>
 
-                    <Button
-                        className="w-full"
-                        iconName="layoutGrid"
-                        onClick={() => {
-                            if (userId) {
-                                router.push("/my-rooms");
-                            } else {
+                    {userId ? (
+                        <Button
+                            className="w-full"
+                            iconName="layoutGrid"
+                            onClick={() => router.push("/my-rooms")}
+                        >
+                            My Rooms
+                        </Button>
+                    ) : (
+                        <Button
+                            className="w-full"
+                            iconName="layoutGrid"
+                            onClick={() =>
                                 router.push(
                                     process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                );
+                                )
                             }
-                        }}
-                    >
-                        My Rooms
-                    </Button>
+                        >
+                            Create Your Room
+                        </Button>
+                    )}
                 </div>
 
                 <Button

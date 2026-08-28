@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Shell from "@/components/layout/Shell";
-import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 
@@ -16,7 +15,6 @@ type Props = {
 export default function Settings({
     initialSounDeffects,
     initialBackgroundMusic,
-    initialServerUrl,
 }: Props) {
     const router = useRouter();
 
@@ -25,17 +23,12 @@ export default function Settings({
     );
     const [sounDeffects, setSounDeffects] = useState(initialSounDeffects);
 
-    const [serverUrl, setServerUrl] = useState(initialServerUrl);
-
     const setCookie = (key: string, value: string) => {
         document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=31536000`;
     };
 
     return (
         <Shell title="Settings" className="items-start flex flex-col">
-            <div data-cursor="text" className="font-bold text-lg mb-4">
-                Sound
-            </div>
             <div className="mb-4 w-full items-center flex justify-between">
                 <div data-cursor="text">Background Music</div>
                 <div data-cursor="button" className="rounded-full flex">
@@ -84,48 +77,10 @@ export default function Settings({
                     </button>
                 </div>
             </div>
-            <div data-cursor="text" className="font-bold text-lg mb-4">
-                Connection
-            </div>
-            <div className="inline w-full relative mb-4" data-cursor="text">
-                <Input
-                    value={serverUrl}
-                    onChange={(e) => {
-                        const value = e.target.value;
-
-                        setServerUrl(value);
-
-                        setCookie("server-url", value);
-                    }}
-                    type="url"
-                    font="mono"
-                    className="relative w-full"
-                    inputClassName="pr-33"
-                    label="Server URL"
-                >
-                    <div
-                        className="bg-(--color-background) absolute top-3 rounded-md right-3"
-                        data-cursor="button"
-                        data-cursor-shape="1"
-                    >
-                        <button
-                            className="active:scale-95 px-2 py-1 transition-all duration-200 ease-out"
-                            onClick={() => {
-                                setServerUrl("");
-                                setCookie("server-url", "");
-                            }}
-                        >
-                            <div className="transition-all duration-200 ease-out font-bold text-cyan-600">
-                                Use Default
-                            </div>
-                        </button>
-                    </div>
-                </Input>
-            </div>
 
             <Button
                 onClick={() => router.push("/")}
-                className="w-full mt-4"
+                className="w-full"
                 variant="primary"
                 iconName="check"
             >
