@@ -373,7 +373,7 @@ export default function Page({
                             >
                                 {words.map((word, index) => (
                                     <SortableItem key={word.id} id={word.id}>
-                                        <div className="flex gap-4 w-full">
+                                        <div className="flex items-center gap-4 w-full">
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
