@@ -160,7 +160,7 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (currentInput === null)
@@ -174,7 +174,7 @@ export default function TypingView({
                         return (
                             <button
                                 key={index}
-                                className={`relative z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
                                 data-cursor="button"
                                 data-cursor-shape={
                                     currentInput === null ? "1" : "2"
