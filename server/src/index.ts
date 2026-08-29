@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
+import { logError, logEvent, setServerState, startConsole } from "./lib/console";
 
 let rooms: Room[] = [];
 
@@ -16,6 +17,14 @@ const io = new Server(httpServer, {
         methods: ["GET", "POST"],
     },
 });
+
+const refreshServerState = () => {
+    setServerState({
+        rooms: rooms.length,
+        players: rooms.reduce((total, room) => total + (room.users?.length ?? 0), 0),
+        games: rooms.filter((room) => room.isStart).length,
+    });
+};
 
 const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
@@ -37,6 +46,8 @@ const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
     };
 
     rooms.push(newRoom);
+    refreshServerState();
+    logEvent("ROOM", `created ${roomId}`);
     return newRoom;
 };
 
@@ -51,7 +62,6 @@ const sendRoomInfo = (roomId: string | null) => {
         password: undefined,
         bombTimer: undefined,
     });
-    console.log("room:", room);
 };
 
 const sendInputUpdate = (roomId: string | null, input: string) => {
@@ -72,7 +82,7 @@ io.on("connection", (socket) => {
         return rooms.findIndex((item) => item.id === roomId);
     };
 
-    console.log("Connected👍:", user.id);
+    logEvent("SERVER", "client connected");
 
     // AUTH
     socket.emit("auth:request");
@@ -98,6 +108,8 @@ io.on("connection", (socket) => {
                 id: user.id,
                 displayName: user.displayName,
             });
+            refreshServerState();
+            logEvent("ROOM", `player joined ${roomId}`);
         }
 
         sendRoomInfo(roomId);
@@ -118,6 +130,8 @@ io.on("connection", (socket) => {
                 clearTimeout(room.bombTimer);
             }
             rooms = rooms.filter((item) => item.id !== currentRoomId);
+            refreshServerState();
+            logEvent("ROOM", `closed ${currentRoomId}`);
         }
     };
 
@@ -127,10 +141,7 @@ io.on("connection", (socket) => {
         "auth:response",
         async (response: { jwtToken: string; displayName: string }) => {
             try {
-                console.log("JWT Token:", response.jwtToken);
-
                 const jwtResult = await verifyToken(response.jwtToken);
-                console.log("room id:", jwtResult);
                 if (!jwtResult) return;
 
                 roomId = jwtResult;
@@ -140,9 +151,10 @@ io.on("connection", (socket) => {
                 const room = await createRoomIfNeeded(roomId);
                 if (!room) return;
 
+                logEvent("ROOM", `authenticated ${roomId}`);
                 sendRoomInfo(roomId);
             } catch (error) {
-                console.error("Auth or Room Fetch Error:", error);
+                logError("auth or room fetch failed", error);
             }
         },
     );
@@ -181,13 +193,12 @@ io.on("connection", (socket) => {
             return;
         }
 
-        console.log("success!!");
-
         room.bombHolder = (room.bombHolder + 1) % room.users.length;
         if (room.words && room.words.length > 0) {
             room.wordIndex = Math.floor(Math.random() * room.words.length);
         }
 
+        logEvent("GAME", `word passed in ${roomId}`);
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
     });
@@ -211,6 +222,8 @@ io.on("connection", (socket) => {
         room.wordIndex = undefined;
         room.bombStatus = 0;
 
+        refreshServerState();
+        logEvent("GAME", `started ${roomId}`);
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
 
@@ -259,6 +272,7 @@ io.on("connection", (socket) => {
                         });
                     }
                     resetGameStatus(gameId);
+                    logEvent("GAME", `ended ${roomId}`);
                     sendInputUpdate(roomId, "");
                     sendRoomInfo(roomId);
                 } else {
@@ -290,6 +304,7 @@ io.on("connection", (socket) => {
         room.bombStatus = 0;
         room.bombHolder = 0;
         room.wordIndex = undefined;
+        refreshServerState();
         sendInputUpdate(roomId, "");
     };
 
@@ -305,9 +320,12 @@ io.on("connection", (socket) => {
             if (room.isStart) {
                 resetGameStatus();
                 io.to(roomId).emit("game:quited");
+                logEvent("GAME", `cancelled ${roomId}`);
             }
 
             room.users = room.users.filter((item) => item.id !== userId);
+            refreshServerState();
+            logEvent("ROOM", `player left ${roomId}`);
         }
 
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
@@ -316,6 +334,7 @@ io.on("connection", (socket) => {
                 clearTimeout(room.bombTimer);
             }
             rooms = rooms.filter((item) => item.id !== roomId);
+            refreshServerState();
         } else {
             sendInputUpdate(roomId, "");
         }
@@ -325,9 +344,10 @@ io.on("connection", (socket) => {
 
     socket.on("disconnect", () => {
         deleteUser(user.id);
+        logEvent("SERVER", "client disconnected");
     });
 });
 
 httpServer.listen(3001, () => {
-    console.log("Socket.IO Server running on :3001");
+    startConsole(3001);
 });
