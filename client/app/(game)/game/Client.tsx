@@ -188,8 +188,17 @@ export default function Clinet({
 
             socket.on("auth:request", () => {
                 candidate.ready = true;
-                if (!selected || socketRef.current !== socket) return;
-                void authenticate(socket);
+
+                if (!selected) {
+                    if (candidate.socket === primaryCandidate.socket) {
+                        selectCandidate(primaryCandidate, false);
+                    }
+                    return;
+                }
+
+                if (socketRef.current === socket) {
+                    void authenticate(socket);
+                }
             });
 
             socket.on(
@@ -224,18 +233,6 @@ export default function Clinet({
             }, SERVER_FAILOVER_TIMEOUT_MS);
         } else {
             fallbackTimer = null;
-        }
-
-        primarySocket.on("auth:request", () => {
-            if (!selected) selectCandidate(primaryCandidate, false);
-        });
-
-        if (renderSocket && renderCandidate) {
-            renderSocket.on("auth:request", () => {
-                if (selected && socketRef.current === renderSocket) {
-                    void authenticate(renderSocket);
-                }
-            });
         }
 
         return () => {
@@ -564,7 +561,7 @@ export default function Clinet({
                                                             "Success! Emitting to server...",
                                                         );
                                                         socketRef.current?.emit(
-                                                            "word:success",
+                                                            "success",
                                                         );
                                                     }}
                                                     onChangeInput={(input) => {
