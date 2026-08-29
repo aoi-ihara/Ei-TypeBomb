@@ -8,6 +8,7 @@ import { getRoomFromId } from "./lib/get";
 import { logError, logEvent, setServerState, startConsole } from "./lib/console";
 
 let rooms: Room[] = [];
+const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,18 +20,42 @@ const refreshServerState = () => setServerState({
     games: rooms.filter((room) => room.isStart).length,
 });
 
-const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
+const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
-    if (existingRoom) return existingRoom;
-    const room = await getRoomFromId(roomId);
-    if (!room) return null;
-    const roomAfterFetch = rooms.find((item) => item.id === roomId);
-    if (roomAfterFetch) return roomAfterFetch;
-    const newRoom: Room = { ...room, users: [], isStart: false, gameId: undefined, bombStatus: 0, bombHolder: 0 };
-    rooms.push(newRoom);
-    refreshServerState();
-    logEvent("ROOM", `created ${roomId}`);
-    return newRoom;
+    if (existingRoom) return Promise.resolve(existingRoom);
+
+    const pendingLoad = pendingRoomLoads.get(roomId);
+    if (pendingLoad) return pendingLoad;
+
+    const loadPromise = (async () => {
+        const room = await getRoomFromId(roomId);
+        if (!room) return null;
+
+        const roomAfterFetch = rooms.find((item) => item.id === roomId);
+        if (roomAfterFetch) return roomAfterFetch;
+
+        const newRoom: Room = {
+            ...room,
+            users: [],
+            isStart: false,
+            gameId: undefined,
+            bombStatus: 0,
+            bombHolder: 0,
+        };
+
+        rooms.push(newRoom);
+        refreshServerState();
+        logEvent("ROOM", `created ${roomId}`);
+        return newRoom;
+    })();
+
+    pendingRoomLoads.set(roomId, loadPromise);
+
+    return loadPromise.finally(() => {
+        if (pendingRoomLoads.get(roomId) === loadPromise) {
+            pendingRoomLoads.delete(roomId);
+        }
+    });
 };
 
 const sendRoomInfo = (roomId: string | null) => {
@@ -54,12 +79,12 @@ io.on("connection", (socket) => {
     logEvent("SERVER", "client connected");
     socket.emit("auth:request");
 
-    socket.on("room:join", async () => {
+    socket.on("room:join", () => {
         if (!roomId) return;
-        const room = await createRoomIfNeeded(roomId);
+
+        const room = rooms.find((item) => item.id === roomId);
         if (!room) return;
-        const index = getRoomIndex();
-        if (index === -1) return;
+
         const maxPlayers = room.maxPlayers;
         if (!maxPlayers || room.users.length >= maxPlayers) return;
         socket.join(roomId);
@@ -79,19 +104,27 @@ io.on("connection", (socket) => {
     };
     socket.on("room:leave", leaveRoom);
 
-    socket.on("auth:response", async (response: { jwtToken: string; displayName: string }) => {
-        try {
-            const jwtResult = await verifyToken(response.jwtToken);
-            if (!jwtResult) return;
-            roomId = jwtResult;
-            user = { ...user, displayName: response.displayName };
-            socket.join(roomId);
-            const room = await createRoomIfNeeded(roomId);
-            if (!room) return;
-            logEvent("ROOM", `authenticated ${roomId}`);
-            sendRoomInfo(roomId);
-        } catch (error) { logError("auth or room fetch failed", error); }
-    });
+    socket.on(
+        "auth:response",
+        async (response: { jwtToken: string; displayName: string }) => {
+            try {
+                const jwtResult = await verifyToken(response.jwtToken);
+                if (!jwtResult) return;
+
+                roomId = jwtResult;
+                user = { ...user, displayName: response.displayName };
+
+                const room = await createRoomIfNeeded(roomId);
+                if (!room) return;
+
+                socket.join(roomId);
+                logEvent("ROOM", `authenticated ${roomId}`);
+                sendRoomInfo(roomId);
+            } catch (error) {
+                logError("auth or room fetch failed", error);
+            }
+        },
+    );
 
     const handleCurrentInput = (input: unknown) => {
         if (typeof input !== "string") return;
@@ -219,4 +252,6 @@ io.on("connection", (socket) => {
     socket.on("disconnect", () => { deleteUser(user.id); logEvent("SERVER", "client disconnected"); });
 });
 
-httpServer.listen(3001, () => startConsole(3001));
+httpServer.listen(3001, () => {
+    startConsole(3001);
+});
