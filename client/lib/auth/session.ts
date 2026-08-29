@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/db/server";
+import { serverError } from "@/lib/server-console";
 
 export const getSession = async () => {
     const supabase = await createClient({
@@ -10,7 +11,7 @@ export const getSession = async () => {
     const { data, error } = await supabase.auth.getSession();
 
     if (error) {
-        console.error(error);
+        serverError("failed to get session", error, "AUTH");
         return;
     }
     if (!data.session?.user) return null;
@@ -25,7 +26,7 @@ export const getUser = async () => {
     const { data, error } = await supabase.auth.getUser();
 
     if (error) {
-        console.error(error);
+        serverError("failed to get user", error, "AUTH");
         return;
     }
     if (!data.user) return null;
