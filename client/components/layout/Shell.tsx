@@ -23,7 +23,7 @@ export default function Shell({
             </h1>
             {!loading && (
                 <div
-                    className={`px-4 pb-4 ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
+                    className={`px-4 pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
                 >
                     {children}
                 </div>
