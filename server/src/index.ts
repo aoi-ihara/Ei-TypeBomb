@@ -86,10 +86,11 @@ io.on("connection", (socket) => {
         if (!room) return;
 
         const maxPlayers = room.maxPlayers;
-        if (!maxPlayers || room.users.length >= maxPlayers) return;
+        const users = room.users ?? (room.users = []);
+        if (!maxPlayers || users.length >= maxPlayers) return;
         socket.join(roomId);
-        if (!room.users.some((u) => u.id === user.id)) {
-            room.users.push({ id: user.id, displayName: user.displayName });
+        if (!users.some((u) => u.id === user.id)) {
+            users.push({ id: user.id, displayName: user.displayName });
             refreshServerState();
             logEvent("ROOM", `player joined ${roomId}`);
         }
