@@ -271,8 +271,12 @@ io.on("connection", (socket) => {
                             holderDisplayName: lostUser.displayName,
                         });
                     }
+
                     resetGameStatus(gameId);
+                    currentRoom.users = [];
+                    refreshServerState();
                     logEvent("GAME", `ended ${roomId}`);
+                    logEvent("ROOM", `players kicked after game ${roomId}`);
                     sendInputUpdate(roomId, "");
                     sendRoomInfo(roomId);
                 } else {
