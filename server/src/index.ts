@@ -8,6 +8,7 @@ import { getRoomFromId } from "./lib/get";
 import { logError, logEvent, setServerState, startConsole } from "./lib/console";
 
 let rooms: Room[] = [];
+const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
 const app = express();
 const httpServer = createServer(app);
@@ -26,29 +27,42 @@ const refreshServerState = () => {
     });
 };
 
-const createRoomIfNeeded = async (roomId: string): Promise<Room | null> => {
+const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
-    if (existingRoom) return existingRoom;
+    if (existingRoom) return Promise.resolve(existingRoom);
 
-    const room = await getRoomFromId(roomId);
-    if (!room) return null;
+    const pendingLoad = pendingRoomLoads.get(roomId);
+    if (pendingLoad) return pendingLoad;
 
-    const roomAfterFetch = rooms.find((item) => item.id === roomId);
-    if (roomAfterFetch) return roomAfterFetch;
+    const loadPromise = (async () => {
+        const room = await getRoomFromId(roomId);
+        if (!room) return null;
 
-    const newRoom: Room = {
-        ...room,
-        users: [],
-        isStart: false,
-        gameId: undefined,
-        bombStatus: 0,
-        bombHolder: 0,
-    };
+        const roomAfterFetch = rooms.find((item) => item.id === roomId);
+        if (roomAfterFetch) return roomAfterFetch;
 
-    rooms.push(newRoom);
-    refreshServerState();
-    logEvent("ROOM", `created ${roomId}`);
-    return newRoom;
+        const newRoom: Room = {
+            ...room,
+            users: [],
+            isStart: false,
+            gameId: undefined,
+            bombStatus: 0,
+            bombHolder: 0,
+        };
+
+        rooms.push(newRoom);
+        refreshServerState();
+        logEvent("ROOM", `created ${roomId}`);
+        return newRoom;
+    })();
+
+    pendingRoomLoads.set(roomId, loadPromise);
+
+    return loadPromise.finally(() => {
+        if (pendingRoomLoads.get(roomId) === loadPromise) {
+            pendingRoomLoads.delete(roomId);
+        }
+    });
 };
 
 const sendRoomInfo = (roomId: string | null) => {
@@ -87,14 +101,11 @@ io.on("connection", (socket) => {
     // AUTH
     socket.emit("auth:request");
 
-    socket.on("room:join", async () => {
+    socket.on("room:join", () => {
         if (!roomId) return;
 
-        const room = await createRoomIfNeeded(roomId);
+        const room = rooms.find((item) => item.id === roomId);
         if (!room) return;
-
-        const index = getRoomIndex();
-        if (index === -1) return;
 
         const maxPlayers = room.maxPlayers;
         if (!maxPlayers) return;
@@ -146,11 +157,11 @@ io.on("connection", (socket) => {
 
                 roomId = jwtResult;
                 user = { ...user, displayName: response.displayName };
-                socket.join(roomId);
 
                 const room = await createRoomIfNeeded(roomId);
                 if (!room) return;
 
+                socket.join(roomId);
                 logEvent("ROOM", `authenticated ${roomId}`);
                 sendRoomInfo(roomId);
             } catch (error) {
