@@ -69,9 +69,9 @@ export default function Clinet({
         // SOCKET
         const primaryUrl =
             typeof window === "undefined" || initialServerUrl === ""
-                ? process.env.NEXT_PUBLIC_RENDER_URL
+                ? process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL
                 : initialServerUrl;
-        const renderUrl = process.env.NEXT_PUBLIC_RENDER_URL;
+        const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
         let selected = false;
         let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -80,8 +80,8 @@ export default function Clinet({
             reconnection: false,
         });
         const renderSocket =
-            renderUrl && renderUrl !== primaryUrl
-                ? io(renderUrl, { reconnection: false })
+            backupUrl && backupUrl !== primaryUrl
+                ? io(backupUrl, { reconnection: false })
                 : null;
 
         type Candidate = {
@@ -128,7 +128,9 @@ export default function Clinet({
             standbySocket?.disconnect();
 
             if (isFallback) {
-                console.warn("Primary server unavailable. Switching to Render.");
+                console.warn(
+                    "Primary server unavailable. Switching to Render.",
+                );
             } else {
                 console.info("Connected to primary server.");
             }
@@ -157,7 +159,10 @@ export default function Clinet({
                     setRoom(newRoom);
                     setUsers(
                         newRoom.users.map((item) => {
-                            return { id: item.id, displayName: item.displayName };
+                            return {
+                                id: item.id,
+                                displayName: item.displayName,
+                            };
                         }),
                     );
                     setIsStarted(newRoom.isStart);
@@ -166,7 +171,9 @@ export default function Clinet({
                         setCurrentWord(newRoom.words[newRoom.wordIndex]);
                     else setCurrentWord(null);
                     setBombStatus(newRoom.bombStatus);
-                    setUserPositions(newPositions(newRoom.users, userPositions));
+                    setUserPositions(
+                        newPositions(newRoom.users, userPositions),
+                    );
                 },
             );
 
