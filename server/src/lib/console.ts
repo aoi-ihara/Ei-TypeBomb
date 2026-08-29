@@ -145,7 +145,6 @@ export const logError = (message: string, error?: unknown) => {
 };
 
 export const startConsole = (port: number) => {
-    writeToFile({ context: "SERVER", message: `listening on :${port}` });
     renderState();
     logEvent("SERVER", `listening on :${port}`);
 };
