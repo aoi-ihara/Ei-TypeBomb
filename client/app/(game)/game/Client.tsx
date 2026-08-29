@@ -18,6 +18,8 @@ type Props = {
     initialServerUrl: string;
 };
 
+const SERVER_FAILOVER_TIMEOUT_MS = 10_000;
+
 export default function Clinet({
     initialBackgroundMusic,
     initialSounDeffects,
@@ -65,98 +67,183 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const socket = io(
+        const primaryUrl =
             typeof window === "undefined" || initialServerUrl === ""
                 ? process.env.NEXT_PUBLIC_RENDER_URL
-                : initialServerUrl,
-        );
+                : initialServerUrl;
+        const renderUrl = process.env.NEXT_PUBLIC_RENDER_URL;
 
-        socketRef.current = socket;
+        let selected = false;
+        let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-        socket.on(
-            "room:broadcast",
-            (
-                newRoom: Room & {
-                    users: User[];
-                    isStart: boolean;
-                    bombHolder: number;
-                    wordIndex: number;
-                    bombStatus: number;
-                },
-            ) => {
-                console.log(newRoom);
-                setRoom(newRoom);
-                setUsers(
-                    newRoom.users.map((item) => {
-                        return { id: item.id, displayName: item.displayName };
-                    }),
-                );
-                setIsStarted(newRoom.isStart);
-                setCurrentTurn(newRoom.bombHolder);
-                if (newRoom.wordIndex !== undefined && newRoom.words)
-                    setCurrentWord(newRoom.words[newRoom.wordIndex]);
-                else setCurrentWord(null);
-                setBombStatus(newRoom.bombStatus);
-                setUserPositions(newPositions(newRoom.users, userPositions));
-            },
-        );
-
-        socket.on("typing:input", ({ input }: { input: string }) => {
-            setCurrentInput(input);
+        const primarySocket = io(primaryUrl, {
+            reconnection: false,
         });
+        const renderSocket =
+            renderUrl && renderUrl !== primaryUrl
+                ? io(renderUrl, { reconnection: false })
+                : null;
 
-        socket.on("game:quited", () => {
-            setConnectionAlert(1);
-            console.log("game quited");
-            posthog.capture("game_quited");
+        type Candidate = {
+            socket: ReturnType<typeof io>;
+            ready: boolean;
+        };
 
-            setTimeout(() => {
-                setConnectionAlert(null);
-            }, 3000);
-        });
+        const primaryCandidate: Candidate = {
+            socket: primarySocket,
+            ready: false,
+        };
+        const renderCandidate: Candidate | null = renderSocket
+            ? { socket: renderSocket, ready: false }
+            : null;
 
-        socket.on("auth:request", () => {
+        const authenticate = async (socket: ReturnType<typeof io>) => {
             setUserId(socket.id ?? null);
             userIdRef.current = socket.id ?? null;
-            const sendToken = async () => {
-                const authToken = await getAuthToken();
-                if (!authToken) return;
 
-                console.log("Auth Token:", authToken);
-                socket.emit("auth:response", {
-                    jwtToken: authToken,
-                    displayName: displayName,
-                });
-            };
+            const authToken = await getAuthToken();
+            if (!authToken || !selected || socketRef.current !== socket) return;
 
-            sendToken();
+            socket.emit("auth:response", {
+                jwtToken: authToken,
+                displayName: displayName,
+            });
+        };
+
+        const selectCandidate = (candidate: Candidate, isFallback: boolean) => {
+            if (selected) return;
+
+            selected = true;
+            if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+                fallbackTimer = null;
+            }
+
+            socketRef.current = candidate.socket;
+
+            const standbySocket =
+                candidate.socket === primaryCandidate.socket
+                    ? renderCandidate?.socket
+                    : primaryCandidate.socket;
+            standbySocket?.disconnect();
+
+            if (isFallback) {
+                console.warn("Primary server unavailable. Switching to Render.");
+            } else {
+                console.info("Connected to primary server.");
+            }
+
+            if (candidate.ready) {
+                void authenticate(candidate.socket);
+            }
+        };
+
+        const attachSocketListeners = (candidate: Candidate) => {
+            const { socket } = candidate;
+
+            socket.on(
+                "room:broadcast",
+                (
+                    newRoom: Room & {
+                        users: User[];
+                        isStart: boolean;
+                        bombHolder: number;
+                        wordIndex: number;
+                        bombStatus: number;
+                    },
+                ) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    console.log(newRoom);
+                    setRoom(newRoom);
+                    setUsers(
+                        newRoom.users.map((item) => {
+                            return { id: item.id, displayName: item.displayName };
+                        }),
+                    );
+                    setIsStarted(newRoom.isStart);
+                    setCurrentTurn(newRoom.bombHolder);
+                    if (newRoom.wordIndex !== undefined && newRoom.words)
+                        setCurrentWord(newRoom.words[newRoom.wordIndex]);
+                    else setCurrentWord(null);
+                    setBombStatus(newRoom.bombStatus);
+                    setUserPositions(newPositions(newRoom.users, userPositions));
+                },
+            );
+
+            socket.on("typing:input", ({ input }: { input: string }) => {
+                if (!selected || socketRef.current !== socket) return;
+                setCurrentInput(input);
+            });
+
+            socket.on("game:quited", () => {
+                if (!selected || socketRef.current !== socket) return;
+                setConnectionAlert(1);
+                console.log("game quited");
+                posthog.capture("game_quited");
+
+                setTimeout(() => {
+                    setConnectionAlert(null);
+                }, 3000);
+            });
+
+            socket.on("auth:request", () => {
+                candidate.ready = true;
+                if (!selected || socketRef.current !== socket) return;
+                void authenticate(socket);
+            });
+
+            socket.on(
+                "game:end",
+                ({
+                    holderUserId,
+                    holderDisplayName,
+                }: {
+                    holderUserId: string;
+                    holderDisplayName: string;
+                }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    const didLose = userIdRef.current === holderUserId;
+                    setResult(didLose);
+                    setLostDisplayName(holderDisplayName);
+
+                    if (didLose) {
+                        posthog.capture("game_lost");
+                    } else {
+                        posthog.capture("game_won");
+                    }
+                },
+            );
+        };
+
+        attachSocketListeners(primaryCandidate);
+        if (renderCandidate) attachSocketListeners(renderCandidate);
+
+        if (renderCandidate) {
+            fallbackTimer = setTimeout(() => {
+                selectCandidate(renderCandidate, true);
+            }, SERVER_FAILOVER_TIMEOUT_MS);
+        } else {
+            fallbackTimer = null;
+        }
+
+        primarySocket.on("auth:request", () => {
+            if (!selected) selectCandidate(primaryCandidate, false);
         });
 
-        socket.on(
-            "game:end",
-            ({
-                holderUserId,
-                holderDisplayName,
-            }: {
-                holderUserId: string;
-                holderDisplayName: string;
-            }) => {
-                const didLose = userIdRef.current === holderUserId;
-                setResult(didLose);
-                setLostDisplayName(holderDisplayName);
-
-                if (didLose) {
-                    posthog.capture("game_lost");
-                } else {
-                    posthog.capture("game_won");
+        if (renderSocket && renderCandidate) {
+            renderSocket.on("auth:request", () => {
+                if (selected && socketRef.current === renderSocket) {
+                    void authenticate(renderSocket);
                 }
-            },
-        );
+            });
+        }
 
         return () => {
+            if (fallbackTimer) clearTimeout(fallbackTimer);
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
-            socket.disconnect();
+            primarySocket.disconnect();
+            renderSocket?.disconnect();
         };
     }, []);
 
@@ -477,7 +564,7 @@ export default function Clinet({
                                                             "Success! Emitting to server...",
                                                         );
                                                         socketRef.current?.emit(
-                                                            "success",
+                                                            "word:success",
                                                         );
                                                     }}
                                                     onChangeInput={(input) => {
