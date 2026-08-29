@@ -38,7 +38,7 @@ const contextColor = (context: EventContext) => {
 const formatEvent = ({ context, message }: ConsoleEvent) =>
     `${colorize(`[${context}]`, contextColor(context))} ${message}`;
 
-const bar = (value: number, width = 12) => {
+const bar = (value: number, width = 13) => {
     const filled = Math.min(value, width);
     return `[${"#".repeat(filled)}${"-".repeat(width - filled)}]`;
 };
@@ -46,19 +46,19 @@ const bar = (value: number, width = 12) => {
 const formatState = () =>
     [
         "",
-        "       +------------------------+",
-        "       |   Ei-TypeBomb Server   |",
-        "       +------------------------+",
+        "   +------------------------+",
+        "   | Ei-TypeBomb Server     |",
+        "   +------------------------+",
         "",
-        `            ${colorize("[ ONLINE ]", ansi.green)}`,
+        `          ${colorize("[ ONLINE ]", ansi.green)}`,
         "",
-        `       Rooms    ${bar(state.rooms)} ${state.rooms}`,
-        `       Players  ${bar(state.players)} ${state.players}`,
-        `       Games    ${bar(state.games)} ${state.games}`,
+        `   Rooms    ${bar(state.rooms)} ${state.rooms}`,
+        `   Players  ${bar(state.players)} ${state.players}`,
+        `   Games    ${bar(state.games)} ${state.games}`,
         "",
-        "       +------------------------+",
-        `       | ${colorize("RECENT", ansi.blue)}                 |`,
-        "       +------------------------+",
+        "   +------------------------+",
+        `   | ${colorize("RECENT", ansi.blue)}                 |`,
+        "   +------------------------+",
     ].join("\n");
 
 const renderState = () => {
@@ -75,7 +75,9 @@ const renderState = () => {
     process.stdout.write(`${formatState()}\n`);
     process.stdout.write(
         recentEvents.length > 0
-            ? recentEvents.map((event) => `       > ${formatEvent(event)}`).join("\n")
+            ? recentEvents
+                  .map((event) => `   > ${formatEvent(event)}`)
+                  .join("\n")
             : "       > Server ready",
     );
     process.stdout.write("\n");
@@ -97,7 +99,8 @@ export const setServerState = (nextState: ServerState) => {
 export const logEvent = (context: EventContext, message: string) => {
     if (
         (context === "SERVER" &&
-            (message === "client connected" || message === "client disconnected")) ||
+            (message === "client connected" ||
+                message === "client disconnected")) ||
         (context === "ROOM" && message.startsWith("authenticated "))
     ) {
         return;
