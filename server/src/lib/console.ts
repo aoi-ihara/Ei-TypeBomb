@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 type ServerState = {
     rooms: number;
     players: number;
@@ -9,6 +12,8 @@ type ConsoleEvent = { context: EventContext; message: string };
 
 const isInteractive = Boolean(process.stdout.isTTY);
 const recentEvents: ConsoleEvent[] = [];
+const logDirectory = path.resolve(process.cwd(), "logs");
+const logFile = path.join(logDirectory, "server.log");
 
 let state: ServerState = {
     rooms: 0,
@@ -37,6 +42,18 @@ const contextColor = (context: EventContext) => {
 
 const formatEvent = ({ context, message }: ConsoleEvent) =>
     `${colorize(`[${context}]`, contextColor(context))} ${message}`;
+
+const formatFileEvent = ({ context, message }: ConsoleEvent) =>
+    `[${new Date().toISOString()}] [${context}] ${message}`;
+
+const writeToFile = (event: ConsoleEvent) => {
+    try {
+        fs.mkdirSync(logDirectory, { recursive: true });
+        fs.appendFileSync(logFile, `${formatFileEvent(event)}\n`, "utf8");
+    } catch (error) {
+        console.error("[ERROR] Failed to write server log", error);
+    }
+};
 
 const bar = (value: number, width = 13) => {
     const filled = Math.min(value, width);
@@ -106,19 +123,29 @@ export const logEvent = (context: EventContext, message: string) => {
         return;
     }
 
-    recentEvents.push({ context, message });
+    const event = { context, message };
+    recentEvents.push(event);
     if (recentEvents.length > 8) recentEvents.shift();
+
+    writeToFile(event);
 
     if (isInteractive) scheduleRender();
     else console.log(`> [${context}] ${message}`);
 };
 
 export const logError = (message: string, error?: unknown) => {
+    const event = {
+        context: "SERVER" as const,
+        message: `[ERROR] ${message}`,
+    };
+    writeToFile(event);
+
     console.error(`${colorize("[ERROR]", ansi.red)} ${message}`);
     if (error) console.error(error);
 };
 
 export const startConsole = (port: number) => {
+    writeToFile({ context: "SERVER", message: `listening on :${port}` });
     renderState();
     logEvent("SERVER", `listening on :${port}`);
 };
