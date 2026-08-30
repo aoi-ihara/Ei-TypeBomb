@@ -16,8 +16,11 @@ export default function Home() {
     const [userId, setUserId] = useState<string | null>(null);
 
     const redesignedSignInButton = useFeatureFlagEnabled(
-        "redesigned-sign-in-button",
+        "redesignedSignInButton",
     );
+    const bigPlayButton = useFeatureFlagEnabled("bigPlayButton");
+    const showSignInButton = useFeatureFlagEnabled("showSignInButton");
+
     const router = useRouter();
 
     useEffect(() => {
@@ -145,14 +148,26 @@ export default function Home() {
                 </div>
 
                 <div className="w-64 gap-4 flex flex-col">
-                    <Button
-                        className="w-full"
-                        iconName="play"
-                        onClick={() => router.push("/room")}
-                        variant="primary"
-                    >
-                        Play
-                    </Button>
+                    {bigPlayButton ? (
+                        <Button
+                            className="w-full"
+                            padding="large"
+                            iconName="play"
+                            onClick={() => router.push("/room")}
+                            variant="primary"
+                        >
+                            Play
+                        </Button>
+                    ) : (
+                        <Button
+                            className="w-full"
+                            iconName="play"
+                            onClick={() => router.push("/room")}
+                            variant="primary"
+                        >
+                            Play
+                        </Button>
+                    )}
 
                     {userId ? (
                         <Button
@@ -161,6 +176,18 @@ export default function Home() {
                             onClick={() => router.push("/my-rooms")}
                         >
                             My Rooms
+                        </Button>
+                    ) : showSignInButton ? (
+                        <Button
+                            className="w-full"
+                            iconName="logIn"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
+                        >
+                            Sign In
                         </Button>
                     ) : (
                         <Button
