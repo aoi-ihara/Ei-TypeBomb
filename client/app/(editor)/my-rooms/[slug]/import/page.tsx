@@ -186,6 +186,13 @@ export default function Import({
                     Import & Add
                 </Button>
             </div>
+            <Button
+                className="w-full"
+                onClick={() => router.back()}
+                iconName="x"
+            >
+                Cancel
+            </Button>
             {error && (
                 <div className="text-red-500" data-cursor="text">
                     {error}

@@ -20,6 +20,7 @@ export default function Import({
     const [isFournd, setIsFound] = useState(true);
     const [roomId, setRoomId] = useState<string | null>(null);
     const [showCopiedText, setShowCopiedText] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(json);
@@ -33,6 +34,7 @@ export default function Import({
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
+            setLoading(false);
 
             if (!room) {
                 setIsFound(false);
@@ -51,7 +53,7 @@ export default function Import({
     }
 
     return (
-        <Shell title="Export to JSON">
+        <Shell title="Export to JSON" loading={loading}>
             <button
                 onClick={handleCopy}
                 data-cursor="button"
@@ -86,6 +88,7 @@ export default function Import({
                 variant="primary"
                 onClick={() => router.push(`/my-rooms/${roomId}`)}
                 className="w-full"
+                iconName="check"
             >
                 Done
             </Button>

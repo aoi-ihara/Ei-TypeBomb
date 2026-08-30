@@ -234,6 +234,15 @@ export default function Page({
                 <>
                     <div className="flex mt-16 mb-4 items-center w-full">
                         <Button
+                            onClick={() => router.push(`/my-rooms`)}
+                            variant="text"
+                            className="h-full"
+                        >
+                            <div className="w-8 h-10 flex justify-center items-center">
+                                <Icon name="arrowLeft" />
+                            </div>
+                        </Button>
+                        <Button
                             onClick={() =>
                                 router.push(`/my-rooms/${slug}/visibility`)
                             }
@@ -585,7 +594,7 @@ export default function Page({
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
-                        size={200}
+                        size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
                         className="text-(--color-foreground) md:shrink-0"

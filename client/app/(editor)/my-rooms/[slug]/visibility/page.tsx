@@ -24,6 +24,7 @@ export default function Page({
     const [isFournd, setIsFound] = useState(true);
     const [conformPassword, setConformPassword] = useState("");
     const [isPrivate, setIsPrivate] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     const handleUpdate = async () => {
         if (!slug) {
@@ -58,6 +59,7 @@ export default function Page({
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
+            setLoading(false);
 
             if (!room) {
                 setIsFound(false);
@@ -75,11 +77,7 @@ export default function Page({
     }
 
     return (
-        <Shell
-            title="Visibility Settings"
-            size="medium"
-            className="flex flex-col gap-4"
-        >
+        <Shell title="Visibility Settings" size="medium" loading={loading}>
             <div className="w-full items-center flex justify-between">
                 <div data-cursor="text">Set to Private</div>
                 <div data-cursor="button" className="rounded-full flex">

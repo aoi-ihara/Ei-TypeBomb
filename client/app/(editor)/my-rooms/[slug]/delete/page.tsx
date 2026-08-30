@@ -49,7 +49,12 @@ export default function Page({
     }
 
     return (
-        <Shell title="Delete Room" size="small" className="flex flex-col gap-4">
+        <Shell
+            title="Delete Room"
+            size="small"
+            className="flex flex-col gap-4"
+            loading={!roomTitle}
+        >
             <div data-cursor="text">
                 Are you sure you want to delete this room? This action cannot be
                 undone.
