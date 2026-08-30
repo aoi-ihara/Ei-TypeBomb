@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getSession } from "@/lib/auth/session";
+import { getUserDetails } from "@/lib/auth/session";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
@@ -18,12 +18,15 @@ export default function Home() {
 
     useEffect(() => {
         const fetchUserData = async () => {
-            const userId = await getSession();
-            if (!userId) return;
+            const user = await getUserDetails();
+            if (!user) return;
 
-            setUserId(userId);
+            setUserId(user.id);
 
-            posthog.identify(userId);
+            posthog.identify(user.id, {
+                email: user.email,
+                display_name: user.displayName,
+            });
         };
 
         fetchUserData();
