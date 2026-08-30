@@ -32,3 +32,27 @@ export const getUser = async () => {
     if (!data.user) return null;
     return data.user.id;
 };
+
+export const getUserDetails = async () => {
+    const supabase = await createClient({
+        next: { tags: ["current-user"] },
+    });
+
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error) {
+        serverError("failed to get user details", error, "AUTH");
+        return;
+    }
+    if (!data.user) return null;
+
+    return {
+        id: data.user.id,
+        email: data.user.email ?? null,
+        displayName:
+            data.user.user_metadata?.display_name ??
+            data.user.user_metadata?.full_name ??
+            data.user.user_metadata?.name ??
+            null,
+    };
+};
