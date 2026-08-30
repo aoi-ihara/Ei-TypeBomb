@@ -5,7 +5,7 @@ type LogLevel = "INFO" | "ERROR";
 
 type LogMetadata = Record<string, unknown>;
 
-const logPath = resolve(process.cwd(), "logs", "server.log");
+const logPath = resolve(__dirname, "../../logs/server.log");
 
 const ensureLogFile = () => {
     mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
