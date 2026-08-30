@@ -83,5 +83,5 @@ export function Icon({ name, size = 24 }: Props) {
 
     if (!IconComponent) return null;
 
-    return <IconComponent size={size} strokeWidth={2.5} />;
+    return <IconComponent size={size} strokeWidth={2.5} data-icon={name} />;
 }
