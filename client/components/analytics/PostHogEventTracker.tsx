@@ -32,12 +32,11 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (icon === "trash") {
-                if (/^\/my-rooms\/[^/]+$/.test(pathname)) {
-                    posthog.capture("word_deleted");
-                } else if (/^\/my-rooms\/[^/]+\/delete$/.test(pathname)) {
-                    posthog.capture("room_deleted");
-                }
+            if (
+                icon === "trash" &&
+                /^\/my-rooms\/[^/]+$/.test(pathname)
+            ) {
+                posthog.capture("word_deleted");
             }
         };
 
