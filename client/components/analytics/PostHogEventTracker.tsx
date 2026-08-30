@@ -57,14 +57,25 @@ export default function PostHogEventTracker() {
             );
             dragStart = null;
 
-            if (distance > 8 && /^\/my-rooms\/[^/]+$/.test(window.location.pathname)) {
+            if (
+                distance > 8 &&
+                /^\/my-rooms\/[^/]+$/.test(window.location.pathname)
+            ) {
                 posthog.capture("words_reordered");
             }
         };
 
         const observer = new MutationObserver(() => {
-            if (gameFinishedCaptured) return;
-            if (document.querySelector('button [data-icon="rotateCw"]')) {
+            const gameFinishedButton = document.querySelector(
+                'button [data-icon="rotateCw"]',
+            );
+
+            if (!gameFinishedButton) {
+                gameFinishedCaptured = false;
+                return;
+            }
+
+            if (!gameFinishedCaptured) {
                 gameFinishedCaptured = true;
                 posthog.capture("game_finished");
             }
