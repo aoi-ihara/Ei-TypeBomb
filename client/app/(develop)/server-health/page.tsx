@@ -35,8 +35,16 @@ export default function ServerHealth() {
 
     return (
         <Shell
-            title={healthy === undefined ? undefined : healthy ? "Healthy" : "Downed"}
+            title={
+                healthy === undefined
+                    ? undefined
+                    : healthy
+                      ? "Healthy"
+                      : "Downed"
+            }
             loading={healthy === undefined}
-        />
+        >
+            <></>
+        </Shell>
     );
 }
