@@ -1,5 +1,5 @@
 type AuthShellProps = {
-    title: string;
+    title?: string;
     children: React.ReactNode;
     className?: string;
     size?: "large" | "small" | "medium";
@@ -15,12 +15,14 @@ export default function Shell({
 }: AuthShellProps) {
     return (
         <>
-            <h1
-                className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${loading && "gradient-text"}`}
-                data-cursor="text"
-            >
-                {loading ? "Loading…" : title}
-            </h1>
+            {title && (
+                <h1
+                    className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${loading && "gradient-text"}`}
+                    data-cursor="text"
+                >
+                    {loading ? "Loading…" : title}
+                </h1>
+            )}
             {!loading && (
                 <div
                     className={`px-4 pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}

@@ -31,6 +31,7 @@ import {
 } from "@/lib/auth/validator";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
+import Shell from "@/components/layout/Shell";
 
 type Word = {
     jp: string;
@@ -228,40 +229,38 @@ export default function Page({
     }
 
     return (
-        <div className="px-4 flex flex-col max-w-2xl gap-4 w-full pb-4">
+        <Shell className="flex flex-col gap-4" size="large">
             {id ? (
                 <>
-                    <div>
-                        <div className="flex mt-16 mb-4 items-center">
-                            <Button
-                                onClick={() =>
-                                    router.push(`/my-rooms/${slug}/visibility`)
-                                }
-                                variant="text"
-                                className="h-full"
-                            >
-                                <div className="w-8 h-10 flex justify-center items-center">
-                                    {password ? (
-                                        <Icon name="lock" />
-                                    ) : (
-                                        <Icon name="earth" />
-                                    )}
-                                </div>
-                            </Button>
-                            <input
-                                className="w-full outline-none text-2xl font-bold font-mono"
-                                value={title}
-                                placeholder="Room Title"
-                                data-cursor="text"
-                                onChange={(e) => setTitle(e.target.value)}
-                            />
-                        </div>
-                        {validateTitle(title) && (
-                            <div className="text-red-500" data-cursor="text">
-                                {validateTitle(title)}
+                    <div className="flex mt-16 mb-4 items-center w-full">
+                        <Button
+                            onClick={() =>
+                                router.push(`/my-rooms/${slug}/visibility`)
+                            }
+                            variant="text"
+                            className="h-full"
+                        >
+                            <div className="w-8 h-10 flex justify-center items-center">
+                                {password ? (
+                                    <Icon name="lock" />
+                                ) : (
+                                    <Icon name="earth" />
+                                )}
                             </div>
-                        )}
+                        </Button>
+                        <input
+                            className="w-full outline-none text-2xl font-bold font-mono"
+                            value={title}
+                            placeholder="Room Title"
+                            data-cursor="text"
+                            onChange={(e) => setTitle(e.target.value)}
+                        />
                     </div>
+                    {validateTitle(title) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateTitle(title)}
+                        </div>
+                    )}
 
                     <div
                         data-cursor="text"
@@ -306,7 +305,7 @@ export default function Page({
                         </div>
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 w-full">
                         <div className="w-full flex flex-col gap-4">
                             <Input
                                 onChange={(e) => setLink(e.target.value)}
@@ -602,6 +601,6 @@ export default function Page({
                     Press escape or click to return.
                 </div>
             </div>
-        </div>
+        </Shell>
     );
 }
