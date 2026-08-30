@@ -13,8 +13,8 @@ export const newPositions = (users: User[], positions: Position[]) => {
         } else if (index < users.length) {
             const angle = (index / users.length) * 2 * Math.PI;
             return {
-                x: Math.cos(angle) * (users.length * 4 + 8),
-                y: Math.sin(angle) * (users.length * 4 + 8),
+                x: Math.cos(angle) * (users.length * 4 + 4),
+                y: Math.sin(angle) * (users.length * 4 + 4),
                 w: 24,
                 h: 24,
                 opacity: 1,
