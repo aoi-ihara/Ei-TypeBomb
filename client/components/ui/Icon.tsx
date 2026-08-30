@@ -32,6 +32,7 @@ import {
     UsersRound,
     CircleUserRound,
     QrCode,
+    ArrowLeft,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -50,6 +51,7 @@ const icons: Record<string, LucideIcon> = {
     mail: Mail,
     pen: Pen,
     arrowRight: ArrowRight,
+    arrowLeft: ArrowLeft,
     check: Check,
     plus: Plus,
     copy: Copy,

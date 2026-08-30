@@ -51,7 +51,7 @@ export default function Import({
     }
 
     return (
-        <Shell title="Export to JSON">
+        <Shell title="Export to JSON" loading={!json}>
             <button
                 onClick={handleCopy}
                 data-cursor="button"
@@ -86,6 +86,7 @@ export default function Import({
                 variant="primary"
                 onClick={() => router.push(`/my-rooms/${roomId}`)}
                 className="w-full"
+                iconName="check"
             >
                 Done
             </Button>

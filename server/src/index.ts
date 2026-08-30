@@ -5,20 +5,31 @@ import { Server } from "socket.io";
 import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
-import { logError, logEvent, setServerState, startConsole } from "./lib/console";
+import {
+    logError,
+    logEvent,
+    setServerState,
+    startConsole,
+} from "./lib/console";
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*", methods: ["GET", "POST"] } });
-
-const refreshServerState = () => setServerState({
-    rooms: rooms.length,
-    players: rooms.reduce((total, room) => total + (room.users?.length ?? 0), 0),
-    games: rooms.filter((room) => room.isStart).length,
+const io = new Server(httpServer, {
+    cors: { origin: "*", methods: ["GET", "POST"] },
 });
+
+const refreshServerState = () =>
+    setServerState({
+        rooms: rooms.length,
+        players: rooms.reduce(
+            (total, room) => total + (room.users?.length ?? 0),
+            0,
+        ),
+        games: rooms.filter((room) => room.isStart).length,
+    });
 
 const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
@@ -62,7 +73,11 @@ const sendRoomInfo = (roomId: string | null) => {
     if (!roomId) return;
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
-    io.to(roomId).emit("room:broadcast", { ...room, password: undefined, bombTimer: undefined });
+    io.to(roomId).emit("room:broadcast", {
+        ...room,
+        password: undefined,
+        bombTimer: undefined,
+    });
 };
 
 const sendInputUpdate = (roomId: string | null, input: string) => {
@@ -144,9 +159,17 @@ io.on("connection", (socket) => {
         if (roomIndex === -1) return;
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
-        if (!room.isStart || room.bombHolder === undefined || !currentUser || currentUser.id !== user.id || !room.users?.length) return;
+        if (
+            !room.isStart ||
+            room.bombHolder === undefined ||
+            !currentUser ||
+            currentUser.id !== user.id ||
+            !room.users?.length
+        )
+            return;
         room.bombHolder = (room.bombHolder + 1) % room.users.length;
-        if (room.words?.length) room.wordIndex = Math.floor(Math.random() * room.words.length);
+        if (room.words?.length)
+            room.wordIndex = Math.floor(Math.random() * room.words.length);
         logEvent("GAME", `word passed in ${roomId}`);
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
@@ -157,7 +180,10 @@ io.on("connection", (socket) => {
         if (index === -1) return;
         const room = rooms[index];
         if (!room.users || room.users.length < 2 || room.isStart) return;
-        if (room.bombTimer) { clearTimeout(room.bombTimer); room.bombTimer = undefined; }
+        if (room.bombTimer) {
+            clearTimeout(room.bombTimer);
+            room.bombTimer = undefined;
+        }
         const gameId = randomUUID();
         room.gameId = gameId;
         room.isStart = true;
@@ -173,7 +199,10 @@ io.on("connection", (socket) => {
             if (currentRoomIndex === -1) return;
             const currentRoom = rooms[currentRoomIndex];
             if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
-            if (currentRoom.words?.length) currentRoom.wordIndex = Math.floor(Math.random() * currentRoom.words.length);
+            if (currentRoom.words?.length)
+                currentRoom.wordIndex = Math.floor(
+                    Math.random() * currentRoom.words.length,
+                );
             sendInputUpdate(roomId, "");
             sendRoomInfo(roomId);
         }, 3000);
@@ -187,11 +216,17 @@ io.on("connection", (socket) => {
                 const currentRoomIndex = getRoomIndex();
                 if (currentRoomIndex === -1) return;
                 const currentRoom = rooms[currentRoomIndex];
-                if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
+                if (currentRoom.gameId !== gameId || !currentRoom.isStart)
+                    return;
                 if (currentRoom.bombStatus === 4) {
                     if (!roomId) return;
-                    const lostUser = currentRoom.users?.[currentRoom.bombHolder!];
-                    if (lostUser) io.to(roomId).emit("game:end", { holderUserId: lostUser.id, holderDisplayName: lostUser.displayName });
+                    const lostUser =
+                        currentRoom.users?.[currentRoom.bombHolder!];
+                    if (lostUser)
+                        io.to(roomId).emit("game:end", {
+                            holderUserId: lostUser.id,
+                            holderDisplayName: lostUser.displayName,
+                        });
                     resetGameStatus(gameId);
                     currentRoom.users = [];
                     refreshServerState();
@@ -214,7 +249,10 @@ io.on("connection", (socket) => {
         if (roomIndex === -1) return;
         const room = rooms[roomIndex];
         if (expectedGameId && room.gameId !== expectedGameId) return;
-        if (room.bombTimer) { clearTimeout(room.bombTimer); room.bombTimer = undefined; }
+        if (room.bombTimer) {
+            clearTimeout(room.bombTimer);
+            room.bombTimer = undefined;
+        }
         room.isStart = false;
         room.gameId = undefined;
         room.bombStatus = 0;
@@ -234,8 +272,10 @@ io.on("connection", (socket) => {
                 resetGameStatus();
                 io.to(roomId).emit("game:quited");
                 logEvent("GAME", `cancelled ${roomId}`);
+                room.users = [];
+            } else {
+                room.users = room.users.filter((item) => item.id !== userId);
             }
-            room.users = room.users.filter((item) => item.id !== userId);
             refreshServerState();
             logEvent("ROOM", `player left ${roomId}`);
         }
@@ -250,7 +290,10 @@ io.on("connection", (socket) => {
         sendRoomInfo(roomId);
     };
 
-    socket.on("disconnect", () => { deleteUser(user.id); logEvent("SERVER", "client disconnected"); });
+    socket.on("disconnect", () => {
+        deleteUser(user.id);
+        logEvent("SERVER", "client disconnected");
+    });
 });
 
 httpServer.listen(3001, () => {
