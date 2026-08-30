@@ -1,3 +1,4 @@
+import { capturePostHogEvent } from "./posthog";
 import { logErrorToFile, logToFile } from "./fileLogger";
 
 type ServerState = {
@@ -128,6 +129,9 @@ export const logError = (
     metadata?: LogMetadata,
 ) => {
     logErrorToFile(message, error, metadata);
+    capturePostHogEvent("server_error", {
+        error_name: error instanceof Error ? error.name : "UnknownError",
+    });
     console.error(`${colorize("[ERROR]", ansi.red)} ${message}`);
     if (error) console.error(error);
 };

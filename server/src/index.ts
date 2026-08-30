@@ -5,6 +5,7 @@ import { Server } from "socket.io";
 import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
+import { capturePostHogEvent } from "./lib/posthog";
 import {
     logError,
     logEvent,
@@ -113,6 +114,9 @@ io.on("connection", (socket) => {
                 userId: user.id,
                 displayName: user.displayName,
             });
+            capturePostHogEvent("player_joined", {
+                player_count: users.length,
+            });
         }
         sendRoomInfo(roomId);
     });
@@ -121,7 +125,7 @@ io.on("connection", (socket) => {
         if (!roomId) return;
         // Game-room membership is separate from Socket.IO membership.
         // Keep the socket in the Socket.IO room so the same connection can rejoin.
-        deleteUser(user.id);
+        deleteUser(user.id, "room_leave");
     };
     socket.on("room:leave", leaveRoom);
 
@@ -145,6 +149,7 @@ io.on("connection", (socket) => {
                     userId: user.id,
                     displayName: user.displayName,
                 });
+                capturePostHogEvent("room_authenticated");
                 sendRoomInfo(roomId);
             } catch (error) {
                 logError("auth or room fetch failed", error, {
@@ -237,6 +242,9 @@ io.on("connection", (socket) => {
                 displayName: player.displayName,
             })),
         });
+        capturePostHogEvent("game_started", {
+            player_count: room.users.length,
+        });
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
         setTimeout(() => {
@@ -287,6 +295,9 @@ io.on("connection", (socket) => {
                             displayName: player.displayName,
                         })),
                     });
+                    capturePostHogEvent("game_finished", {
+                        player_count: currentRoom.users?.length ?? 0,
+                    });
                     currentRoom.users = [];
                     refreshServerState();
                     logEvent("ROOM", `players kicked after game ${roomId}`, {
@@ -323,7 +334,7 @@ io.on("connection", (socket) => {
         sendInputUpdate(roomId, "");
     };
 
-    const deleteUser = (userId: string) => {
+    const deleteUser = (userId: string, reason: "disconnect" | "room_leave") => {
         if (!roomId) return;
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
@@ -341,6 +352,10 @@ io.on("connection", (socket) => {
                     userId: leavingUser.id,
                     displayName: leavingUser.displayName,
                 });
+                capturePostHogEvent("game_cancelled", {
+                    reason,
+                    player_count: room.users?.length ?? 0,
+                });
                 room.users = [];
             } else {
                 room.users = (room.users ?? []).filter(
@@ -357,6 +372,10 @@ io.on("connection", (socket) => {
                     userId: player.id,
                     displayName: player.displayName,
                 })),
+            });
+            capturePostHogEvent("player_left", {
+                reason,
+                player_count: room.users?.length ?? 0,
             });
         }
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
@@ -378,7 +397,7 @@ io.on("connection", (socket) => {
             displayName: user.displayName,
             roomId,
         });
-        deleteUser(user.id);
+        deleteUser(user.id, "disconnect");
     });
 });
 
