@@ -272,8 +272,10 @@ io.on("connection", (socket) => {
                 resetGameStatus();
                 io.to(roomId).emit("game:quited");
                 logEvent("GAME", `cancelled ${roomId}`);
+                room.users = [];
+            } else {
+                room.users = room.users.filter((item) => item.id !== userId);
             }
-            room.users = room.users.filter((item) => item.id !== userId);
             refreshServerState();
             logEvent("ROOM", `player left ${roomId}`);
         }
