@@ -574,7 +574,7 @@ export default function Page({
             )}
 
             <div
-                className={`w-full h-full flex justify-center px-16 gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
+                className={`w-full h-full flex justify-center px-8 md:px-8 gap-8 md:gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
                     !showRoomId && "opacity-0 scale-95 pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
                 onClick={() => setShowRoomId(false)}
@@ -582,17 +582,17 @@ export default function Page({
                 <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
                 </div>
-                <div className="w-full bg-(--color-background) gap-16 flex flex-col lg:flex-row justify-center items-center">
+                <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
-                        size={256}
+                        size={200}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
-                        className="text-(--color-foreground) shrink-0"
+                        className="text-(--color-foreground) md:shrink-0"
                     />
                     <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
                     <div className="flex items-center justify-center">
-                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-4xl">
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-3xl sm:text-4xl">
                             {link}
                         </div>
                     </div>
