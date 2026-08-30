@@ -594,7 +594,7 @@ export default function Page({
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
-                        size={200}
+                        size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
                         className="text-(--color-foreground) md:shrink-0"
