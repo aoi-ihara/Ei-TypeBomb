@@ -11,7 +11,6 @@ import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
-import { useFeatureFlagEnabled } from "posthog-js/react";
 
 type Props = {
     initialBackgroundMusic: boolean;
