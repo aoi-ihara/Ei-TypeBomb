@@ -8,12 +8,16 @@ import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
 
+    const redesignedSignInButton = useFeatureFlagEnabled(
+        "redesigned-sign-in-button",
+    );
     const router = useRouter();
 
     useEffect(() => {
@@ -50,7 +54,9 @@ export default function Home() {
                     onClick={() => setShowPopUp(false)}
                 />
             )}
-            <div className="w-full flex justify-end p-2">
+            <div
+                className={`w-full flex justify-end p-2 ${redesignedSignInButton && "border-b border-(--color-border)"}`}
+            >
                 {userId ? (
                     <>
                         <div
@@ -110,24 +116,22 @@ export default function Home() {
                         </div>
                     </>
                 ) : (
-                    <>
-                        <div
-                            className="rounded-lg"
-                            data-cursor="button"
-                            data-cursor-shape="1"
+                    <div
+                        className="rounded-lg"
+                        data-cursor="button"
+                        data-cursor-shape="1"
+                    >
+                        <button
+                            className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
                         >
-                            <button
-                                className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
-                                onClick={() =>
-                                    router.push(
-                                        process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                    )
-                                }
-                            >
-                                Sign In
-                            </button>
-                        </div>
-                    </>
+                            Sign In
+                        </button>
+                    </div>
                 )}
             </div>
             <div className="flex h-full flex-col justify-center items-center gap-4">
