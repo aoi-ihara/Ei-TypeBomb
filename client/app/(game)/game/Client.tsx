@@ -51,7 +51,7 @@ export default function Clinet({
     const [currentInput, setCurrentInput] = useState("");
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
     const [userPositions, setUserPositions] = useState<Position[]>(
-        Array.from({ length: 6 }, () => ({
+        Array.from({ length: 8 }, () => ({
             x: 0,
             y: 0,
             w: 24,
@@ -659,12 +659,6 @@ export default function Clinet({
                 </div>
             </div>
             <div className="w-full relative md:order-1 flex justify-center items-center h-full">
-                <div
-                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
-                    data-cursor="text"
-                >
-                    {room?.title}
-                </div>
                 <UsersView
                     users={users ?? []}
                     positions={userPositions}
