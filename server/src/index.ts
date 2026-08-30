@@ -343,7 +343,9 @@ io.on("connection", (socket) => {
                 });
                 room.users = [];
             } else {
-                room.users = room.users.filter((item) => item.id !== userId);
+                room.users = (room.users ?? []).filter(
+                    (item) => item.id !== userId,
+                );
             }
             refreshServerState();
             logEvent("ROOM", `player left ${roomId}`, {
