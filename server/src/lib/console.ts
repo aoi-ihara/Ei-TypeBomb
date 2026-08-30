@@ -1,3 +1,5 @@
+import { logErrorToFile, logToFile } from "./fileLogger";
+
 type ServerState = {
     rooms: number;
     players: number;
@@ -6,6 +8,7 @@ type ServerState = {
 
 type EventContext = "ROOM" | "GAME" | "SERVER";
 type ConsoleEvent = { context: EventContext; message: string };
+type LogMetadata = Record<string, unknown>;
 
 const isInteractive = Boolean(process.stdout.isTTY);
 const recentEvents: ConsoleEvent[] = [];
@@ -96,7 +99,13 @@ export const setServerState = (nextState: ServerState) => {
     else renderState();
 };
 
-export const logEvent = (context: EventContext, message: string) => {
+export const logEvent = (
+    context: EventContext,
+    message: string,
+    metadata?: LogMetadata,
+) => {
+    logToFile(context, message, metadata);
+
     if (
         (context === "SERVER" &&
             (message === "client connected" ||
@@ -113,7 +122,12 @@ export const logEvent = (context: EventContext, message: string) => {
     else console.log(`> [${context}] ${message}`);
 };
 
-export const logError = (message: string, error?: unknown) => {
+export const logError = (
+    message: string,
+    error?: unknown,
+    metadata?: LogMetadata,
+) => {
+    logErrorToFile(message, error, metadata);
     console.error(`${colorize("[ERROR]", ansi.red)} ${message}`);
     if (error) console.error(error);
 };
