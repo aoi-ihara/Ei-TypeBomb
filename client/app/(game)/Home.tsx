@@ -8,11 +8,18 @@ import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 export default function Home() {
     const [showCursor, setShowCursor] = useState(true);
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+
+    const redesignedSignInButton = useFeatureFlagEnabled(
+        "redesignedSignInButton",
+    );
+    const bigPlayButton = useFeatureFlagEnabled("bigPlayButton");
+    const showSignInButton = useFeatureFlagEnabled("showSignInButton");
 
     const router = useRouter();
 
@@ -50,7 +57,9 @@ export default function Home() {
                     onClick={() => setShowPopUp(false)}
                 />
             )}
-            <div className="w-full flex justify-end p-2">
+            <div
+                className={`w-full flex justify-end p-2 ${redesignedSignInButton && "border-b border-(--color-border)"}`}
+            >
                 {userId ? (
                     <>
                         <div
@@ -110,24 +119,22 @@ export default function Home() {
                         </div>
                     </>
                 ) : (
-                    <>
-                        <div
-                            className="rounded-lg"
-                            data-cursor="button"
-                            data-cursor-shape="1"
+                    <div
+                        className="rounded-lg"
+                        data-cursor="button"
+                        data-cursor-shape="1"
+                    >
+                        <button
+                            className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
                         >
-                            <button
-                                className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
-                                onClick={() =>
-                                    router.push(
-                                        process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                    )
-                                }
-                            >
-                                Sign In
-                            </button>
-                        </div>
-                    </>
+                            Sign In
+                        </button>
+                    </div>
                 )}
             </div>
             <div className="flex h-full flex-col justify-center items-center gap-4">
@@ -141,14 +148,26 @@ export default function Home() {
                 </div>
 
                 <div className="w-64 gap-4 flex flex-col">
-                    <Button
-                        className="w-full"
-                        iconName="play"
-                        onClick={() => router.push("/room")}
-                        variant="primary"
-                    >
-                        Play
-                    </Button>
+                    {bigPlayButton ? (
+                        <Button
+                            className="w-full"
+                            padding="large"
+                            iconName="play"
+                            onClick={() => router.push("/room")}
+                            variant="primary"
+                        >
+                            Play
+                        </Button>
+                    ) : (
+                        <Button
+                            className="w-full"
+                            iconName="play"
+                            onClick={() => router.push("/room")}
+                            variant="primary"
+                        >
+                            Play
+                        </Button>
+                    )}
 
                     {userId ? (
                         <Button
@@ -157,6 +176,18 @@ export default function Home() {
                             onClick={() => router.push("/my-rooms")}
                         >
                             My Rooms
+                        </Button>
+                    ) : showSignInButton ? (
+                        <Button
+                            className="w-full"
+                            iconName="logIn"
+                            onClick={() =>
+                                router.push(
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
+                                )
+                            }
+                        >
+                            Sign In
                         </Button>
                     ) : (
                         <Button

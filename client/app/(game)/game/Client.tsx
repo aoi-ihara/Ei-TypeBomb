@@ -11,6 +11,7 @@ import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -37,6 +38,7 @@ export default function Clinet({
         return localStorage.getItem("display-name") ?? "";
     });
     const [bombStatus, setBombStatus] = useState<number | null>(0);
+
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
