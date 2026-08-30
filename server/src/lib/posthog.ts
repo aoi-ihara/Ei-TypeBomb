@@ -1,4 +1,7 @@
-type AnalyticsProperties = Record<string, string | number | boolean | null | undefined>;
+type AnalyticsProperties = Record<
+    string,
+    string | number | boolean | null | undefined
+>;
 
 type AnalyticsEvent =
     | "room_authenticated"
@@ -9,7 +12,7 @@ type AnalyticsEvent =
     | "game_cancelled"
     | "server_error";
 
-const apiKey = process.env.POSTHOG_API_KEY;
+const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const host = (process.env.POSTHOG_HOST ?? "https://us.i.posthog.com").replace(
     /\/$/,
     "",
@@ -48,11 +51,15 @@ export const capturePostHogEvent = (
                 $process_person_profile: false,
             },
         }),
-    }).then((response) => {
-        if (!response.ok) {
-            throw new Error(`PostHog responded with HTTP ${response.status}`);
-        }
-    }).catch((error) => {
-        console.error("[POSTHOG] failed to capture analytics event", error);
-    });
+    })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(
+                    `PostHog responded with HTTP ${response.status}`,
+                );
+            }
+        })
+        .catch((error) => {
+            console.error("[POSTHOG] failed to capture analytics event", error);
+        });
 };
