@@ -24,6 +24,8 @@ export default function Page({
     const [isFournd, setIsFound] = useState(true);
     const [conformPassword, setConformPassword] = useState("");
     const [isPrivate, setIsPrivate] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [updating, setUpdating] = useState(false);
 
     const handleUpdate = async () => {
         if (!slug) {
@@ -43,7 +45,9 @@ export default function Page({
             password: isPrivate ? newPassword : null,
         };
 
+        setUpdating(true);
         const error = await updateRoomFromId(request);
+        setUpdating(false);
 
         if (error) setError(error);
         else {
@@ -58,6 +62,7 @@ export default function Page({
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
+            setLoading(false);
 
             if (!room) {
                 setIsFound(false);
@@ -79,6 +84,7 @@ export default function Page({
             title="Visibility Settings"
             size="medium"
             className="flex flex-col gap-4"
+            loading={loading}
         >
             <div className="w-full items-center flex justify-between">
                 <div data-cursor="text">Set to Private</div>
@@ -125,6 +131,7 @@ export default function Page({
                 onClick={() => handleUpdate()}
                 className="w-full"
                 iconName="check"
+                loading={updating}
             >
                 Done
             </Button>

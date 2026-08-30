@@ -24,6 +24,7 @@ export default function Import({
     const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<Word[]>([]);
     const [error, setError] = useState("");
+    const [updating, setUpdating] = useState(false);
 
     const importJson = async () => {
         posthog.capture("words_imported_and_added", { room_id: slug });
@@ -46,10 +47,12 @@ export default function Import({
 
         const newWords = [...words, ...parsedJson];
 
+        setUpdating(true);
         const result = await updateRoomFromId({
             id: roomId,
             words: newWords,
         });
+        setUpdating(false);
 
         if (result) {
             setError(result);
@@ -104,6 +107,7 @@ export default function Import({
                     <Button
                         onClick={() => setNavigation(false)}
                         className="w-full"
+                        iconName="x"
                     >
                         Cancel
                     </Button>
@@ -125,6 +129,8 @@ export default function Import({
                         }}
                         className="w-full"
                         variant="danger"
+                        iconName="rotateCw"
+                        loading={updating}
                     >
                         Delete & Import
                     </Button>
@@ -182,10 +188,19 @@ export default function Import({
                     onClick={() => importJson()}
                     className="w-full"
                     iconName="plus"
+                    loading={updating}
                 >
                     Import & Add
                 </Button>
             </div>
+            <Button
+                onClick={() => router.back()}
+                className="w-full"
+                iconName="x"
+                loading={updating}
+            >
+                Cancel
+            </Button>
             {error && (
                 <div className="text-red-500" data-cursor="text">
                     {error}
