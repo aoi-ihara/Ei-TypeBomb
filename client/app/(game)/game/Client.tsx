@@ -132,6 +132,7 @@ export default function Clinet({
                 console.warn(
                     "Primary server unavailable. Switching to Render.",
                 );
+                posthog.capture("switched_to_backup_server");
             } else {
                 console.info("Connected to primary server.");
                 posthog.capture("primary_server_connected");
