@@ -8,6 +8,7 @@ import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { Icon } from "@/components/ui/Icon";
+import posthog from "posthog-js";
 
 export default function Profile() {
     const router = useRouter();
@@ -19,6 +20,7 @@ export default function Profile() {
             if (!result?.rooms) return;
 
             setRooms(result.rooms);
+            posthog.capture("my_rooms_opened", { room_count: result.rooms.length });
         };
 
         fetchUser();
@@ -26,6 +28,7 @@ export default function Profile() {
 
     const addRoom = async () => {
         const roomId = await createNewRoom();
+        posthog.capture("room_created");
         router.push(`/my-rooms/${roomId}`);
     };
 
