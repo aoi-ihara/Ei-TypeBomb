@@ -1,4 +1,5 @@
 import { capturePostHogEvent } from "./posthog";
+import { capturePostHogLog } from "./posthogLogs";
 import { logErrorToFile, logToFile } from "./fileLogger";
 
 type ServerState = {
@@ -106,6 +107,7 @@ export const logEvent = (
     metadata?: LogMetadata,
 ) => {
     logToFile(context, message, metadata);
+    capturePostHogLog("INFO", context, message, metadata);
 
     if (
         (context === "SERVER" &&
@@ -129,6 +131,18 @@ export const logError = (
     metadata?: LogMetadata,
 ) => {
     logErrorToFile(message, error, metadata);
+    capturePostHogLog("ERROR", "ERROR", message, {
+        ...(metadata ?? {}),
+        ...(error instanceof Error
+            ? {
+                  error_name: error.name,
+                  error_message: error.message,
+                  error_stack: error.stack,
+              }
+            : error !== undefined
+              ? { error_value: error }
+              : {}),
+    });
     capturePostHogEvent("server_error", {
         error_name: error instanceof Error ? error.name : "UnknownError",
     });
