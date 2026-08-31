@@ -413,7 +413,7 @@ export default function Clinet({
             )}
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator && !isStarted ? "opacity-0 scale-95 pointer-events-none" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room ? (
                         users.some((user) => user.id === userId) ? (
