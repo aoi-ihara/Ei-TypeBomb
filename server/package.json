@@ -24,6 +24,7 @@
         "express": "^5.2.1",
         "js-cookie": "^3.0.8",
         "jsonwebtoken": "^9.0.3",
+        "posthog-node": "^5.51.4",
         "socket.io": "^4.8.3"
     },
     "devDependencies": {
