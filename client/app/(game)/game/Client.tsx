@@ -418,20 +418,262 @@ export default function Clinet({
                     {room ? (
                         users.some((user) => user.id === userId) ? (
                             <div className="flex flex-col h-full">
-                                <TypingView
-                                    currentWord={currentWord}
-                                    currentInput={currentInput}
-                                    setCurrentInput={setCurrentInput}
-                                    isStarted={isStarted}
-                                    currentTurnUser={currentTurnUser}
-                                    userId={userId}
-                                    socket={socketRef.current}
-                                />
+                                <div className="flex h-full">
+                                    <div className="w-full flex flex-col items-center justify-center gap-4">
+                                        {isStarted ? (
+                                            currentWord === null ? (
+                                                <div
+                                                    className="font-mono w-fit font-bold text-2xl"
+                                                    data-cursor="text"
+                                                >
+                                                    Game started
+                                                </div>
+                                            ) : (
+                                                <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
+                                                    {currentTurnUser?.id ==
+                                                    userId ? (
+                                                        <div
+                                                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                            data-cursor="text"
+                                                        >
+                                                            YOUR TURN
+                                                        </div>
+                                                    ) : currentTurnUser ? (
+                                                        <div
+                                                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                            data-cursor="text"
+                                                        >
+                                                            {currentTurnUser.displayName +
+                                                                "'s Turn"}
+                                                        </div>
+                                                    ) : null}
+                                                    <TypingView
+                                                        japanese={
+                                                            currentWord.jp
+                                                        }
+                                                        english={currentWord.en}
+                                                        onSuccess={() => {
+                                                            console.log(
+                                                                "Success! Emitting to server...",
+                                                            );
+                                                            posthog.capture(
+                                                                "word_succeeded",
+                                                            );
+                                                            socketRef.current?.emit(
+                                                                "word:success",
+                                                            );
+                                                        }}
+                                                        onChangeInput={(
+                                                            input,
+                                                        ) => {
+                                                            if (
+                                                                userId ==
+                                                                currentTurnUser?.id
+                                                            )
+                                                                socketRef.current?.emit(
+                                                                    "cuttentInput",
+                                                                    input,
+                                                                );
+                                                        }}
+                                                        currentInput={
+                                                            userId ==
+                                                            currentTurnUser?.id
+                                                                ? null
+                                                                : currentInput
+                                                        }
+                                                    />
+                                                </div>
+                                            )
+                                        ) : (
+                                            <>
+                                                <div
+                                                    className="gradient-text h-fit px-2 py-1 font-bold flex"
+                                                    data-cursor="text"
+                                                >
+                                                    Waiting for other players…
+                                                </div>
+                                                <div
+                                                    className="rounded-lg w-48 flex"
+                                                    data-cursor="button"
+                                                    data-cursor-shape={
+                                                        users.length < 2
+                                                            ? "2"
+                                                            : "0"
+                                                    }
+                                                >
+                                                    <button
+                                                        className={`items-center cursor-pointer font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
+                                                        onClick={() => {
+                                                            if (
+                                                                users.length > 1
+                                                            )
+                                                                handleStartGame();
+                                                        }}
+                                                    >
+                                                        Start Game
+                                                    </button>
+                                                </div>
+                                                <div
+                                                    className="rounded-lg w-48 flex"
+                                                    data-cursor="button"
+                                                    data-cursor-shape="1"
+                                                >
+                                                    <button
+                                                        className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                        onClick={() =>
+                                                            handleLeave()
+                                                        }
+                                                    >
+                                                        Leave
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
-                        ) : null
-                    ) : null}
+                        ) : (
+                            <div className="h-full w-full flex justify-center items-center">
+                                {users.length < room.maxPlayers! ? (
+                                    isStarted ? (
+                                        currentWord === null ? (
+                                            <div
+                                                className="font-mono w-fit font-bold text-2xl"
+                                                data-cursor="text"
+                                            >
+                                                Game started
+                                            </div>
+                                        ) : (
+                                            <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
+                                                {currentTurnUser?.id ==
+                                                userId ? (
+                                                    <div
+                                                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                        data-cursor="text"
+                                                    >
+                                                        YOUR TURN
+                                                    </div>
+                                                ) : currentTurnUser ? (
+                                                    <div
+                                                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                                                        data-cursor="text"
+                                                    >
+                                                        {currentTurnUser.displayName +
+                                                            "'s Turn"}
+                                                    </div>
+                                                ) : null}
+                                                <TypingView
+                                                    japanese={currentWord.jp}
+                                                    english={currentWord.en}
+                                                    onSuccess={() => {
+                                                        console.log(
+                                                            "Success! Emitting to server...",
+                                                        );
+                                                        socketRef.current?.emit(
+                                                            "success",
+                                                        );
+                                                    }}
+                                                    onChangeInput={(input) => {
+                                                        if (
+                                                            userId ==
+                                                            currentTurnUser?.id
+                                                        )
+                                                            socketRef.current?.emit(
+                                                                "cuttentInput",
+                                                                input,
+                                                            );
+                                                    }}
+                                                    currentInput={
+                                                        userId ==
+                                                        currentTurnUser?.id
+                                                            ? null
+                                                            : currentInput
+                                                    }
+                                                />
+                                            </div>
+                                        )
+                                    ) : (
+                                        !isSpectator && (
+                                            <>
+                                                <div className="w-full">
+                                                    <div
+                                                        className="w-fit pl-4 font-bold"
+                                                        data-cursor="text"
+                                                    >
+                                                        Connected
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div
+                                                        className="rounded-lg w-32 flex"
+                                                        data-cursor="button"
+                                                        data-cursor-shape="1"
+                                                    >
+                                                        <button
+                                                            className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                            onClick={() =>
+                                                                handleWatch()
+                                                            }
+                                                        >
+                                                            Watch Only
+                                                        </button>
+                                                    </div>
+                                                    <div
+                                                        className="rounded-lg w-24 flex"
+                                                        data-cursor="button"
+                                                        data-cursor-shape="0"
+                                                    >
+                                                        <button
+                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-200 ease-out active:scale-95"
+                                                            onClick={() =>
+                                                                handleJoin()
+                                                            }
+                                                        >
+                                                            Join
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )
+                                    )
+                                ) : (
+                                    <div className="flex justify-start w-full">
+                                        <div
+                                            className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                            data-cursor="text"
+                                        >
+                                            This room is full
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    ) : (
+                        <div className="w-full h-full flex items-center">
+                            <div
+                                className="w-fit pl-4 font-bold gradient-text"
+                                data-cursor="text"
+                            >
+                                Connecting to server…
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <UsersView users={users} userId={userId} />
+            </div>
+            <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+                <div
+                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
+                    data-cursor="text"
+                >
+                    {room?.title}
+                </div>
+                <UsersView
+                    users={users ?? []}
+                    positions={userPositions}
+                    userId={userId}
+                    currentTurn={isStarted ? currentTurn : null}
+                    bombStatus={bombStatus ?? 0}
+                />
             </div>
         </div>
     );
