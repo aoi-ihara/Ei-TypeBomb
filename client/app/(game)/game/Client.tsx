@@ -134,6 +134,7 @@ export default function Clinet({
                 );
             } else {
                 console.info("Connected to primary server.");
+                posthog.capture("primary_server_connected");
             }
 
             if (candidate.ready) {
