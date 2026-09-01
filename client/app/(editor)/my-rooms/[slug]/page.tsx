@@ -527,6 +527,14 @@ export default function Page({
                                 onClick={() =>
                                     router.push(`/my-rooms/${slug}/import`)
                                 }
+                                iconName="wandSparkles"
+                                padding="large"
+                            />
+
+                            <Button
+                                onClick={() =>
+                                    router.push(`/my-rooms/${slug}/import`)
+                                }
                                 iconName="upload"
                                 padding="large"
                             />

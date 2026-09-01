@@ -34,6 +34,7 @@ import {
     QrCode,
     ArrowLeft,
     Info,
+    WandSparkles,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -71,6 +72,7 @@ const icons: Record<string, LucideIcon> = {
     circleUserRound: CircleUserRound,
     qrCode: QrCode,
     info: Info,
+    wandSparkles: WandSparkles,
 };
 
 export type IconName = keyof typeof icons;
