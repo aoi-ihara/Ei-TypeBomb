@@ -13,6 +13,7 @@
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
         "@flags-sdk/vercel": "^1.4.7",
+        "@google/genai": "^2.20.0",
         "@marsidev/react-turnstile": "^1.5.3",
         "@supabase/ssr": "^0.12.3",
         "@vercel/analytics": "^2.0.1",
