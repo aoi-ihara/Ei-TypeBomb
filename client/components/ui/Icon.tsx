@@ -33,6 +33,7 @@ import {
     CircleUserRound,
     QrCode,
     ArrowLeft,
+    Info,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -69,6 +70,7 @@ const icons: Record<string, LucideIcon> = {
     usersRound: UsersRound,
     circleUserRound: CircleUserRound,
     qrCode: QrCode,
+    info: Info,
 };
 
 export type IconName = keyof typeof icons;
