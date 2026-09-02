@@ -32,6 +32,7 @@ import {
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
+import Dialog from "@/components/ui/Dialog";
 
 type Word = {
     jp: string;
@@ -92,6 +93,7 @@ export default function Page({
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
     const [showRoomId, setShowRoomId] = useState(false);
+    const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -525,7 +527,7 @@ export default function Page({
 
                             <Button
                                 onClick={() =>
-                                    router.push(`/my-rooms/${slug}/import`)
+                                    router.push(`/my-rooms/${slug}/generate`)
                                 }
                                 iconName="wandSparkles"
                                 padding="large"
@@ -538,6 +540,14 @@ export default function Page({
                                 iconName="upload"
                                 padding="large"
                             />
+
+                            <Dialog
+                                title="hello"
+                                open={showGenerationWindow}
+                                onClose={() => setShowGeneratingWindow(false)}
+                            >
+                                <Button onClick={() => {}}>Hello</Button>
+                            </Dialog>
                         </div>
                     )}
 
