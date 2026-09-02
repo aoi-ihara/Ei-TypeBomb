@@ -3,26 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 
-type Button = {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    shape: number;
-    borderRadius: number;
-};
-
-type Text = {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    fontSize: number;
-};
-
 export default function Cursor() {
-    const buttons = useRef<Button[]>([]);
-    const texts = useRef<Text[]>([]);
+    const rootRef = useRef<HTMLDivElement>(null);
 
     const mouse = useRef({
         x: 0,
@@ -66,117 +48,55 @@ export default function Cursor() {
             `0 0 0 ${latestWeight}px inset var(--color-foreground)`,
     );
 
-    const getElements = useCallback(() => {
-        const buttonElements = document.querySelectorAll(
-            '[data-cursor="button"]',
-        );
-
-        const textElements = document.querySelectorAll('[data-cursor="text"]');
-
-        buttons.current = Array.from(buttonElements).map((element) => {
-            const htmlElement = element as HTMLElement;
-
-            const rect = htmlElement.getBoundingClientRect();
-
-            const style = window.getComputedStyle(htmlElement);
-
-            return {
-                x: rect.left,
-                y: rect.top,
-
-                width: rect.width,
-                height: rect.height,
-
-                borderRadius: parseFloat(style.borderRadius),
-
-                shape: Number(htmlElement.dataset.cursorShape ?? 0),
-            };
-        });
-
-        texts.current = Array.from(textElements).map((element) => {
-            const htmlElement = element as HTMLElement;
-
-            const rect = htmlElement.getBoundingClientRect();
-
-            const style = window.getComputedStyle(htmlElement);
-
-            return {
-                x: rect.left,
-                y: rect.top,
-
-                width: rect.width,
-                height: rect.height,
-
-                fontSize: parseFloat(style.fontSize),
-            };
-        });
-    }, []);
-
     const handleMouseMove = useCallback(
         (x: number, y: number) => {
             mouse.current.x = x;
             mouse.current.y = y;
 
-            const frontmostElement = document.elementFromPoint(x, y);
-            const frontmostButton = frontmostElement?.closest(
+            let hit = document.elementFromPoint(x, y);
+
+            if (hit && rootRef.current?.contains(hit)) {
+                hit = null;
+            }
+
+            const buttonEl = hit?.closest<HTMLElement>(
                 '[data-cursor="button"]',
             );
-            const frontmostText = frontmostElement?.closest(
-                '[data-cursor="text"]',
-            );
+            const textEl = hit?.closest<HTMLElement>('[data-cursor="text"]');
 
-            const selectedButton = frontmostButton
-                ? buttons.current.find((element) => {
-                      return (
-                          x >= element.x &&
-                          x <= element.x + element.width &&
-                          y >= element.y &&
-                          y <= element.y + element.height
-                      );
-                  })
-                : undefined;
+            if (buttonEl) {
+                const rect = buttonEl.getBoundingClientRect();
+                const style = window.getComputedStyle(buttonEl);
+                const shape = Number(buttonEl.dataset.cursorShape ?? 0);
+                const borderRadius = parseFloat(style.borderRadius) || 0;
 
-            const selectedText = frontmostText
-                ? texts.current.find((element) => {
-                      return (
-                          x >= element.x &&
-                          x <= element.x + element.width &&
-                          y >= element.y &&
-                          y <= element.y + element.height
-                      );
-                  })
-                : undefined;
-
-            if (selectedButton) {
-                if (selectedButton.shape === 0) {
+                if (shape === 0) {
                     target.current = {
-                        x: selectedButton.x + selectedButton.width / 2,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
 
-                        y: selectedButton.y + selectedButton.height / 2,
-
-                        width: selectedButton.width + 16,
-                        height: selectedButton.height + 16,
+                        width: rect.width + 16,
+                        height: rect.height + 16,
 
                         weight: 4,
                         opacity: 0.25,
 
-                        borderRadius: selectedButton.borderRadius + 8,
+                        borderRadius: borderRadius + 8,
                     };
-                } else if (selectedButton.shape == 1) {
+                } else if (shape === 1) {
                     target.current = {
-                        x: selectedButton.x + selectedButton.width / 2,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
 
-                        y: selectedButton.y + selectedButton.height / 2,
-
-                        width: selectedButton.width,
-                        height: selectedButton.height,
+                        width: rect.width,
+                        height: rect.height,
 
                         weight: 1000,
                         opacity: 0.15,
 
-                        borderRadius: selectedButton.borderRadius,
+                        borderRadius: borderRadius,
                     };
-                } else if (selectedButton.shape === 2) {
+                } else if (shape === 2) {
                     target.current = {
                         x,
                         y,
@@ -190,15 +110,17 @@ export default function Cursor() {
                         borderRadius: 15,
                     };
                 }
-            } else if (selectedText) {
+            } else if (textEl) {
+                const style = window.getComputedStyle(textEl);
+                const fontSize = parseFloat(style.fontSize) || 16;
+
                 target.current = {
                     x,
                     y,
 
                     width: 3 * (isMouseDownRef.current ? 2 : 1),
                     height:
-                        (selectedText.fontSize + 10) *
-                        (isMouseDownRef.current ? 0.9 : 1),
+                        (fontSize + 10) * (isMouseDownRef.current ? 0.9 : 1),
 
                     weight: 2 * (isMouseDownRef.current ? 2 : 1),
                     opacity: 0.5,
@@ -253,51 +175,47 @@ export default function Cursor() {
             handleMouseMove(e.clientX, e.clientY);
         };
 
-        const onMouseDown = () => {
-            getElements();
+        const refresh = () => handleMouseMove(mouse.current.x, mouse.current.y);
 
+        const onMouseDown = () => {
             setIsMouseDown(true);
             isMouseDownRef.current = true;
 
-            handleMouseMove(mouse.current.x, mouse.current.y);
+            refresh();
         };
 
         const onMouseUp = () => {
             setIsMouseDown(false);
             isMouseDownRef.current = false;
 
-            handleMouseMove(mouse.current.x, mouse.current.y);
+            refresh();
         };
 
-        getElements();
-
         window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("animationend", getElements, true);
 
         window.addEventListener("mousedown", onMouseDown);
-
         window.addEventListener("mouseup", onMouseUp);
 
-        window.addEventListener("resize", getElements);
-        window.addEventListener("scroll", getElements);
-        window.addEventListener("animationend", getElements, true);
-        window.addEventListener("transitionend", getElements, true);
+        window.addEventListener("resize", refresh);
+        window.addEventListener("scroll", refresh, true);
+        window.addEventListener("animationend", refresh, true);
+        window.addEventListener("transitionend", refresh, true);
 
         return () => {
             window.removeEventListener("mousemove", onMouseMove);
 
             window.removeEventListener("mousedown", onMouseDown);
-
             window.removeEventListener("mouseup", onMouseUp);
 
-            window.removeEventListener("resize", getElements);
-            window.removeEventListener("scroll", getElements);
+            window.removeEventListener("resize", refresh);
+            window.removeEventListener("scroll", refresh, true);
+            window.removeEventListener("animationend", refresh, true);
+            window.removeEventListener("transitionend", refresh, true);
         };
-    }, [getElements, handleMouseMove]);
+    }, [handleMouseMove]);
 
     useEffect(() => {
         const observer = new MutationObserver(() => {
-            getElements();
             handleMouseMove(mouse.current.x, mouse.current.y);
         });
 
@@ -307,10 +225,11 @@ export default function Cursor() {
         });
 
         return () => observer.disconnect();
-    }, [getElements, handleMouseMove]);
+    }, [handleMouseMove]);
 
     return (
         <motion.div
+            ref={rootRef}
             className={`z-10 pointer-events-none fixed`}
             style={{
                 opacity: cursorOpacity,

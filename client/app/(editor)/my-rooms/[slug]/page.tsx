@@ -33,6 +33,7 @@ import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
+import { deleteRoom } from "@/lib/room/delete";
 
 type Word = {
     jp: string;
@@ -95,6 +96,8 @@ export default function Page({
     const [showRoomId, setShowRoomId] = useState(false);
     const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [json, setJson] = useState("");
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -143,6 +146,14 @@ export default function Page({
         const newIndex = words.findIndex((w) => w.id === over.id);
 
         setWords(arrayMove(words, oldIndex, newIndex));
+    };
+
+    const deleteCurrentRoom = async () => {
+        if (!id) return;
+        const result = await deleteRoom(id);
+
+        if (result) throw result;
+        else router.push("/my-rooms");
     };
 
     useEffect(() => {
@@ -535,12 +546,74 @@ export default function Page({
                             />
 
                             <Button
-                                onClick={() =>
-                                    router.push(`/my-rooms/${slug}/import`)
-                                }
+                                onClick={() => setShowImportDialog(true)}
                                 iconName="upload"
                                 padding="large"
                             />
+                            <Dialog
+                                title="Import from JSON"
+                                size="large"
+                                alignment="vertical"
+                                open={showImportDialog}
+                                onClose={() => setShowImportDialog(false)}
+                            >
+                                <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                                    <div data-cursor="text">
+                                        Please make sure your JSON file follows
+                                        this format:
+                                    </div>
+                                    <div data-cursor="text">
+                                        {" "}
+                                        <pre className="text-sm">
+                                            {`[
+    {
+        "jp": "りんご",
+        "en": "apple"
+    },
+    {
+        "jp": "ねこ",
+        "en": "cat"
+    }
+]`}
+                                        </pre>
+                                    </div>
+                                    <div
+                                        className="opacity-50"
+                                        data-cursor="text"
+                                    >
+                                        Each object must include a
+                                        &quot;jp&quot; field for the Japanese
+                                        word and an &quot;en&quot; field for the
+                                        English word.
+                                    </div>
+                                </div>
+                                <Input
+                                    value={json}
+                                    variant="textarea"
+                                    inputClassName="resize-none h-64"
+                                    font="mono"
+                                    onChange={(e) => setJson(e.target.value)}
+                                    label="JSON Data"
+                                />
+                                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                    <Button
+                                        onClick={() =>
+                                            setShowImportDialog(false)
+                                        }
+                                        className="w-full"
+                                        iconName="x"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        className="w-full"
+                                        iconName="plus"
+                                    >
+                                        Import
+                                    </Button>
+                                </div>
+                            </Dialog>
                         </div>
                     )}
 
@@ -561,6 +634,7 @@ export default function Page({
                         >
                             Visibility
                         </Button>
+
                         <Button
                             onClick={() =>
                                 router.push(`/my-rooms/${slug}/export`)
@@ -570,6 +644,7 @@ export default function Page({
                         >
                             Export
                         </Button>
+
                         <Button
                             onClick={() => setShowDeleteDialog(true)}
                             variant="danger"
@@ -578,6 +653,28 @@ export default function Page({
                         >
                             Delete Room
                         </Button>
+                        <Dialog
+                            title="Are you sure you want to delete this room?"
+                            description="This action cannot be undone."
+                            open={showDeleteDialog}
+                            onClose={() => setShowDeleteDialog(false)}
+                        >
+                            <Button
+                                iconName="x"
+                                className="w-full"
+                                onClick={() => setShowDeleteDialog(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="danger"
+                                iconName="trash"
+                                className="w-full"
+                                onClick={() => deleteCurrentRoom()}
+                            >
+                                Delete
+                            </Button>
+                        </Dialog>
                     </div>
                 </>
             ) : (
