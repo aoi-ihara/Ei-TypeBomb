@@ -117,54 +117,66 @@ export default function Cursor() {
             mouse.current.x = x;
             mouse.current.y = y;
 
-            const selectedButtons = buttons.current.filter((element) => {
-                return (
-                    x >= element.x &&
-                    x <= element.x + element.width &&
-                    y >= element.y &&
-                    y <= element.y + element.height
-                );
-            });
+            const frontmostElement = document.elementFromPoint(x, y);
+            const frontmostButton = frontmostElement?.closest(
+                '[data-cursor="button"]',
+            );
+            const frontmostText = frontmostElement?.closest(
+                '[data-cursor="text"]',
+            );
 
-            const selectedTexts = texts.current.filter((element) => {
-                return (
-                    x >= element.x &&
-                    x <= element.x + element.width &&
-                    y >= element.y &&
-                    y <= element.y + element.height
-                );
-            });
+            const selectedButton = frontmostButton
+                ? buttons.current.find((element) => {
+                      return (
+                          x >= element.x &&
+                          x <= element.x + element.width &&
+                          y >= element.y &&
+                          y <= element.y + element.height
+                      );
+                  })
+                : undefined;
 
-            if (selectedButtons.length > 0) {
-                if (selectedButtons[0].shape === 0) {
+            const selectedText = frontmostText
+                ? texts.current.find((element) => {
+                      return (
+                          x >= element.x &&
+                          x <= element.x + element.width &&
+                          y >= element.y &&
+                          y <= element.y + element.height
+                      );
+                  })
+                : undefined;
+
+            if (selectedButton) {
+                if (selectedButton.shape === 0) {
                     target.current = {
-                        x: selectedButtons[0].x + selectedButtons[0].width / 2,
+                        x: selectedButton.x + selectedButton.width / 2,
 
-                        y: selectedButtons[0].y + selectedButtons[0].height / 2,
+                        y: selectedButton.y + selectedButton.height / 2,
 
-                        width: selectedButtons[0].width + 16,
-                        height: selectedButtons[0].height + 16,
+                        width: selectedButton.width + 16,
+                        height: selectedButton.height + 16,
 
                         weight: 4,
                         opacity: 0.25,
 
-                        borderRadius: selectedButtons[0].borderRadius + 8,
+                        borderRadius: selectedButton.borderRadius + 8,
                     };
-                } else if (selectedButtons[0].shape == 1) {
+                } else if (selectedButton.shape == 1) {
                     target.current = {
-                        x: selectedButtons[0].x + selectedButtons[0].width / 2,
+                        x: selectedButton.x + selectedButton.width / 2,
 
-                        y: selectedButtons[0].y + selectedButtons[0].height / 2,
+                        y: selectedButton.y + selectedButton.height / 2,
 
-                        width: selectedButtons[0].width,
-                        height: selectedButtons[0].height,
+                        width: selectedButton.width,
+                        height: selectedButton.height,
 
                         weight: 1000,
                         opacity: 0.15,
 
-                        borderRadius: selectedButtons[0].borderRadius,
+                        borderRadius: selectedButton.borderRadius,
                     };
-                } else if (selectedButtons[0].shape === 2) {
+                } else if (selectedButton.shape === 2) {
                     target.current = {
                         x,
                         y,
@@ -178,14 +190,14 @@ export default function Cursor() {
                         borderRadius: 15,
                     };
                 }
-            } else if (selectedTexts.length > 0) {
+            } else if (selectedText) {
                 target.current = {
                     x,
                     y,
 
                     width: 3 * (isMouseDownRef.current ? 2 : 1),
                     height:
-                        (selectedTexts[0].fontSize + 10) *
+                        (selectedText.fontSize + 10) *
                         (isMouseDownRef.current ? 0.9 : 1),
 
                     weight: 2 * (isMouseDownRef.current ? 2 : 1),
