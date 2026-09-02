@@ -33,6 +33,7 @@ import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
+import { deleteRoom } from "@/lib/room/delete";
 
 type Word = {
     jp: string;
@@ -145,6 +146,14 @@ export default function Page({
         setWords(arrayMove(words, oldIndex, newIndex));
     };
 
+    const deleteCurrentRoom = async () => {
+        if (!id) return;
+        const result = await deleteRoom(id);
+
+        if (result) throw result;
+        else router.push("/my-rooms");
+    };
+
     useEffect(() => {
         const getRoomInfo = async () => {
             const room = await getRoomFromId(slug);
@@ -235,29 +244,6 @@ export default function Page({
         <Shell className="flex flex-col gap-4" size="large">
             {id ? (
                 <>
-                    <Dialog
-                        title="Are you sure you want to delete this room?"
-                        description="This action cannot be undone."
-                        open={showDeleteDialog}
-                        alignment="vertical"
-                        onClose={() => setShowDeleteDialog(false)}
-                    >
-                        <Button
-                            iconName="x"
-                            className="w-full"
-                            onClick={() => setShowDeleteDialog(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="danger"
-                            iconName="trash"
-                            className="w-full"
-                            onClick={() => {}}
-                        >
-                            Delete
-                        </Button>
-                    </Dialog>
                     <div className="flex mt-16 mb-4 items-center w-full">
                         <Button
                             onClick={() => router.push("/my-rooms")}
@@ -584,6 +570,7 @@ export default function Page({
                         >
                             Visibility
                         </Button>
+
                         <Button
                             onClick={() =>
                                 router.push(`/my-rooms/${slug}/export`)
@@ -593,6 +580,7 @@ export default function Page({
                         >
                             Export
                         </Button>
+
                         <Button
                             onClick={() => setShowDeleteDialog(true)}
                             variant="danger"
@@ -601,6 +589,28 @@ export default function Page({
                         >
                             Delete Room
                         </Button>
+                        <Dialog
+                            title="Are you sure you want to delete this room?"
+                            description="This action cannot be undone."
+                            open={showDeleteDialog}
+                            onClose={() => setShowDeleteDialog(false)}
+                        >
+                            <Button
+                                iconName="x"
+                                className="w-full"
+                                onClick={() => setShowDeleteDialog(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="danger"
+                                iconName="trash"
+                                className="w-full"
+                                onClick={() => deleteCurrentRoom()}
+                            >
+                                Delete
+                            </Button>
+                        </Dialog>
                     </div>
                 </>
             ) : (

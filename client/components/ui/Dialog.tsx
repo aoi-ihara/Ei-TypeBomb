@@ -19,7 +19,7 @@ export default function Dialog({
     children,
     className = "",
     alignment = "horizontal",
-    size = "medium",
+    size = "small",
 }: DialogProps) {
     useEffect(() => {
         if (!open) return;
