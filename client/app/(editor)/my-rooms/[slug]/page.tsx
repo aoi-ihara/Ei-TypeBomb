@@ -94,6 +94,7 @@ export default function Page({
     const [linkError, setLinkError] = useState("");
     const [showRoomId, setShowRoomId] = useState(false);
     const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -540,14 +541,6 @@ export default function Page({
                                 iconName="upload"
                                 padding="large"
                             />
-
-                            <Dialog
-                                title="hello"
-                                open={showGenerationWindow}
-                                onClose={() => setShowGeneratingWindow(false)}
-                            >
-                                <Button onClick={() => {}}>Hello</Button>
-                            </Dialog>
                         </div>
                     )}
 
@@ -578,9 +571,7 @@ export default function Page({
                             Export
                         </Button>
                         <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/delete`)
-                            }
+                            onClick={() => setShowDeleteDialog(true)}
                             variant="danger"
                             className=""
                             iconName="trash"

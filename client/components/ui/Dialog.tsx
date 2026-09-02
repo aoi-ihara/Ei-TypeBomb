@@ -53,12 +53,13 @@ export default function Dialog({
             aria-modal="true"
             aria-labelledby="dialog-title"
             aria-describedby={description ? "dialog-description" : undefined}
+            data-cursor="text"
         >
             <button
                 type="button"
                 aria-label="Close dialog"
                 onClick={onClose}
-                className={`absolute inset-0 cursor-default ${open && "bg-(--color-border)"} transition-all duration-200 ease-out`}
+                className={`absolute inset-0 cursor-default ${open && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
             />
 
             <div
