@@ -235,6 +235,29 @@ export default function Page({
         <Shell className="flex flex-col gap-4" size="large">
             {id ? (
                 <>
+                    <Dialog
+                        title="Are you sure you want to delete this room?"
+                        description="This action cannot be undone."
+                        open={showDeleteDialog}
+                        alignment="vertical"
+                        onClose={() => setShowDeleteDialog(false)}
+                    >
+                        <Button
+                            iconName="x"
+                            className="w-full"
+                            onClick={() => setShowDeleteDialog(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="danger"
+                            iconName="trash"
+                            className="w-full"
+                            onClick={() => {}}
+                        >
+                            Delete
+                        </Button>
+                    </Dialog>
                     <div className="flex mt-16 mb-4 items-center w-full">
                         <Button
                             onClick={() => router.push("/my-rooms")}

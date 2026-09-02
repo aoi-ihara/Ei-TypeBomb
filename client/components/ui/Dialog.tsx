@@ -8,6 +8,7 @@ type DialogProps = {
     children?: React.ReactNode;
     className?: string;
     alignment?: "horizontal" | "vertical";
+    size?: "large" | "small" | "medium";
 };
 
 export default function Dialog({
@@ -18,6 +19,7 @@ export default function Dialog({
     children,
     className = "",
     alignment = "horizontal",
+    size = "medium",
 }: DialogProps) {
     useEffect(() => {
         if (!open) return;
@@ -53,7 +55,6 @@ export default function Dialog({
             aria-modal="true"
             aria-labelledby="dialog-title"
             aria-describedby={description ? "dialog-description" : undefined}
-            data-cursor="text"
         >
             <button
                 type="button"
@@ -63,7 +64,7 @@ export default function Dialog({
             />
 
             <div
-                className={`relative w-full max-w-md rounded-2xl bg-(--color-background) p-2 ${className}`}
+                className={`relative w-full ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="flex flex-col gap-2 pt-1 px-3">
