@@ -32,6 +32,7 @@ import {
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
+import Dialog from "@/components/ui/Dialog";
 
 type Word = {
     jp: string;
@@ -92,6 +93,8 @@ export default function Page({
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
     const [showRoomId, setShowRoomId] = useState(false);
+    const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -525,6 +528,14 @@ export default function Page({
 
                             <Button
                                 onClick={() =>
+                                    router.push(`/my-rooms/${slug}/generate`)
+                                }
+                                iconName="wandSparkles"
+                                padding="large"
+                            />
+
+                            <Button
+                                onClick={() =>
                                     router.push(`/my-rooms/${slug}/import`)
                                 }
                                 iconName="upload"
@@ -560,9 +571,7 @@ export default function Page({
                             Export
                         </Button>
                         <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/delete`)
-                            }
+                            onClick={() => setShowDeleteDialog(true)}
                             variant="danger"
                             className=""
                             iconName="trash"

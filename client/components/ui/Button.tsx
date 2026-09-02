@@ -71,7 +71,15 @@ export default function Button({
                 onClick={onClick}
                 className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
-                {iconName && !loading && <Icon name={iconName} size={24} />}
+                {iconName && (!loading || !children) && (
+                    <Icon
+                        name={loading && !children ? "loaderCircle" : iconName}
+                        className={
+                            loading && !children ? "animate-spin" : undefined
+                        }
+                        size={24}
+                    />
+                )}
                 {children && (
                     <div
                         className={`transition-all duration-200 ease-out ${

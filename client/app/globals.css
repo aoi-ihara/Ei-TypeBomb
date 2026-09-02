@@ -75,7 +75,7 @@ body {
     }
 }
 
-.loading .gradient-background {
+.gradient-background {
     background: linear-gradient(
         270deg,
         var(--color-background-secondary) 25%,
