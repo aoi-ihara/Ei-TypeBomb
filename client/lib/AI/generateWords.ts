@@ -1,29 +1,18 @@
 import "server-only";
+import { z } from "zod";
 import { gemini } from "./gemini";
+import { Word } from "@/type";
 
-const wordSchema = {
-    type: "object",
-    properties: {
-        words: {
-            type: "array",
-            minItems: 24,
-            maxItems: 24,
-            items: {
-                type: "object",
-                properties: {
-                    en: {
-                        type: "string",
-                    },
-                    jp: {
-                        type: "string",
-                    },
-                },
-                required: ["en", "jp"],
-            },
-        },
-    },
-    required: ["words"],
-};
+const wordSchema = z.object({
+    words: z
+        .array(
+            z.object({
+                en: z.string().min(1),
+                jp: z.string().min(1),
+            }),
+        )
+        .length(24),
+});
 
 export async function generateWords(theme: string) {
     const response = await gemini.models.generateContent({
@@ -48,7 +37,25 @@ ${theme}
 
         config: {
             responseMimeType: "application/json",
-            responseJsonSchema: wordSchema,
+            responseJsonSchema: {
+                type: "object",
+                properties: {
+                    words: {
+                        type: "array",
+                        minItems: 24,
+                        maxItems: 24,
+                        items: {
+                            type: "object",
+                            properties: {
+                                en: { type: "string" },
+                                jp: { type: "string" },
+                            },
+                            required: ["en", "jp"],
+                        },
+                    },
+                },
+                required: ["words"],
+            },
         },
     });
 
@@ -56,17 +63,9 @@ ${theme}
         throw new Error("Gemini returned empty response");
     }
 
-    const result = JSON.parse(response.text);
+    const parsed = JSON.parse(response.text);
 
-    if (!Array.isArray(result.words)) {
-        throw new Error("Invalid response format");
-    }
+    const result = wordSchema.parse(parsed);
 
-    if (result.words.length !== 24) {
-        throw new Error(
-            `Expected 24 words, but received ${result.words.length}`,
-        );
-    }
-
-    return result.words;
+    return result.words as Word[];
 }
