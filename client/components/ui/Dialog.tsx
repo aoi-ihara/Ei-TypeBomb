@@ -50,7 +50,7 @@ export default function Dialog({
 
     return (
         <div
-            className={`fixed inset-0 z-2 flex items-center justify-center p-4 ${!open && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+            className={`fixed inset-0 z-2 flex items-center justify-center ${!open && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
@@ -63,30 +63,32 @@ export default function Dialog({
                 className={`absolute inset-0 cursor-default ${open && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
             />
 
-            <div
-                className={`relative w-full ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
-                onClick={(event) => event.stopPropagation()}
-            >
-                <div className="flex flex-col gap-2 pt-1 px-3">
-                    <div
-                        id="dialog-title"
-                        className="text-lg font-bold text-(--color-foreground)"
-                    >
-                        {title}
+            <div className="max-w-full max-h-dvh p-4 overflow-scroll">
+                <div
+                    className={`relative w-full ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <div className="flex flex-col gap-2 pt-1 px-3">
+                        <div
+                            id="dialog-title"
+                            className="text-lg font-bold text-(--color-foreground)"
+                        >
+                            {title}
+                        </div>
+
+                        {description && (
+                            <div id="dialog-description">{description}</div>
+                        )}
                     </div>
 
-                    {description && (
-                        <div id="dialog-description">{description}</div>
+                    {children && (
+                        <div
+                            className={`mt-4 flex items-center justify-end gap-4 ${alignment === "vertical" && "flex-col"}`}
+                        >
+                            {children}
+                        </div>
                     )}
                 </div>
-
-                {children && (
-                    <div
-                        className={`mt-4 flex items-center justify-end gap-4 ${alignment === "vertical" && "flex-col"}`}
-                    >
-                        {children}
-                    </div>
-                )}
             </div>
         </div>
     );

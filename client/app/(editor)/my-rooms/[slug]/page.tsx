@@ -96,6 +96,8 @@ export default function Page({
     const [showRoomId, setShowRoomId] = useState(false);
     const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [json, setJson] = useState("");
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -544,12 +546,74 @@ export default function Page({
                             />
 
                             <Button
-                                onClick={() =>
-                                    router.push(`/my-rooms/${slug}/import`)
-                                }
+                                onClick={() => setShowImportDialog(true)}
                                 iconName="upload"
                                 padding="large"
                             />
+                            <Dialog
+                                title="Import from JSON"
+                                size="large"
+                                alignment="vertical"
+                                open={showImportDialog}
+                                onClose={() => setShowImportDialog(false)}
+                            >
+                                <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                                    <div data-cursor="text">
+                                        Please make sure your JSON file follows
+                                        this format:
+                                    </div>
+                                    <div data-cursor="text">
+                                        {" "}
+                                        <pre className="text-sm">
+                                            {`[
+    {
+        "jp": "りんご",
+        "en": "apple"
+    },
+    {
+        "jp": "ねこ",
+        "en": "cat"
+    }
+]`}
+                                        </pre>
+                                    </div>
+                                    <div
+                                        className="opacity-50"
+                                        data-cursor="text"
+                                    >
+                                        Each object must include a
+                                        &quot;jp&quot; field for the Japanese
+                                        word and an &quot;en&quot; field for the
+                                        English word.
+                                    </div>
+                                </div>
+                                <Input
+                                    value={json}
+                                    variant="textarea"
+                                    inputClassName="resize-none h-64"
+                                    font="mono"
+                                    onChange={(e) => setJson(e.target.value)}
+                                    label="JSON Data"
+                                />
+                                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                    <Button
+                                        onClick={() =>
+                                            setShowImportDialog(false)
+                                        }
+                                        className="w-full"
+                                        iconName="x"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        className="w-full"
+                                        iconName="plus"
+                                    >
+                                        Import
+                                    </Button>
+                                </div>
+                            </Dialog>
                         </div>
                     )}
 
