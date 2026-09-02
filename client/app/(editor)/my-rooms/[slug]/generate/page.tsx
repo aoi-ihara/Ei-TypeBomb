@@ -23,7 +23,6 @@ export default function Generate({
 }) {
     const { slug } = use(params);
 
-    const [showWords, setShowWords] = useState(false);
     const [prompt, setPrompt] = useState("");
     const [loading, setLoading] = useState(false);
     const [response, setResponse] = useState<Word[]>([]);
@@ -81,7 +80,6 @@ export default function Generate({
                         setLoading(false);
 
                         setResponse(response);
-                        setShowWords(true);
                     }}
                     iconName="arrowRight"
                     variant="primary"
