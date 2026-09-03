@@ -16,7 +16,7 @@ export default function ServerUrl({ initialServerUrl }: Props) {
     };
 
     return (
-        <Shell title="Sign In">
+        <Shell title="Server URL">
             <div className="inline w-full relative mb-4" data-cursor="text">
                 <Input
                     value={serverUrl}

@@ -1,14 +1,18 @@
-import { cookieTools } from "@/lib/analytics/flags";
-import { notFound } from "next/navigation";
+"use client";
 
-export default async function RootLayout({
+import { notFound } from "next/navigation";
+import { useFeatureFlagEnabled } from "posthog-js/react";
+
+export default function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const showCookieSettings = await cookieTools();
+    const showDevelopmentSettings = useFeatureFlagEnabled(
+        "showDevelopmentSettings",
+    );
 
-    if (!showCookieSettings) {
+    if (!showDevelopmentSettings) {
         notFound();
     }
 
