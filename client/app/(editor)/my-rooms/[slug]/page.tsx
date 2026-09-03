@@ -766,6 +766,7 @@ export default function Page({
                             />
                             <Button
                                 loading={generating}
+                                disabled={!prompt}
                                 onClick={async () => {
                                     setGenerating(true);
                                     const response =
