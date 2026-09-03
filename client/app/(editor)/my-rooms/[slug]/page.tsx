@@ -752,7 +752,7 @@ export default function Page({
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
-                        className={`flex z-10 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-10 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div className="flex gap-4 w-full">
@@ -864,7 +864,7 @@ export default function Page({
                     </Collapsible>
                     <Collapsible
                         open={showImportInput}
-                        className={`flex z-10 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-10 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text">
