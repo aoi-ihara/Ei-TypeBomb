@@ -36,11 +36,15 @@ import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction } from "@/lib/AI/actions";
-import { en } from "zod/v4/locales";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
+    "大学受験でよく見る英単語",
+    "英語のニュースでよく使われる単語",
+    "日常会話でよく使う英単語",
     "入国審査で言われそうな単語",
+    "ホテルで使いそうな英単語",
+    "レストランで使う英単語",
     "プログラミングで使う英単語",
 ];
 
@@ -784,6 +788,7 @@ export default function Page({
                                     <Button
                                         onClick={() => setPrompt(item)}
                                         className="w-full flex"
+                                        padding="small"
                                         key={index}
                                     >
                                         {item}
