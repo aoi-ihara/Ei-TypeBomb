@@ -35,6 +35,14 @@ import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
+import { generateWordsAction } from "@/lib/AI/actions";
+import { en } from "zod/v4/locales";
+
+const EXAMPLES = [
+    "高校1年生の定期テストの単語",
+    "入国審査で言われそうな単語",
+    "プログラミングで使う英単語",
+];
 
 type Word = {
     jp: string;
@@ -107,6 +115,49 @@ export default function Page({
     const [conformPassword, setConformPassword] = useState("");
 
     const [showExportText, setShowExportText] = useState(false);
+
+    const [showGenerationInput, setShowGenerationInput] = useState(false);
+    const [prompt, setPrompt] = useState("");
+    const [response, setResponse] = useState<Word[]>([
+        {
+            jp: "林檎時計",
+            en: "apple watch",
+        },
+        {
+            jp: "林檎壱",
+            en: "apple one",
+        },
+        {
+            jp: "林檎テレビ",
+            en: "apple tv",
+        },
+        {
+            jp: "林檎視覚本格派",
+            en: "apple vision pro",
+        },
+        {
+            jp: "林檎公園",
+            en: "apple park",
+        },
+        {
+            jp: "林檎電子機器",
+            en: "apple computer",
+        },
+        {
+            jp: "林檎日本",
+            en: "apple japan",
+        },
+        {
+            jp: "林檎厚紙",
+            en: "apple card",
+        },
+        {
+            jp: "林檎保護",
+            en: "apple care",
+        },
+    ]);
+    const [generating, setGenerating] = useState(false);
+    const [generationError, setGenerationError] = useState("");
 
     const [visibilityError, setVisibilityError] = useState("");
     const [updatingVisibilitySettings, setUpdatingVisibilitySettings] =
@@ -202,7 +253,16 @@ export default function Page({
     // ROOM FUNCTIONS
 
     const handleCopyJson = async () => {
-        const jsonData = JSON.stringify(words, null, 4);
+        const jsonData = JSON.stringify(
+            (words ?? []).map((item) => {
+                return {
+                    jp: item.jp,
+                    en: item.en,
+                };
+            }),
+            null,
+            4,
+        );
         await navigator.clipboard.writeText(jsonData);
         setShowExportText(true);
         setTimeout(() => {
@@ -620,9 +680,13 @@ export default function Page({
                     </Button>
 
                     <Button
-                        onClick={() =>
-                            router.push(`/my-rooms/${slug}/generate`)
-                        }
+                        onClick={() => {
+                            setShowGenerationInput(!showGenerationInput);
+                            setPrompt("");
+                            setGenerationError("");
+                            setResponse([]);
+                            setShowImportInput(false);
+                        }}
                         iconName="wandSparkles"
                         padding="large"
                     />
@@ -632,6 +696,7 @@ export default function Page({
                             setImportError("");
                             setJson("");
                             setShowImportInput(!showImportInput);
+                            setShowGenerationInput(false);
                         }}
                         iconName="upload"
                         padding="large"
@@ -683,6 +748,116 @@ export default function Page({
 
             {words && (
                 <div className="flex flex-col">
+                    <Collapsible
+                        open={showGenerationInput}
+                        className={`flex ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
+                    >
+                        <div className="flex gap-4 w-full">
+                            <Input
+                                value={prompt}
+                                label="Theme"
+                                onChange={(e) => setPrompt(e.target.value)}
+                                className="w-full"
+                            />
+                            <Button
+                                loading={generating}
+                                onClick={async () => {
+                                    setGenerating(true);
+                                    const response =
+                                        await generateWordsAction(prompt);
+                                    setGenerating(false);
+
+                                    setResponse(response);
+                                }}
+                                iconName="arrowRight"
+                                variant="primary"
+                                padding="large"
+                            />
+                        </div>
+
+                        {!prompt && !response.length && (
+                            <div
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                            >
+                                {EXAMPLES.map((item, index) => (
+                                    <Button
+                                        onClick={() => setPrompt(item)}
+                                        className="w-full flex"
+                                        key={index}
+                                    >
+                                        {item}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+
+                        {response.length !== 0 && (
+                            <div
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                            >
+                                {response.map((item, index) => (
+                                    <div
+                                        data-cursor="text"
+                                        className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                                        key={index}
+                                    >
+                                        {item.jp}
+                                        <div className="w-full font-mono">
+                                            {item.en}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex gap-4 w-full">
+                            <Button
+                                onClick={() => setShowGenerationInput(false)}
+                                className="w-full"
+                                iconName="x"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="w-full"
+                                iconName="plus"
+                                disabled={!response}
+                                onClick={() => {
+                                    if (!response) return;
+
+                                    let parsedJson: Word[];
+
+                                    try {
+                                        parsedJson = response.map(
+                                            (w: Word) => ({
+                                                jp: w.jp,
+                                                en: w.en,
+                                                id: crypto.randomUUID(),
+                                            }),
+                                        );
+                                    } catch {
+                                        setImportError("Invalid JSON format.");
+                                        return;
+                                    }
+
+                                    const result = parsedJson as WordWithId[];
+
+                                    setWords([...result, ...words]);
+                                    setShowGenerationInput(false);
+                                }}
+                            >
+                                Add
+                            </Button>
+                        </div>
+
+                        {generationError && (
+                            <div className="text-red-500">
+                                {generationError}
+                            </div>
+                        )}
+                    </Collapsible>
                     <Collapsible
                         open={showImportInput}
                         className={`flex ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
