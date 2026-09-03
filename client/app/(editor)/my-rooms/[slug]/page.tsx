@@ -272,7 +272,9 @@ export default function Page({
                 room_id: slug,
                 is_private: isPrivate,
             });
-            router.push(`/my-rooms/${slug}`);
+
+            setPassword(isPrivate ? "" : newPassword);
+            setShowVisibilitySettings(false);
         }
     };
 
@@ -452,7 +454,15 @@ export default function Page({
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                 <Button
-                    onClick={() => setShowVisibilitySettings(true)}
+                    onClick={() => {
+                        if (password) setIsPrivate(true);
+                        else setIsPrivate(false);
+
+                        setNewPassword("");
+                        setConformPassword("");
+
+                        setShowVisibilitySettings(true);
+                    }}
                     className=""
                     iconName="eye"
                 >
@@ -607,7 +617,11 @@ export default function Page({
                     />
 
                     <Button
-                        onClick={() => setShowImportInput(!showImportInput)}
+                        onClick={() => {
+                            setImportError("");
+                            setJson("");
+                            setShowImportInput(!showImportInput);
+                        }}
                         iconName="upload"
                         padding="large"
                     />
