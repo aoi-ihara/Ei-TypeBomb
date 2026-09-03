@@ -34,6 +34,19 @@ import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
+import Collapsible from "@/components/ui/Collapsible";
+import { generateWordsAction } from "@/lib/AI/actions";
+
+const EXAMPLES = [
+    "高校1年生の定期テストの単語",
+    "大学受験でよく見る英単語",
+    "英語のニュースでよく使われる単語",
+    "日常会話でよく使う英単語",
+    "入国審査で言われそうな単語",
+    "ホテルで使いそうな英単語",
+    "レストランで使う英単語",
+    "プログラミングで使う英単語",
+];
 
 type Word = {
     jp: string;
@@ -94,12 +107,65 @@ export default function Page({
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
     const [showRoomId, setShowRoomId] = useState(false);
-    const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [json, setJson] = useState("");
     const [importError, setImportError] = useState("");
-    const [importing, setImporting] = useState(false);
+    const [showImportInput, setShowImportInput] = useState(false);
+    const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
+
+    const [newPassword, setNewPassword] = useState("");
+    const [isPrivate, setIsPrivate] = useState(false);
+    const [conformPassword, setConformPassword] = useState("");
+
+    const [showExportText, setShowExportText] = useState(false);
+
+    const [showGenerationInput, setShowGenerationInput] = useState(false);
+    const [prompt, setPrompt] = useState("");
+    const [response, setResponse] = useState<Word[]>([
+        {
+            jp: "林檎時計",
+            en: "apple watch",
+        },
+        {
+            jp: "林檎壱",
+            en: "apple one",
+        },
+        {
+            jp: "林檎テレビ",
+            en: "apple tv",
+        },
+        {
+            jp: "林檎視覚本格派",
+            en: "apple vision pro",
+        },
+        {
+            jp: "林檎公園",
+            en: "apple park",
+        },
+        {
+            jp: "林檎電子機器",
+            en: "apple computer",
+        },
+        {
+            jp: "林檎日本",
+            en: "apple japan",
+        },
+        {
+            jp: "林檎厚紙",
+            en: "apple card",
+        },
+        {
+            jp: "林檎保護",
+            en: "apple care",
+        },
+    ]);
+    const [generating, setGenerating] = useState(false);
+    const [generationError, setGenerationError] = useState("");
+
+    const [visibilityError, setVisibilityError] = useState("");
+    const [updatingVisibilitySettings, setUpdatingVisibilitySettings] =
+        useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -188,6 +254,105 @@ export default function Page({
         getRoomInfo();
     }, [slug]);
 
+    // ROOM FUNCTIONS
+
+    const handleCopyJson = async () => {
+        const jsonData = JSON.stringify(
+            (words ?? []).map((item) => {
+                return {
+                    jp: item.jp,
+                    en: item.en,
+                };
+            }),
+            null,
+            4,
+        );
+        await navigator.clipboard.writeText(jsonData);
+        setShowExportText(true);
+        setTimeout(() => {
+            setShowExportText(false);
+        }, 3000);
+    };
+
+    const handleCopy = async () => {
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
+        await navigator.clipboard.writeText(joinLink);
+        posthog.capture("room_code_copied", { room_id: slug });
+        setShowCopiedText(true);
+        setTimeout(() => {
+            setShowCopiedText(false);
+        }, 3000);
+    };
+
+    const importJson = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
+
+        setImportError("");
+
+        if (!id || words === null) return;
+
+        if (!json) {
+            setImportError("JSON data is required.");
+            return;
+        }
+
+        let parsedJson: Word[];
+
+        try {
+            parsedJson = JSON.parse(json).map((w: Word) => ({
+                jp: w.jp,
+                en: w.en,
+                id: crypto.randomUUID(),
+            }));
+        } catch {
+            setImportError("Invalid JSON format.");
+            return;
+        }
+
+        const result = parsedJson as WordWithId[];
+        const newWords = [...result, ...words];
+        setWords(newWords);
+
+        setJson("");
+        setShowImportInput(false);
+    };
+
+    const handleUpdate = async () => {
+        setVisibilityError("");
+
+        if (!slug) {
+            console.error("Room ID is required.");
+            return;
+        }
+
+        if (newPassword !== conformPassword && isPrivate) {
+            setVisibilityError("Passwords do not match.");
+            return;
+        }
+
+        console.log(slug);
+
+        const request: Room = {
+            id: slug,
+            password: isPrivate ? newPassword : null,
+        };
+
+        setUpdatingVisibilitySettings(true);
+        const error = await updateRoomFromId(request);
+        setUpdatingVisibilitySettings(false);
+
+        if (error) setVisibilityError(error);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
+
+            setPassword(isPrivate ? "" : newPassword);
+            setShowVisibilitySettings(false);
+        }
+    };
+
     const saveRoomData = async () => {
         const roomLinkResult = await getRoomFromLink(link);
         if (roomLinkResult && roomLinkResult !== slug) {
@@ -229,51 +394,6 @@ export default function Page({
             saveRoomData();
         }, 2000);
     }, [title, explanation, maxPlayers, words, id, link]);
-
-    const handleCopy = async () => {
-        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
-        await navigator.clipboard.writeText(joinLink);
-        posthog.capture("room_code_copied", { room_id: slug });
-        setShowCopiedText(true);
-        setTimeout(() => {
-            setShowCopiedText(false);
-        }, 3000);
-    };
-
-    const importJson = async () => {
-        posthog.capture("words_imported_and_added", { room_id: slug });
-
-        if (!id || words === null) return;
-
-        if (!json) {
-            setImportError("JSON data is required.");
-            return;
-        }
-
-        let parsedJson: Word[];
-
-        try {
-            parsedJson = JSON.parse(json);
-        } catch {
-            setImportError("Invalid JSON format.");
-            return;
-        }
-
-        const newWords = [...words, ...parsedJson];
-
-        setImporting(true);
-        const result = await updateRoomFromId({
-            id: id,
-            words: newWords,
-        });
-        setImporting(false);
-
-        if (result) {
-            setImportError(result);
-        } else {
-            router.push(`/my-rooms/${id}`);
-        }
-    };
 
     if (error) {
         notFound();
@@ -409,19 +529,96 @@ export default function Page({
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                 <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    onClick={() => {
+                        if (password) setIsPrivate(true);
+                        else setIsPrivate(false);
+
+                        setNewPassword("");
+                        setConformPassword("");
+
+                        setShowVisibilitySettings(true);
+                    }}
                     className=""
                     iconName="eye"
                 >
                     Visibility
                 </Button>
+                <Dialog
+                    title="Visibility Settings"
+                    open={showVisibilitySettings}
+                    alignment="vertical"
+                    size="middle"
+                    onClose={() => setShowVisibilitySettings(false)}
+                >
+                    <div className="w-full pl-2 items-center flex justify-between">
+                        <div data-cursor="text">Set to Private</div>
+                        <div data-cursor="button" className="rounded-full flex">
+                            <button
+                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                                onClick={() => {
+                                    const next = !isPrivate;
+
+                                    setIsPrivate(next);
+                                }}
+                            >
+                                <div
+                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-200 ease-out`}
+                                ></div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <Input
+                        value={newPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        label="Room Password"
+                        type="password"
+                    />
+
+                    <Input
+                        value={conformPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setConformPassword(e.target.value)}
+                        label="Conform Password"
+                        type="password"
+                    />
+
+                    {error && (
+                        <div className="text-red-500" data-cursor="text">
+                            {error}
+                        </div>
+                    )}
+
+                    <div className="flex gap-4 w-full">
+                        <Button
+                            className="w-full"
+                            onClick={() => setShowVisibilitySettings(false)}
+                            iconName="x"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => handleUpdate()}
+                            className="w-full"
+                            iconName="check"
+                            loading={updatingVisibilitySettings}
+                        >
+                            Done
+                        </Button>
+                    </div>
+                    {visibilityError && (
+                        <div className="text-red-500">{visibilityError}</div>
+                    )}
+                </Dialog>
 
                 <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/export`)}
+                    onClick={() => handleCopyJson()}
                     className=""
-                    iconName="download"
+                    iconName={showExportText ? "check" : "download"}
                 >
-                    Export
+                    {!showExportText && "Export"}
                 </Button>
 
                 <Button
@@ -467,6 +664,7 @@ export default function Page({
                 <div className="w-full flex gap-4">
                     <Button
                         onClick={() => {
+                            setShowImportInput(false);
                             setWords([
                                 {
                                     id: crypto.randomUUID(),
@@ -486,15 +684,24 @@ export default function Page({
                     </Button>
 
                     <Button
-                        onClick={() =>
-                            router.push(`/my-rooms/${slug}/generate`)
-                        }
+                        onClick={() => {
+                            setShowGenerationInput(!showGenerationInput);
+                            setPrompt("");
+                            setGenerationError("");
+                            setResponse([]);
+                            setShowImportInput(false);
+                        }}
                         iconName="wandSparkles"
                         padding="large"
                     />
 
                     <Button
-                        onClick={() => setShowImportDialog(true)}
+                        onClick={() => {
+                            setImportError("");
+                            setJson("");
+                            setShowImportInput(!showImportInput);
+                            setShowGenerationInput(false);
+                        }}
                         iconName="upload"
                         padding="large"
                     />
@@ -505,7 +712,7 @@ export default function Page({
                         open={showImportDialog}
                         onClose={() => setShowImportDialog(false)}
                     >
-                        <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                        <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
                                 Please make sure your JSON file follows this
                                 format:
@@ -531,17 +738,158 @@ export default function Page({
                                 field for the English word.
                             </div>
                         </div>
+                        <Button
+                            onClick={() => setShowImportDialog(false)}
+                            variant="primary"
+                            className="w-full"
+                            iconName="check"
+                        >
+                            Done
+                        </Button>
+                    </Dialog>
+                </div>
+            )}
+
+            {words && (
+                <div className="flex flex-col">
+                    <Collapsible
+                        open={showGenerationInput}
+                        className={`flex ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
+                    >
+                        <div className="flex gap-4 w-full">
+                            <Input
+                                value={prompt}
+                                label="Theme"
+                                onChange={(e) => setPrompt(e.target.value)}
+                                className="w-full"
+                            />
+                            <Button
+                                loading={generating}
+                                onClick={async () => {
+                                    setGenerating(true);
+                                    const response =
+                                        await generateWordsAction(prompt);
+                                    setGenerating(false);
+
+                                    setResponse(response);
+                                }}
+                                iconName="arrowRight"
+                                variant="primary"
+                                padding="large"
+                            />
+                        </div>
+
+                        {!prompt && !response.length && (
+                            <div
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                            >
+                                {EXAMPLES.map((item, index) => (
+                                    <Button
+                                        onClick={() => setPrompt(item)}
+                                        className="w-full flex"
+                                        padding="small"
+                                        key={index}
+                                    >
+                                        {item}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+
+                        {response.length !== 0 && (
+                            <div
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                            >
+                                {response.map((item, index) => (
+                                    <div
+                                        data-cursor="text"
+                                        className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                                        key={index}
+                                    >
+                                        {item.jp}
+                                        <div className="w-full font-mono">
+                                            {item.en}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex gap-4 w-full">
+                            <Button
+                                onClick={() => setShowGenerationInput(false)}
+                                className="w-full"
+                                iconName="x"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="w-full"
+                                iconName="plus"
+                                disabled={!response}
+                                onClick={() => {
+                                    if (!response) return;
+
+                                    let parsedJson: Word[];
+
+                                    try {
+                                        parsedJson = response.map(
+                                            (w: Word) => ({
+                                                jp: w.jp,
+                                                en: w.en,
+                                                id: crypto.randomUUID(),
+                                            }),
+                                        );
+                                    } catch {
+                                        setImportError("Invalid JSON format.");
+                                        return;
+                                    }
+
+                                    const result = parsedJson as WordWithId[];
+
+                                    setWords([...result, ...words]);
+                                    setShowGenerationInput(false);
+                                }}
+                            >
+                                Add
+                            </Button>
+                        </div>
+
+                        {generationError && (
+                            <div className="text-red-500">
+                                {generationError}
+                            </div>
+                        )}
+                    </Collapsible>
+                    <Collapsible
+                        open={showImportInput}
+                        className={`flex ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
+                    >
+                        <div data-cursor="text">
+                            Each object must include a &quot;jp&quot; field for
+                            the Japanese word and an &quot;en&quot; field for
+                            the English word.
+                            <Button
+                                onClick={() => setShowImportDialog(true)}
+                                variant="text"
+                            >
+                                Learn More
+                            </Button>
+                        </div>
                         <Input
                             value={json}
                             variant="textarea"
-                            inputClassName="resize-none h-64"
+                            inputClassName="resize-none h-48"
                             font="mono"
                             onChange={(e) => setJson(e.target.value)}
                             label="JSON Data"
                         />
                         <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <Button
-                                onClick={() => setShowImportDialog(false)}
+                                onClick={() => setShowImportInput(false)}
                                 className="w-full"
                                 iconName="x"
                             >
@@ -552,7 +900,6 @@ export default function Page({
                                 className="w-full"
                                 iconName="plus"
                                 onClick={() => importJson()}
-                                loading={importing}
                             >
                                 Import
                             </Button>
@@ -560,129 +907,138 @@ export default function Page({
                         {importError && (
                             <div className="text-red-500">{importError}</div>
                         )}
-                    </Dialog>
+                    </Collapsible>
+                    <div className="flex flex-col gap-4">
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext
+                                items={words.map((w) => w.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {words.map((word, index) => (
+                                    <SortableItem key={word.id} id={word.id}>
+                                        <div className="flex items-center gap-4 w-full">
+                                            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                                <div className="flex flex-col gap-4">
+                                                    <Input
+                                                        label="Label"
+                                                        value={word.jp}
+                                                        onChange={(e) => {
+                                                            const newWords =
+                                                                words.map(
+                                                                    (w, i) =>
+                                                                        i ===
+                                                                        index
+                                                                            ? {
+                                                                                  ...w,
+                                                                                  jp: e
+                                                                                      .target
+                                                                                      .value,
+                                                                              }
+                                                                            : w,
+                                                                );
+                                                            setWords(newWords);
+                                                        }}
+                                                    />
+                                                    {word.jp.length > 32 && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            It is too long.
+                                                        </div>
+                                                    )}
+                                                    {!word.jp && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            This field is
+                                                            required.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col gap-4">
+                                                    <Input
+                                                        label="Correct Answer"
+                                                        font="mono"
+                                                        value={word.en}
+                                                        onChange={(e) => {
+                                                            const newWords =
+                                                                words.map(
+                                                                    (w, i) =>
+                                                                        i ===
+                                                                        index
+                                                                            ? {
+                                                                                  ...w,
+                                                                                  en: e
+                                                                                      .target
+                                                                                      .value,
+                                                                              }
+                                                                            : w,
+                                                                );
+                                                            setWords(newWords);
+                                                        }}
+                                                    />
+                                                    {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
+                                                        word.en,
+                                                    ) &&
+                                                        word.en && (
+                                                            <div className="text-red-500">
+                                                                You can use only
+                                                                letters,
+                                                                numbers, spaces,
+                                                                and the
+                                                                following
+                                                                punctuation: .,
+                                                                ,, !, ?, and -.
+                                                            </div>
+                                                        )}
+                                                    {word.en.length > 32 && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            It is too long.
+                                                        </div>
+                                                    )}
+                                                    {!word.en && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            This field is
+                                                            required.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <Button
+                                                    onClick={() => {
+                                                        const newWords =
+                                                            words.filter(
+                                                                (_, i) =>
+                                                                    i !== index,
+                                                            );
+                                                        setWords(newWords);
+                                                    }}
+                                                    className="h-fit"
+                                                    padding="large"
+                                                    iconName="trash"
+                                                />
+                                            </div>
+                                        </div>
+                                    </SortableItem>
+                                ))}
+                            </SortableContext>
+                        </DndContext>
+                    </div>
                 </div>
-            )}
-
-            {words && (
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
-                    <SortableContext
-                        items={words.map((w) => w.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        {words.map((word, index) => (
-                            <SortableItem key={word.id} id={word.id}>
-                                <div className="flex items-center gap-4 w-full">
-                                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
-                                        <div className="flex flex-col gap-4">
-                                            <Input
-                                                label="Label"
-                                                value={word.jp}
-                                                onChange={(e) => {
-                                                    const newWords = words.map(
-                                                        (w, i) =>
-                                                            i === index
-                                                                ? {
-                                                                      ...w,
-                                                                      jp: e
-                                                                          .target
-                                                                          .value,
-                                                                  }
-                                                                : w,
-                                                    );
-                                                    setWords(newWords);
-                                                }}
-                                            />
-                                            {word.jp.length > 32 && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    It is too long.
-                                                </div>
-                                            )}
-                                            {!word.jp && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    This field is required.
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col gap-4">
-                                            <Input
-                                                label="Correct Answer"
-                                                font="mono"
-                                                value={word.en}
-                                                onChange={(e) => {
-                                                    const newWords = words.map(
-                                                        (w, i) =>
-                                                            i === index
-                                                                ? {
-                                                                      ...w,
-                                                                      en: e
-                                                                          .target
-                                                                          .value,
-                                                                  }
-                                                                : w,
-                                                    );
-                                                    setWords(newWords);
-                                                }}
-                                            />
-                                            {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
-                                                word.en,
-                                            ) &&
-                                                word.en && (
-                                                    <div className="text-red-500">
-                                                        You can use only
-                                                        letters, numbers,
-                                                        spaces, and the
-                                                        following punctuation:
-                                                        ., ,, !, ?, and -.
-                                                    </div>
-                                                )}
-                                            {word.en.length > 32 && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    It is too long.
-                                                </div>
-                                            )}
-                                            {!word.en && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    This field is required.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <Button
-                                            onClick={() => {
-                                                const newWords = words.filter(
-                                                    (_, i) => i !== index,
-                                                );
-                                                setWords(newWords);
-                                            }}
-                                            className="h-fit"
-                                            padding="large"
-                                            iconName="trash"
-                                        />
-                                    </div>
-                                </div>
-                            </SortableItem>
-                        ))}
-                    </SortableContext>
-                </DndContext>
             )}
 
             <div

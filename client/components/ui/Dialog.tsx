@@ -8,7 +8,7 @@ type DialogProps = {
     children?: React.ReactNode;
     className?: string;
     alignment?: "horizontal" | "vertical";
-    size?: "large" | "small" | "medium";
+    size?: "large" | "small" | "middle";
 };
 
 export default function Dialog({
@@ -63,9 +63,9 @@ export default function Dialog({
                 className={`absolute inset-0 cursor-default ${open && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
             />
 
-            <div className="max-w-full max-h-dvh p-4 overflow-scroll">
+            <div className="max-w-full w-full flex justify-center max-h-dvh p-4 overflow-scroll">
                 <div
-                    className={`relative w-full ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
+                    className={`relative w-full ${size === "middle" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
                     onClick={(event) => event.stopPropagation()}
                 >
                     <div className="flex flex-col gap-2 pt-1 px-3">
