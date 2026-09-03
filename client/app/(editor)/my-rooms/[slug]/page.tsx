@@ -44,8 +44,6 @@ const EXAMPLES = [
     "日常会話でよく使う英単語",
     "入国審査で言われそうな単語",
     "ホテルで使いそうな英単語",
-    "レストランで使う英単語",
-    "プログラミングで使う英単語",
 ];
 
 type Word = {
@@ -754,7 +752,7 @@ export default function Page({
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
-                        className={`flex ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-10 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div className="flex gap-4 w-full">
@@ -766,6 +764,7 @@ export default function Page({
                             />
                             <Button
                                 loading={generating}
+                                disabled={!prompt}
                                 onClick={async () => {
                                     setGenerating(true);
                                     const response =
@@ -865,7 +864,7 @@ export default function Page({
                     </Collapsible>
                     <Collapsible
                         open={showImportInput}
-                        className={`flex ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-10 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text">
@@ -1069,6 +1068,28 @@ export default function Page({
                 <div className="opacity-50">
                     Press escape or click to return.
                 </div>
+            </div>
+
+            <div
+                className={`fixed z-5 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                aria-describedby={
+                    showImportInput || showGenerationInput
+                        ? "dialog-description"
+                        : undefined
+                }
+            >
+                <button
+                    type="button"
+                    aria-label="Close dialog"
+                    onClick={() => {
+                        setShowImportInput(false);
+                        setShowGenerationInput(false);
+                    }}
+                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
+                />
             </div>
         </Shell>
     );
