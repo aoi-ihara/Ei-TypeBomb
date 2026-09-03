@@ -98,6 +98,8 @@ export default function Page({
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [json, setJson] = useState("");
+    const [importError, setImportError] = useState("");
+    const [importing, setImporting] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -236,6 +238,41 @@ export default function Page({
         setTimeout(() => {
             setShowCopiedText(false);
         }, 3000);
+    };
+
+    const importJson = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
+
+        if (!id || words === null) return;
+
+        if (!json) {
+            setImportError("JSON data is required.");
+            return;
+        }
+
+        let parsedJson: Word[];
+
+        try {
+            parsedJson = JSON.parse(json);
+        } catch {
+            setImportError("Invalid JSON format.");
+            return;
+        }
+
+        const newWords = [...words, ...parsedJson];
+
+        setImporting(true);
+        const result = await updateRoomFromId({
+            id: id,
+            words: newWords,
+        });
+        setImporting(false);
+
+        if (result) {
+            setImportError(result);
+        } else {
+            router.push(`/my-rooms/${id}`);
+        }
     };
 
     if (error) {
@@ -579,10 +616,15 @@ export default function Page({
                                 variant="primary"
                                 className="w-full"
                                 iconName="plus"
+                                onClick={() => importJson()}
+                                loading={importing}
                             >
                                 Import
                             </Button>
                         </div>
+                        {importError && (
+                            <div className="text-red-500">{importError}</div>
+                        )}
                     </Dialog>
                 </div>
             )}
