@@ -705,7 +705,7 @@ export default function Page({
                     />
                     <Dialog
                         title="Import from JSON"
-                        size="large"
+                        size="middle"
                         alignment="vertical"
                         open={showImportDialog}
                         onClose={() => setShowImportDialog(false)}
@@ -752,7 +752,7 @@ export default function Page({
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
-                        className={`flex z-10 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div className="flex gap-4 w-full">
@@ -864,7 +864,7 @@ export default function Page({
                     </Collapsible>
                     <Collapsible
                         open={showImportInput}
-                        className={`flex z-10 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text">
@@ -1071,7 +1071,7 @@ export default function Page({
             </div>
 
             <div
-                className={`fixed z-5 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"
