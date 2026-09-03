@@ -106,6 +106,8 @@ export default function Page({
     const [isPrivate, setIsPrivate] = useState(false);
     const [conformPassword, setConformPassword] = useState("");
 
+    const [showExportText, setShowExportText] = useState(false);
+
     const [visibilityError, setVisibilityError] = useState("");
     const [updatingVisibilitySettings, setUpdatingVisibilitySettings] =
         useState(false);
@@ -198,6 +200,15 @@ export default function Page({
     }, [slug]);
 
     // ROOM FUNCTIONS
+
+    const handleCopyJson = async () => {
+        const jsonData = JSON.stringify(words, null, 4);
+        await navigator.clipboard.writeText(jsonData);
+        setShowExportText(true);
+        setTimeout(() => {
+            setShowExportText(false);
+        }, 3000);
+    };
 
     const handleCopy = async () => {
         const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
@@ -539,11 +550,11 @@ export default function Page({
                 </Dialog>
 
                 <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/export`)}
+                    onClick={() => handleCopyJson()}
                     className=""
-                    iconName="download"
+                    iconName={showExportText ? "check" : "download"}
                 >
-                    Export
+                    {!showExportText && "Export"}
                 </Button>
 
                 <Button
