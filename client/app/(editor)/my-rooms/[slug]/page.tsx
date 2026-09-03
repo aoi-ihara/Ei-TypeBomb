@@ -99,8 +99,16 @@ export default function Page({
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [json, setJson] = useState("");
     const [importError, setImportError] = useState("");
-    const [importing, setImporting] = useState(false);
     const [showImportInput, setShowImportInput] = useState(false);
+    const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
+
+    const [newPassword, setNewPassword] = useState("");
+    const [isPrivate, setIsPrivate] = useState(false);
+    const [conformPassword, setConformPassword] = useState("");
+
+    const [visibilityError, setVisibilityError] = useState("");
+    const [updatingVisibilitySettings, setUpdatingVisibilitySettings] =
+        useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -189,6 +197,85 @@ export default function Page({
         getRoomInfo();
     }, [slug]);
 
+    // ROOM FUNCTIONS
+
+    const handleCopy = async () => {
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
+        await navigator.clipboard.writeText(joinLink);
+        posthog.capture("room_code_copied", { room_id: slug });
+        setShowCopiedText(true);
+        setTimeout(() => {
+            setShowCopiedText(false);
+        }, 3000);
+    };
+
+    const importJson = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
+
+        setImportError("");
+
+        if (!id || words === null) return;
+
+        if (!json) {
+            setImportError("JSON data is required.");
+            return;
+        }
+
+        let parsedJson: Word[];
+
+        try {
+            parsedJson = JSON.parse(json).map((w: Word) => ({
+                jp: w.jp,
+                en: w.en,
+                id: crypto.randomUUID(),
+            }));
+        } catch {
+            setImportError("Invalid JSON format.");
+            return;
+        }
+
+        const result = parsedJson as WordWithId[];
+        const newWords = [...result, ...words];
+        setWords(newWords);
+
+        setJson("");
+        setShowImportInput(false);
+    };
+
+    const handleUpdate = async () => {
+        setVisibilityError("");
+
+        if (!slug) {
+            console.error("Room ID is required.");
+            return;
+        }
+
+        if (newPassword !== conformPassword && isPrivate) {
+            setVisibilityError("Passwords do not match.");
+            return;
+        }
+
+        console.log(slug);
+
+        const request: Room = {
+            id: slug,
+            password: isPrivate ? newPassword : null,
+        };
+
+        setUpdatingVisibilitySettings(true);
+        const error = await updateRoomFromId(request);
+        setUpdatingVisibilitySettings(false);
+
+        if (error) setVisibilityError(error);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
+            router.push(`/my-rooms/${slug}`);
+        }
+    };
+
     const saveRoomData = async () => {
         const roomLinkResult = await getRoomFromLink(link);
         if (roomLinkResult && roomLinkResult !== slug) {
@@ -230,47 +317,6 @@ export default function Page({
             saveRoomData();
         }, 2000);
     }, [title, explanation, maxPlayers, words, id, link]);
-
-    const handleCopy = async () => {
-        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
-        await navigator.clipboard.writeText(joinLink);
-        posthog.capture("room_code_copied", { room_id: slug });
-        setShowCopiedText(true);
-        setTimeout(() => {
-            setShowCopiedText(false);
-        }, 3000);
-    };
-
-    const importJson = async () => {
-        posthog.capture("words_imported_and_added", { room_id: slug });
-
-        if (!id || words === null) return;
-
-        if (!json) {
-            setImportError("JSON data is required.");
-            return;
-        }
-
-        let parsedJson: Word[];
-
-        try {
-            parsedJson = JSON.parse(json).map((w: Word) => ({
-                jp: w.jp,
-                en: w.en,
-                id: crypto.randomUUID(),
-            }));
-        } catch {
-            setImportError("Invalid JSON format.");
-            return;
-        }
-
-        const result = parsedJson as WordWithId[];
-        const newWords = [...result, ...words];
-        setWords(newWords);
-
-        setJson("");
-        setShowImportInput(false);
-    };
 
     if (error) {
         notFound();
@@ -406,12 +452,81 @@ export default function Page({
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                 <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    onClick={() => setShowVisibilitySettings(true)}
                     className=""
                     iconName="eye"
                 >
                     Visibility
                 </Button>
+                <Dialog
+                    title="Visibility Settings"
+                    open={showVisibilitySettings}
+                    alignment="vertical"
+                    size="middle"
+                    onClose={() => setShowVisibilitySettings(false)}
+                >
+                    <div className="w-full pl-2 items-center flex justify-between">
+                        <div data-cursor="text">Set to Private</div>
+                        <div data-cursor="button" className="rounded-full flex">
+                            <button
+                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                                onClick={() => {
+                                    const next = !isPrivate;
+
+                                    setIsPrivate(next);
+                                }}
+                            >
+                                <div
+                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-200 ease-out`}
+                                ></div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <Input
+                        value={newPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        label="Room Password"
+                        type="password"
+                    />
+
+                    <Input
+                        value={conformPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setConformPassword(e.target.value)}
+                        label="Conform Password"
+                        type="password"
+                    />
+
+                    {error && (
+                        <div className="text-red-500" data-cursor="text">
+                            {error}
+                        </div>
+                    )}
+
+                    <div className="flex gap-4 w-full">
+                        <Button
+                            className="w-full"
+                            onClick={() => setShowVisibilitySettings(false)}
+                            iconName="x"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => handleUpdate()}
+                            className="w-full"
+                            iconName="check"
+                            loading={updatingVisibilitySettings}
+                        >
+                            Done
+                        </Button>
+                    </div>
+                    {visibilityError && (
+                        <div className="text-red-500">{visibilityError}</div>
+                    )}
+                </Dialog>
 
                 <Button
                     onClick={() => router.push(`/my-rooms/${slug}/export`)}
@@ -464,6 +579,7 @@ export default function Page({
                 <div className="w-full flex gap-4">
                     <Button
                         onClick={() => {
+                            setShowImportInput(false);
                             setWords([
                                 {
                                     id: crypto.randomUUID(),
@@ -579,7 +695,6 @@ export default function Page({
                                 className="w-full"
                                 iconName="plus"
                                 onClick={() => importJson()}
-                                loading={importing}
                             >
                                 Import
                             </Button>
