@@ -200,7 +200,15 @@ export default function Page({
             words,
             roomId,
         };
-    }, [roomTitle, roomExplanation, roomPassword, maxPlayers, words, roomId, roomLink]);
+    }, [
+        roomTitle,
+        roomExplanation,
+        roomPassword,
+        maxPlayers,
+        words,
+        roomId,
+        roomLink,
+    ]);
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -357,13 +365,8 @@ export default function Page({
             setRoomLinkError("");
         }
 
-        const {
-            roomId,
-            roomTitle,
-            roomExplanation,
-            maxPlayers,
-            words,
-        } = roomDataRef.current;
+        const { roomId, roomTitle, roomExplanation, maxPlayers, words } =
+            roomDataRef.current;
 
         if (!roomId || !words) return;
 
@@ -762,7 +765,9 @@ export default function Page({
                             <Input
                                 value={generationPrompt}
                                 label="Theme"
-                                onChange={(e) => setGenerationPrompt(e.target.value)}
+                                onChange={(e) =>
+                                    setGenerationPrompt(e.target.value)
+                                }
                                 className="w-full"
                             />
                             <Button
@@ -771,7 +776,9 @@ export default function Page({
                                 onClick={async () => {
                                     setIsGenerating(true);
                                     const generatedWords =
-                                        await generateWordsAction(generationPrompt);
+                                        await generateWordsAction(
+                                            generationPrompt,
+                                        );
                                     setIsGenerating(false);
 
                                     setGeneratedWords(generatedWords);
@@ -788,7 +795,9 @@ export default function Page({
                             >
                                 {EXAMPLES.map((example, index) => (
                                     <Button
-                                        onClick={() => setGenerationPrompt(example)}
+                                        onClick={() =>
+                                            setGenerationPrompt(example)
+                                        }
                                         className="w-full flex"
                                         padding="small"
                                         key={index}
@@ -849,9 +858,13 @@ export default function Page({
                                         return;
                                     }
 
-                                    const generatedWordsWithId = parsedWords as WordWithId[];
+                                    const generatedWordsWithId =
+                                        parsedWords as WordWithId[];
 
-                                    setWords([...generatedWordsWithId, ...words]);
+                                    setWords([
+                                        ...generatedWordsWithId,
+                                        ...words,
+                                    ]);
                                     setShowGenerationInput(false);
                                 }}
                             >
@@ -931,7 +944,10 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (currentWord, wordIndex) =>
+                                                                    (
+                                                                        currentWord,
+                                                                        wordIndex,
+                                                                    ) =>
                                                                         wordIndex ===
                                                                         index
                                                                             ? {
@@ -971,7 +987,10 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (currentWord, wordIndex) =>
+                                                                    (
+                                                                        currentWord,
+                                                                        wordIndex,
+                                                                    ) =>
                                                                         wordIndex ===
                                                                         index
                                                                             ? {
@@ -1024,7 +1043,10 @@ export default function Page({
                                                     onClick={() => {
                                                         const newWords =
                                                             words.filter(
-                                                                (_, wordIndex) =>
+                                                                (
+                                                                    _,
+                                                                    wordIndex,
+                                                                ) =>
                                                                     wordIndex !==
                                                                     index,
                                                             );
