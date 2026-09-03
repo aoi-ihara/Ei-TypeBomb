@@ -17,6 +17,7 @@
         "@marsidev/react-turnstile": "^1.5.3",
         "@supabase/ssr": "^0.12.3",
         "@vercel/analytics": "^2.0.1",
+        "@vercel/speed-insights": "^2.0.0",
         "argon2": "^0.45.1",
         "express": "^5.2.1",
         "flags": "^4.3.0",
