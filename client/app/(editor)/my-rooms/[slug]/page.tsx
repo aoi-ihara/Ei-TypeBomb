@@ -94,33 +94,33 @@ export default function Page({
     const { slug } = use(params);
     const router = useRouter();
 
-    const [error, setError] = useState(false);
-    const [explanation, setExplanation] = useState("");
-    const [title, setTitle] = useState("");
-    const [password, setPassword] = useState("");
+    const [roomError, setRoomError] = useState(false);
+    const [roomExplanation, setRoomExplanation] = useState("");
+    const [roomTitle, setRoomTitle] = useState("");
+    const [roomPassword, setRoomPassword] = useState("");
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
-    const [id, setId] = useState<string | null>(null);
+    const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
-    const [showCopiedText, setShowCopiedText] = useState(false);
-    const [link, setLink] = useState("");
-    const [linkError, setLinkError] = useState("");
-    const [showRoomId, setShowRoomId] = useState(false);
+    const [isLinkCopied, setIsLinkCopied] = useState(false);
+    const [roomLink, setRoomLink] = useState("");
+    const [roomLinkError, setRoomLinkError] = useState("");
+    const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
-    const [json, setJson] = useState("");
+    const [importData, setImportData] = useState("");
     const [importError, setImportError] = useState("");
     const [showImportInput, setShowImportInput] = useState(false);
     const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
 
     const [newPassword, setNewPassword] = useState("");
     const [isPrivate, setIsPrivate] = useState(false);
-    const [conformPassword, setConformPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
 
-    const [showExportText, setShowExportText] = useState(false);
+    const [isExported, setIsExported] = useState(false);
 
     const [showGenerationInput, setShowGenerationInput] = useState(false);
-    const [prompt, setPrompt] = useState("");
-    const [response, setResponse] = useState<Word[]>([
+    const [generationPrompt, setGenerationPrompt] = useState("");
+    const [generatedWords, setGeneratedWords] = useState<Word[]>([
         {
             jp: "林檎時計",
             en: "apple watch",
@@ -158,20 +158,20 @@ export default function Page({
             en: "apple care",
         },
     ]);
-    const [generating, setGenerating] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState("");
 
     const [visibilityError, setVisibilityError] = useState("");
-    const [updatingVisibilitySettings, setUpdatingVisibilitySettings] =
+    const [isUpdatingVisibilitySettings, setIsUpdatingVisibilitySettings] =
         useState(false);
 
     const isLoadedRef = useRef(false);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
-                setShowRoomId(false);
+                setShowRoomCode(false);
             }
         };
 
@@ -183,24 +183,24 @@ export default function Page({
     }, []);
 
     const roomDataRef = useRef({
-        title,
-        explanation,
-        password,
+        roomTitle,
+        roomExplanation,
+        roomPassword,
         maxPlayers,
         words,
-        id,
+        roomId,
     });
 
     useEffect(() => {
         roomDataRef.current = {
-            title,
-            explanation,
-            password,
+            roomTitle,
+            roomExplanation,
+            roomPassword,
             maxPlayers,
             words,
-            id,
+            roomId,
         };
-    }, [title, explanation, password, maxPlayers, words, id, link]);
+    }, [roomTitle, roomExplanation, roomPassword, maxPlayers, words, roomId, roomLink]);
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -208,39 +208,39 @@ export default function Page({
         const { active, over } = event;
         if (!over || active.id === over.id || !words) return;
 
-        const oldIndex = words.findIndex((w) => w.id === active.id);
-        const newIndex = words.findIndex((w) => w.id === over.id);
+        const oldIndex = words.findIndex((word) => word.id === active.id);
+        const newIndex = words.findIndex((word) => word.id === over.id);
 
         setWords(arrayMove(words, oldIndex, newIndex));
     };
 
-    const deleteCurrentRoom = async () => {
-        if (!id) return;
-        const result = await deleteRoom(id);
+    const handleDeleteRoom = async () => {
+        if (!roomId) return;
+        const result = await deleteRoom(roomId);
 
         if (result) throw result;
         else router.push("/my-rooms");
     };
 
     useEffect(() => {
-        const getRoomInfo = async () => {
+        const loadRoom = async () => {
             const room = await getRoomFromId(slug);
 
             if (!room) {
-                setError(true);
+                setRoomError(true);
                 return;
             }
 
-            setId(room.id);
-            setTitle(room.title ?? "");
-            setExplanation(room.explanation ?? "");
-            setPassword(room.password ?? "");
+            setRoomId(room.id);
+            setRoomTitle(room.title ?? "");
+            setRoomExplanation(room.explanation ?? "");
+            setRoomPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
-            setLink(room.link ?? room.id);
+            setRoomLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
-                (w: Word) => ({
-                    ...w,
+                (word: Word) => ({
+                    ...word,
                     id: crypto.randomUUID(),
                 }),
             );
@@ -249,57 +249,55 @@ export default function Page({
             isLoadedRef.current = true;
         };
 
-        getRoomInfo();
+        loadRoom();
     }, [slug]);
 
-    // ROOM FUNCTIONS
-
-    const handleCopyJson = async () => {
+    const handleExportWords = async () => {
         const jsonData = JSON.stringify(
-            (words ?? []).map((item) => {
+            (words ?? []).map((word) => {
                 return {
-                    jp: item.jp,
-                    en: item.en,
+                    jp: word.jp,
+                    en: word.en,
                 };
             }),
             null,
             4,
         );
         await navigator.clipboard.writeText(jsonData);
-        setShowExportText(true);
+        setIsExported(true);
         setTimeout(() => {
-            setShowExportText(false);
+            setIsExported(false);
         }, 3000);
     };
 
-    const handleCopy = async () => {
-        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
+    const handleCopyRoomLink = async () => {
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink;
         await navigator.clipboard.writeText(joinLink);
         posthog.capture("room_code_copied", { room_id: slug });
-        setShowCopiedText(true);
+        setIsLinkCopied(true);
         setTimeout(() => {
-            setShowCopiedText(false);
+            setIsLinkCopied(false);
         }, 3000);
     };
 
-    const importJson = async () => {
+    const handleImportWords = async () => {
         posthog.capture("words_imported_and_added", { room_id: slug });
 
         setImportError("");
 
-        if (!id || words === null) return;
+        if (!roomId || words === null) return;
 
-        if (!json) {
+        if (!importData) {
             setImportError("JSON data is required.");
             return;
         }
 
-        let parsedJson: Word[];
+        let parsedWords: Word[];
 
         try {
-            parsedJson = JSON.parse(json).map((w: Word) => ({
-                jp: w.jp,
-                en: w.en,
+            parsedWords = JSON.parse(importData).map((word: Word) => ({
+                jp: word.jp,
+                en: word.en,
                 id: crypto.randomUUID(),
             }));
         } catch {
@@ -307,15 +305,15 @@ export default function Page({
             return;
         }
 
-        const result = parsedJson as WordWithId[];
-        const newWords = [...result, ...words];
+        const importedWords = parsedWords as WordWithId[];
+        const newWords = [...importedWords, ...words];
         setWords(newWords);
 
-        setJson("");
+        setImportData("");
         setShowImportInput(false);
     };
 
-    const handleUpdate = async () => {
+    const handleVisibilityUpdate = async () => {
         setVisibilityError("");
 
         if (!slug) {
@@ -323,7 +321,7 @@ export default function Page({
             return;
         }
 
-        if (newPassword !== conformPassword && isPrivate) {
+        if (newPassword !== confirmPassword && isPrivate) {
             setVisibilityError("Passwords do not match.");
             return;
         }
@@ -335,43 +333,48 @@ export default function Page({
             password: isPrivate ? newPassword : null,
         };
 
-        setUpdatingVisibilitySettings(true);
-        const error = await updateRoomFromId(request);
-        setUpdatingVisibilitySettings(false);
+        setIsUpdatingVisibilitySettings(true);
+        const updateError = await updateRoomFromId(request);
+        setIsUpdatingVisibilitySettings(false);
 
-        if (error) setVisibilityError(error);
+        if (updateError) setVisibilityError(updateError);
         else {
             posthog.capture("room_visibility_changed", {
                 room_id: slug,
                 is_private: isPrivate,
             });
 
-            setPassword(isPrivate ? "" : newPassword);
+            setRoomPassword(isPrivate ? "" : newPassword);
             setShowVisibilitySettings(false);
         }
     };
 
     const saveRoomData = async () => {
-        const roomLinkResult = await getRoomFromLink(link);
+        const roomLinkResult = await getRoomFromLink(roomLink);
         if (roomLinkResult && roomLinkResult !== slug) {
-            setLinkError("Link has already taken.");
+            setRoomLinkError("Link has already taken.");
         } else {
-            setLinkError("");
+            setRoomLinkError("");
         }
 
-        const { id, title, explanation, maxPlayers, words } =
-            roomDataRef.current;
+        const {
+            roomId,
+            roomTitle,
+            roomExplanation,
+            maxPlayers,
+            words,
+        } = roomDataRef.current;
 
-        if (!id || !words) return;
+        if (!roomId || !words) return;
 
         try {
             const updatedRoom: Room = {
-                id,
-                title,
-                explanation,
+                id: roomId,
+                title: roomTitle,
+                explanation: roomExplanation,
                 maxPlayers: Number(maxPlayers),
                 words: words.map(({ jp, en }) => ({ jp, en })),
-                link,
+                link: roomLink,
             };
 
             const result = await updateRoomFromId(updatedRoom);
@@ -382,25 +385,25 @@ export default function Page({
     };
 
     useEffect(() => {
-        if (!isLoadedRef.current || !id || words === null) return;
+        if (!isLoadedRef.current || !roomId || words === null) return;
 
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
         }
 
-        timerRef.current = setTimeout(() => {
+        saveTimerRef.current = setTimeout(() => {
             saveRoomData();
         }, 2000);
-    }, [title, explanation, maxPlayers, words, id, link]);
+    }, [roomTitle, roomExplanation, maxPlayers, words, roomId, roomLink]);
 
-    if (error) {
+    if (roomError) {
         notFound();
     }
 
     return (
         <Shell
             animateAppear={true}
-            loading={!id}
+            loading={!roomId}
             className="flex flex-col gap-4"
             size="large"
         >
@@ -420,7 +423,7 @@ export default function Page({
                     className="h-full"
                 >
                     <div className="w-8 h-10 flex justify-center items-center">
-                        {password ? (
+                        {roomPassword ? (
                             <Icon name="lock" />
                         ) : (
                             <Icon name="earth" />
@@ -429,15 +432,15 @@ export default function Page({
                 </Button>
                 <input
                     className="w-full outline-none text-2xl font-bold font-mono"
-                    value={title}
+                    value={roomTitle}
                     placeholder="Room Title"
                     data-cursor="text"
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => setRoomTitle(e.target.value)}
                 />
             </div>
-            {validateTitle(title) && (
+            {validateTitle(roomTitle) && (
                 <div className="text-red-500" data-cursor="text">
-                    {validateTitle(title)}
+                    {validateTitle(roomTitle)}
                 </div>
             )}
 
@@ -448,13 +451,13 @@ export default function Page({
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                 <div className="flex flex-col gap-4">
                     <Input
-                        onChange={(e) => setExplanation(e.target.value)}
+                        onChange={(e) => setRoomExplanation(e.target.value)}
                         label="Explanation"
-                        value={explanation}
+                        value={roomExplanation}
                     />
-                    {validateExplanation(explanation) && (
+                    {validateExplanation(roomExplanation) && (
                         <div className="text-red-500" data-cursor="text">
-                            {validateExplanation(explanation)}
+                            {validateExplanation(roomExplanation)}
                         </div>
                     )}
                 </div>
@@ -478,27 +481,27 @@ export default function Page({
             <div className="flex gap-4 w-full">
                 <div className="w-full flex flex-col gap-4">
                     <Input
-                        onChange={(e) => setLink(e.target.value)}
+                        onChange={(e) => setRoomLink(e.target.value)}
                         label="Invite Link"
                         font="mono"
                         type="url"
                         inputClassName="pl-19.5"
                         className={`transition-all w-full duration-200 ease-out`}
-                        value={link}
+                        value={roomLink}
                         disableLabelAnimation={true}
                     >
                         <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
                             /join/
                         </div>
                     </Input>
-                    {validateLink(link) && (
+                    {validateLink(roomLink) && (
                         <div className="text-red-500" data-cursor="text">
-                            {validateLink(link)}
+                            {validateLink(roomLink)}
                         </div>
                     )}
-                    {linkError && (
+                    {roomLinkError && (
                         <div className="text-red-500" data-cursor="text">
-                            {linkError}
+                            {roomLinkError}
                         </div>
                     )}
                 </div>
@@ -507,14 +510,14 @@ export default function Page({
                     className="w-fit shrink-0"
                     padding="large"
                     iconName="qrCode"
-                    onClick={() => setShowRoomId(true)}
+                    onClick={() => setShowRoomCode(true)}
                 ></Button>
 
                 <Button
                     className="w-fit shrink-0"
-                    onClick={handleCopy}
+                    onClick={handleCopyRoomLink}
                     padding="large"
-                    iconName={showCopiedText ? "check" : "copy"}
+                    iconName={isLinkCopied ? "check" : "copy"}
                 ></Button>
             </div>
 
@@ -528,11 +531,11 @@ export default function Page({
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                 <Button
                     onClick={() => {
-                        if (password) setIsPrivate(true);
+                        if (roomPassword) setIsPrivate(true);
                         else setIsPrivate(false);
 
                         setNewPassword("");
-                        setConformPassword("");
+                        setConfirmPassword("");
 
                         setShowVisibilitySettings(true);
                     }}
@@ -575,16 +578,16 @@ export default function Page({
                     />
 
                     <Input
-                        value={conformPassword}
+                        value={confirmPassword}
                         disabled={!isPrivate}
-                        onChange={(e) => setConformPassword(e.target.value)}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         label="Conform Password"
                         type="password"
                     />
 
-                    {error && (
+                    {roomError && (
                         <div className="text-red-500" data-cursor="text">
-                            {error}
+                            {roomError}
                         </div>
                     )}
 
@@ -598,10 +601,10 @@ export default function Page({
                         </Button>
                         <Button
                             variant="primary"
-                            onClick={() => handleUpdate()}
+                            onClick={() => handleVisibilityUpdate()}
                             className="w-full"
                             iconName="check"
-                            loading={updatingVisibilitySettings}
+                            loading={isUpdatingVisibilitySettings}
                         >
                             Done
                         </Button>
@@ -612,11 +615,11 @@ export default function Page({
                 </Dialog>
 
                 <Button
-                    onClick={() => handleCopyJson()}
+                    onClick={() => handleExportWords()}
                     className=""
-                    iconName={showExportText ? "check" : "download"}
+                    iconName={isExported ? "check" : "download"}
                 >
-                    {!showExportText && "Export"}
+                    {!isExported && "Export"}
                 </Button>
 
                 <Button
@@ -644,7 +647,7 @@ export default function Page({
                         variant="danger"
                         iconName="trash"
                         className="w-full"
-                        onClick={() => deleteCurrentRoom()}
+                        onClick={() => handleDeleteRoom()}
                     >
                         Delete
                     </Button>
@@ -684,9 +687,9 @@ export default function Page({
                     <Button
                         onClick={() => {
                             setShowGenerationInput(!showGenerationInput);
-                            setPrompt("");
+                            setGenerationPrompt("");
                             setGenerationError("");
-                            setResponse([]);
+                            setGeneratedWords([]);
                             setShowImportInput(false);
                         }}
                         iconName="wandSparkles"
@@ -696,7 +699,7 @@ export default function Page({
                     <Button
                         onClick={() => {
                             setImportError("");
-                            setJson("");
+                            setImportData("");
                             setShowImportInput(!showImportInput);
                             setShowGenerationInput(false);
                         }}
@@ -757,21 +760,21 @@ export default function Page({
                     >
                         <div className="flex gap-4 w-full">
                             <Input
-                                value={prompt}
+                                value={generationPrompt}
                                 label="Theme"
-                                onChange={(e) => setPrompt(e.target.value)}
+                                onChange={(e) => setGenerationPrompt(e.target.value)}
                                 className="w-full"
                             />
                             <Button
-                                loading={generating}
-                                disabled={!prompt}
+                                loading={isGenerating}
+                                disabled={!generationPrompt}
                                 onClick={async () => {
-                                    setGenerating(true);
-                                    const response =
-                                        await generateWordsAction(prompt);
-                                    setGenerating(false);
+                                    setIsGenerating(true);
+                                    const generatedWords =
+                                        await generateWordsAction(generationPrompt);
+                                    setIsGenerating(false);
 
-                                    setResponse(response);
+                                    setGeneratedWords(generatedWords);
                                 }}
                                 iconName="arrowRight"
                                 variant="primary"
@@ -779,36 +782,36 @@ export default function Page({
                             />
                         </div>
 
-                        {!prompt && !response.length && (
+                        {!generationPrompt && !generatedWords.length && (
                             <div
                                 className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
                             >
-                                {EXAMPLES.map((item, index) => (
+                                {EXAMPLES.map((example, index) => (
                                     <Button
-                                        onClick={() => setPrompt(item)}
+                                        onClick={() => setGenerationPrompt(example)}
                                         className="w-full flex"
                                         padding="small"
                                         key={index}
                                     >
-                                        {item}
+                                        {example}
                                     </Button>
                                 ))}
                             </div>
                         )}
 
-                        {response.length !== 0 && (
+                        {generatedWords.length !== 0 && (
                             <div
                                 className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
                             >
-                                {response.map((item, index) => (
+                                {generatedWords.map((word, index) => (
                                     <div
                                         data-cursor="text"
                                         className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
                                         key={index}
                                     >
-                                        {item.jp}
+                                        {word.jp}
                                         <div className="w-full font-mono">
-                                            {item.en}
+                                            {word.en}
                                         </div>
                                     </div>
                                 ))}
@@ -827,17 +830,17 @@ export default function Page({
                                 variant="primary"
                                 className="w-full"
                                 iconName="plus"
-                                disabled={!response}
+                                disabled={!generatedWords}
                                 onClick={() => {
-                                    if (!response) return;
+                                    if (!generatedWords) return;
 
-                                    let parsedJson: Word[];
+                                    let parsedWords: Word[];
 
                                     try {
-                                        parsedJson = response.map(
-                                            (w: Word) => ({
-                                                jp: w.jp,
-                                                en: w.en,
+                                        parsedWords = generatedWords.map(
+                                            (word: Word) => ({
+                                                jp: word.jp,
+                                                en: word.en,
                                                 id: crypto.randomUUID(),
                                             }),
                                         );
@@ -846,9 +849,9 @@ export default function Page({
                                         return;
                                     }
 
-                                    const result = parsedJson as WordWithId[];
+                                    const generatedWordsWithId = parsedWords as WordWithId[];
 
-                                    setWords([...result, ...words]);
+                                    setWords([...generatedWordsWithId, ...words]);
                                     setShowGenerationInput(false);
                                 }}
                             >
@@ -879,11 +882,11 @@ export default function Page({
                             </Button>
                         </div>
                         <Input
-                            value={json}
+                            value={importData}
                             variant="textarea"
                             inputClassName="resize-none h-48"
                             font="mono"
-                            onChange={(e) => setJson(e.target.value)}
+                            onChange={(e) => setImportData(e.target.value)}
                             label="JSON Data"
                         />
                         <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
@@ -898,7 +901,7 @@ export default function Page({
                                 variant="primary"
                                 className="w-full"
                                 iconName="plus"
-                                onClick={() => importJson()}
+                                onClick={() => handleImportWords()}
                             >
                                 Import
                             </Button>
@@ -914,7 +917,7 @@ export default function Page({
                             onDragEnd={handleDragEnd}
                         >
                             <SortableContext
-                                items={words.map((w) => w.id)}
+                                items={words.map((word) => word.id)}
                                 strategy={verticalListSortingStrategy}
                             >
                                 {words.map((word, index) => (
@@ -928,16 +931,16 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (w, i) =>
-                                                                        i ===
+                                                                    (currentWord, wordIndex) =>
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...w,
+                                                                                  ...currentWord,
                                                                                   jp: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : w,
+                                                                            : currentWord,
                                                                 );
                                                             setWords(newWords);
                                                         }}
@@ -968,16 +971,16 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (w, i) =>
-                                                                        i ===
+                                                                    (currentWord, wordIndex) =>
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...w,
+                                                                                  ...currentWord,
                                                                                   en: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : w,
+                                                                            : currentWord,
                                                                 );
                                                             setWords(newWords);
                                                         }}
@@ -1021,8 +1024,9 @@ export default function Page({
                                                     onClick={() => {
                                                         const newWords =
                                                             words.filter(
-                                                                (_, i) =>
-                                                                    i !== index,
+                                                                (_, wordIndex) =>
+                                                                    wordIndex !==
+                                                                    index,
                                                             );
                                                         setWords(newWords);
                                                     }}
@@ -1041,18 +1045,18 @@ export default function Page({
             )}
 
             <div
-                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomId &&
+                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
+                    !showRoomCode &&
                     "opacity-0 scale-95 blur-md pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
-                onClick={() => setShowRoomId(false)}
+                onClick={() => setShowRoomCode(false)}
             >
                 <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
                 </div>
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
-                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
+                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink}
                         size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
@@ -1061,7 +1065,7 @@ export default function Page({
                     <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
                     <div className="flex items-center justify-center">
                         <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-3xl sm:text-4xl">
-                            {link}
+                            {roomLink}
                         </div>
                     </div>
                 </div>
