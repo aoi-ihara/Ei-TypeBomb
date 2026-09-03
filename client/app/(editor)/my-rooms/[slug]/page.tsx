@@ -34,6 +34,7 @@ import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
+import Collapsible from "@/components/ui/Collapsible";
 
 type Word = {
     jp: string;
@@ -253,26 +254,22 @@ export default function Page({
         let parsedJson: Word[];
 
         try {
-            parsedJson = JSON.parse(json);
+            parsedJson = JSON.parse(json).map((w: Word) => ({
+                jp: w.jp,
+                en: w.en,
+                id: crypto.randomUUID(),
+            }));
         } catch {
             setImportError("Invalid JSON format.");
             return;
         }
 
-        const newWords = [...words, ...parsedJson];
+        const result = parsedJson as WordWithId[];
+        const newWords = [...result, ...words];
+        setWords(newWords);
 
-        setImporting(true);
-        const result = await updateRoomFromId({
-            id: id,
-            words: newWords,
-        });
-        setImporting(false);
-
-        if (result) {
-            setImportError(result);
-        } else {
-            router.push(`/my-rooms/${id}`);
-        }
+        setJson("");
+        setShowImportInput(false);
     };
 
     if (error) {
@@ -543,170 +540,185 @@ export default function Page({
                 </div>
             )}
 
-            {showImportInput && (
-                <div className="flex flex-col rounded-3xl -mx-4 border border-(--color-border) p-4 gap-4 animate-appear origin-top">
-                    <div data-cursor="text">
-                        Each object must include a &quot;jp&quot; field for the
-                        Japanese word and an &quot;en&quot; field for the
-                        English word.
-                        <Button
-                            onClick={() => setShowImportDialog(true)}
-                            variant="text"
-                        >
-                            Learn More
-                        </Button>
-                    </div>
-                    <Input
-                        value={json}
-                        variant="textarea"
-                        inputClassName="resize-none h-48"
-                        font="mono"
-                        onChange={(e) => setJson(e.target.value)}
-                        label="JSON Data"
-                    />
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                        <Button
-                            onClick={() => setShowImportInput(false)}
-                            className="w-full"
-                            iconName="x"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="primary"
-                            className="w-full"
-                            iconName="plus"
-                            onClick={() => importJson()}
-                            loading={importing}
-                        >
-                            Import
-                        </Button>
-                    </div>
-                    {importError && (
-                        <div className="text-red-500">{importError}</div>
-                    )}
-                </div>
-            )}
-
             {words && (
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
-                    <SortableContext
-                        items={words.map((w) => w.id)}
-                        strategy={verticalListSortingStrategy}
+                <div className="flex flex-col">
+                    <Collapsible
+                        open={showImportInput}
+                        className={`flex ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl -mx-4 border border-(--color-border) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
-                        {words.map((word, index) => (
-                            <SortableItem key={word.id} id={word.id}>
-                                <div className="flex items-center gap-4 w-full">
-                                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
-                                        <div className="flex flex-col gap-4">
-                                            <Input
-                                                label="Label"
-                                                value={word.jp}
-                                                onChange={(e) => {
-                                                    const newWords = words.map(
-                                                        (w, i) =>
-                                                            i === index
-                                                                ? {
-                                                                      ...w,
-                                                                      jp: e
-                                                                          .target
-                                                                          .value,
-                                                                  }
-                                                                : w,
-                                                    );
-                                                    setWords(newWords);
-                                                }}
-                                            />
-                                            {word.jp.length > 32 && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    It is too long.
+                        <div data-cursor="text">
+                            Each object must include a &quot;jp&quot; field for
+                            the Japanese word and an &quot;en&quot; field for
+                            the English word.
+                            <Button
+                                onClick={() => setShowImportDialog(true)}
+                                variant="text"
+                            >
+                                Learn More
+                            </Button>
+                        </div>
+                        <Input
+                            value={json}
+                            variant="textarea"
+                            inputClassName="resize-none h-48"
+                            font="mono"
+                            onChange={(e) => setJson(e.target.value)}
+                            label="JSON Data"
+                        />
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                            <Button
+                                onClick={() => setShowImportInput(false)}
+                                className="w-full"
+                                iconName="x"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="w-full"
+                                iconName="plus"
+                                onClick={() => importJson()}
+                                loading={importing}
+                            >
+                                Import
+                            </Button>
+                        </div>
+                        {importError && (
+                            <div className="text-red-500">{importError}</div>
+                        )}
+                    </Collapsible>
+                    <div className="flex flex-col gap-4">
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <SortableContext
+                                items={words.map((w) => w.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {words.map((word, index) => (
+                                    <SortableItem key={word.id} id={word.id}>
+                                        <div className="flex items-center gap-4 w-full">
+                                            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                                <div className="flex flex-col gap-4">
+                                                    <Input
+                                                        label="Label"
+                                                        value={word.jp}
+                                                        onChange={(e) => {
+                                                            const newWords =
+                                                                words.map(
+                                                                    (w, i) =>
+                                                                        i ===
+                                                                        index
+                                                                            ? {
+                                                                                  ...w,
+                                                                                  jp: e
+                                                                                      .target
+                                                                                      .value,
+                                                                              }
+                                                                            : w,
+                                                                );
+                                                            setWords(newWords);
+                                                        }}
+                                                    />
+                                                    {word.jp.length > 32 && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            It is too long.
+                                                        </div>
+                                                    )}
+                                                    {!word.jp && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            This field is
+                                                            required.
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                            {!word.jp && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    This field is required.
+                                                <div className="flex flex-col gap-4">
+                                                    <Input
+                                                        label="Correct Answer"
+                                                        font="mono"
+                                                        value={word.en}
+                                                        onChange={(e) => {
+                                                            const newWords =
+                                                                words.map(
+                                                                    (w, i) =>
+                                                                        i ===
+                                                                        index
+                                                                            ? {
+                                                                                  ...w,
+                                                                                  en: e
+                                                                                      .target
+                                                                                      .value,
+                                                                              }
+                                                                            : w,
+                                                                );
+                                                            setWords(newWords);
+                                                        }}
+                                                    />
+                                                    {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
+                                                        word.en,
+                                                    ) &&
+                                                        word.en && (
+                                                            <div className="text-red-500">
+                                                                You can use only
+                                                                letters,
+                                                                numbers, spaces,
+                                                                and the
+                                                                following
+                                                                punctuation: .,
+                                                                ,, !, ?, and -.
+                                                            </div>
+                                                        )}
+                                                    {word.en.length > 32 && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            It is too long.
+                                                        </div>
+                                                    )}
+                                                    {!word.en && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            This field is
+                                                            required.
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col gap-4">
-                                            <Input
-                                                label="Correct Answer"
-                                                font="mono"
-                                                value={word.en}
-                                                onChange={(e) => {
-                                                    const newWords = words.map(
-                                                        (w, i) =>
-                                                            i === index
-                                                                ? {
-                                                                      ...w,
-                                                                      en: e
-                                                                          .target
-                                                                          .value,
-                                                                  }
-                                                                : w,
-                                                    );
-                                                    setWords(newWords);
-                                                }}
-                                            />
-                                            {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
-                                                word.en,
-                                            ) &&
-                                                word.en && (
-                                                    <div className="text-red-500">
-                                                        You can use only
-                                                        letters, numbers,
-                                                        spaces, and the
-                                                        following punctuation:
-                                                        ., ,, !, ?, and -.
-                                                    </div>
-                                                )}
-                                            {word.en.length > 32 && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    It is too long.
-                                                </div>
-                                            )}
-                                            {!word.en && (
-                                                <div
-                                                    className="text-red-500"
-                                                    data-cursor="text"
-                                                >
-                                                    This field is required.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                                            </div>
 
-                                    <div>
-                                        <Button
-                                            onClick={() => {
-                                                const newWords = words.filter(
-                                                    (_, i) => i !== index,
-                                                );
-                                                setWords(newWords);
-                                            }}
-                                            className="h-fit"
-                                            padding="large"
-                                            iconName="trash"
-                                        />
-                                    </div>
-                                </div>
-                            </SortableItem>
-                        ))}
-                    </SortableContext>
-                </DndContext>
+                                            <div>
+                                                <Button
+                                                    onClick={() => {
+                                                        const newWords =
+                                                            words.filter(
+                                                                (_, i) =>
+                                                                    i !== index,
+                                                            );
+                                                        setWords(newWords);
+                                                    }}
+                                                    className="h-fit"
+                                                    padding="large"
+                                                    iconName="trash"
+                                                />
+                                            </div>
+                                        </div>
+                                    </SortableItem>
+                                ))}
+                            </SortableContext>
+                        </DndContext>
+                    </div>
+                </div>
             )}
 
             <div
