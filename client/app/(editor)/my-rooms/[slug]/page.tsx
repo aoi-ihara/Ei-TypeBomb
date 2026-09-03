@@ -94,12 +94,12 @@ export default function Page({
     const [link, setLink] = useState("");
     const [linkError, setLinkError] = useState("");
     const [showRoomId, setShowRoomId] = useState(false);
-    const [showGenerationWindow, setShowGeneratingWindow] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [json, setJson] = useState("");
     const [importError, setImportError] = useState("");
     const [importing, setImporting] = useState(false);
+    const [showImportInput, setShowImportInput] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -494,7 +494,7 @@ export default function Page({
                     />
 
                     <Button
-                        onClick={() => setShowImportDialog(true)}
+                        onClick={() => setShowImportInput(!showImportInput)}
                         iconName="upload"
                         padding="large"
                     />
@@ -505,7 +505,7 @@ export default function Page({
                         open={showImportDialog}
                         onClose={() => setShowImportDialog(false)}
                     >
-                        <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                        <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
                                 Please make sure your JSON file follows this
                                 format:
@@ -531,36 +531,60 @@ export default function Page({
                                 field for the English word.
                             </div>
                         </div>
-                        <Input
-                            value={json}
-                            variant="textarea"
-                            inputClassName="resize-none h-64"
-                            font="mono"
-                            onChange={(e) => setJson(e.target.value)}
-                            label="JSON Data"
-                        />
-                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                            <Button
-                                onClick={() => setShowImportDialog(false)}
-                                className="w-full"
-                                iconName="x"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="primary"
-                                className="w-full"
-                                iconName="plus"
-                                onClick={() => importJson()}
-                                loading={importing}
-                            >
-                                Import
-                            </Button>
-                        </div>
-                        {importError && (
-                            <div className="text-red-500">{importError}</div>
-                        )}
+                        <Button
+                            onClick={() => setShowImportDialog(false)}
+                            variant="primary"
+                            className="w-full"
+                            iconName="check"
+                        >
+                            Done
+                        </Button>
                     </Dialog>
+                </div>
+            )}
+
+            {showImportInput && (
+                <div className="flex flex-col rounded-3xl -mx-4 border border-(--color-border) p-4 gap-4 animate-appear origin-top">
+                    <div data-cursor="text">
+                        Each object must include a &quot;jp&quot; field for the
+                        Japanese word and an &quot;en&quot; field for the
+                        English word.
+                        <Button
+                            onClick={() => setShowImportDialog(true)}
+                            variant="text"
+                        >
+                            Learn More
+                        </Button>
+                    </div>
+                    <Input
+                        value={json}
+                        variant="textarea"
+                        inputClassName="resize-none h-48"
+                        font="mono"
+                        onChange={(e) => setJson(e.target.value)}
+                        label="JSON Data"
+                    />
+                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                        <Button
+                            onClick={() => setShowImportInput(false)}
+                            className="w-full"
+                            iconName="x"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            className="w-full"
+                            iconName="plus"
+                            onClick={() => importJson()}
+                            loading={importing}
+                        >
+                            Import
+                        </Button>
+                    </div>
+                    {importError && (
+                        <div className="text-red-500">{importError}</div>
+                    )}
                 </div>
             )}
 
