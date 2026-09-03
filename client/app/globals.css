@@ -139,13 +139,3 @@ body {
         transform: translateX(0);
     }
 }
-
-@keyframes resultAnimation {
-    0% {
-        transform: scale(0.75);
-        filter: blur(16px);
-        opacity: 0;
-    }
-    100% {
-    }
-}
