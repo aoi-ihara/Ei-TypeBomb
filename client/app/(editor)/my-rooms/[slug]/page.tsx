@@ -404,8 +404,165 @@ export default function Page({
                 data-cursor="text"
                 className="font-bold flex w-fit text-lg mt-4"
             >
+                Settings
+            </div>
+
+            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+                <Button
+                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    className=""
+                    iconName="eye"
+                >
+                    Visibility
+                </Button>
+
+                <Button
+                    onClick={() => router.push(`/my-rooms/${slug}/export`)}
+                    className=""
+                    iconName="download"
+                >
+                    Export
+                </Button>
+
+                <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="danger"
+                    className=""
+                    iconName="trash"
+                >
+                    Delete Room
+                </Button>
+                <Dialog
+                    title="Are you sure you want to delete this room?"
+                    description="This action cannot be undone."
+                    open={showDeleteDialog}
+                    onClose={() => setShowDeleteDialog(false)}
+                >
+                    <Button
+                        iconName="x"
+                        className="w-full"
+                        onClick={() => setShowDeleteDialog(false)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        iconName="trash"
+                        className="w-full"
+                        onClick={() => deleteCurrentRoom()}
+                    >
+                        Delete
+                    </Button>
+                </Dialog>
+            </div>
+
+            <div
+                data-cursor="text"
+                className="font-bold flex w-fit text-lg mt-4"
+            >
                 Words
             </div>
+
+            {words && (
+                <div className="w-full flex gap-4">
+                    <Button
+                        onClick={() => {
+                            setWords([
+                                {
+                                    id: crypto.randomUUID(),
+                                    en: "",
+                                    jp: "",
+                                },
+                                ...words,
+                            ]);
+
+                            posthog.capture("word_added");
+                        }}
+                        className="w-full"
+                        padding="large"
+                        iconName="plus"
+                    >
+                        Add
+                    </Button>
+
+                    <Button
+                        onClick={() =>
+                            router.push(`/my-rooms/${slug}/generate`)
+                        }
+                        iconName="wandSparkles"
+                        padding="large"
+                    />
+
+                    <Button
+                        onClick={() => setShowImportDialog(true)}
+                        iconName="upload"
+                        padding="large"
+                    />
+                    <Dialog
+                        title="Import from JSON"
+                        size="large"
+                        alignment="vertical"
+                        open={showImportDialog}
+                        onClose={() => setShowImportDialog(false)}
+                    >
+                        <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                            <div data-cursor="text">
+                                Please make sure your JSON file follows this
+                                format:
+                            </div>
+                            <div data-cursor="text">
+                                {" "}
+                                <pre className="text-sm">
+                                    {`[
+    {
+        "jp": "りんご",
+        "en": "apple"
+    },
+    {
+        "jp": "ねこ",
+        "en": "cat"
+    }
+]`}
+                                </pre>
+                            </div>
+                            <div className="opacity-50" data-cursor="text">
+                                Each object must include a &quot;jp&quot; field
+                                for the Japanese word and an &quot;en&quot;
+                                field for the English word.
+                            </div>
+                        </div>
+                        <Input
+                            value={json}
+                            variant="textarea"
+                            inputClassName="resize-none h-64"
+                            font="mono"
+                            onChange={(e) => setJson(e.target.value)}
+                            label="JSON Data"
+                        />
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                            <Button
+                                onClick={() => setShowImportDialog(false)}
+                                className="w-full"
+                                iconName="x"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="primary"
+                                className="w-full"
+                                iconName="plus"
+                                onClick={() => importJson()}
+                                loading={importing}
+                            >
+                                Import
+                            </Button>
+                        </div>
+                        {importError && (
+                            <div className="text-red-500">{importError}</div>
+                        )}
+                    </Dialog>
+                </div>
+            )}
 
             {words && (
                 <DndContext
@@ -527,163 +684,6 @@ export default function Page({
                     </SortableContext>
                 </DndContext>
             )}
-
-            {words && (
-                <div className="w-full flex gap-4">
-                    <Button
-                        onClick={() => {
-                            setWords([
-                                ...words,
-                                {
-                                    id: crypto.randomUUID(),
-                                    en: "",
-                                    jp: "",
-                                },
-                            ]);
-
-                            posthog.capture("word_added");
-                        }}
-                        className="w-full"
-                        padding="large"
-                        iconName="plus"
-                    >
-                        Add
-                    </Button>
-
-                    <Button
-                        onClick={() =>
-                            router.push(`/my-rooms/${slug}/generate`)
-                        }
-                        iconName="wandSparkles"
-                        padding="large"
-                    />
-
-                    <Button
-                        onClick={() => setShowImportDialog(true)}
-                        iconName="upload"
-                        padding="large"
-                    />
-                    <Dialog
-                        title="Import from JSON"
-                        size="large"
-                        alignment="vertical"
-                        open={showImportDialog}
-                        onClose={() => setShowImportDialog(false)}
-                    >
-                        <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
-                            <div data-cursor="text">
-                                Please make sure your JSON file follows this
-                                format:
-                            </div>
-                            <div data-cursor="text">
-                                {" "}
-                                <pre className="text-sm">
-                                    {`[
-    {
-        "jp": "りんご",
-        "en": "apple"
-    },
-    {
-        "jp": "ねこ",
-        "en": "cat"
-    }
-]`}
-                                </pre>
-                            </div>
-                            <div className="opacity-50" data-cursor="text">
-                                Each object must include a &quot;jp&quot; field
-                                for the Japanese word and an &quot;en&quot;
-                                field for the English word.
-                            </div>
-                        </div>
-                        <Input
-                            value={json}
-                            variant="textarea"
-                            inputClassName="resize-none h-64"
-                            font="mono"
-                            onChange={(e) => setJson(e.target.value)}
-                            label="JSON Data"
-                        />
-                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                            <Button
-                                onClick={() => setShowImportDialog(false)}
-                                className="w-full"
-                                iconName="x"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="primary"
-                                className="w-full"
-                                iconName="plus"
-                                onClick={() => importJson()}
-                                loading={importing}
-                            >
-                                Import
-                            </Button>
-                        </div>
-                        {importError && (
-                            <div className="text-red-500">{importError}</div>
-                        )}
-                    </Dialog>
-                </div>
-            )}
-
-            <div
-                data-cursor="text"
-                className="font-bold flex w-fit text-lg mt-4"
-            >
-                Settings
-            </div>
-
-            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
-                    className=""
-                    iconName="eye"
-                >
-                    Visibility
-                </Button>
-
-                <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/export`)}
-                    className=""
-                    iconName="download"
-                >
-                    Export
-                </Button>
-
-                <Button
-                    onClick={() => setShowDeleteDialog(true)}
-                    variant="danger"
-                    className=""
-                    iconName="trash"
-                >
-                    Delete Room
-                </Button>
-                <Dialog
-                    title="Are you sure you want to delete this room?"
-                    description="This action cannot be undone."
-                    open={showDeleteDialog}
-                    onClose={() => setShowDeleteDialog(false)}
-                >
-                    <Button
-                        iconName="x"
-                        className="w-full"
-                        onClick={() => setShowDeleteDialog(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="danger"
-                        iconName="trash"
-                        className="w-full"
-                        onClick={() => deleteCurrentRoom()}
-                    >
-                        Delete
-                    </Button>
-                </Dialog>
-            </div>
 
             <div
                 className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
