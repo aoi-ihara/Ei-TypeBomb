@@ -50,7 +50,7 @@ export default function Dialog({
 
     return (
         <div
-            className={`fixed inset-0 z-2 flex items-center justify-center ${!open && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+            className={`fixed inset-0 z-4 flex items-center justify-center ${!open && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="dialog-title"
@@ -65,7 +65,7 @@ export default function Dialog({
 
             <div className="max-w-full w-full flex justify-center max-h-dvh p-4 overflow-scroll">
                 <div
-                    className={`relative w-full ${size === "middle" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
+                    className={`relative z-8 w-full ${size === "middle" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
                     onClick={(event) => event.stopPropagation()}
                 >
                     <div className="flex flex-col gap-2 pt-1 px-3">
