@@ -121,12 +121,14 @@ export default function Loading() {
             />
 
             {showPasswordField && (
-                <Input
-                    value={roomPassword}
-                    type="password"
-                    onChange={(e) => setRoomPassword(e.target.value)}
-                    label="Room Password"
-                />
+                <div className="animate-appear w-full">
+                    <Input
+                        value={roomPassword}
+                        type="password"
+                        onChange={(e) => setRoomPassword(e.target.value)}
+                        label="Room Password"
+                    />
+                </div>
             )}
 
             <Button

@@ -20,7 +20,9 @@ export default function Profile() {
             if (!result?.rooms) return;
 
             setRooms(result.rooms);
-            posthog.capture("my_rooms_opened", { room_count: result.rooms.length });
+            posthog.capture("my_rooms_opened", {
+                room_count: result.rooms.length,
+            });
         };
 
         fetchUser();
@@ -33,7 +35,12 @@ export default function Profile() {
     };
 
     return (
-        <Shell title="My Rooms" size="large" loading={!rooms}>
+        <Shell
+            title="My Rooms"
+            size="large"
+            loading={!rooms}
+            animateAppear={true}
+        >
             {rooms && rooms.length !== 0 && (
                 <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                     {rooms

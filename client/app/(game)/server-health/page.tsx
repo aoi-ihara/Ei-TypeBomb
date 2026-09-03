@@ -18,7 +18,7 @@ function ServerStatus({
     return (
         <div
             data-cursor="text"
-            className="font-bold flex gap-2 justify-between w-full"
+            className="font-bold animate-appear flex gap-2 justify-between w-full"
         >
             {name}
 
@@ -143,7 +143,11 @@ export default function ServerHealth() {
                 latency={backup.latency}
             />
 
-            <Button onClick={handleRefresh} className="w-full">
+            <Button
+                iconName="rotateCw"
+                onClick={handleRefresh}
+                className="w-full"
+            >
                 Refresh
             </Button>
         </Shell>

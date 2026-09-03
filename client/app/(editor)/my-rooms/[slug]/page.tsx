@@ -98,6 +98,8 @@ export default function Page({
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [json, setJson] = useState("");
+    const [importError, setImportError] = useState("");
+    const [importing, setImporting] = useState(false);
 
     const isLoadedRef = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -238,334 +240,345 @@ export default function Page({
         }, 3000);
     };
 
+    const importJson = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
+
+        if (!id || words === null) return;
+
+        if (!json) {
+            setImportError("JSON data is required.");
+            return;
+        }
+
+        let parsedJson: Word[];
+
+        try {
+            parsedJson = JSON.parse(json);
+        } catch {
+            setImportError("Invalid JSON format.");
+            return;
+        }
+
+        const newWords = [...words, ...parsedJson];
+
+        setImporting(true);
+        const result = await updateRoomFromId({
+            id: id,
+            words: newWords,
+        });
+        setImporting(false);
+
+        if (result) {
+            setImportError(result);
+        } else {
+            router.push(`/my-rooms/${id}`);
+        }
+    };
+
     if (error) {
         notFound();
     }
 
     return (
-        <Shell className="flex flex-col gap-4" size="large">
-            {id ? (
-                <>
-                    <div className="flex mt-16 mb-4 items-center w-full">
-                        <Button
-                            onClick={() => router.push("/my-rooms")}
-                            variant="text"
-                            className="h-full"
-                        >
-                            <div className="w-8 h-10 flex justify-center items-center">
-                                <Icon name="arrowLeft" />
-                            </div>
-                        </Button>
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/visibility`)
-                            }
-                            variant="text"
-                            className="h-full"
-                        >
-                            <div className="w-8 h-10 flex justify-center items-center">
-                                {password ? (
-                                    <Icon name="lock" />
-                                ) : (
-                                    <Icon name="earth" />
-                                )}
-                            </div>
-                        </Button>
-                        <input
-                            className="w-full outline-none text-2xl font-bold font-mono"
-                            value={title}
-                            placeholder="Room Title"
-                            data-cursor="text"
-                            onChange={(e) => setTitle(e.target.value)}
-                        />
+        <Shell
+            animateAppear={true}
+            loading={!id}
+            className="flex flex-col gap-4"
+            size="large"
+        >
+            <div className="flex mt-16 mb-4 items-center w-full">
+                <Button
+                    onClick={() => router.push("/my-rooms")}
+                    variant="text"
+                    className="h-full"
+                >
+                    <div className="w-8 h-10 flex justify-center items-center">
+                        <Icon name="arrowLeft" />
                     </div>
-                    {validateTitle(title) && (
+                </Button>
+                <Button
+                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    variant="text"
+                    className="h-full"
+                >
+                    <div className="w-8 h-10 flex justify-center items-center">
+                        {password ? (
+                            <Icon name="lock" />
+                        ) : (
+                            <Icon name="earth" />
+                        )}
+                    </div>
+                </Button>
+                <input
+                    className="w-full outline-none text-2xl font-bold font-mono"
+                    value={title}
+                    placeholder="Room Title"
+                    data-cursor="text"
+                    onChange={(e) => setTitle(e.target.value)}
+                />
+            </div>
+            {validateTitle(title) && (
+                <div className="text-red-500" data-cursor="text">
+                    {validateTitle(title)}
+                </div>
+            )}
+
+            <div data-cursor="text" className="font-bold flex w-fit text-lg">
+                General
+            </div>
+
+            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                <div className="flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setExplanation(e.target.value)}
+                        label="Explanation"
+                        value={explanation}
+                    />
+                    {validateExplanation(explanation) && (
                         <div className="text-red-500" data-cursor="text">
-                            {validateTitle(title)}
+                            {validateExplanation(explanation)}
                         </div>
                     )}
+                </div>
+                <div className="flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setMaxPlayers(e.target.value)}
+                        label="Max Players"
+                        type="number"
+                        min={2}
+                        max={8}
+                        value={maxPlayers}
+                    />
+                    {validateMaxPlayers(Number(maxPlayers)) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateMaxPlayers(Number(maxPlayers))}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg"
+            <div className="flex gap-4 w-full">
+                <div className="w-full flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setLink(e.target.value)}
+                        label="Invite Link"
+                        font="mono"
+                        type="url"
+                        inputClassName="pl-19.5"
+                        className={`transition-all w-full duration-200 ease-out`}
+                        value={link}
+                        disableLabelAnimation={true}
                     >
-                        General
-                    </div>
-
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                        <div className="flex flex-col gap-4">
-                            <Input
-                                onChange={(e) => setExplanation(e.target.value)}
-                                label="Explanation"
-                                value={explanation}
-                            />
-                            {validateExplanation(explanation) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateExplanation(explanation)}
-                                </div>
-                            )}
+                        <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
+                            /join/
                         </div>
-                        <div className="flex flex-col gap-4">
-                            <Input
-                                onChange={(e) => setMaxPlayers(e.target.value)}
-                                label="Max Players"
-                                type="number"
-                                min={2}
-                                max={8}
-                                value={maxPlayers}
-                            />
-                            {validateMaxPlayers(Number(maxPlayers)) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateMaxPlayers(Number(maxPlayers))}
-                                </div>
-                            )}
+                    </Input>
+                    {validateLink(link) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateLink(link)}
                         </div>
-                    </div>
-
-                    <div className="flex gap-4 w-full">
-                        <div className="w-full flex flex-col gap-4">
-                            <Input
-                                onChange={(e) => setLink(e.target.value)}
-                                label="Invite Link"
-                                font="mono"
-                                type="url"
-                                inputClassName="pl-19.5"
-                                className={`transition-all w-full duration-200 ease-out`}
-                                value={link}
-                                disableLabelAnimation={true}
-                            >
-                                <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
-                                    /join/
-                                </div>
-                            </Input>
-                            {validateLink(link) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateLink(link)}
-                                </div>
-                            )}
-                            {linkError && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {linkError}
-                                </div>
-                            )}
+                    )}
+                    {linkError && (
+                        <div className="text-red-500" data-cursor="text">
+                            {linkError}
                         </div>
+                    )}
+                </div>
 
-                        <Button
-                            className="w-fit shrink-0"
-                            padding="large"
-                            iconName="qrCode"
-                            onClick={() => setShowRoomId(true)}
-                        ></Button>
+                <Button
+                    className="w-fit shrink-0"
+                    padding="large"
+                    iconName="qrCode"
+                    onClick={() => setShowRoomId(true)}
+                ></Button>
 
-                        <Button
-                            className="w-fit shrink-0"
-                            onClick={handleCopy}
-                            padding="large"
-                            iconName={showCopiedText ? "check" : "copy"}
-                        ></Button>
-                    </div>
+                <Button
+                    className="w-fit shrink-0"
+                    onClick={handleCopy}
+                    padding="large"
+                    iconName={showCopiedText ? "check" : "copy"}
+                ></Button>
+            </div>
 
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg mt-4"
+            <div
+                data-cursor="text"
+                className="font-bold flex w-fit text-lg mt-4"
+            >
+                Words
+            </div>
+
+            {words && (
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={words.map((w) => w.id)}
+                        strategy={verticalListSortingStrategy}
                     >
-                        Words
-                    </div>
-
-                    {words && (
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
-                        >
-                            <SortableContext
-                                items={words.map((w) => w.id)}
-                                strategy={verticalListSortingStrategy}
-                            >
-                                {words.map((word, index) => (
-                                    <SortableItem key={word.id} id={word.id}>
-                                        <div className="flex items-center gap-4 w-full">
-                                            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
-                                                <div className="flex flex-col gap-4">
-                                                    <Input
-                                                        label="Label"
-                                                        value={word.jp}
-                                                        onChange={(e) => {
-                                                            const newWords =
-                                                                words.map(
-                                                                    (w, i) =>
-                                                                        i ===
-                                                                        index
-                                                                            ? {
-                                                                                  ...w,
-                                                                                  jp: e
-                                                                                      .target
-                                                                                      .value,
-                                                                              }
-                                                                            : w,
-                                                                );
-                                                            setWords(newWords);
-                                                        }}
-                                                    />
-                                                    {word.jp.length > 32 && (
-                                                        <div
-                                                            className="text-red-500"
-                                                            data-cursor="text"
-                                                        >
-                                                            It is too long.
-                                                        </div>
-                                                    )}
-                                                    {!word.jp && (
-                                                        <div
-                                                            className="text-red-500"
-                                                            data-cursor="text"
-                                                        >
-                                                            This field is
-                                                            required.
-                                                        </div>
-                                                    )}
+                        {words.map((word, index) => (
+                            <SortableItem key={word.id} id={word.id}>
+                                <div className="flex items-center gap-4 w-full">
+                                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                        <div className="flex flex-col gap-4">
+                                            <Input
+                                                label="Label"
+                                                value={word.jp}
+                                                onChange={(e) => {
+                                                    const newWords = words.map(
+                                                        (w, i) =>
+                                                            i === index
+                                                                ? {
+                                                                      ...w,
+                                                                      jp: e
+                                                                          .target
+                                                                          .value,
+                                                                  }
+                                                                : w,
+                                                    );
+                                                    setWords(newWords);
+                                                }}
+                                            />
+                                            {word.jp.length > 32 && (
+                                                <div
+                                                    className="text-red-500"
+                                                    data-cursor="text"
+                                                >
+                                                    It is too long.
                                                 </div>
-                                                <div className="flex flex-col gap-4">
-                                                    <Input
-                                                        label="Correct Answer"
-                                                        font="mono"
-                                                        value={word.en}
-                                                        onChange={(e) => {
-                                                            const newWords =
-                                                                words.map(
-                                                                    (w, i) =>
-                                                                        i ===
-                                                                        index
-                                                                            ? {
-                                                                                  ...w,
-                                                                                  en: e
-                                                                                      .target
-                                                                                      .value,
-                                                                              }
-                                                                            : w,
-                                                                );
-                                                            setWords(newWords);
-                                                        }}
-                                                    />
-                                                    {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
-                                                        word.en,
-                                                    ) &&
-                                                        word.en && (
-                                                            <div className="text-red-500">
-                                                                You can use only
-                                                                letters,
-                                                                numbers, spaces,
-                                                                and the
-                                                                following
-                                                                punctuation: .,
-                                                                ,, !, ?, and -.
-                                                            </div>
-                                                        )}
-                                                    {word.en.length > 32 && (
-                                                        <div
-                                                            className="text-red-500"
-                                                            data-cursor="text"
-                                                        >
-                                                            It is too long.
-                                                        </div>
-                                                    )}
-                                                    {!word.en && (
-                                                        <div
-                                                            className="text-red-500"
-                                                            data-cursor="text"
-                                                        >
-                                                            This field is
-                                                            required.
-                                                        </div>
-                                                    )}
+                                            )}
+                                            {!word.jp && (
+                                                <div
+                                                    className="text-red-500"
+                                                    data-cursor="text"
+                                                >
+                                                    This field is required.
                                                 </div>
-                                            </div>
-
-                                            <div>
-                                                <Button
-                                                    onClick={() => {
-                                                        const newWords =
-                                                            words.filter(
-                                                                (_, i) =>
-                                                                    i !== index,
-                                                            );
-                                                        setWords(newWords);
-                                                    }}
-                                                    className="h-fit"
-                                                    padding="large"
-                                                    iconName="trash"
-                                                />
-                                            </div>
+                                            )}
                                         </div>
-                                    </SortableItem>
-                                ))}
-                            </SortableContext>
-                        </DndContext>
-                    )}
-
-                    {words && (
-                        <div className="w-full flex gap-4">
-                            <Button
-                                onClick={() => {
-                                    setWords([
-                                        ...words,
-                                        {
-                                            id: crypto.randomUUID(),
-                                            en: "",
-                                            jp: "",
-                                        },
-                                    ]);
-
-                                    posthog.capture("word_added");
-                                }}
-                                className="w-full"
-                                padding="large"
-                                iconName="plus"
-                            >
-                                Add
-                            </Button>
-
-                            <Button
-                                onClick={() =>
-                                    router.push(`/my-rooms/${slug}/generate`)
-                                }
-                                iconName="wandSparkles"
-                                padding="large"
-                            />
-
-                            <Button
-                                onClick={() => setShowImportDialog(true)}
-                                iconName="upload"
-                                padding="large"
-                            />
-                            <Dialog
-                                title="Import from JSON"
-                                size="large"
-                                alignment="vertical"
-                                open={showImportDialog}
-                                onClose={() => setShowImportDialog(false)}
-                            >
-                                <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
-                                    <div data-cursor="text">
-                                        Please make sure your JSON file follows
-                                        this format:
+                                        <div className="flex flex-col gap-4">
+                                            <Input
+                                                label="Correct Answer"
+                                                font="mono"
+                                                value={word.en}
+                                                onChange={(e) => {
+                                                    const newWords = words.map(
+                                                        (w, i) =>
+                                                            i === index
+                                                                ? {
+                                                                      ...w,
+                                                                      en: e
+                                                                          .target
+                                                                          .value,
+                                                                  }
+                                                                : w,
+                                                    );
+                                                    setWords(newWords);
+                                                }}
+                                            />
+                                            {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
+                                                word.en,
+                                            ) &&
+                                                word.en && (
+                                                    <div className="text-red-500">
+                                                        You can use only
+                                                        letters, numbers,
+                                                        spaces, and the
+                                                        following punctuation:
+                                                        ., ,, !, ?, and -.
+                                                    </div>
+                                                )}
+                                            {word.en.length > 32 && (
+                                                <div
+                                                    className="text-red-500"
+                                                    data-cursor="text"
+                                                >
+                                                    It is too long.
+                                                </div>
+                                            )}
+                                            {!word.en && (
+                                                <div
+                                                    className="text-red-500"
+                                                    data-cursor="text"
+                                                >
+                                                    This field is required.
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div data-cursor="text">
-                                        {" "}
-                                        <pre className="text-sm">
-                                            {`[
+
+                                    <div>
+                                        <Button
+                                            onClick={() => {
+                                                const newWords = words.filter(
+                                                    (_, i) => i !== index,
+                                                );
+                                                setWords(newWords);
+                                            }}
+                                            className="h-fit"
+                                            padding="large"
+                                            iconName="trash"
+                                        />
+                                    </div>
+                                </div>
+                            </SortableItem>
+                        ))}
+                    </SortableContext>
+                </DndContext>
+            )}
+
+            {words && (
+                <div className="w-full flex gap-4">
+                    <Button
+                        onClick={() => {
+                            setWords([
+                                ...words,
+                                {
+                                    id: crypto.randomUUID(),
+                                    en: "",
+                                    jp: "",
+                                },
+                            ]);
+
+                            posthog.capture("word_added");
+                        }}
+                        className="w-full"
+                        padding="large"
+                        iconName="plus"
+                    >
+                        Add
+                    </Button>
+
+                    <Button
+                        onClick={() =>
+                            router.push(`/my-rooms/${slug}/generate`)
+                        }
+                        iconName="wandSparkles"
+                        padding="large"
+                    />
+
+                    <Button
+                        onClick={() => setShowImportDialog(true)}
+                        iconName="upload"
+                        padding="large"
+                    />
+                    <Dialog
+                        title="Import from JSON"
+                        size="large"
+                        alignment="vertical"
+                        open={showImportDialog}
+                        onClose={() => setShowImportDialog(false)}
+                    >
+                        <div className="w-full px-2 pb-2 flex flex-col items-start gap-4">
+                            <div data-cursor="text">
+                                Please make sure your JSON file follows this
+                                format:
+                            </div>
+                            <div data-cursor="text">
+                                {" "}
+                                <pre className="text-sm">
+                                    {`[
     {
         "jp": "りんご",
         "en": "apple"
@@ -575,122 +588,107 @@ export default function Page({
         "en": "cat"
     }
 ]`}
-                                        </pre>
-                                    </div>
-                                    <div
-                                        className="opacity-50"
-                                        data-cursor="text"
-                                    >
-                                        Each object must include a
-                                        &quot;jp&quot; field for the Japanese
-                                        word and an &quot;en&quot; field for the
-                                        English word.
-                                    </div>
-                                </div>
-                                <Input
-                                    value={json}
-                                    variant="textarea"
-                                    inputClassName="resize-none h-64"
-                                    font="mono"
-                                    onChange={(e) => setJson(e.target.value)}
-                                    label="JSON Data"
-                                />
-                                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                                    <Button
-                                        onClick={() =>
-                                            setShowImportDialog(false)
-                                        }
-                                        className="w-full"
-                                        iconName="x"
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        variant="primary"
-                                        className="w-full"
-                                        iconName="plus"
-                                    >
-                                        Import
-                                    </Button>
-                                </div>
-                            </Dialog>
+                                </pre>
+                            </div>
+                            <div className="opacity-50" data-cursor="text">
+                                Each object must include a &quot;jp&quot; field
+                                for the Japanese word and an &quot;en&quot;
+                                field for the English word.
+                            </div>
                         </div>
-                    )}
-
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg mt-4"
-                    >
-                        Settings
-                    </div>
-
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/visibility`)
-                            }
-                            className=""
-                            iconName="eye"
-                        >
-                            Visibility
-                        </Button>
-
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/export`)
-                            }
-                            className=""
-                            iconName="download"
-                        >
-                            Export
-                        </Button>
-
-                        <Button
-                            onClick={() => setShowDeleteDialog(true)}
-                            variant="danger"
-                            className=""
-                            iconName="trash"
-                        >
-                            Delete Room
-                        </Button>
-                        <Dialog
-                            title="Are you sure you want to delete this room?"
-                            description="This action cannot be undone."
-                            open={showDeleteDialog}
-                            onClose={() => setShowDeleteDialog(false)}
-                        >
+                        <Input
+                            value={json}
+                            variant="textarea"
+                            inputClassName="resize-none h-64"
+                            font="mono"
+                            onChange={(e) => setJson(e.target.value)}
+                            label="JSON Data"
+                        />
+                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                             <Button
-                                iconName="x"
+                                onClick={() => setShowImportDialog(false)}
                                 className="w-full"
-                                onClick={() => setShowDeleteDialog(false)}
+                                iconName="x"
                             >
                                 Cancel
                             </Button>
                             <Button
-                                variant="danger"
-                                iconName="trash"
+                                variant="primary"
                                 className="w-full"
-                                onClick={() => deleteCurrentRoom()}
+                                iconName="plus"
+                                onClick={() => importJson()}
+                                loading={importing}
                             >
-                                Delete
+                                Import
                             </Button>
-                        </Dialog>
-                    </div>
-                </>
-            ) : (
-                <div className="w-full flex justify-center">
-                    <h1
-                        className="text-2xl mt-16 mb-8 font-bold font-mono gradient-text"
-                        data-cursor="text"
-                    >
-                        Loading…
-                    </h1>
+                        </div>
+                        {importError && (
+                            <div className="text-red-500">{importError}</div>
+                        )}
+                    </Dialog>
                 </div>
             )}
 
             <div
+                data-cursor="text"
+                className="font-bold flex w-fit text-lg mt-4"
+            >
+                Settings
+            </div>
+
+            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+                <Button
+                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    className=""
+                    iconName="eye"
+                >
+                    Visibility
+                </Button>
+
+                <Button
+                    onClick={() => router.push(`/my-rooms/${slug}/export`)}
+                    className=""
+                    iconName="download"
+                >
+                    Export
+                </Button>
+
+                <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="danger"
+                    className=""
+                    iconName="trash"
+                >
+                    Delete Room
+                </Button>
+                <Dialog
+                    title="Are you sure you want to delete this room?"
+                    description="This action cannot be undone."
+                    open={showDeleteDialog}
+                    onClose={() => setShowDeleteDialog(false)}
+                >
+                    <Button
+                        iconName="x"
+                        className="w-full"
+                        onClick={() => setShowDeleteDialog(false)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        iconName="trash"
+                        className="w-full"
+                        onClick={() => deleteCurrentRoom()}
+                    >
+                        Delete
+                    </Button>
+                </Dialog>
+            </div>
+
+            <div
                 className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomId && "opacity-0 scale-95 pointer-events-none"
+                    !showRoomId &&
+                    "opacity-0 scale-95 blur-md pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
                 onClick={() => setShowRoomId(false)}
             >

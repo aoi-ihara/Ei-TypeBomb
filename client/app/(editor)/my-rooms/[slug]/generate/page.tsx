@@ -110,7 +110,7 @@ export default function Generate({
                     {response.map((item, index) => (
                         <div
                             data-cursor="text"
-                            className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                            className="truncate animate-appear rounded-lg bg-(--color-background-secondary) py-1 px-2"
                             key={index}
                         >
                             {item.jp}
