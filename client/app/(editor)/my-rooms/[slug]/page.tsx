@@ -738,13 +738,30 @@ export default function Page({
                                 disabled={!generationPrompt}
                                 onClick={async () => {
                                     setIsGenerating(true);
-                                    const generatedWords =
-                                        await generateWordsAction(
-                                            generationPrompt,
-                                        );
-                                    setIsGenerating(false);
+                                    setGenerationError("");
 
-                                    setGeneratedWords(generatedWords);
+                                    try {
+                                        const generatedWords =
+                                            await generateWordsAction(
+                                                generationPrompt,
+                                            );
+
+                                        setGeneratedWords(generatedWords);
+                                    } catch (error) {
+                                        console.error(
+                                            "Failed to generate words:",
+                                            error,
+                                        );
+
+                                        setGeneratedWords([]);
+                                        setGenerationError(
+                                            error instanceof Error
+                                                ? error.message
+                                                : "Failed to generate words. Please try again.",
+                                        );
+                                    } finally {
+                                        setIsGenerating(false);
+                                    }
                                 }}
                                 iconName="arrowRight"
                                 variant="primary"
