@@ -31,6 +31,7 @@ export default function PostHogEventTracker() {
         let generationPanelOpen = false;
         let generationRequestPending = false;
         let importPanelOpen = false;
+        let importRequestPending = false;
 
         const pathname = window.location.pathname;
 
@@ -87,6 +88,7 @@ export default function PostHogEventTracker() {
                 generationPanelOpen = !generationPanelOpen;
                 generationRequestPending = false;
                 importPanelOpen = false;
+                importRequestPending = false;
 
                 if (generationPanelOpen) {
                     posthog.capture("word_generation_opened", {
@@ -98,6 +100,7 @@ export default function PostHogEventTracker() {
 
             if (inRoomEditor && icon === "upload") {
                 importPanelOpen = !importPanelOpen;
+                importRequestPending = false;
                 generationPanelOpen = false;
                 generationRequestPending = false;
 
@@ -175,10 +178,10 @@ export default function PostHogEventTracker() {
             }
 
             if (inRoomEditor && importPanelOpen && text === "Import") {
+                importRequestPending = true;
                 posthog.capture("words_import_submitted", {
                     room_id: roomId,
                 });
-                importPanelOpen = false;
                 return;
             }
 
@@ -192,6 +195,7 @@ export default function PostHogEventTracker() {
                     room_id: roomId,
                 });
                 importPanelOpen = false;
+                importRequestPending = false;
                 return;
             }
 
@@ -209,6 +213,7 @@ export default function PostHogEventTracker() {
                 generationPanelOpen = false;
                 generationRequestPending = false;
                 importPanelOpen = false;
+                importRequestPending = false;
             }
         };
 
@@ -247,35 +252,69 @@ export default function PostHogEventTracker() {
                 posthog.capture("game_finished");
             }
 
-            if (!generationRequestPending || !generationPanelOpen) return;
+            if (generationRequestPending && generationPanelOpen) {
+                const generatedWordsAddButton = Array.from(
+                    document.querySelectorAll("button"),
+                ).find(
+                    (element) =>
+                        element.textContent?.trim() === "Add" &&
+                        isFeaturePanelElement(element),
+                );
 
-            const generatedWordsAddButton = Array.from(
-                document.querySelectorAll("button"),
-            ).find(
-                (element) =>
-                    element.textContent?.trim() === "Add" &&
-                    isFeaturePanelElement(element),
-            );
+                if (generatedWordsAddButton) {
+                    generationRequestPending = false;
+                    posthog.capture("word_generation_succeeded", {
+                        room_id: getRoomId(window.location.pathname),
+                    });
+                } else {
+                    const generationError = Array.from(
+                        document.querySelectorAll(".text-red-500"),
+                    ).find((element) =>
+                        element.textContent?.includes(
+                            "Failed to generate words",
+                        ),
+                    );
 
-            if (generatedWordsAddButton) {
-                generationRequestPending = false;
-                posthog.capture("word_generation_succeeded", {
-                    room_id: getRoomId(window.location.pathname),
-                });
-                return;
+                    if (generationError) {
+                        generationRequestPending = false;
+                        posthog.capture("word_generation_failed", {
+                            room_id: getRoomId(window.location.pathname),
+                        });
+                    }
+                }
             }
 
-            const generationError = Array.from(
-                document.querySelectorAll(".text-red-500"),
-            ).find((element) =>
-                element.textContent?.includes("Failed to generate words"),
-            );
+            if (importRequestPending && importPanelOpen) {
+                const importButton = Array.from(
+                    document.querySelectorAll("button"),
+                ).find(
+                    (element) =>
+                        element.textContent?.trim() === "Import" &&
+                        isFeaturePanelElement(element),
+                );
 
-            if (generationError) {
-                generationRequestPending = false;
-                posthog.capture("word_generation_failed", {
-                    room_id: getRoomId(window.location.pathname),
+                const importError = Array.from(
+                    document.querySelectorAll(".text-red-500"),
+                ).find((element) => {
+                    const content = element.textContent ?? "";
+                    return (
+                        content.includes("JSON data is required") ||
+                        content.includes("Invalid JSON format")
+                    );
                 });
+
+                if (importError) {
+                    importRequestPending = false;
+                    posthog.capture("words_import_failed", {
+                        room_id: getRoomId(window.location.pathname),
+                    });
+                } else if (!importButton) {
+                    importRequestPending = false;
+                    importPanelOpen = false;
+                    posthog.capture("words_import_succeeded", {
+                        room_id: getRoomId(window.location.pathname),
+                    });
+                }
             }
         });
 
