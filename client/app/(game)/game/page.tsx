@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { useRouter } from "next/navigation";
-import Button from "@/components/ui/Button";
 import { scoreCircle, type Point, type CircleScore } from "@/lib/circle/hough";
 
 const CANVAS_SIZE = 640;
@@ -143,9 +142,7 @@ export default function CircleGame() {
     }, [clearCanvas]);
 
     const handlePlayAgain = () => {
-        setResult(null);
-        setState("ready");
-        clearCanvas();
+        router.push("/");
     };
 
     return (
@@ -205,17 +202,14 @@ export default function CircleGame() {
                 </div>
 
                 {state === "result" && (
-                    <div className="flex w-full max-w-xs flex-col gap-3 animate-appear">
-                        <Button
-                            variant="primary"
-                            iconName="rotateCw"
+                    <div className="w-full max-w-xs animate-appear" data-cursor="button">
+                        <button
+                            type="button"
                             onClick={handlePlayAgain}
+                            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-cyan-600 px-5 py-4 font-bold text-white transition-all duration-200 ease-out active:scale-95"
                         >
                             Play Again
-                        </Button>
-                        <Button variant="text" onClick={() => router.push("/")}>
-                            Home
-                        </Button>
+                        </button>
                     </div>
                 )}
             </div>
