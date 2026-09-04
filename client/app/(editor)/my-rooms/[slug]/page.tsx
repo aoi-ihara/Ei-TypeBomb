@@ -1074,7 +1074,7 @@ export default function Page({
                     />
                     <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
                     <div className="flex items-center justify-center">
-                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-3xl sm:text-4xl">
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl">
                             {roomLink}
                         </div>
                     </div>
