@@ -753,9 +753,7 @@ export default function Page({
                         </div>
 
                         {!generationPrompt && !generatedWords.length && (
-                            <div
-                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
-                            >
+                            <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
                                 {EXAMPLES.map((example, index) => (
                                     <Button
                                         onClick={() =>
@@ -790,50 +788,55 @@ export default function Page({
                             </div>
                         )}
 
-                        <div className="flex gap-4 w-full">
-                            <Button
-                                onClick={() => setShowGenerationInput(false)}
-                                className="w-full"
-                                iconName="x"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="primary"
-                                className="w-full"
-                                iconName="plus"
-                                disabled={!generatedWords}
-                                onClick={() => {
-                                    if (!generatedWords) return;
-
-                                    let parsedWords: Word[];
-
-                                    try {
-                                        parsedWords = generatedWords.map(
-                                            (word: Word) => ({
-                                                jp: word.jp,
-                                                en: word.en,
-                                                id: crypto.randomUUID(),
-                                            }),
-                                        );
-                                    } catch {
-                                        setImportError("Invalid JSON format.");
-                                        return;
+                        {generatedWords?.length !== 0 && (
+                            <div className="flex gap-4 w-full">
+                                <Button
+                                    onClick={() =>
+                                        setShowGenerationInput(false)
                                     }
+                                    className="w-full animate-appear"
+                                    iconName="x"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    className="w-full animate-appear"
+                                    iconName="plus"
+                                    onClick={() => {
+                                        if (!generatedWords) return;
 
-                                    const generatedWordsWithId =
-                                        parsedWords as WordWithId[];
+                                        let parsedWords: Word[];
 
-                                    setWords([
-                                        ...generatedWordsWithId,
-                                        ...words,
-                                    ]);
-                                    setShowGenerationInput(false);
-                                }}
-                            >
-                                Add
-                            </Button>
-                        </div>
+                                        try {
+                                            parsedWords = generatedWords.map(
+                                                (word: Word) => ({
+                                                    jp: word.jp,
+                                                    en: word.en,
+                                                    id: crypto.randomUUID(),
+                                                }),
+                                            );
+                                        } catch {
+                                            setImportError(
+                                                "Invalid JSON format.",
+                                            );
+                                            return;
+                                        }
+
+                                        const generatedWordsWithId =
+                                            parsedWords as WordWithId[];
+
+                                        setWords([
+                                            ...generatedWordsWithId,
+                                            ...words,
+                                        ]);
+                                        setShowGenerationInput(false);
+                                    }}
+                                >
+                                    Add
+                                </Button>
+                            </div>
+                        )}
 
                         {generationError && (
                             <div className="text-red-500">
