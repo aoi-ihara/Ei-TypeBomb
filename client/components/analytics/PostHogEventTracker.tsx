@@ -3,40 +3,206 @@
 import { useEffect } from "react";
 import posthog from "posthog-js";
 
+const GENERATION_EXAMPLES = new Set([
+    "高校1年生の定期テストの単語",
+    "大学受験でよく見る英単語",
+    "英語のニュースでよく使われる単語",
+    "日常会話でよく使う英単語",
+    "入国審査で言われそうな単語",
+    "ホテルで使いそうな英単語",
+]);
+
+function isRoomEditorPath(pathname: string) {
+    return /^\/my-rooms\/[^/]+$/.test(pathname);
+}
+
+function isFeaturePanelElement(element: Element | null) {
+    return !!element?.closest(".rounded-3xl");
+}
+
 export default function PostHogEventTracker() {
     useEffect(() => {
         let dragStart: { x: number; y: number } | null = null;
         let gameFinishedCaptured = false;
+        let generationPanelOpen = false;
+        let generationRequestPending = false;
+        let importPanelOpen = false;
+
+        const pathname = window.location.pathname;
+
+        if (isRoomEditorPath(pathname)) {
+            posthog.capture("room_editor_opened", {
+                room_id: pathname.split("/").at(-1),
+            });
+        }
 
         const captureClickEvent = (event: MouseEvent) => {
             const target = event.target as Element | null;
             const button = target?.closest("button");
             if (!button) return;
 
-            const pathname = window.location.pathname;
+            const currentPathname = window.location.pathname;
             const text = button.textContent?.trim();
-            const icon = button.querySelector<SVGElement>("[data-icon]")?.getAttribute("data-icon");
+            const icon = button
+                .querySelector<SVGElement>("[data-icon]")
+                ?.getAttribute("data-icon");
+            const inRoomEditor = isRoomEditorPath(currentPathname);
+            const inFeaturePanel = isFeaturePanelElement(button);
 
-            if (pathname === "/" && text === "Play") {
+            if (currentPathname === "/" && text === "Play") {
                 posthog.capture("play_clicked");
                 return;
             }
 
-            if (pathname === "/room" && text === "Play Demo") {
+            if (currentPathname === "/room" && text === "Play Demo") {
                 posthog.capture("demo_started");
                 return;
             }
 
-            if (icon === "qrCode" && pathname.startsWith("/my-rooms/")) {
-                posthog.capture("room_qr_opened");
+            if (icon === "qrCode" && inRoomEditor) {
+                posthog.capture("room_qr_opened", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
                 return;
             }
 
             if (
                 icon === "trash" &&
-                /^\/my-rooms\/[^/]+$/.test(pathname)
+                inRoomEditor &&
+                text !== "Delete Room"
             ) {
-                posthog.capture("word_deleted");
+                posthog.capture("word_deleted", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (icon === "download" && inRoomEditor) {
+                posthog.capture("words_exported", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (icon === "wandSparkles" && inRoomEditor) {
+                generationPanelOpen = true;
+                generationRequestPending = false;
+                posthog.capture("word_generation_opened", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (icon === "upload" && inRoomEditor) {
+                importPanelOpen = true;
+                posthog.capture("words_import_opened", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                generationPanelOpen &&
+                GENERATION_EXAMPLES.has(text ?? "") &&
+                inFeaturePanel
+            ) {
+                posthog.capture("word_generation_example_selected", {
+                    room_id: currentPathname.split("/").at(-1),
+                    example: text,
+                });
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                generationPanelOpen &&
+                icon === "arrowRight" &&
+                inFeaturePanel
+            ) {
+                generationRequestPending = true;
+                posthog.capture("word_generation_requested", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                generationPanelOpen &&
+                text === "Add" &&
+                inFeaturePanel
+            ) {
+                posthog.capture("generated_words_added", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                generationPanelOpen = false;
+                generationRequestPending = false;
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                generationPanelOpen &&
+                text === "Cancel" &&
+                inFeaturePanel
+            ) {
+                posthog.capture("word_generation_cancelled", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                generationPanelOpen = false;
+                generationRequestPending = false;
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                importPanelOpen &&
+                text === "Learn More"
+            ) {
+                posthog.capture("words_import_help_opened", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                return;
+            }
+
+            if (inRoomEditor && importPanelOpen && text === "Import") {
+                posthog.capture("words_import_submitted", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                importPanelOpen = false;
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                importPanelOpen &&
+                text === "Cancel" &&
+                inFeaturePanel
+            ) {
+                posthog.capture("words_import_cancelled", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+                importPanelOpen = false;
+                return;
+            }
+
+            if (
+                inRoomEditor &&
+                text === "Visibility"
+            ) {
+                posthog.capture("room_visibility_settings_opened", {
+                    room_id: currentPathname.split("/").at(-1),
+                });
+            }
+
+            if (
+                inRoomEditor &&
+                generationPanelOpen === true &&
+                button.getAttribute("aria-label") === "Close dialog"
+            ) {
+                generationPanelOpen = false;
+                generationRequestPending = false;
             }
         };
 
@@ -56,11 +222,10 @@ export default function PostHogEventTracker() {
             );
             dragStart = null;
 
-            if (
-                distance > 8 &&
-                /^\/my-rooms\/[^/]+$/.test(window.location.pathname)
-            ) {
-                posthog.capture("words_reordered");
+            if (distance > 8 && isRoomEditorPath(window.location.pathname)) {
+                posthog.capture("words_reordered", {
+                    room_id: window.location.pathname.split("/").at(-1),
+                });
             }
         };
 
@@ -71,12 +236,40 @@ export default function PostHogEventTracker() {
 
             if (!gameFinishedButton) {
                 gameFinishedCaptured = false;
+            } else if (!gameFinishedCaptured) {
+                gameFinishedCaptured = true;
+                posthog.capture("game_finished");
+            }
+
+            if (!generationRequestPending || !generationPanelOpen) return;
+
+            const generatedWordsAddButton = Array.from(
+                document.querySelectorAll("button"),
+            ).find(
+                (element) =>
+                    element.textContent?.trim() === "Add" &&
+                    isFeaturePanelElement(element),
+            );
+
+            if (generatedWordsAddButton) {
+                generationRequestPending = false;
+                posthog.capture("word_generation_succeeded", {
+                    room_id: window.location.pathname.split("/").at(-1),
+                });
                 return;
             }
 
-            if (!gameFinishedCaptured) {
-                gameFinishedCaptured = true;
-                posthog.capture("game_finished");
+            const generationError = Array.from(
+                document.querySelectorAll(".text-red-500"),
+            ).find((element) =>
+                element.textContent?.includes("Failed to generate words"),
+            );
+
+            if (generationError) {
+                generationRequestPending = false;
+                posthog.capture("word_generation_failed", {
+                    room_id: window.location.pathname.split("/").at(-1),
+                });
             }
         });
 
