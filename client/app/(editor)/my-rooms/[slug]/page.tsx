@@ -384,7 +384,7 @@ export default function Page({
                     </div>
                 </Button>
                 <Button
-                    onClick={() => router.push(`/my-rooms/${slug}/visibility`)}
+                    onClick={() => setShowVisibilitySettings(true)}
                     variant="text"
                     className="h-full"
                 >
