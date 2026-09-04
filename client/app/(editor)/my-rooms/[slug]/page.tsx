@@ -868,23 +868,25 @@ export default function Page({
                             onChange={(e) => setImportData(e.target.value)}
                             label="JSON Data"
                         />
-                        <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                            <Button
-                                onClick={() => setShowImportInput(false)}
-                                className="w-full"
-                                iconName="x"
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                variant="primary"
-                                className="w-full"
-                                iconName="plus"
-                                onClick={() => handleImportWords()}
-                            >
-                                Import
-                            </Button>
-                        </div>
+                        {importData && (
+                            <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                <Button
+                                    onClick={() => setShowImportInput(false)}
+                                    className="w-full"
+                                    iconName="x"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    className="w-full"
+                                    iconName="plus"
+                                    onClick={() => handleImportWords()}
+                                >
+                                    Import
+                                </Button>
+                            </div>
+                        )}
                         {importError && (
                             <div className="text-red-500">{importError}</div>
                         )}
