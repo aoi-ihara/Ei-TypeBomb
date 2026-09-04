@@ -61,6 +61,7 @@ export default function Button({
                 : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-3`;
 
     const autoPlayAgain = children === "Play Again";
+    const buttonRef = useRef<HTMLButtonElement | null>(null);
     const autoPlayAgainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -72,10 +73,7 @@ export default function Button({
             autoPlayAgainTimerRef.current = null;
 
             if (!disabled && !loading) {
-                onClick?.({
-                    currentTarget: null,
-                    target: null,
-                } as unknown as React.MouseEvent<HTMLButtonElement>);
+                buttonRef.current?.click();
             }
         }, PLAY_AGAIN_AUTO_CLICK_DELAY_MS);
 
@@ -85,7 +83,7 @@ export default function Button({
                 autoPlayAgainTimerRef.current = null;
             }
         };
-    }, [autoPlayAgain, disabled, loading, onClick]);
+    }, [autoPlayAgain, disabled, loading]);
 
     const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
         if (autoPlayAgainTimerRef.current) {
@@ -105,6 +103,7 @@ export default function Button({
             }
         >
             <button
+                ref={buttonRef}
                 type={type}
                 onClick={handleClick}
                 className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
