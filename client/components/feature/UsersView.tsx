@@ -67,6 +67,7 @@ export default function UsersView({
                                 opacity: `${position.opacity}`,
                                 width: `${position.w}px`,
                                 height: `${position.h}px`,
+                                filter: `blur(${(1 - position.opacity) * 12}px)`,
                                 left: `calc(${posX + 50}% - ${position.w / 2}px)`,
                                 top: `calc(${posY + 50}% - ${position.h / 2}px)`,
                             }}
