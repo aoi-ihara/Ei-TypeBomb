@@ -35,8 +35,10 @@ The room editor was substantially consolidated and expanded after the original P
 | `words_import_opened` | User opened the JSON import controls | `components/analytics/PostHogEventTracker.tsx` |
 | `words_import_help_opened` | User opened the JSON import format help | `components/analytics/PostHogEventTracker.tsx` |
 | `words_import_submitted` | User submitted JSON import from the editor | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_succeeded` | JSON import was accepted and the editor closed the import controls | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_failed` | JSON import validation failed | `components/analytics/PostHogEventTracker.tsx` |
 | `words_import_cancelled` | User cancelled the JSON import controls | `components/analytics/PostHogEventTracker.tsx` |
-| `words_imported_and_added` | Client-side import handler accepted an import and added words | `app/(editor)/my-rooms/[slug]/page.tsx` |
+| `words_imported_and_added` | Existing import handler event kept for dashboard compatibility | `app/(editor)/my-rooms/[slug]/page.tsx` |
 | `word_generation_opened` | User opened the AI word generation controls | `components/analytics/PostHogEventTracker.tsx` |
 | `word_generation_example_selected` | User selected a suggested generation theme | `components/analytics/PostHogEventTracker.tsx` |
 | `word_generation_requested` | User submitted an AI word generation request | `components/analytics/PostHogEventTracker.tsx` |
@@ -53,7 +55,7 @@ The previous generic trash-icon matcher could classify the room-level `Delete Ro
 
 The newer generation UI is tracked as a small funnel: `word_generation_opened` → optional `word_generation_example_selected` → `word_generation_requested` → `word_generation_succeeded` / `word_generation_failed` → `generated_words_added`.
 
-JSON import is tracked separately for opening, help, submission, and cancellation. The existing `words_imported_and_added` event remains at the current import handler so existing dashboards continue to receive that event.
+JSON import is tracked separately for opening, help, submission, success, failure, and cancellation. The existing `words_imported_and_added` event remains at the current import handler for dashboard compatibility, while the new success/failure events reflect the actual UI outcome.
 
 ## Verify before merging
 
@@ -62,5 +64,5 @@ JSON import is tracked separately for opening, help, submission, and cancellatio
 - [ ] Manually exercise the room editor and confirm no event is duplicated for the same action.
 - [ ] Confirm `Delete Room` does not produce `word_deleted`.
 - [ ] Confirm generation emits requested + succeeded/failed, and adding generated words emits `generated_words_added`.
-- [ ] Confirm JSON import open/cancel/submit events fire after the editor's controls were consolidated.
+- [ ] Confirm JSON import emits submitted + succeeded/failed for the corresponding outcomes.
 - [ ] Confirm `room_updated` remains useful as a server-side save event without being treated as a direct UI action.
