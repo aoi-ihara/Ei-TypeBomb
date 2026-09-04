@@ -78,7 +78,7 @@ export default function Home() {
                                 className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
                             >
                                 <div
-                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
+                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.8%,0.991_72.3%,0.987_81.8%,1)]`}
                                 >
                                     <div
                                         className="rounded-sm w-full"
@@ -153,7 +153,7 @@ export default function Home() {
                             className="w-full"
                             padding="large"
                             iconName="play"
-                            onClick={() => router.push("/room")}
+                            onClick={() => router.push("/game")}
                             variant="primary"
                         >
                             Play
@@ -162,7 +162,7 @@ export default function Home() {
                         <Button
                             className="w-full"
                             iconName="play"
-                            onClick={() => router.push("/room")}
+                            onClick={() => router.push("/game")}
                             variant="primary"
                         >
                             Play
