@@ -627,7 +627,7 @@ export default function Clinet({
                                                         Connected
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 animate-appear">
                                                     <div
                                                         className="rounded-lg w-32 flex"
                                                         data-cursor="button"

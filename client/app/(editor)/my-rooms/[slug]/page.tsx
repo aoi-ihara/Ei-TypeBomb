@@ -646,7 +646,6 @@ export default function Page({
                             posthog.capture("word_added");
                         }}
                         className="w-full"
-                        padding="large"
                         iconName="plus"
                     >
                         Add
@@ -661,7 +660,6 @@ export default function Page({
                             setShowImportInput(false);
                         }}
                         iconName="wandSparkles"
-                        padding="large"
                     />
 
                     <Button
@@ -672,7 +670,6 @@ export default function Page({
                             setShowGenerationInput(false);
                         }}
                         iconName="upload"
-                        padding="large"
                     />
                     <Dialog
                         title="Import from JSON"
@@ -775,11 +772,13 @@ export default function Page({
                             <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
                                 {EXAMPLES.map((example, index) => (
                                     <Button
+                                        iconName="plus"
                                         onClick={() =>
                                             setGenerationPrompt(example)
                                         }
                                         className="w-full flex"
                                         padding="small"
+                                        alignment="left"
                                         key={index}
                                     >
                                         {example}
@@ -1075,7 +1074,7 @@ export default function Page({
                     />
                     <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
                     <div className="flex items-center justify-center">
-                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-3xl sm:text-4xl">
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl">
                             {roomLink}
                         </div>
                     </div>
