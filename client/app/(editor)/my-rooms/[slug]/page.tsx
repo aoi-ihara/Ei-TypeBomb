@@ -576,7 +576,9 @@ export default function Page({
                         </Button>
                     </div>
                     {visibilityError && (
-                        <div className="text-red-500">{visibilityError}</div>
+                        <div className="text-red-500" data-cursor="text">
+                            {visibilityError}
+                        </div>
                     )}
                 </Dialog>
 
@@ -856,7 +858,7 @@ export default function Page({
                         )}
 
                         {generationError && (
-                            <div className="text-red-500">
+                            <div className="text-red-500" data-cursor="text">
                                 {generationError}
                             </div>
                         )}
@@ -866,7 +868,7 @@ export default function Page({
                         className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
-                        <div data-cursor="text">
+                        <div data-cursor="text" className="p-2">
                             Each object must include a &quot;jp&quot; field for
                             the Japanese word and an &quot;en&quot; field for
                             the English word.
@@ -905,7 +907,9 @@ export default function Page({
                             </div>
                         )}
                         {importError && (
-                            <div className="text-red-500">{importError}</div>
+                            <div className="text-red-500" data-cursor="text">
+                                {importError}
+                            </div>
                         )}
                     </Collapsible>
                     <div className="flex flex-col gap-4">
