@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";
 
@@ -17,6 +17,8 @@ type ButtonProps = {
     iconName?: IconName;
     alignment?: "left" | "center";
 };
+
+const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
 
 const baseStyles =
     "font-bold transition-all duration-200 ease-out cursor-pointer";
@@ -58,6 +60,40 @@ export default function Button({
                 ? `rounded-lg ${iconName ? "pl-3.5" : "pl-4"} ${children ? "pr-4" : "pr-3.5"} py-3 gap-2`
                 : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-3`;
 
+    const autoPlayAgain = children === "Play Again";
+    const buttonRef = useRef<HTMLButtonElement | null>(null);
+    const autoPlayAgainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+
+    useEffect(() => {
+        if (!autoPlayAgain || disabled || loading) return;
+
+        autoPlayAgainTimerRef.current = setTimeout(() => {
+            autoPlayAgainTimerRef.current = null;
+
+            if (!disabled && !loading) {
+                buttonRef.current?.click();
+            }
+        }, PLAY_AGAIN_AUTO_CLICK_DELAY_MS);
+
+        return () => {
+            if (autoPlayAgainTimerRef.current) {
+                clearTimeout(autoPlayAgainTimerRef.current);
+                autoPlayAgainTimerRef.current = null;
+            }
+        };
+    }, [autoPlayAgain, disabled, loading]);
+
+    const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+        if (autoPlayAgainTimerRef.current) {
+            clearTimeout(autoPlayAgainTimerRef.current);
+            autoPlayAgainTimerRef.current = null;
+        }
+
+        onClick?.(event);
+    };
+
     return (
         <div
             className={`rounded-lg ${className}`}
@@ -67,8 +103,9 @@ export default function Button({
             }
         >
             <button
+                ref={buttonRef}
                 type={type}
-                onClick={onClick}
+                onClick={handleClick}
                 className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
                 {iconName && (!loading || !children) && (
