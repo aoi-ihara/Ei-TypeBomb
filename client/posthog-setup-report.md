@@ -1,6 +1,8 @@
 # PostHog post-wizard report
 
-The wizard has completed a deep integration of the Ei-TypeBomb Next.js App Router project. The previous integration (PR #66) already provided a solid foundation: client-side initialization via `instrumentation-client.ts`, a reverse proxy via `next.config.ts`, a `lib/posthog-server.ts` helper for server actions, user identification on home page load, and 15 instrumented events. This run added 4 new events covering settings toggles, room visibility changes, room code copying, and server-side room updates.
+The wizard integration remains the foundation for the Ei-TypeBomb Next.js App Router project. The current instrumentation includes client-side initialization via `instrumentation-client.ts`, the PostHog reverse proxy, the server-side `lib/posthog-server.ts` helper, and custom product events across gameplay, rooms, authentication, and the room editor.
+
+The room editor was substantially consolidated and expanded after the original PostHog setup. This update aligns analytics with the current single-page editor flow, removes a false-positive word deletion path, and adds coverage for the newer generation, import, export, and editor-entry interactions.
 
 | Event name | Description | File |
 |---|---|---|
@@ -20,30 +22,45 @@ The wizard has completed a deep integration of the Ei-TypeBomb Next.js App Route
 | `room_created` | Server: user created a new room | `lib/room/create.ts` |
 | `room_deleted` | Server: user deleted a room | `lib/room/delete.ts` |
 | `settings_changed` | User toggled background music or sound effects | `app/(game)/settings/Settings.tsx` |
-| `room_visibility_changed` | User changed room visibility (public/private) | `app/(editor)/my-rooms/[slug]/visibility/page.tsx` |
-| `room_code_copied` | User copied the room code in the room editor | `app/(editor)/my-rooms/[slug]/page.tsx` |
+| `room_editor_opened` | User opened a specific room editor | `components/analytics/PostHogEventTracker.tsx` |
+| `room_visibility_settings_opened` | User opened the room visibility settings from the editor | `components/analytics/PostHogEventTracker.tsx` |
+| `room_visibility_changed` | User successfully changed room visibility (public/private) | `app/(editor)/my-rooms/[slug]/page.tsx` |
+| `room_qr_opened` | User opened the room QR code view | `components/analytics/PostHogEventTracker.tsx` |
+| `room_code_copied` | User copied the room invite link in the room editor | `app/(editor)/my-rooms/[slug]/page.tsx` |
 | `room_updated` | Server: room settings or words were saved | `lib/room/update.ts` |
+| `word_added` | User manually added a word in the editor | `app/(editor)/my-rooms/[slug]/page.tsx` |
+| `word_deleted` | User deleted an individual word in the editor | `components/analytics/PostHogEventTracker.tsx` |
+| `words_reordered` | User reordered words with drag and drop | `components/analytics/PostHogEventTracker.tsx` |
+| `words_exported` | User copied the room's word list as JSON | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_opened` | User opened the JSON import controls | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_help_opened` | User opened the JSON import format help | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_submitted` | User submitted JSON import from the editor | `components/analytics/PostHogEventTracker.tsx` |
+| `words_import_cancelled` | User cancelled the JSON import controls | `components/analytics/PostHogEventTracker.tsx` |
+| `words_imported_and_added` | Client-side import handler accepted an import and added words | `app/(editor)/my-rooms/[slug]/page.tsx` |
+| `word_generation_opened` | User opened the AI word generation controls | `components/analytics/PostHogEventTracker.tsx` |
+| `word_generation_example_selected` | User selected a suggested generation theme | `components/analytics/PostHogEventTracker.tsx` |
+| `word_generation_requested` | User submitted an AI word generation request | `components/analytics/PostHogEventTracker.tsx` |
+| `word_generation_succeeded` | AI generation returned a result set | `components/analytics/PostHogEventTracker.tsx` |
+| `word_generation_failed` | AI generation returned an error | `components/analytics/PostHogEventTracker.tsx` |
+| `generated_words_added` | User added generated words to the room | `components/analytics/PostHogEventTracker.tsx` |
+| `word_generation_cancelled` | User cancelled the generation controls | `components/analytics/PostHogEventTracker.tsx` |
 
-## Next steps
+## Room editor analytics notes
 
-We've built some insights and a dashboard for you to keep an eye on user behavior, based on the events we just instrumented:
+The room editor is now a single consolidated page. The analytics implementation therefore tracks the current editor controls directly rather than depending on the old split-page structure.
 
-- **Dashboard**: [Analytics basics (wizard)](https://us.posthog.com/project/529828/dashboard/1909901)
-- **Game play funnel**: [hTQvheBa](https://us.posthog.com/project/529828/insights/hTQvheBa) — `play_clicked` → `room_entered` → `room_join_clicked` → `game_started`
-- **Game outcomes over time**: [CmGzVOTO](https://us.posthog.com/project/529828/insights/CmGzVOTO) — `game_won` vs `game_lost` daily trends
-- **Room lifecycle events**: [aP7KuHKs](https://us.posthog.com/project/529828/insights/aP7KuHKs) — `room_created`, `room_updated`, `room_deleted` daily counts
-- **Sign-in success vs failure**: [nbTTi6OC](https://us.posthog.com/project/529828/insights/nbTTi6OC) — `sign_in_submitted` vs `sign_in_failed` trends
-- **Daily active players**: [t8diiapP](https://us.posthog.com/project/529828/insights/t8diiapP) — unique users starting games per day
+The previous generic trash-icon matcher could classify the room-level `Delete Room` action as `word_deleted`. The matcher now explicitly excludes that room-level action and attaches `room_id` to word deletion events.
+
+The newer generation UI is tracked as a small funnel: `word_generation_opened` → optional `word_generation_example_selected` → `word_generation_requested` → `word_generation_succeeded` / `word_generation_failed` → `generated_words_added`.
+
+JSON import is tracked separately for opening, help, submission, and cancellation. The existing `words_imported_and_added` event remains at the current import handler so existing dashboards continue to receive that event.
 
 ## Verify before merging
 
-- [ ] Run a full production build (`npm run build`) and fix any lint or type errors introduced by the generated code.
-- [ ] Run the test suite — call sites that were rewritten or instrumented may need updated mocks or fixtures.
-- [ ] Add `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST` to `.env.example` and any CI/deployment scripts so collaborators know what to set.
-- [ ] Wire source-map upload (`posthog-cli sourcemap` or your bundler's upload step) into CI so production stack traces de-minify.
-- [ ] Confirm the returning-visitor path also calls `identify` — currently `posthog.identify(userId)` runs in a `useEffect` in `Home.tsx` on every render; verify it fires on page refresh when a session is already active.
-- [ ] **Data warehouse**: This project uses Supabase. Run `npx @posthog/wizard warehouse` to connect Supabase as a PostHog data warehouse source and unlock SQL queries over your game and room data alongside PostHog events.
-
-### Agent skill
-
-We've left an agent skill folder in your project. You can use this context for further agent development when using Claude Code. This will help ensure the model provides the most up-to-date approaches for integrating PostHog.
+- [ ] Run a full production build (`npm run build`) and fix any lint or type errors introduced by analytics changes.
+- [ ] Run the lint command (`npm run lint`).
+- [ ] Manually exercise the room editor and confirm no event is duplicated for the same action.
+- [ ] Confirm `Delete Room` does not produce `word_deleted`.
+- [ ] Confirm generation emits requested + succeeded/failed, and adding generated words emits `generated_words_added`.
+- [ ] Confirm JSON import open/cancel/submit events fire after the editor's controls were consolidated.
+- [ ] Confirm `room_updated` remains useful as a server-side save event without being treated as a direct UI action.
