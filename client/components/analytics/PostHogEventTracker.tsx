@@ -16,6 +16,10 @@ function isRoomEditorPath(pathname: string) {
     return /^\/my-rooms\/[^/]+$/.test(pathname);
 }
 
+function getRoomId(pathname: string) {
+    return pathname.split("/").at(-1);
+}
+
 function isFeaturePanelElement(element: Element | null) {
     return !!element?.closest(".rounded-3xl");
 }
@@ -32,7 +36,7 @@ export default function PostHogEventTracker() {
 
         if (isRoomEditorPath(pathname)) {
             posthog.capture("room_editor_opened", {
-                room_id: pathname.split("/").at(-1),
+                room_id: getRoomId(pathname),
             });
         }
 
@@ -48,6 +52,7 @@ export default function PostHogEventTracker() {
                 ?.getAttribute("data-icon");
             const inRoomEditor = isRoomEditorPath(currentPathname);
             const inFeaturePanel = isFeaturePanelElement(button);
+            const roomId = getRoomId(currentPathname);
 
             if (currentPathname === "/" && text === "Play") {
                 posthog.capture("play_clicked");
@@ -59,45 +64,48 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (icon === "qrCode" && inRoomEditor) {
-                posthog.capture("room_qr_opened", {
-                    room_id: currentPathname.split("/").at(-1),
-                });
+            if (inRoomEditor && icon === "qrCode") {
+                posthog.capture("room_qr_opened", { room_id: roomId });
                 return;
             }
 
             if (
-                icon === "trash" &&
                 inRoomEditor &&
+                icon === "trash" &&
                 text !== "Delete Room"
             ) {
-                posthog.capture("word_deleted", {
-                    room_id: currentPathname.split("/").at(-1),
-                });
+                posthog.capture("word_deleted", { room_id: roomId });
                 return;
             }
 
-            if (icon === "download" && inRoomEditor) {
-                posthog.capture("words_exported", {
-                    room_id: currentPathname.split("/").at(-1),
-                });
+            if (inRoomEditor && icon === "download") {
+                posthog.capture("words_exported", { room_id: roomId });
                 return;
             }
 
-            if (icon === "wandSparkles" && inRoomEditor) {
-                generationPanelOpen = true;
+            if (inRoomEditor && icon === "wandSparkles") {
+                generationPanelOpen = !generationPanelOpen;
                 generationRequestPending = false;
-                posthog.capture("word_generation_opened", {
-                    room_id: currentPathname.split("/").at(-1),
-                });
+                importPanelOpen = false;
+
+                if (generationPanelOpen) {
+                    posthog.capture("word_generation_opened", {
+                        room_id: roomId,
+                    });
+                }
                 return;
             }
 
-            if (icon === "upload" && inRoomEditor) {
-                importPanelOpen = true;
-                posthog.capture("words_import_opened", {
-                    room_id: currentPathname.split("/").at(-1),
-                });
+            if (inRoomEditor && icon === "upload") {
+                importPanelOpen = !importPanelOpen;
+                generationPanelOpen = false;
+                generationRequestPending = false;
+
+                if (importPanelOpen) {
+                    posthog.capture("words_import_opened", {
+                        room_id: roomId,
+                    });
+                }
                 return;
             }
 
@@ -108,7 +116,7 @@ export default function PostHogEventTracker() {
                 inFeaturePanel
             ) {
                 posthog.capture("word_generation_example_selected", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                     example: text,
                 });
                 return;
@@ -122,7 +130,7 @@ export default function PostHogEventTracker() {
             ) {
                 generationRequestPending = true;
                 posthog.capture("word_generation_requested", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 return;
             }
@@ -134,7 +142,7 @@ export default function PostHogEventTracker() {
                 inFeaturePanel
             ) {
                 posthog.capture("generated_words_added", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 generationPanelOpen = false;
                 generationRequestPending = false;
@@ -148,7 +156,7 @@ export default function PostHogEventTracker() {
                 inFeaturePanel
             ) {
                 posthog.capture("word_generation_cancelled", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 generationPanelOpen = false;
                 generationRequestPending = false;
@@ -161,14 +169,14 @@ export default function PostHogEventTracker() {
                 text === "Learn More"
             ) {
                 posthog.capture("words_import_help_opened", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 return;
             }
 
             if (inRoomEditor && importPanelOpen && text === "Import") {
                 posthog.capture("words_import_submitted", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 importPanelOpen = false;
                 return;
@@ -181,28 +189,26 @@ export default function PostHogEventTracker() {
                 inFeaturePanel
             ) {
                 posthog.capture("words_import_cancelled", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
                 importPanelOpen = false;
                 return;
             }
 
-            if (
-                inRoomEditor &&
-                text === "Visibility"
-            ) {
+            if (inRoomEditor && text === "Visibility") {
                 posthog.capture("room_visibility_settings_opened", {
-                    room_id: currentPathname.split("/").at(-1),
+                    room_id: roomId,
                 });
+                return;
             }
 
             if (
                 inRoomEditor &&
-                generationPanelOpen === true &&
                 button.getAttribute("aria-label") === "Close dialog"
             ) {
                 generationPanelOpen = false;
                 generationRequestPending = false;
+                importPanelOpen = false;
             }
         };
 
@@ -224,7 +230,7 @@ export default function PostHogEventTracker() {
 
             if (distance > 8 && isRoomEditorPath(window.location.pathname)) {
                 posthog.capture("words_reordered", {
-                    room_id: window.location.pathname.split("/").at(-1),
+                    room_id: getRoomId(window.location.pathname),
                 });
             }
         };
@@ -254,7 +260,7 @@ export default function PostHogEventTracker() {
             if (generatedWordsAddButton) {
                 generationRequestPending = false;
                 posthog.capture("word_generation_succeeded", {
-                    room_id: window.location.pathname.split("/").at(-1),
+                    room_id: getRoomId(window.location.pathname),
                 });
                 return;
             }
@@ -268,7 +274,7 @@ export default function PostHogEventTracker() {
             if (generationError) {
                 generationRequestPending = false;
                 posthog.capture("word_generation_failed", {
-                    room_id: window.location.pathname.split("/").at(-1),
+                    room_id: getRoomId(window.location.pathname),
                 });
             }
         });
