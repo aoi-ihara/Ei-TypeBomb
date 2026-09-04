@@ -120,44 +120,7 @@ export default function Page({
 
     const [showGenerationInput, setShowGenerationInput] = useState(false);
     const [generationPrompt, setGenerationPrompt] = useState("");
-    const [generatedWords, setGeneratedWords] = useState<Word[]>([
-        {
-            jp: "林檎時計",
-            en: "apple watch",
-        },
-        {
-            jp: "林檎壱",
-            en: "apple one",
-        },
-        {
-            jp: "林檎テレビ",
-            en: "apple tv",
-        },
-        {
-            jp: "林檎視覚本格派",
-            en: "apple vision pro",
-        },
-        {
-            jp: "林檎公園",
-            en: "apple park",
-        },
-        {
-            jp: "林檎電子機器",
-            en: "apple computer",
-        },
-        {
-            jp: "林檎日本",
-            en: "apple japan",
-        },
-        {
-            jp: "林檎厚紙",
-            en: "apple card",
-        },
-        {
-            jp: "林檎保護",
-            en: "apple care",
-        },
-    ]);
+    const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState("");
 
