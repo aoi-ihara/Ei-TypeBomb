@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
-import { getRoomFromLink, getRoomStatusFromId } from "@/lib/room/get";
-import { signInToRoom } from "@/lib/room/auth";
+import { prepareRoomJoin, signInToRoom } from "@/lib/room/auth";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
 import posthog from "posthog-js";
@@ -48,46 +47,35 @@ export default function Loading() {
         }
 
         setLoading(true);
-        const roomIdResult = await getRoomFromLink(
+        setError("");
+
+        const roomResult = await prepareRoomJoin(
             link.replace(process.env.NEXT_PUBLIC_JOIN_LINK!, ""),
         );
-        if (!roomIdResult) {
+
+        if (!roomResult) {
             setError("Room not found.");
             setLoading(false);
             return;
         }
 
-        const normalizedRoomId = roomIdResult.toLowerCase();
+        if ("error" in roomResult && roomResult.error) {
+            setError(roomResult.error);
+            setLoading(false);
+            return;
+        }
+
+        const normalizedRoomId = roomResult.id.toLowerCase();
         setRoomId(normalizedRoomId);
 
-        const result = await getRoomStatusFromId(normalizedRoomId);
-        setLoading(false);
-
-        if (result === null) {
-            setError("Room not found.");
+        if (roomResult.requiresPassword) {
+            setShowPasswordField(true);
             setLoading(false);
             return;
         }
 
-        if (result === false) {
-            const result = await signInToRoom({
-                id: normalizedRoomId,
-                password: roomPassword,
-            });
-
-            if (result === null) {
-                posthog.capture("room_entered", { room_id: normalizedRoomId });
-                router.push("/display-name");
-                setLoading(false);
-            } else {
-                setError(result);
-                setLoading(false);
-                return;
-            }
-        } else {
-            setShowPasswordField(true);
-            setError("");
-        }
+        posthog.capture("room_entered", { room_id: normalizedRoomId });
+        router.push("/display-name");
     };
 
     useEffect(() => {
