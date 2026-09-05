@@ -115,7 +115,7 @@ export default function TypingView({
                 const next = Array(english.length).fill("");
                 setInput(next);
                 setCurrentSelection(0);
-                setMissCount(prefixLength);
+                setMissCount(bombStatus === 0 ? prefixLength : 0);
                 onChangeInput(next.join(""));
                 const audio = new Audio("/Blip_select_36.wav");
                 audio.volume = 1;
