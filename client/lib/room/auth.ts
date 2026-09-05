@@ -15,6 +15,27 @@ export const getAuthToken = async () => {
     return authToken;
 };
 
+export const prepareRoomJoin = async (link: string) => {
+    if (!link) return null;
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, password")
+        .eq("link", link)
+        .maybeSingle();
+
+    if (error) return { error: error.message };
+    if (!data) return null;
+
+    if (!data.password) {
+        await setAuthCookie(data.id);
+        return { id: data.id, requiresPassword: false };
+    }
+
+    return { id: data.id, requiresPassword: true };
+};
+
 export const signInToRoom = async (room: Room, turnstileToken?: string) => {
     if (!isUUID(room.id, 4)) return "Incorrect Room ID.";
 
@@ -28,7 +49,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase
             .from("ei_typebomb_rooms")
-            .select("*")
+            .select("password")
             .eq("id", room.id)
             .maybeSingle();
 
@@ -43,7 +64,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase
             .from("ei_typebomb_rooms")
-            .select("*")
+            .select("id, password")
             .eq("id", room.id)
             .maybeSingle();
 
