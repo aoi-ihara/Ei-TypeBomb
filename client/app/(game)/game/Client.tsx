@@ -607,6 +607,7 @@ export default function Clinet({
                                                                 input,
                                                             );
                                                     }}
+                                                    bombStatus={bombStatus}
                                                     currentInput={
                                                         userId ==
                                                         currentTurnUser?.id

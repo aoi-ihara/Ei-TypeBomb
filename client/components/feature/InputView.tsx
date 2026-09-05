@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { getAuthToken } from "@/lib/room/auth";
+import posthog from "posthog-js";
+
+type WordPrefixVariant = "control" | "prefix-1" | "prefix-3";
+
+const prefixLengthMap: Record<WordPrefixVariant, number> = {
+    control: 0,
+    "prefix-1": 1,
+    "prefix-3": 3,
+};
 
 export default function TypingView({
     japanese,
@@ -8,14 +17,19 @@ export default function TypingView({
     onSuccess,
     onChangeInput,
     currentInput,
+    bombStatus,
 }: {
     japanese: string;
     english: string | null;
     onSuccess: () => void;
     onChangeInput: (input: string) => void;
     currentInput: string | null;
+    bombStatus?: number | null;
 }) {
-    const [missCount, setMissCount] = useState(0);
+    const variant = posthog.getFeatureFlag("showWordPrefix");
+    const prefixLength = prefixLengthMap[variant as WordPrefixVariant] ?? 0;
+
+    const [missCount, setMissCount] = useState(prefixLength);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
@@ -101,7 +115,7 @@ export default function TypingView({
                 const next = Array(english.length).fill("");
                 setInput(next);
                 setCurrentSelection(0);
-                setMissCount(0);
+                setMissCount(prefixLength);
                 onChangeInput(next.join(""));
                 const audio = new Audio("/Blip_select_36.wav");
                 audio.volume = 1;
