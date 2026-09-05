@@ -1,0 +1,100 @@
+name: Refactor shared toggle v3
+
+on:
+  push:
+    branches:
+      - refactor/shared-toggle-component
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply refactor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          component = '''"use client";
+
+type ToggleProps = {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+};
+
+export default function Toggle({ checked, onChange }: ToggleProps) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            className={`w-16 ${checked ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95 cursor-pointer`}
+            onClick={() => onChange(!checked)}
+        >
+            <div
+                className={`h-6 w-8 rounded-full bg-(--color-foreground) ${checked ? "ml-6" : ""} transition-all duration-200 ease-out`}
+            />
+        </button>
+    );
+}
+'''
+          Path("client/components/ui/Toggle.tsx").write_text(component)
+
+          settings_path = Path("client/app/(game)/settings/Settings.tsx")
+          settings = settings_path.read_text()
+          if 'import Toggle from "@/components/ui/Toggle";' not in settings:
+              settings = settings.replace('import Button from "@/components/ui/Button";\n', 'import Button from "@/components/ui/Button";\nimport Toggle from "@/components/ui/Toggle";\n')
+          settings = re.sub(r'(?s)(<div data-cursor="button" className="rounded-full flex">\s*)<button\s+className=\{`w-16 \$\{backgroundMusic \? "bg-cyan-600" : "bg-\(--color-background-secondary\)"\}[^>]*>\s*<div\s+className=\{`h-6 w-8 rounded-full bg-\(--color-foreground\) \$\{backgroundMusic && "ml-6"\}[^}]*\}\s*></div>\s*</button>\s*</div>', r'''\1<Toggle
+                        checked={backgroundMusic}
+                        onChange={(next) => {
+                            setBackgroundMusic(next);
+                            setCookie("background-music", String(next));
+                            posthog.capture("settings_changed", {
+                                setting: "background_music",
+                                value: next,
+                            });
+                        }}
+                    />
+                </div>''', settings)
+          settings = re.sub(r'(?s)(<div data-cursor="button" className="rounded-full flex">\s*)<button\s+className=\{`w-16 \$\{sounDeffects \? "bg-cyan-600" : "bg-\(--color-background-secondary\)"\}[^>]*>\s*<div\s+className=\{`h-6 w-8 rounded-full bg-\(--color-foreground\) \$\{sounDeffects && "ml-6"\}[^}]*\}\s*></div>\s*</button>\s*</div>', r'''\1<Toggle
+                        checked={sounDeffects}
+                        onChange={(next) => {
+                            setSounDeffects(next);
+                            setCookie("sound-effects", String(next));
+                            posthog.capture("settings_changed", {
+                                setting: "sound_effects",
+                                value: next,
+                            });
+                        }}
+                    />
+                </div>''', settings)
+          settings_path.write_text(settings)
+
+          page_path = Path("client/app/(editor)/my-rooms/[slug]/page.tsx")
+          page = page_path.read_text()
+          if 'import Toggle from "@/components/ui/Toggle";' not in page:
+              page = page.replace('import Button from "@/components/ui/Button";\n', 'import Button from "@/components/ui/Button";\nimport Toggle from "@/components/ui/Toggle";\n')
+          page = re.sub(r'(?s)(<div data-cursor="button" className="rounded-full flex">\s*)<button\s+className=\{`w-16 \$\{isPrivate \? "bg-cyan-600" : "bg-\(--color-background-secondary\)"\}[^>]*>\s*<div\s+className=\{`h-6 w-8 rounded-full bg-\(--color-foreground\) \$\{isPrivate && "ml-6"\}[^}]*\}\s*></div>\s*</button>\s*</div>', r'''\1<Toggle checked={isPrivate} onChange={setIsPrivate} />
+                        </div>''', page)
+          page_path.write_text(page)
+          PY
+      - name: Verify and commit
+        run: |
+          test -f "client/components/ui/Toggle.tsx"
+          grep -q 'import Toggle from "@/components/ui/Toggle";' "client/app/(game)/settings/Settings.tsx"
+          grep -q '<Toggle' "client/app/(game)/settings/Settings.tsx"
+          grep -q 'import Toggle from "@/components/ui/Toggle";' "client/app/(editor)/my-rooms/[slug]/page.tsx"
+          grep -q '<Toggle checked={isPrivate}' "client/app/(editor)/my-rooms/[slug]/page.tsx"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "client/components/ui/Toggle.tsx" "client/app/(game)/settings/Settings.tsx" "client/app/(editor)/my-rooms/[slug]/page.tsx"
+          git rm -f ".github/workflows/refactor-shared-toggle.yml" ".github/workflows/refactor-shared-toggle-v2.yml" ".github/workflows/refactor-shared-toggle-v3.yml"
+          git commit -m "refactor: share toggle component"
+          git push
