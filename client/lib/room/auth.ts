@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "../db/server";
 import type { Room } from "@/type";
+import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
 import argon2 from "argon2";
@@ -36,7 +37,7 @@ export const prepareRoomJoin = async (link: string) => {
 };
 
 export const signInToRoom = async (room: Room, turnstileToken?: string) => {
-    if (!room.id) return "Incorrect Room ID.";
+    if (!isUUID(room.id, 4)) return "Incorrect Room ID.";
 
     if (room.password) {
         if (validatePassword(room.password)) return "Incorrect password.";
