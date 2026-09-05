@@ -27,13 +27,16 @@ export default function TypingView({
     bombStatus?: number | null;
 }) {
     const variant = posthog.getFeatureFlag("showWordPrefix");
+    console.log("variant", variant);
     const prefixLength = prefixLengthMap[variant as WordPrefixVariant] ?? 0;
 
     const [missCount, setMissCount] = useState(prefixLength);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
-    const [currentSelection, setCurrentSelection] = useState(0);
+    const [currentSelection, setCurrentSelection] = useState(
+        bombStatus === 0 ? prefixLength : 0,
+    );
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
@@ -115,6 +118,7 @@ export default function TypingView({
                 const next = Array(english.length).fill("");
                 setInput(next);
                 setCurrentSelection(0);
+                console.log("bombStatus", bombStatus);
                 setMissCount(bombStatus === 0 ? prefixLength : 0);
                 onChangeInput(next.join(""));
                 const audio = new Audio("/Blip_select_36.wav");

@@ -161,7 +161,6 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
-                    console.log(newRoom);
                     setRoom(newRoom);
                     setUsers(
                         newRoom.users.map((item) => {
@@ -475,6 +474,9 @@ export default function Clinet({
                                                         japanese={
                                                             currentWord.jp
                                                         }
+                                                        bombStatus={
+                                                            bombStatus ?? 0
+                                                        }
                                                         english={currentWord.en}
                                                         onSuccess={() => {
                                                             console.log(
@@ -607,7 +609,7 @@ export default function Clinet({
                                                                 input,
                                                             );
                                                     }}
-                                                    bombStatus={bombStatus}
+                                                    bombStatus={bombStatus ?? 0}
                                                     currentInput={
                                                         userId ==
                                                         currentTurnUser?.id
