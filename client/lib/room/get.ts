@@ -43,15 +43,20 @@ export const getRoomStatusFromId = async (id: string) => {
 };
 
 export const getRoomFromId = async (id: string) => {
-    const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
-
     const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
+
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select(
+                "id, title, user_id, explanation, max_players, password, created_at, updated_at, words, link",
+            )
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
+
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     if (error) {
         serverError("failed to fetch room", error, "DB");
