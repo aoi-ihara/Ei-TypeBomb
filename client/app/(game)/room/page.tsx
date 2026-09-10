@@ -86,7 +86,7 @@ export default function Loading() {
         return () => {
             clearInterval(intervalId);
         };
-    });
+    }, []);
 
     return (
         <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">

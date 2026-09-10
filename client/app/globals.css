@@ -22,7 +22,7 @@
 }
 
 @media (min-width: 768px) {
-    * {
+    html.custom-cursor-active * {
         cursor: none;
     }
 }

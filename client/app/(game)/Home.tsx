@@ -47,7 +47,7 @@ export default function Home() {
         return () => {
             clearInterval(intervalId);
         };
-    });
+    }, []);
 
     return (
         <div className="flex flex-col h-dvh w-dvw">
