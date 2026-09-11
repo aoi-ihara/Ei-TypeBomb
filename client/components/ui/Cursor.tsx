@@ -215,8 +215,13 @@ export default function Cursor() {
     }, [handleMouseMove]);
 
     useEffect(() => {
+        let timeoutId: number;
+
         const observer = new MutationObserver(() => {
-            handleMouseMove(mouse.current.x, mouse.current.y);
+            window.clearTimeout(timeoutId);
+            timeoutId = window.setTimeout(() => {
+                handleMouseMove(mouse.current.x, mouse.current.y);
+            }, 100);
         });
 
         observer.observe(document.body, {
@@ -224,8 +229,19 @@ export default function Cursor() {
             subtree: true,
         });
 
-        return () => observer.disconnect();
+        return () => {
+            window.clearTimeout(timeoutId);
+            observer.disconnect();
+        };
     }, [handleMouseMove]);
+
+    useEffect(() => {
+        document.documentElement.classList.add("custom-cursor-active");
+
+        return () => {
+            document.documentElement.classList.remove("custom-cursor-active");
+        };
+    }, []);
 
     return (
         <motion.div
@@ -235,20 +251,6 @@ export default function Cursor() {
                 opacity: cursorOpacity,
             }}
         >
-            <motion.div
-                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
-                style={{
-                    left: cursorX,
-                    top: cursorY,
-
-                    width: cursorW,
-                    height: cursorH,
-
-                    boxShadow,
-
-                    borderRadius: cursorBorderRadius,
-                }}
-            />
             <motion.div
                 className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
                 style={{
