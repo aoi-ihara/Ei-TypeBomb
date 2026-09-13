@@ -11,14 +11,14 @@ permissions:
 
 jobs:
   release:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production'
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout production
+      - name: Checkout merge commit
         uses: actions/checkout@v4
         with:
-          ref: production
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
           fetch-depth: 0
 
       - name: Determine release type
@@ -35,10 +35,10 @@ jobs:
 
           IFS=',' read -ra labels <<< "$LABELS"
           for label in "${labels[@]}"; do
-            case "$label" in
-              Major) major=true ;;
-              Minor) minor=true ;;
-              Patch) patch=true ;;
+            case "${label,,}" in
+              major) major=true ;;
+              minor) minor=true ;;
+              patch) patch=true ;;
             esac
           done
 
@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          latest="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          latest="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
           if [ -z "$latest" ]; then
             latest="v0.0.0"
           fi
@@ -98,6 +98,7 @@ jobs:
       - name: Create and push tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -117,7 +118,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          set -euo pipefail
           gh release create "$VERSION" \
-            --target production \
+            --target "${{ github.event.pull_request.merge_commit_sha }}" \
             --title "$VERSION" \
             --generate-notes
