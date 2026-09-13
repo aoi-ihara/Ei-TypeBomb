@@ -68,9 +68,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          latest="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
+          latest="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)"
           if [ -z "$latest" ]; then
             latest="v0.0.0"
+          fi
+
+          if [[ ! "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Latest release tag is not a valid SemVer tag: $latest"
+            exit 1
           fi
 
           version="${latest#v}"
@@ -98,7 +103,6 @@ jobs:
       - name: Create and push tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
