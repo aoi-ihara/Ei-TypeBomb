@@ -1,0 +1,51 @@
+name: Validate Release Label
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate production release label
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "$BASE_BRANCH" != "production" ]; then
+            echo "Not a production PR; release label validation is not required."
+            exit 0
+          fi
+
+          major=false
+          minor=false
+          patch=false
+
+          IFS=',' read -ra labels <<< "$LABELS"
+          for label in "${labels[@]}"; do
+            case "${label,,}" in
+              major) major=true ;;
+              minor) minor=true ;;
+              patch) patch=true ;;
+            esac
+          done
+
+          count=0
+          $major && count=$((count + 1))
+          $minor && count=$((count + 1))
+          $patch && count=$((count + 1))
+
+          if [ "$count" -ne 1 ]; then
+            echo "A production PR must have exactly one of: Major, Minor, Patch."
+            exit 1
+          fi
+
+          echo "Release label validation passed."
