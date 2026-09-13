@@ -11,7 +11,7 @@ export const getRoomFromLink = async (link: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("*")
+        .select("id")
         .eq("link", link)
         .maybeSingle();
 
