@@ -1,0 +1,123 @@
+name: Create Release Tag
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - production
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'production'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout production
+        uses: actions/checkout@v4
+        with:
+          ref: production
+          fetch-depth: 0
+
+      - name: Determine release type
+        id: release_type
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          major=false
+          minor=false
+          patch=false
+
+          IFS=',' read -ra labels <<< "$LABELS"
+          for label in "${labels[@]}"; do
+            case "$label" in
+              Major) major=true ;;
+              Minor) minor=true ;;
+              Patch) patch=true ;;
+            esac
+          done
+
+          count=0
+          $major && count=$((count + 1))
+          $minor && count=$((count + 1))
+          $patch && count=$((count + 1))
+
+          if [ "$count" -ne 1 ]; then
+            echo "Exactly one of Major, Minor, or Patch must be set on the merged production PR."
+            exit 1
+          fi
+
+          if $major; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif $minor; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Calculate next version
+        id: version
+        env:
+          RELEASE_TYPE: ${{ steps.release_type.outputs.type }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          if [ -z "$latest" ]; then
+            latest="v0.0.0"
+          fi
+
+          version="${latest#v}"
+          IFS='.' read -r major minor patch <<< "$version"
+
+          case "$RELEASE_TYPE" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          next="v${major}.${minor}.${patch}"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION" HEAD
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --target production \
+            --title "$VERSION" \
+            --generate-notes
