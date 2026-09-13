@@ -7,6 +7,7 @@ import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
+import { isTrustedServerUrl, resolveServerUrl } from "@/lib/room/serverUrl";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
@@ -69,10 +70,7 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl =
-            typeof window === "undefined" || initialServerUrl === ""
-                ? process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL
-                : initialServerUrl;
+        const primaryUrl = resolveServerUrl(initialServerUrl);
         const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
         let selected = false;
@@ -90,22 +88,28 @@ export default function Clinet({
         type Candidate = {
             socket: ReturnType<typeof io>;
             ready: boolean;
+            url: string | undefined;
         };
 
         const primaryCandidate: Candidate = {
             socket: primarySocket,
             ready: false,
+            url: primaryUrl,
         };
         const renderCandidate: Candidate | null = renderSocket
-            ? { socket: renderSocket, ready: false }
+            ? { socket: renderSocket, ready: false, url: backupUrl }
             : null;
 
-        const authenticate = async (socket: ReturnType<typeof io>) => {
+        const authenticate = async (candidate: Candidate) => {
+            const socket = candidate.socket;
             setUserId(socket.id ?? null);
             userIdRef.current = socket.id ?? null;
 
             const authToken = await getAuthToken();
             if (!authToken || !selected || socketRef.current !== socket) return;
+
+            // Never disclose the authentication token to an untrusted origin.
+            if (!isTrustedServerUrl(candidate.url)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -142,7 +146,7 @@ export default function Clinet({
             }
 
             if (candidate.ready) {
-                void authenticate(candidate.socket);
+                void authenticate(candidate);
             }
         };
 
@@ -221,7 +225,7 @@ export default function Clinet({
                         });
                         backupConnectionStartedAt = null;
                     }
-                    void authenticate(socket);
+                    void authenticate(candidate);
                 }
             });
 
