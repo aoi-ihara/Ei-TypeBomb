@@ -69,35 +69,26 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (shouldUpdatePassword) updateData.password = newHashedPassword;
 
-    const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
-
-    const supabase = await createAdminClient();
-
-    const { data, error: selectError } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("user_id")
-        .eq("id", room.id)
-        .maybeSingle();
-
-    if (selectError) return selectError.message;
-
-    if (!data) return "Could not find this room.";
-
-    if (data.user_id !== userId) return "You do not have access to this room.";
-
     if (Object.keys(updateData).length === 0) {
         return validationErrors.length > 0 ? validationErrors.join("\n") : null;
     }
 
+    const userId = await getUser();
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
+
     updateData.updated_at = new Date();
 
-    const { error: updateError } = await supabase
+    const supabase = await createAdminClient();
+    const { data, error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update(updateData)
-        .eq("id", room.id);
+        .eq("id", room.id)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
 
     if (updateError) return updateError.message;
+    if (!data) return "Could not find this room or you do not have access to it.";
 
     const posthog = getPostHogClient();
     posthog.capture({
