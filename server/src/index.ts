@@ -5,20 +5,32 @@ import { Server } from "socket.io";
 import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
-import { logError, logEvent, setServerState, startConsole } from "./lib/console";
+import { capturePostHogEvent } from "./lib/posthog";
+import {
+    logError,
+    logEvent,
+    setServerState,
+    startConsole,
+} from "./lib/console";
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*", methods: ["GET", "POST"] } });
-
-const refreshServerState = () => setServerState({
-    rooms: rooms.length,
-    players: rooms.reduce((total, room) => total + (room.users?.length ?? 0), 0),
-    games: rooms.filter((room) => room.isStart).length,
+const io = new Server(httpServer, {
+    cors: { origin: "*", methods: ["GET", "POST"] },
 });
+
+const refreshServerState = () =>
+    setServerState({
+        rooms: rooms.length,
+        players: rooms.reduce(
+            (total, room) => total + (room.users?.length ?? 0),
+            0,
+        ),
+        games: rooms.filter((room) => room.isStart).length,
+    });
 
 const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
@@ -45,7 +57,7 @@ const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
 
         rooms.push(newRoom);
         refreshServerState();
-        logEvent("ROOM", `created ${roomId}`);
+        logEvent("ROOM", `created ${roomId}`, { roomId });
         return newRoom;
     })();
 
@@ -62,7 +74,11 @@ const sendRoomInfo = (roomId: string | null) => {
     if (!roomId) return;
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
-    io.to(roomId).emit("room:broadcast", { ...room, password: undefined, bombTimer: undefined });
+    io.to(roomId).emit("room:broadcast", {
+        ...room,
+        password: undefined,
+        bombTimer: undefined,
+    });
 };
 
 const sendInputUpdate = (roomId: string | null, input: string) => {
@@ -76,7 +92,7 @@ io.on("connection", (socket) => {
     let user: User = { id: socket.id };
     let roomId: null | string = null;
     const getRoomIndex = () => rooms.findIndex((item) => item.id === roomId);
-    logEvent("SERVER", "client connected");
+    logEvent("SERVER", "client connected", { socketId: socket.id });
     socket.emit("auth:request");
 
     socket.on("room:join", () => {
@@ -92,7 +108,15 @@ io.on("connection", (socket) => {
         if (!users.some((u) => u.id === user.id)) {
             users.push({ id: user.id, displayName: user.displayName });
             refreshServerState();
-            logEvent("ROOM", `player joined ${roomId}`);
+            logEvent("ROOM", `player joined ${roomId}`, {
+                roomId,
+                socketId: socket.id,
+                userId: user.id,
+                displayName: user.displayName,
+            });
+            capturePostHogEvent("player_joined", {
+                player_count: users.length,
+            });
         }
         sendRoomInfo(roomId);
     });
@@ -101,7 +125,7 @@ io.on("connection", (socket) => {
         if (!roomId) return;
         // Game-room membership is separate from Socket.IO membership.
         // Keep the socket in the Socket.IO room so the same connection can rejoin.
-        deleteUser(user.id);
+        deleteUser(user.id, "room_leave");
     };
     socket.on("room:leave", leaveRoom);
 
@@ -119,10 +143,21 @@ io.on("connection", (socket) => {
                 if (!room) return;
 
                 socket.join(roomId);
-                logEvent("ROOM", `authenticated ${roomId}`);
+                logEvent("ROOM", `authenticated ${roomId}`, {
+                    roomId,
+                    socketId: socket.id,
+                    userId: user.id,
+                    displayName: user.displayName,
+                });
+                capturePostHogEvent("room_authenticated");
                 sendRoomInfo(roomId);
             } catch (error) {
-                logError("auth or room fetch failed", error);
+                logError("auth or room fetch failed", error, {
+                    socketId: socket.id,
+                    userId: user.id,
+                    displayName: user.displayName,
+                    roomId,
+                });
             }
         },
     );
@@ -144,10 +179,36 @@ io.on("connection", (socket) => {
         if (roomIndex === -1) return;
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
-        if (!room.isStart || room.bombHolder === undefined || !currentUser || currentUser.id !== user.id || !room.users?.length) return;
+        if (
+            !room.isStart ||
+            room.bombHolder === undefined ||
+            !currentUser ||
+            currentUser.id !== user.id ||
+            !room.users?.length
+        )
+            return;
+        const previousHolder = currentUser;
         room.bombHolder = (room.bombHolder + 1) % room.users.length;
-        if (room.words?.length) room.wordIndex = Math.floor(Math.random() * room.words.length);
-        logEvent("GAME", `word passed in ${roomId}`);
+        const nextHolder = room.users[room.bombHolder];
+        if (room.words?.length)
+            room.wordIndex = Math.floor(Math.random() * room.words.length);
+        logEvent("GAME", `word passed in ${roomId}`, {
+            roomId,
+            gameId: room.gameId,
+            socketId: socket.id,
+            userId: user.id,
+            displayName: user.displayName,
+            previousHolder: {
+                userId: previousHolder.id,
+                displayName: previousHolder.displayName,
+            },
+            nextHolder: nextHolder
+                ? {
+                      userId: nextHolder.id,
+                      displayName: nextHolder.displayName,
+                  }
+                : undefined,
+        });
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
     });
@@ -157,7 +218,10 @@ io.on("connection", (socket) => {
         if (index === -1) return;
         const room = rooms[index];
         if (!room.users || room.users.length < 2 || room.isStart) return;
-        if (room.bombTimer) { clearTimeout(room.bombTimer); room.bombTimer = undefined; }
+        if (room.bombTimer) {
+            clearTimeout(room.bombTimer);
+            room.bombTimer = undefined;
+        }
         const gameId = randomUUID();
         room.gameId = gameId;
         room.isStart = true;
@@ -165,7 +229,22 @@ io.on("connection", (socket) => {
         room.wordIndex = undefined;
         room.bombStatus = 0;
         refreshServerState();
-        logEvent("GAME", `started ${roomId}`);
+        logEvent("GAME", `started ${roomId}`, {
+            roomId,
+            gameId,
+            starter: {
+                socketId: socket.id,
+                userId: user.id,
+                displayName: user.displayName,
+            },
+            players: room.users.map((player) => ({
+                userId: player.id,
+                displayName: player.displayName,
+            })),
+        });
+        capturePostHogEvent("game_started", {
+            player_count: room.users.length,
+        });
         sendInputUpdate(roomId, "");
         sendRoomInfo(roomId);
         setTimeout(() => {
@@ -173,7 +252,10 @@ io.on("connection", (socket) => {
             if (currentRoomIndex === -1) return;
             const currentRoom = rooms[currentRoomIndex];
             if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
-            if (currentRoom.words?.length) currentRoom.wordIndex = Math.floor(Math.random() * currentRoom.words.length);
+            if (currentRoom.words?.length)
+                currentRoom.wordIndex = Math.floor(
+                    Math.random() * currentRoom.words.length,
+                );
             sendInputUpdate(roomId, "");
             sendRoomInfo(roomId);
         }, 3000);
@@ -187,16 +269,41 @@ io.on("connection", (socket) => {
                 const currentRoomIndex = getRoomIndex();
                 if (currentRoomIndex === -1) return;
                 const currentRoom = rooms[currentRoomIndex];
-                if (currentRoom.gameId !== gameId || !currentRoom.isStart) return;
+                if (currentRoom.gameId !== gameId || !currentRoom.isStart)
+                    return;
                 if (currentRoom.bombStatus === 4) {
                     if (!roomId) return;
-                    const lostUser = currentRoom.users?.[currentRoom.bombHolder!];
-                    if (lostUser) io.to(roomId).emit("game:end", { holderUserId: lostUser.id, holderDisplayName: lostUser.displayName });
+                    const lostUser =
+                        currentRoom.users?.[currentRoom.bombHolder!];
+                    if (lostUser)
+                        io.to(roomId).emit("game:end", {
+                            holderUserId: lostUser.id,
+                            holderDisplayName: lostUser.displayName,
+                        });
                     resetGameStatus(gameId);
+                    logEvent("GAME", `ended ${roomId}`, {
+                        roomId,
+                        gameId,
+                        holder: lostUser
+                            ? {
+                                  userId: lostUser.id,
+                                  displayName: lostUser.displayName,
+                              }
+                            : undefined,
+                        players: currentRoom.users?.map((player) => ({
+                            userId: player.id,
+                            displayName: player.displayName,
+                        })),
+                    });
+                    capturePostHogEvent("game_finished", {
+                        player_count: currentRoom.users?.length ?? 0,
+                    });
                     currentRoom.users = [];
                     refreshServerState();
-                    logEvent("GAME", `ended ${roomId}`);
-                    logEvent("ROOM", `players kicked after game ${roomId}`);
+                    logEvent("ROOM", `players kicked after game ${roomId}`, {
+                        roomId,
+                        gameId,
+                    });
                     sendInputUpdate(roomId, "");
                     sendRoomInfo(roomId);
                 } else {
@@ -214,7 +321,10 @@ io.on("connection", (socket) => {
         if (roomIndex === -1) return;
         const room = rooms[roomIndex];
         if (expectedGameId && room.gameId !== expectedGameId) return;
-        if (room.bombTimer) { clearTimeout(room.bombTimer); room.bombTimer = undefined; }
+        if (room.bombTimer) {
+            clearTimeout(room.bombTimer);
+            room.bombTimer = undefined;
+        }
         room.isStart = false;
         room.gameId = undefined;
         room.bombStatus = 0;
@@ -224,33 +334,71 @@ io.on("connection", (socket) => {
         sendInputUpdate(roomId, "");
     };
 
-    const deleteUser = (userId: string) => {
+    const deleteUser = (userId: string, reason: "disconnect" | "room_leave") => {
         if (!roomId) return;
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
         const room = rooms[roomIndex];
-        if (room.users?.find((item) => item.id === userId)) {
+        const leavingUser = room.users?.find((item) => item.id === userId);
+        if (leavingUser) {
             if (room.isStart) {
+                const gameId = room.gameId;
                 resetGameStatus();
                 io.to(roomId).emit("game:quited");
-                logEvent("GAME", `cancelled ${roomId}`);
+                logEvent("GAME", `cancelled ${roomId}`, {
+                    roomId,
+                    gameId,
+                    socketId: socket.id,
+                    userId: leavingUser.id,
+                    displayName: leavingUser.displayName,
+                });
+                capturePostHogEvent("game_cancelled", {
+                    reason,
+                    player_count: room.users?.length ?? 0,
+                });
+                room.users = [];
+            } else {
+                room.users = (room.users ?? []).filter(
+                    (item) => item.id !== userId,
+                );
             }
-            room.users = room.users.filter((item) => item.id !== userId);
             refreshServerState();
-            logEvent("ROOM", `player left ${roomId}`);
+            logEvent("ROOM", `player left ${roomId}`, {
+                roomId,
+                socketId: socket.id,
+                userId: leavingUser.id,
+                displayName: leavingUser.displayName,
+                remainingPlayers: room.users?.map((player) => ({
+                    userId: player.id,
+                    displayName: player.displayName,
+                })),
+            });
+            capturePostHogEvent("player_left", {
+                reason,
+                player_count: room.users?.length ?? 0,
+            });
         }
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
         if (!socketRoom || socketRoom.size === 0) {
             if (room.bombTimer) clearTimeout(room.bombTimer);
             rooms = rooms.filter((item) => item.id !== roomId);
             refreshServerState();
+            logEvent("ROOM", `deleted ${roomId}`, { roomId });
         } else {
             sendInputUpdate(roomId, "");
         }
         sendRoomInfo(roomId);
     };
 
-    socket.on("disconnect", () => { deleteUser(user.id); logEvent("SERVER", "client disconnected"); });
+    socket.on("disconnect", () => {
+        logEvent("SERVER", "client disconnected", {
+            socketId: socket.id,
+            userId: user.id,
+            displayName: user.displayName,
+            roomId,
+        });
+        deleteUser(user.id, "disconnect");
+    });
 });
 
 httpServer.listen(3001, () => {

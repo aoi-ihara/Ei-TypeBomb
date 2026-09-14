@@ -22,7 +22,7 @@
 }
 
 @media (min-width: 768px) {
-    * {
+    html.custom-cursor-active * {
         cursor: none;
     }
 }
@@ -75,7 +75,25 @@ body {
     }
 }
 
-.loading .gradient-background {
+@keyframes appear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+        filter: blur(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
+}
+
+@theme {
+    --animate-appear: appear 0.2s ease-out;
+}
+
+.gradient-background {
     background: linear-gradient(
         270deg,
         var(--color-background-secondary) 25%,
@@ -119,15 +137,5 @@ body {
     }
     100% {
         transform: translateX(0);
-    }
-}
-
-@keyframes resultAnimation {
-    0% {
-        transform: scale(0.75);
-        filter: blur(16px);
-        opacity: 0;
-    }
-    100% {
     }
 }

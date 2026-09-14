@@ -4,6 +4,7 @@ type AuthShellProps = {
     className?: string;
     size?: "large" | "small" | "medium";
     loading?: boolean;
+    animateAppear?: boolean;
 };
 
 export default function Shell({
@@ -12,24 +13,33 @@ export default function Shell({
     className = "flex flex-col gap-4 items-center",
     size = "medium",
     loading,
+    animateAppear = false,
 }: AuthShellProps) {
     return (
         <>
-            {title && (
+            {(title || loading) && (
                 <h1
-                    className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${loading && "gradient-text"}`}
+                    className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${!title && loading && "gradient-text"}`}
                     data-cursor="text"
                 >
-                    {loading ? "Loading…" : title}
+                    {title ? title : "Loading…"}
                 </h1>
             )}
-            {!loading && (
-                <div
-                    className={`px-4 pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className}`}
-                >
-                    {children}
-                </div>
-            )}
+            <div
+                className={`px-4 pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className} ${!loading && animateAppear && "animate-appear origin-top"}`}
+            >
+                {title && loading && (
+                    <div className="w-full flex justify-center">
+                        <div
+                            className="w-fit gradient-text fonr-mono font-bold"
+                            data-cursor="text"
+                        >
+                            Loading…
+                        </div>
+                    </div>
+                )}
+                {!loading && children}
+            </div>
         </>
     );
 }

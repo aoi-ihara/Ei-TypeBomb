@@ -87,7 +87,10 @@ export default function Page({
     if (isNotFound) notFound();
 
     return (
-        <Shell title="Enter Password" loading={!showPasswordField}>
+        <Shell
+            title={showPasswordField ? "Enter Password" : undefined}
+            loading={!showPasswordField}
+        >
             {showPasswordField && (
                 <Input
                     value={roomPassword}

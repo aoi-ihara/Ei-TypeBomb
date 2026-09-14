@@ -32,6 +32,19 @@ import {
 import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
+import Dialog from "@/components/ui/Dialog";
+import { deleteRoom } from "@/lib/room/delete";
+import Collapsible from "@/components/ui/Collapsible";
+import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
+
+const EXAMPLES = [
+    "高校1年生の定期テストの単語",
+    "大学受験でよく見る英単語",
+    "英語のニュースでよく使われる単語",
+    "日常会話でよく使う英単語",
+    "入国審査で言われそうな単語",
+    "ホテルで使いそうな英単語",
+];
 
 type Word = {
     jp: string;
@@ -81,25 +94,49 @@ export default function Page({
     const { slug } = use(params);
     const router = useRouter();
 
-    const [error, setError] = useState(false);
-    const [explanation, setExplanation] = useState("");
-    const [title, setTitle] = useState("");
-    const [password, setPassword] = useState("");
+    const [roomError, setRoomError] = useState(false);
+    const [roomExplanation, setRoomExplanation] = useState("");
+    const [roomTitle, setRoomTitle] = useState("");
+    const [roomPassword, setRoomPassword] = useState("");
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
-    const [id, setId] = useState<string | null>(null);
+    const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
-    const [showCopiedText, setShowCopiedText] = useState(false);
-    const [link, setLink] = useState("");
-    const [linkError, setLinkError] = useState("");
-    const [showRoomId, setShowRoomId] = useState(false);
+    const [isLinkCopied, setIsLinkCopied] = useState(false);
+    const [roomLink, setRoomLink] = useState("");
+    const [roomLinkError, setRoomLinkError] = useState("");
+    const [showRoomCode, setShowRoomCode] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false);
+    const [importData, setImportData] = useState("");
+    const [importError, setImportError] = useState("");
+    const [showImportInput, setShowImportInput] = useState(false);
+    const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
+
+    const [newPassword, setNewPassword] = useState("");
+    const [isPrivate, setIsPrivate] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState("");
+
+    const [isExported, setIsExported] = useState(false);
+
+    const [showGenerationInput, setShowGenerationInput] = useState(false);
+    const [generationPrompt, setGenerationPrompt] = useState("");
+    const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationError, setGenerationError] = useState("");
+    const [isGeminiLimitReached, setIsGeminiLimitReached] = useState(false);
+    const [isGeminiUsageLoading, setIsGeminiUsageLoading] = useState(true);
+
+    const [visibilityError, setVisibilityError] = useState("");
+    const [isUpdatingVisibilitySettings, setIsUpdatingVisibilitySettings] =
+        useState(false);
 
     const isLoadedRef = useRef(false);
-    const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
-                setShowRoomId(false);
+                setShowRoomCode(false);
             }
         };
 
@@ -110,25 +147,65 @@ export default function Page({
         };
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadGeminiUsage = async () => {
+            try {
+                const usage = await getGeminiUsageAction();
+                if (!cancelled) {
+                    setIsGeminiLimitReached(usage.remaining <= 0);
+                }
+            } catch (error) {
+                console.error("Failed to load Gemini usage:", error);
+            } finally {
+                if (!cancelled) setIsGeminiUsageLoading(false);
+            }
+        };
+
+        loadGeminiUsage();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const refreshGeminiUsage = async () => {
+        try {
+            const usage = await getGeminiUsageAction();
+            setIsGeminiLimitReached(usage.remaining <= 0);
+        } catch (error) {
+            console.error("Failed to refresh Gemini usage:", error);
+        }
+    };
+
     const roomDataRef = useRef({
-        title,
-        explanation,
-        password,
+        roomTitle,
+        roomExplanation,
+        roomPassword,
         maxPlayers,
         words,
-        id,
+        roomId,
     });
 
     useEffect(() => {
         roomDataRef.current = {
-            title,
-            explanation,
-            password,
+            roomTitle,
+            roomExplanation,
+            roomPassword,
             maxPlayers,
             words,
-            id,
+            roomId,
         };
-    }, [title, explanation, password, maxPlayers, words, id, link]);
+    }, [
+        roomTitle,
+        roomExplanation,
+        roomPassword,
+        maxPlayers,
+        words,
+        roomId,
+        roomLink,
+    ]);
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -136,31 +213,39 @@ export default function Page({
         const { active, over } = event;
         if (!over || active.id === over.id || !words) return;
 
-        const oldIndex = words.findIndex((w) => w.id === active.id);
-        const newIndex = words.findIndex((w) => w.id === over.id);
+        const oldIndex = words.findIndex((word) => word.id === active.id);
+        const newIndex = words.findIndex((word) => word.id === over.id);
 
         setWords(arrayMove(words, oldIndex, newIndex));
     };
 
+    const handleDeleteRoom = async () => {
+        if (!roomId) return;
+        const result = await deleteRoom(roomId);
+
+        if (result) throw result;
+        else router.push("/my-rooms");
+    };
+
     useEffect(() => {
-        const getRoomInfo = async () => {
+        const loadRoom = async () => {
             const room = await getRoomFromId(slug);
 
             if (!room) {
-                setError(true);
+                setRoomError(true);
                 return;
             }
 
-            setId(room.id);
-            setTitle(room.title ?? "");
-            setExplanation(room.explanation ?? "");
-            setPassword(room.password ?? "");
+            setRoomId(room.id);
+            setRoomTitle(room.title ?? "");
+            setRoomExplanation(room.explanation ?? "");
+            setRoomPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
-            setLink(room.link ?? room.id);
+            setRoomLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
-                (w: Word) => ({
-                    ...w,
+                (word: Word) => ({
+                    ...word,
                     id: crypto.randomUUID(),
                 }),
             );
@@ -169,30 +254,127 @@ export default function Page({
             isLoadedRef.current = true;
         };
 
-        getRoomInfo();
+        loadRoom();
     }, [slug]);
 
-    const saveRoomData = async () => {
-        const roomLinkResult = await getRoomFromLink(link);
-        if (roomLinkResult && roomLinkResult !== slug) {
-            setLinkError("Link has already taken.");
-        } else {
-            setLinkError("");
+    const handleExportWords = async () => {
+        const jsonData = JSON.stringify(
+            (words ?? []).map((word) => {
+                return {
+                    jp: word.jp,
+                    en: word.en,
+                };
+            }),
+            null,
+            4,
+        );
+        await navigator.clipboard.writeText(jsonData);
+        setIsExported(true);
+        setTimeout(() => {
+            setIsExported(false);
+        }, 3000);
+    };
+
+    const handleCopyRoomLink = async () => {
+        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink;
+        await navigator.clipboard.writeText(joinLink);
+        posthog.capture("room_code_copied", { room_id: slug });
+        setIsLinkCopied(true);
+        setTimeout(() => {
+            setIsLinkCopied(false);
+        }, 3000);
+    };
+
+    const handleImportWords = async () => {
+        posthog.capture("words_imported_and_added", { room_id: slug });
+
+        setImportError("");
+
+        if (!roomId || words === null) return;
+
+        if (!importData) {
+            setImportError("JSON data is required.");
+            return;
         }
 
-        const { id, title, explanation, maxPlayers, words } =
+        let parsedWords: Word[];
+
+        try {
+            parsedWords = JSON.parse(importData).map((word: Word) => ({
+                jp: word.jp,
+                en: word.en,
+                id: crypto.randomUUID(),
+            }));
+        } catch {
+            setImportError("Invalid JSON format.");
+            return;
+        }
+
+        const importedWords = parsedWords as WordWithId[];
+        const newWords = [...importedWords, ...words];
+        setWords(newWords);
+
+        setImportData("");
+        setShowImportInput(false);
+    };
+
+    const handleVisibilityUpdate = async () => {
+        setVisibilityError("");
+
+        if (!slug) {
+            console.error("Room ID is required.");
+            return;
+        }
+
+        if (newPassword !== confirmPassword && isPrivate) {
+            setVisibilityError("Passwords do not match.");
+            return;
+        }
+
+        console.log(slug);
+
+        const request: Room = {
+            id: slug,
+            password: isPrivate ? newPassword : null,
+        };
+
+        setIsUpdatingVisibilitySettings(true);
+        const updateError = await updateRoomFromId(request);
+        setIsUpdatingVisibilitySettings(false);
+
+        if (updateError) setVisibilityError(updateError);
+        else {
+            posthog.capture("room_visibility_changed", {
+                room_id: slug,
+                is_private: isPrivate,
+            });
+
+            setRoomPassword(isPrivate ? "" : newPassword);
+            setShowVisibilitySettings(false);
+        }
+    };
+
+    const saveRoomData = async () => {
+        const roomLinkResult = await getRoomFromLink(roomLink);
+        if (roomLinkResult && roomLinkResult !== slug) {
+            setRoomLinkError("Link has already taken.");
+        } else {
+            setRoomLinkError("");
+        }
+
+        const { roomId, roomTitle, roomExplanation, maxPlayers, words } =
             roomDataRef.current;
 
-        if (!id || !words) return;
+        if (!roomId || !words) return;
 
         try {
             const updatedRoom: Room = {
-                id,
-                title,
-                explanation,
+                id: roomId,
+                title: roomTitle,
+                explanation: roomExplanation,
                 maxPlayers: Number(maxPlayers),
                 words: words.map(({ jp, en }) => ({ jp, en })),
-                link,
+                link: roomLink,
             };
 
             const result = await updateRoomFromId(updatedRoom);
@@ -203,172 +385,584 @@ export default function Page({
     };
 
     useEffect(() => {
-        if (!isLoadedRef.current || !id || words === null) return;
+        if (!isLoadedRef.current || !roomId || words === null) return;
 
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
+        if (saveTimerRef.current) {
+            clearTimeout(saveTimerRef.current);
         }
 
-        timerRef.current = setTimeout(() => {
+        saveTimerRef.current = setTimeout(() => {
             saveRoomData();
         }, 2000);
-    }, [title, explanation, maxPlayers, words, id, link]);
+    }, [roomTitle, roomExplanation, maxPlayers, words, roomId, roomLink]);
 
-    const handleCopy = async () => {
-        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + link;
-        await navigator.clipboard.writeText(joinLink);
-        posthog.capture("room_code_copied", { room_id: slug });
-        setShowCopiedText(true);
-        setTimeout(() => {
-            setShowCopiedText(false);
-        }, 3000);
-    };
-
-    if (error) {
+    if (roomError) {
         notFound();
     }
 
     return (
-        <Shell className="flex flex-col gap-4" size="large">
-            {id ? (
-                <>
-                    <div className="flex mt-16 mb-4 items-center w-full">
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/visibility`)
-                            }
-                            variant="text"
-                            className="h-full"
-                        >
-                            <div className="w-8 h-10 flex justify-center items-center">
-                                {password ? (
-                                    <Icon name="lock" />
-                                ) : (
-                                    <Icon name="earth" />
-                                )}
-                            </div>
-                        </Button>
-                        <input
-                            className="w-full outline-none text-2xl font-bold font-mono"
-                            value={title}
-                            placeholder="Room Title"
-                            data-cursor="text"
-                            onChange={(e) => setTitle(e.target.value)}
-                        />
+        <Shell
+            animateAppear={true}
+            loading={!roomId}
+            className="flex flex-col gap-4"
+            size="large"
+        >
+            <div className="flex mt-16 mb-4 items-center w-full">
+                <Button
+                    onClick={() => router.push("/my-rooms")}
+                    variant="text"
+                    className="h-full"
+                >
+                    <div className="w-8 h-10 flex justify-center items-center">
+                        <Icon name="arrowLeft" />
                     </div>
-                    {validateTitle(title) && (
+                </Button>
+                <Button
+                    onClick={() => {
+                        if (roomPassword) setIsPrivate(true);
+                        else setIsPrivate(false);
+
+                        setNewPassword("");
+                        setConfirmPassword("");
+
+                        setShowVisibilitySettings(true);
+                    }}
+                    variant="text"
+                    className="h-full"
+                >
+                    <div className="w-8 h-10 flex justify-center items-center">
+                        {roomPassword ? (
+                            <Icon name="lock" />
+                        ) : (
+                            <Icon name="earth" />
+                        )}
+                    </div>
+                </Button>
+                <input
+                    className="w-full outline-none text-2xl font-bold font-mono"
+                    value={roomTitle}
+                    placeholder="Room Title"
+                    data-cursor="text"
+                    onChange={(e) => setRoomTitle(e.target.value)}
+                />
+            </div>
+            {validateTitle(roomTitle) && (
+                <div className="text-red-500" data-cursor="text">
+                    {validateTitle(roomTitle)}
+                </div>
+            )}
+
+            <div data-cursor="text" className="font-bold flex w-fit text-lg">
+                General
+            </div>
+
+            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                <div className="flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setRoomExplanation(e.target.value)}
+                        label="Explanation"
+                        value={roomExplanation}
+                    />
+                    {validateExplanation(roomExplanation) && (
                         <div className="text-red-500" data-cursor="text">
-                            {validateTitle(title)}
+                            {validateExplanation(roomExplanation)}
+                        </div>
+                    )}
+                </div>
+                <div className="flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setMaxPlayers(e.target.value)}
+                        label="Max Players"
+                        type="number"
+                        min={2}
+                        max={8}
+                        value={maxPlayers}
+                    />
+                    {validateMaxPlayers(Number(maxPlayers)) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateMaxPlayers(Number(maxPlayers))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex gap-4 w-full">
+                <div className="w-full flex flex-col gap-4">
+                    <Input
+                        onChange={(e) => setRoomLink(e.target.value)}
+                        label="Invite Link"
+                        font="mono"
+                        type="url"
+                        inputClassName="pl-19.5"
+                        className={`transition-all w-full duration-200 ease-out`}
+                        value={roomLink}
+                        disableLabelAnimation={true}
+                    >
+                        <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
+                            /join/
+                        </div>
+                    </Input>
+                    {validateLink(roomLink) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateLink(roomLink)}
+                        </div>
+                    )}
+                    {roomLinkError && (
+                        <div className="text-red-500" data-cursor="text">
+                            {roomLinkError}
+                        </div>
+                    )}
+                </div>
+
+                <Button
+                    className="w-fit shrink-0"
+                    padding="large"
+                    iconName="qrCode"
+                    onClick={() => setShowRoomCode(true)}
+                ></Button>
+
+                <Button
+                    className="w-fit shrink-0"
+                    onClick={handleCopyRoomLink}
+                    padding="large"
+                    iconName={isLinkCopied ? "check" : "copy"}
+                ></Button>
+            </div>
+
+            <div
+                data-cursor="text"
+                className="font-bold flex w-fit text-lg mt-4"
+            >
+                Settings
+            </div>
+
+            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
+                <Button
+                    onClick={() => {
+                        if (roomPassword) setIsPrivate(true);
+                        else setIsPrivate(false);
+
+                        setNewPassword("");
+                        setConfirmPassword("");
+
+                        setShowVisibilitySettings(true);
+                    }}
+                    className=""
+                    iconName="eye"
+                >
+                    Visibility
+                </Button>
+                <Dialog
+                    title="Visibility Settings"
+                    open={showVisibilitySettings}
+                    alignment="vertical"
+                    size="middle"
+                    onClose={() => setShowVisibilitySettings(false)}
+                >
+                    <div className="w-full pl-2 items-center flex justify-between">
+                        <div data-cursor="text">Set to Private</div>
+                        <div data-cursor="button" className="rounded-full flex">
+                            <button
+                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                                onClick={() => {
+                                    const next = !isPrivate;
+
+                                    setIsPrivate(next);
+                                }}
+                            >
+                                <div
+                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-200 ease-out`}
+                                ></div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <Input
+                        value={newPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        label="Room Password"
+                        type="password"
+                    />
+
+                    <Input
+                        value={confirmPassword}
+                        disabled={!isPrivate}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        label="Conform Password"
+                        type="password"
+                    />
+
+                    {roomError && (
+                        <div className="text-red-500" data-cursor="text">
+                            {roomError}
                         </div>
                     )}
 
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg"
-                    >
-                        General
-                    </div>
-
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                        <div className="flex flex-col gap-4">
-                            <Input
-                                onChange={(e) => setExplanation(e.target.value)}
-                                label="Explanation"
-                                value={explanation}
-                            />
-                            {validateExplanation(explanation) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateExplanation(explanation)}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex flex-col gap-4">
-                            <Input
-                                onChange={(e) => setMaxPlayers(e.target.value)}
-                                label="Max Players"
-                                type="number"
-                                min={2}
-                                max={8}
-                                value={maxPlayers}
-                            />
-                            {validateMaxPlayers(Number(maxPlayers)) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateMaxPlayers(Number(maxPlayers))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
                     <div className="flex gap-4 w-full">
-                        <div className="w-full flex flex-col gap-4">
+                        <Button
+                            className="w-full"
+                            onClick={() => setShowVisibilitySettings(false)}
+                            iconName="x"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => handleVisibilityUpdate()}
+                            className="w-full"
+                            iconName="check"
+                            loading={isUpdatingVisibilitySettings}
+                        >
+                            Done
+                        </Button>
+                    </div>
+                    {visibilityError && (
+                        <div className="text-red-500" data-cursor="text">
+                            {visibilityError}
+                        </div>
+                    )}
+                </Dialog>
+
+                <Button
+                    onClick={() => handleExportWords()}
+                    className=""
+                    iconName={isExported ? "check" : "download"}
+                >
+                    {!isExported && "Export"}
+                </Button>
+
+                <Button
+                    onClick={() => setShowDeleteDialog(true)}
+                    variant="danger"
+                    className=""
+                    iconName="trash"
+                >
+                    Delete Room
+                </Button>
+                <Dialog
+                    title="Are you sure you want to delete this room?"
+                    description="This action cannot be undone."
+                    open={showDeleteDialog}
+                    onClose={() => setShowDeleteDialog(false)}
+                >
+                    <Button
+                        iconName="x"
+                        className="w-full"
+                        onClick={() => setShowDeleteDialog(false)}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="danger"
+                        iconName="trash"
+                        className="w-full"
+                        onClick={() => handleDeleteRoom()}
+                    >
+                        Delete
+                    </Button>
+                </Dialog>
+            </div>
+
+            <div
+                data-cursor="text"
+                className="font-bold flex w-fit text-lg mt-4"
+            >
+                Words
+            </div>
+
+            {words && (
+                <div className="w-full flex gap-4">
+                    <Button
+                        onClick={() => {
+                            setShowImportInput(false);
+                            setWords([
+                                {
+                                    id: crypto.randomUUID(),
+                                    en: "",
+                                    jp: "",
+                                },
+                                ...words,
+                            ]);
+
+                            posthog.capture("word_added");
+                        }}
+                        className="w-full"
+                        iconName="plus"
+                    >
+                        Add
+                    </Button>
+
+                    <Button
+                        onClick={() => {
+                            setShowGenerationInput(!showGenerationInput);
+                            setGenerationPrompt("");
+                            setGenerationError("");
+                            setGeneratedWords([]);
+                            setShowImportInput(false);
+                        }}
+                        disabled={isGeminiUsageLoading || isGeminiLimitReached}
+                        iconName="wandSparkles"
+                    />
+
+                    <Button
+                        onClick={() => {
+                            setImportError("");
+                            setImportData("");
+                            setShowImportInput(!showImportInput);
+                            setShowGenerationInput(false);
+                        }}
+                        iconName="upload"
+                    />
+                    <Dialog
+                        title="Import from JSON"
+                        size="middle"
+                        alignment="vertical"
+                        open={showImportDialog}
+                        onClose={() => setShowImportDialog(false)}
+                    >
+                        <div className="w-full px-2 flex flex-col items-start gap-4">
+                            <div data-cursor="text">
+                                Please make sure your JSON file follows this
+                                format:
+                            </div>
+                            <div data-cursor="text">
+                                {" "}
+                                <pre className="text-sm">
+                                    {`[
+    {
+        "jp": "りんご",
+        "en": "apple"
+    },
+    {
+        "jp": "ねこ",
+        "en": "cat"
+    }
+]`}
+                                </pre>
+                            </div>
+                            <div className="opacity-50" data-cursor="text">
+                                Each object must include a &quot;jp&quot; field
+                                for the Japanese word and an &quot;en&quot;
+                                field for the English word.
+                            </div>
+                        </div>
+                        <Button
+                            onClick={() => setShowImportDialog(false)}
+                            variant="primary"
+                            className="w-full"
+                            iconName="check"
+                        >
+                            Done
+                        </Button>
+                    </Dialog>
+                </div>
+            )}
+
+            {words && (
+                <div className="flex flex-col">
+                    <Collapsible
+                        open={showGenerationInput}
+                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
+                    >
+                        <div className="flex gap-4 w-full">
                             <Input
-                                onChange={(e) => setLink(e.target.value)}
-                                label="Invite Link"
-                                font="mono"
-                                type="url"
-                                inputClassName="pl-19.5"
-                                className={`transition-all w-full duration-200 ease-out`}
-                                value={link}
-                                disableLabelAnimation={true}
-                            >
-                                <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
-                                    /join/
-                                </div>
-                            </Input>
-                            {validateLink(link) && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {validateLink(link)}
-                                </div>
-                            )}
-                            {linkError && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {linkError}
-                                </div>
-                            )}
+                                value={generationPrompt}
+                                label="Theme"
+                                onChange={(e) =>
+                                    setGenerationPrompt(e.target.value)
+                                }
+                                className="w-full"
+                            />
+                            <Button
+                                loading={isGenerating}
+                                disabled={!generationPrompt}
+                                onClick={async () => {
+                                    setIsGenerating(true);
+                                    setGenerationError("");
+
+                                    try {
+                                        const generatedWords =
+                                            await generateWordsAction(
+                                                generationPrompt,
+                                            );
+
+                                        setGeneratedWords(generatedWords);
+                                    } catch (error) {
+                                        console.error(
+                                            "Failed to generate words:",
+                                            error,
+                                        );
+
+                                        setGeneratedWords([]);
+                                        setGenerationError(
+                                            error instanceof Error
+                                                ? error.message
+                                                : "Failed to generate words. Please try again.",
+                                        );
+                                    } finally {
+                                        setIsGenerating(false);
+                                        await refreshGeminiUsage();
+                                    }
+                                }}
+                                iconName="arrowRight"
+                                variant="primary"
+                                padding="large"
+                            />
                         </div>
 
-                        <Button
-                            className="w-fit shrink-0"
-                            padding="large"
-                            iconName="qrCode"
-                            onClick={() => setShowRoomId(true)}
-                        ></Button>
+                        {!generationPrompt && !generatedWords.length && (
+                            <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
+                                {EXAMPLES.map((example, index) => (
+                                    <Button
+                                        iconName="plus"
+                                        onClick={() =>
+                                            setGenerationPrompt(example)
+                                        }
+                                        className="w-full flex"
+                                        padding="small"
+                                        alignment="left"
+                                        key={index}
+                                    >
+                                        {example}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
 
-                        <Button
-                            className="w-fit shrink-0"
-                            onClick={handleCopy}
-                            padding="large"
-                            iconName={showCopiedText ? "check" : "copy"}
-                        ></Button>
-                    </div>
+                        {generatedWords.length !== 0 && (
+                            <div
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                            >
+                                {generatedWords.map((word, index) => (
+                                    <div
+                                        data-cursor="text"
+                                        className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                                        key={index}
+                                    >
+                                        {word.jp}
+                                        <div className="w-full font-mono">
+                                            {word.en}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg mt-4"
+                        {generatedWords?.length !== 0 && (
+                            <div className="flex gap-4 w-full">
+                                <Button
+                                    onClick={() =>
+                                        setShowGenerationInput(false)
+                                    }
+                                    className="w-full animate-appear"
+                                    iconName="x"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    className="w-full animate-appear"
+                                    iconName="plus"
+                                    onClick={() => {
+                                        if (!generatedWords) return;
+
+                                        let parsedWords: Word[];
+
+                                        try {
+                                            parsedWords = generatedWords.map(
+                                                (word: Word) => ({
+                                                    jp: word.jp,
+                                                    en: word.en,
+                                                    id: crypto.randomUUID(),
+                                                }),
+                                            );
+                                        } catch {
+                                            setImportError(
+                                                "Invalid JSON format.",
+                                            );
+                                            return;
+                                        }
+
+                                        const generatedWordsWithId =
+                                            parsedWords as WordWithId[];
+
+                                        setWords([
+                                            ...generatedWordsWithId,
+                                            ...words,
+                                        ]);
+                                        setShowGenerationInput(false);
+                                    }}
+                                >
+                                    Add
+                                </Button>
+                            </div>
+                        )}
+
+                        {generationError && (
+                            <div className="text-red-500" data-cursor="text">
+                                {generationError}
+                            </div>
+                        )}
+                    </Collapsible>
+                    <Collapsible
+                        open={showImportInput}
+                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
-                        Words
-                    </div>
-
-                    {words && (
+                        <div data-cursor="text" className="p-2">
+                            Each object must include a &quot;jp&quot; field for
+                            the Japanese word and an &quot;en&quot; field for
+                            the English word.
+                            <Button
+                                onClick={() => setShowImportDialog(true)}
+                                variant="text"
+                            >
+                                Learn More
+                            </Button>
+                        </div>
+                        <Input
+                            value={importData}
+                            variant="textarea"
+                            inputClassName="resize-none h-48"
+                            font="mono"
+                            onChange={(e) => setImportData(e.target.value)}
+                            label="JSON Data"
+                        />
+                        {importData && (
+                            <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                <Button
+                                    onClick={() => setShowImportInput(false)}
+                                    className="w-full"
+                                    iconName="x"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    className="w-full"
+                                    iconName="plus"
+                                    onClick={() => handleImportWords()}
+                                >
+                                    Import
+                                </Button>
+                            </div>
+                        )}
+                        {importError && (
+                            <div className="text-red-500" data-cursor="text">
+                                {importError}
+                            </div>
+                        )}
+                    </Collapsible>
+                    <div className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
                             collisionDetection={closestCenter}
                             onDragEnd={handleDragEnd}
                         >
                             <SortableContext
-                                items={words.map((w) => w.id)}
+                                items={words.map((word) => word.id)}
                                 strategy={verticalListSortingStrategy}
                             >
                                 {words.map((word, index) => (
@@ -382,16 +976,19 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (w, i) =>
-                                                                        i ===
+                                                                    (
+                                                                        currentWord,
+                                                                        wordIndex,
+                                                                    ) =>
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...w,
+                                                                                  ...currentWord,
                                                                                   jp: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : w,
+                                                                            : currentWord,
                                                                 );
                                                             setWords(newWords);
                                                         }}
@@ -422,16 +1019,19 @@ export default function Page({
                                                         onChange={(e) => {
                                                             const newWords =
                                                                 words.map(
-                                                                    (w, i) =>
-                                                                        i ===
+                                                                    (
+                                                                        currentWord,
+                                                                        wordIndex,
+                                                                    ) =>
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...w,
+                                                                                  ...currentWord,
                                                                                   en: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : w,
+                                                                            : currentWord,
                                                                 );
                                                             setWords(newWords);
                                                         }}
@@ -475,8 +1075,12 @@ export default function Page({
                                                     onClick={() => {
                                                         const newWords =
                                                             words.filter(
-                                                                (_, i) =>
-                                                                    i !== index,
+                                                                (
+                                                                    _,
+                                                                    wordIndex,
+                                                                ) =>
+                                                                    wordIndex !==
+                                                                    index,
                                                             );
                                                         setWords(newWords);
                                                     }}
@@ -490,116 +1094,60 @@ export default function Page({
                                 ))}
                             </SortableContext>
                         </DndContext>
-                    )}
-
-                    {words && (
-                        <div className="w-full flex gap-4">
-                            <Button
-                                onClick={() => {
-                                    setWords([
-                                        ...words,
-                                        {
-                                            id: crypto.randomUUID(),
-                                            en: "",
-                                            jp: "",
-                                        },
-                                    ]);
-
-                                    posthog.capture("word_added");
-                                }}
-                                className="w-full"
-                                padding="large"
-                                iconName="plus"
-                            >
-                                Add
-                            </Button>
-
-                            <Button
-                                onClick={() =>
-                                    router.push(`/my-rooms/${slug}/import`)
-                                }
-                                iconName="upload"
-                                padding="large"
-                            />
-                        </div>
-                    )}
-
-                    <div
-                        data-cursor="text"
-                        className="font-bold flex w-fit text-lg mt-4"
-                    >
-                        Settings
                     </div>
-
-                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/visibility`)
-                            }
-                            className=""
-                            iconName="eye"
-                        >
-                            Visibility
-                        </Button>
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/export`)
-                            }
-                            className=""
-                            iconName="download"
-                        >
-                            Export
-                        </Button>
-                        <Button
-                            onClick={() =>
-                                router.push(`/my-rooms/${slug}/delete`)
-                            }
-                            variant="danger"
-                            className=""
-                            iconName="trash"
-                        >
-                            Delete Room
-                        </Button>
-                    </div>
-                </>
-            ) : (
-                <div className="w-full flex justify-center">
-                    <h1
-                        className="text-2xl mt-16 mb-8 font-bold font-mono gradient-text"
-                        data-cursor="text"
-                    >
-                        Loading…
-                    </h1>
                 </div>
             )}
 
             <div
-                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col  fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomId && "opacity-0 scale-95 pointer-events-none"
+                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
+                    !showRoomCode &&
+                    "opacity-0 scale-95 blur-md pointer-events-none"
                 } z-100 transition-all overlay duration-200 ease-out`}
-                onClick={() => setShowRoomId(false)}
+                onClick={() => setShowRoomCode(false)}
             >
                 <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
                 </div>
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
-                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + link}
-                        size={200}
+                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink}
+                        size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
                         className="text-(--color-foreground) md:shrink-0"
                     />
                     <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
                     <div className="flex items-center justify-center">
-                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center leading-tight text-3xl sm:text-4xl">
-                            {link}
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl">
+                            {roomLink}
                         </div>
                     </div>
                 </div>
                 <div className="opacity-50">
                     Press escape or click to return.
                 </div>
+            </div>
+
+            <div
+                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                aria-describedby={
+                    showImportInput || showGenerationInput
+                        ? "dialog-description"
+                        : undefined
+                }
+            >
+                <button
+                    type="button"
+                    aria-label="Close dialog"
+                    onClick={() => {
+                        setShowImportInput(false);
+                        setShowGenerationInput(false);
+                    }}
+                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
+                />
             </div>
         </Shell>
     );

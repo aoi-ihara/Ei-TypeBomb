@@ -17,3 +17,31 @@ if (token) {
         debug: process.env.NODE_ENV === "development",
     });
 }
+
+let gameNumber = 0;
+const originalCapture = posthog.capture.bind(posthog);
+
+posthog.capture = ((eventName, properties, options) => {
+    if (eventName === "game_started") {
+        gameNumber += 1;
+    }
+
+    if (eventName === "game_won" || eventName === "game_lost") {
+        properties = {
+            ...properties,
+            game_number: gameNumber,
+        };
+    }
+
+    return originalCapture(eventName, properties, options);
+}) as typeof posthog.capture;
+
+document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const button = target.closest("button");
+    if (button?.textContent?.trim() !== "Play Again") return;
+
+    posthog.capture("game_play_again_clicked");
+});

@@ -7,6 +7,7 @@ import UsersView from "@/components/feature/UsersView";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
+import { isTrustedServerUrl, resolveServerUrl } from "@/lib/room/serverUrl";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
@@ -27,6 +28,7 @@ export default function Clinet({
 }: Props) {
     const [userId, setUserId] = useState<string | null>(null);
     const userIdRef = useRef<string | null>(null);
+    const gameNumberRef = useRef(0);
 
     const [room, setRoom] = useState<Room | null>(null);
     const [users, setUsers] = useState<User[]>([]);
@@ -37,6 +39,7 @@ export default function Clinet({
         return localStorage.getItem("display-name") ?? "";
     });
     const [bombStatus, setBombStatus] = useState<number | null>(0);
+
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -67,14 +70,12 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl =
-            typeof window === "undefined" || initialServerUrl === ""
-                ? process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL
-                : initialServerUrl;
+        const primaryUrl = resolveServerUrl(initialServerUrl);
         const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
         let selected = false;
         let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+        let backupConnectionStartedAt: number | null = null;
 
         const primarySocket = io(primaryUrl, {
             reconnection: false,
@@ -87,22 +88,28 @@ export default function Clinet({
         type Candidate = {
             socket: ReturnType<typeof io>;
             ready: boolean;
+            url: string | undefined;
         };
 
         const primaryCandidate: Candidate = {
             socket: primarySocket,
             ready: false,
+            url: primaryUrl,
         };
         const renderCandidate: Candidate | null = renderSocket
-            ? { socket: renderSocket, ready: false }
+            ? { socket: renderSocket, ready: false, url: backupUrl }
             : null;
 
-        const authenticate = async (socket: ReturnType<typeof io>) => {
+        const authenticate = async (candidate: Candidate) => {
+            const socket = candidate.socket;
             setUserId(socket.id ?? null);
             userIdRef.current = socket.id ?? null;
 
             const authToken = await getAuthToken();
             if (!authToken || !selected || socketRef.current !== socket) return;
+
+            // Never disclose the authentication token to an untrusted origin.
+            if (!isTrustedServerUrl(candidate.url)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -131,12 +138,15 @@ export default function Clinet({
                 console.warn(
                     "Primary server unavailable. Switching to Render.",
                 );
+                backupConnectionStartedAt = performance.now();
+                posthog.capture("switched_to_backup_server");
             } else {
                 console.info("Connected to primary server.");
+                posthog.capture("primary_server_connected");
             }
 
             if (candidate.ready) {
-                void authenticate(candidate.socket);
+                void authenticate(candidate);
             }
         };
 
@@ -155,7 +165,6 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
-                    console.log(newRoom);
                     setRoom(newRoom);
                     setUsers(
                         newRoom.users.map((item) => {
@@ -204,7 +213,19 @@ export default function Clinet({
                 }
 
                 if (socketRef.current === socket) {
-                    void authenticate(socket);
+                    if (
+                        socket === renderSocket &&
+                        backupConnectionStartedAt !== null
+                    ) {
+                        const connectionTimeMs = Math.round(
+                            performance.now() - backupConnectionStartedAt,
+                        );
+                        posthog.capture("backup_server_connected", {
+                            connection_time_ms: connectionTimeMs,
+                        });
+                        backupConnectionStartedAt = null;
+                    }
+                    void authenticate(candidate);
                 }
             });
 
@@ -223,9 +244,13 @@ export default function Clinet({
                     setLostDisplayName(holderDisplayName);
 
                     if (didLose) {
-                        posthog.capture("game_lost");
+                        posthog.capture("game_lost", {
+                            game_number: gameNumberRef.current,
+                        });
                     } else {
-                        posthog.capture("game_won");
+                        posthog.capture("game_won", {
+                            game_number: gameNumberRef.current,
+                        });
                     }
                 },
             );
@@ -343,7 +368,11 @@ export default function Clinet({
     };
 
     const handleStartGame = () => {
-        posthog.capture("game_started", { player_count: users.length });
+        gameNumberRef.current += 1;
+        posthog.capture("game_started", {
+            player_count: users.length,
+            game_number: gameNumberRef.current,
+        });
         socketRef.current?.emit("game:start");
     };
 
@@ -369,7 +398,7 @@ export default function Clinet({
                     width="24px"
                     fill="currentColor"
                 >
-                    <path d="m696-80-56-56 84-84-84-84 56-56 84 84 84-84 56 56-83 84 83 84-56 56-84-83-84 83Zm-216 0q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 10-.5 20t-1.5 20h-81q2-10 2.5-20t.5-20q0-20-2.5-40t-7.5-40H654q3 20 4.5 40t1.5 40v20q0 10-1 20h-80q1-10 1-20v-20q0-20-1.5-40t-4.5-40H386q-3-20-4.5 40t-1.5 40q0 20 1.5 40t4.5 40h174v80H404q12 43 31 82.5t45 75.5q18 0 35.5-2t35.5-4l18 78q-23 5-44.5 7.5T480-80ZM170-400h136q-3-20-4.5-40t-1.5-40q0-20 1.5-40t4.5-40H170q-5 20-7.5 40t-2.5 40q0 20 2.5 40t7.5 40Zm34-240h118q9-37 22.5-72.5T376-782q-55 18-99 54.5T204-640Zm172 462q-18-34-31.5-69.5T322-320H204q29 51 73 87.5t99 54.5Zm28-462h152q-12-43-31-82.5T480-798q-26 36-45 75.5T404-640Zm234 0h118q-29-51-73-87.5T584-782q18 34 31.5 69.5T638-640Z" />
+                    <path d="m696-80-56-56 84-84-84-84 56-56 84 84 84-84 56 56-83 84 83 84-56 56-84-83-84 83Zm-216 0q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 10-.5 20t-1.5 20h-81q2-10 2.5-20t.5-20q0-20-2.5-40t-7.5-40H654q3 20 4.5 40t1.5 40v20q0 10-1 20h-80q1-10 1-20v-20q0-20-1.5-40t-4.5-40H386q-3 20-4.5 40t-1.5 40q0 20 1.5 40t4.5 40h174v80H404q12 43 31 82.5t45 75.5q18 0 35.5-2t35.5-4l18 78q-23 5-44.5 7.5T480-80ZM170-400h136q-3-20-4.5-40t-1.5-40q0-20 1.5-40t4.5-40H170q-5 20-7.5 40t-2.5 40q0 20 2.5 40t7.5 40Zm34-240h118q9-37 22.5-72.5T376-782q-55 18-99 54.5T204-640Zm172 462q-18-34-31.5-69.5T322-320H204q29 51 73 87.5t99 54.5Zm28-462h152q-12-43-31-82.5T480-798q-26 36-45 75.5T404-640Zm234 0h118q-29-51-73-87.5T584-782q18 34 31.5 69.5T638-640Z" />
                 </svg>
                 <div
                     className="flex flex-col"
@@ -381,7 +410,7 @@ export default function Clinet({
             </div>
             {result !== null && (
                 <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
-                    <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
+                    <div className="w-sm flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
                                 ? "You Lose"
@@ -415,7 +444,7 @@ export default function Clinet({
                 >
                     {room ? (
                         users.some((user) => user.id === userId) ? (
-                            <div className="flex flex-col h-full">
+                            <div className="flex flex-col h-full animate-appear">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
@@ -448,6 +477,9 @@ export default function Clinet({
                                                     <TypingView
                                                         japanese={
                                                             currentWord.jp
+                                                        }
+                                                        bombStatus={
+                                                            bombStatus ?? 0
                                                         }
                                                         english={currentWord.en}
                                                         onSuccess={() => {
@@ -536,13 +568,13 @@ export default function Clinet({
                                     isStarted ? (
                                         currentWord === null ? (
                                             <div
-                                                className="font-mono w-fit font-bold text-2xl"
+                                                className="font-mono animate-appear w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
                                                 Game started
                                             </div>
                                         ) : (
-                                            <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
+                                            <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
                                                 {currentTurnUser?.id ==
                                                 userId ? (
                                                     <div
@@ -581,6 +613,7 @@ export default function Clinet({
                                                                 input,
                                                             );
                                                     }}
+                                                    bombStatus={bombStatus ?? 0}
                                                     currentInput={
                                                         userId ==
                                                         currentTurnUser?.id
@@ -593,7 +626,7 @@ export default function Clinet({
                                     ) : (
                                         !isSpectator && (
                                             <>
-                                                <div className="w-full">
+                                                <div className="w-full animate-appear">
                                                     <div
                                                         className="w-fit pl-4 font-bold"
                                                         data-cursor="text"
@@ -601,7 +634,7 @@ export default function Clinet({
                                                         Connected
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 animate-appear">
                                                     <div
                                                         className="rounded-lg w-32 flex"
                                                         data-cursor="button"
@@ -635,7 +668,7 @@ export default function Clinet({
                                         )
                                     )
                                 ) : (
-                                    <div className="flex justify-start w-full">
+                                    <div className="flex justify-start animate-appear w-full">
                                         <div
                                             className="font-mono opacity-50 w-fit pl-4 font-bold"
                                             data-cursor="text"
@@ -647,7 +680,7 @@ export default function Clinet({
                             </div>
                         )
                     ) : (
-                        <div className="w-full h-full flex items-center">
+                        <div className="w-full h-full flex animate-appear items-center">
                             <div
                                 className="w-fit pl-4 font-bold gradient-text"
                                 data-cursor="text"

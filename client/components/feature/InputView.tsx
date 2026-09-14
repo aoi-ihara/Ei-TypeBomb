@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { getAuthToken } from "@/lib/room/auth";
+import posthog from "posthog-js";
+
+type WordPrefixVariant = "control" | "prefix-1" | "prefix-3";
+
+const prefixLengthMap: Record<WordPrefixVariant, number> = {
+    control: 0,
+    "prefix-1": 1,
+    "prefix-3": 3,
+};
+
+const isSoundEffectsEnabled = () => {
+    if (typeof document === "undefined") return true;
+
+    return document.cookie
+        .split(";")
+        .some((cookie) => cookie.trim() === "sound-effects=true" || cookie.trim() === "sound-effects");
+};
 
 export default function TypingView({
     japanese,
@@ -8,14 +25,22 @@ export default function TypingView({
     onSuccess,
     onChangeInput,
     currentInput,
+    bombStatus,
 }: {
     japanese: string;
     english: string | null;
     onSuccess: () => void;
     onChangeInput: (input: string) => void;
     currentInput: string | null;
+    bombStatus?: number | null;
 }) {
-    const [missCount, setMissCount] = useState(0);
+    const variant = posthog.getFeatureFlag("showWordPrefix");
+    console.log("variant", variant);
+    const prefixLength = prefixLengthMap[variant as WordPrefixVariant] ?? 0;
+
+    const [missCount, setMissCount] = useState(
+        bombStatus === 0 ? prefixLength : 0,
+    );
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
@@ -101,11 +126,17 @@ export default function TypingView({
                 const next = Array(english.length).fill("");
                 setInput(next);
                 setCurrentSelection(0);
-                setMissCount(0);
+                console.log("bombStatus", bombStatus);
+                setMissCount(bombStatus === 0 ? prefixLength : 0);
                 onChangeInput(next.join(""));
-                const audio = new Audio("/Blip_select_36.wav");
-                audio.volume = 1;
-                audio.play();
+
+                if (isSoundEffectsEnabled()) {
+                    const audio = new Audio("/Blip_select_36.wav");
+                    audio.volume = 1;
+                    audio.play().catch(() => {
+                        console.log("Audio playback prevented by browser policy.");
+                    });
+                }
             } else {
                 console.log("Wrong answer. Query:", result);
                 setInput(Array(english.length).fill(""));

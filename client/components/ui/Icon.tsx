@@ -32,6 +32,11 @@ import {
     UsersRound,
     CircleUserRound,
     QrCode,
+    ArrowLeft,
+    Info,
+    WandSparkles,
+    Loader,
+    Loader2,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -50,6 +55,7 @@ const icons: Record<string, LucideIcon> = {
     mail: Mail,
     pen: Pen,
     arrowRight: ArrowRight,
+    arrowLeft: ArrowLeft,
     check: Check,
     plus: Plus,
     copy: Copy,
@@ -67,19 +73,33 @@ const icons: Record<string, LucideIcon> = {
     usersRound: UsersRound,
     circleUserRound: CircleUserRound,
     qrCode: QrCode,
+    info: Info,
+    wandSparkles: WandSparkles,
+    loader: Loader,
+    loaderCircle: Loader2,
 };
 
 export type IconName = keyof typeof icons;
 
-type Props = {
+export function Icon({
+    name,
+    size = 24,
+    className,
+}: {
     name: IconName;
     size?: number | string;
-};
-
-export function Icon({ name, size = 24 }: Props) {
+    className?: string;
+}) {
     const IconComponent = icons[name];
 
     if (!IconComponent) return null;
 
-    return <IconComponent size={size} strokeWidth={2.5} />;
+    return (
+        <IconComponent
+            size={size}
+            className={className}
+            strokeWidth={2.5}
+            data-icon={name}
+        />
+    );
 }

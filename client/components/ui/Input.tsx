@@ -60,7 +60,7 @@ export default function Input(props: InputProps) {
     return (
         <div
             className={`relative flex flex-col transition-all duration-200 ease-out ${className} ${
-                disabled ? "opacity-50 pointer-events-none" : ""
+                disabled ? "opacity-50" : ""
             }`}
         >
             {props.variant === "textarea" ? (
@@ -88,6 +88,7 @@ export default function Input(props: InputProps) {
                     onChange={props.onChange}
                     max={max}
                     min={min}
+                    disabled={disabled}
                     data-cursor={disabled ? "button" : "text"}
                     data-cursor-shape="2"
                     autoComplete={autoComplete}
