@@ -16,7 +16,11 @@ const isSoundEffectsEnabled = () => {
 
     return document.cookie
         .split(";")
-        .some((cookie) => cookie.trim() === "sound-effects=true" || cookie.trim() === "sound-effects");
+        .some(
+            (cookie) =>
+                cookie.trim() === "sound-effects=true" ||
+                cookie.trim() === "sound-effects",
+        );
 };
 
 export default function TypingView({
@@ -134,7 +138,9 @@ export default function TypingView({
                     const audio = new Audio("/Blip_select_36.wav");
                     audio.volume = 1;
                     audio.play().catch(() => {
-                        console.log("Audio playback prevented by browser policy.");
+                        console.log(
+                            "Audio playback prevented by browser policy.",
+                        );
                     });
                 }
             } else {
