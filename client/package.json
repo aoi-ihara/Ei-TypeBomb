@@ -50,7 +50,6 @@
         "electron-builder": "^26.15.2",
         "eslint": "^9",
         "eslint-config-next": "16.2.6",
-        "prettier": "^3.9.6",
         "tailwindcss": "^4",
         "typescript": "^5"
     }

@@ -27,7 +27,9 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (room.explanation !== undefined) {
         const validatorResult =
-            room.explanation === "" ? null : validateExplanation(room.explanation);
+            room.explanation === ""
+                ? null
+                : validateExplanation(room.explanation);
         if (validatorResult) validationErrors.push(validatorResult);
         else updateData.explanation = room.explanation;
     }
@@ -88,7 +90,8 @@ export const updateRoomFromId = async (room: Room) => {
         .maybeSingle();
 
     if (updateError) return updateError.message;
-    if (!data) return "Could not find this room or you do not have access to it.";
+    if (!data)
+        return "Could not find this room or you do not have access to it.";
 
     const posthog = getPostHogClient();
     posthog.capture({

@@ -21,9 +21,7 @@ const trustedOrigins = (): string[] =>
  * primary or backup servers. The game sends the authentication token to the
  * server, so it must never connect to an origin the visitor controls.
  */
-export const isTrustedServerUrl = (
-    url: string | undefined | null,
-): boolean => {
+export const isTrustedServerUrl = (url: string | undefined | null): boolean => {
     const origin = originOf(url);
     if (!origin) return false;
 
