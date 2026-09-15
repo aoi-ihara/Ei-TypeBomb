@@ -119,6 +119,25 @@ body {
     }
 }
 
+@keyframes bombShake {
+    0%,
+    100% {
+        transform: translateX(0) rotate(0deg);
+    }
+    25% {
+        transform: translateX(-1.5px) rotate(-2deg);
+    }
+    75% {
+        transform: translateX(1.5px) rotate(2deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bomb-shake {
+        animation: none !important;
+    }
+}
+
 @keyframes wrongAnswer {
     0% {
         transform: translateX(-10);
