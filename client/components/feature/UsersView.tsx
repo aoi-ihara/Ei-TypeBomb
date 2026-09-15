@@ -143,7 +143,7 @@ export default function UsersView({
                                     ? undefined
                                     : `bombShake ${bombShakeDuration} ease-in-out infinite`,
                         }}
-                        className="transition-colors duration-200 ease-out"
+                        className={`transition-colors duration-200 ease-out ${bombShakeDuration === null ? "" : "bomb-shake"}`}
                     >
                         <path
                             fill="none"
