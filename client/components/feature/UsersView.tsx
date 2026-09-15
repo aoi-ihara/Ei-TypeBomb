@@ -51,6 +51,10 @@ export default function UsersView({
 
     const styleIndex = Math.min(Math.max(0, bombStatus), bombStyles.length - 1);
     const style = bombStyles[styleIndex];
+    const bombShakeDuration =
+        bombStatus === 0
+            ? null
+            : `${Math.max(100, 700 - bombStatus * 150)}ms`;
 
     return (
         <div className="h-full w-full flex items-center justify-center">
@@ -134,6 +138,10 @@ export default function UsersView({
                         xmlns="http://www.w3.org/2000/svg"
                         style={{
                             filter: `drop-shadow(0 0 6px ${style.glow})`,
+                            animation:
+                                bombShakeDuration === null
+                                    ? undefined
+                                    : `bombShake ${bombShakeDuration} ease-in-out infinite`,
                         }}
                         className="transition-colors duration-200 ease-out"
                     >
