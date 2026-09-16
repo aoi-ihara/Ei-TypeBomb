@@ -5,7 +5,11 @@ import { useEffect, Suspense } from "react";
 import posthog from "posthog-js";
 import { PostHogProvider as PHProvider } from "posthog-js/react";
 
-if (typeof window !== "undefined" && !posthog.__loaded) {
+if (
+    typeof window !== "undefined" &&
+    !posthog.__loaded &&
+    process.env.NODE_ENV === "production"
+) {
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
         capture_pageview: false,
         disable_session_recording: false,
