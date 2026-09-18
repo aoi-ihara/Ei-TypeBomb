@@ -35,6 +35,10 @@ export default function Loading() {
             posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
+            posthog.capture("room_entry_failed", {
+                room_id: roomId,
+                reason: result,
+            });
             setError(result);
         }
         setLoading(false);
@@ -54,12 +58,14 @@ export default function Loading() {
         );
 
         if (!roomResult) {
+            posthog.capture("room_entry_failed", { reason: "Room not found." });
             setError("Room not found.");
             setLoading(false);
             return;
         }
 
         if ("error" in roomResult && roomResult.error) {
+            posthog.capture("room_entry_failed", { reason: roomResult.error });
             setError(roomResult.error);
             setLoading(false);
             return;
