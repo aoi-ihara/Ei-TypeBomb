@@ -121,8 +121,8 @@ export default function ServerHealth() {
     const primaryUrl = process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL;
     const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
-    const primary = useServerHealth(primaryUrl, 5_000);
-    const backup = useServerHealth(backupUrl, 30_000);
+    const primary = useServerHealth(primaryUrl, 4_000);
+    const backup = useServerHealth(backupUrl, 4_000);
 
     const handleRefresh = useCallback(() => {
         primary.checkServer();
