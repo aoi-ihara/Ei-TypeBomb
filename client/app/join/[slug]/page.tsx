@@ -41,6 +41,10 @@ export default function Page({
             posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
+            posthog.capture("room_entry_failed", {
+                room_id: roomId,
+                reason: result,
+            });
             setError(result);
         }
         setLoading(false);
@@ -73,6 +77,10 @@ export default function Page({
                     posthog.capture("room_entered", { room_id: roomId });
                     router.push("/display-name");
                 } else {
+                    posthog.capture("room_entry_failed", {
+                        room_id: roomIdResult,
+                        reason: result,
+                    });
                     setError(result);
                 }
             } else {
