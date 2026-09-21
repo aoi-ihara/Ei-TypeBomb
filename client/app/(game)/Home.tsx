@@ -124,7 +124,7 @@ export default function Home({
                                     </div>
                                 </div>
                                 <div
-                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all  duration-(--duration-etb) ease-etb`}
+                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-(--duration-etb) ease-etb bg-(--color-background-secondary)`}
                                 />
                             </div>
                         </div>
