@@ -252,7 +252,7 @@ export default function Cursor() {
             }}
         >
             <motion.div
-                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-200 ease-out fixed`}
+                className={`${isMouseDown && "scale-95"} transition-transform z-10 duration-(--duration-etb) ease-etb fixed`}
                 style={{
                     left: cursorX,
                     top: cursorY,

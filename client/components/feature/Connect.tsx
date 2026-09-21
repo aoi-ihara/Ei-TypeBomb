@@ -37,7 +37,7 @@ export default function Connect({
 
             <button
                 data-cursor={isConnected && room.length < 4 ? "button" : ""}
-                className={`text-lg mt-2 items-center font-bold w-48 justify-center py-2 rounded-lg text-white disabled:text-(--color-foreground)/50 flex transition-all duration-200 ease-out active:scale-95 ${isConnected ? "bg-cyan-600 disabled:bg-(--color-background-secondary)" : "gradient-background"}`}
+                className={`text-lg mt-2 items-center font-bold w-48 justify-center py-2 rounded-lg text-white disabled:text-(--color-foreground)/50 flex transition-all duration-(--duration-etb) ease-etb active:scale-95 ${isConnected ? "bg-cyan-600 disabled:bg-(--color-background-secondary)" : "gradient-background"}`}
                 data-cursor-shape="0"
                 disabled={!isConnected || room.length >= 4}
                 onClick={() => handleConnect()}

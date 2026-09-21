@@ -12,7 +12,10 @@ export default function RootLayout({
         "showDevelopmentSettings",
     );
 
-    if (!showDevelopmentSettings) {
+    if (
+        !showDevelopmentSettings &&
+        "true" !== (process.env.NEXT_PUBLIC_DEVELOPER_MODE ?? "")
+    ) {
         notFound();
     }
 

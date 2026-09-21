@@ -3,6 +3,7 @@
 import {
     DndContext,
     PointerSensor,
+    type Modifier,
     closestCenter,
     useSensor,
     useSensors,
@@ -132,6 +133,7 @@ export default function Page({
 
     const isLoadedRef = useRef(false);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -206,6 +208,26 @@ export default function Page({
         roomId,
         roomLink,
     ]);
+
+    const wordListRef = useRef<HTMLDivElement | null>(null);
+
+    const restrictWordDrag: Modifier = ({ transform, activeNodeRect }) => {
+        const list = wordListRef.current;
+
+        if (!list || !activeNodeRect) {
+            return { ...transform, x: 0 };
+        }
+
+        const rect = list.getBoundingClientRect();
+        const minY = rect.top - activeNodeRect.top;
+        const maxY = rect.bottom - activeNodeRect.bottom;
+
+        return {
+            ...transform,
+            x: 0,
+            y: Math.min(Math.max(transform.y, minY), maxY),
+        };
+    };
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -392,9 +414,35 @@ export default function Page({
         }
 
         saveTimerRef.current = setTimeout(() => {
+            if (maxSaveTimerRef.current) {
+                clearTimeout(maxSaveTimerRef.current);
+                maxSaveTimerRef.current = null;
+            }
             saveRoomData();
-        }, 2000);
+        }, 1000);
+
+        if (!maxSaveTimerRef.current) {
+            maxSaveTimerRef.current = setTimeout(() => {
+                if (saveTimerRef.current) {
+                    clearTimeout(saveTimerRef.current);
+                    saveTimerRef.current = null;
+                }
+                maxSaveTimerRef.current = null;
+                saveRoomData();
+            }, 8000);
+        }
     }, [roomTitle, roomExplanation, maxPlayers, words, roomId, roomLink]);
+
+    useEffect(() => {
+        return () => {
+            if (saveTimerRef.current) {
+                clearTimeout(saveTimerRef.current);
+            }
+            if (maxSaveTimerRef.current) {
+                clearTimeout(maxSaveTimerRef.current);
+            }
+        };
+    }, []);
 
     if (roomError) {
         notFound();
@@ -494,7 +542,7 @@ export default function Page({
                         font="mono"
                         type="url"
                         inputClassName="pl-19.5"
-                        className={`transition-all w-full duration-200 ease-out`}
+                        className={`transition-all w-full duration-(--duration-etb) ease-etb`}
                         value={roomLink}
                         disableLabelAnimation={true}
                     >
@@ -563,7 +611,7 @@ export default function Page({
                         <div data-cursor="text">Set to Private</div>
                         <div data-cursor="button" className="rounded-full flex">
                             <button
-                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-(--duration-etb) ease-etb active:scale-95`}
                                 onClick={() => {
                                     const next = !isPrivate;
 
@@ -571,7 +619,7 @@ export default function Page({
                                 }}
                             >
                                 <div
-                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-200 ease-out`}
+                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-(--duration-etb) ease-etb`}
                                 ></div>
                             </button>
                         </div>
@@ -763,7 +811,7 @@ export default function Page({
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
-                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div className="flex gap-4 w-full">
@@ -833,7 +881,7 @@ export default function Page({
 
                         {generatedWords.length !== 0 && (
                             <div
-                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-etb duration-(--duration-etb)`}
                             >
                                 {generatedWords.map((word, index) => (
                                     <div
@@ -908,7 +956,7 @@ export default function Page({
                     </Collapsible>
                     <Collapsible
                         open={showImportInput}
-                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
@@ -955,9 +1003,10 @@ export default function Page({
                             </div>
                         )}
                     </Collapsible>
-                    <div className="flex flex-col gap-4">
+                    <div ref={wordListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
+                            modifiers={[restrictWordDrag]}
                             collisionDetection={closestCenter}
                             onDragEnd={handleDragEnd}
                         >
@@ -1102,7 +1151,7 @@ export default function Page({
                 className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
                     !showRoomCode &&
                     "opacity-0 scale-95 blur-md pointer-events-none"
-                } z-100 transition-all overlay duration-200 ease-out`}
+                } z-100 transition-all overlay duration-(--duration-etb) ease-etb`}
                 onClick={() => setShowRoomCode(false)}
             >
                 <div className="font-extrabold text-cyan-600 text-2xl">
@@ -1129,7 +1178,7 @@ export default function Page({
             </div>
 
             <div
-                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-(--duration-etb) ease-etb`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"
@@ -1146,7 +1195,7 @@ export default function Page({
                         setShowImportInput(false);
                         setShowGenerationInput(false);
                     }}
-                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
+                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-(--duration-etb) ease-etb`}
                 />
             </div>
         </Shell>

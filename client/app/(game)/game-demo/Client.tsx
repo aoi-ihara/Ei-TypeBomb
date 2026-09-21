@@ -330,7 +330,7 @@ export default function Client({
 
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${currentTurn === 0 ? "h-full" : "h-64"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${currentTurn === 0 ? "h-full" : "h-64"} rounded-2xl p-2 w-full`}
                 >
                     {room && (
                         <div className="flex flex-col h-full">

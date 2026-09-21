@@ -21,7 +21,7 @@ type ButtonProps = {
 const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
 
 const baseStyles =
-    "font-bold transition-all duration-200 ease-out cursor-pointer";
+    "font-bold transition-all duration-(--duration-etb) ease-etb cursor-pointer";
 
 const variantStyles = (
     variant: ButtonVariant,
@@ -31,10 +31,10 @@ const variantStyles = (
     return variant === "text"
         ? `${!loading && "underline"} w-fit flex rounded-md active:no-underline active:scale-95`
         : variant === "default" || loading
-          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
+          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
           : variant === "danger"
-            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
-            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
+            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
+            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`;
 };
 
 export default function Button({
@@ -120,7 +120,7 @@ export default function Button({
                 )}
                 {children && (
                     <div
-                        className={`transition-all duration-200 ease-out ${
+                        className={`transition-all duration-(--duration-etb) ease-etb ${
                             loading ? "gradient-text w-fit" : ""
                         }`}
                     >
