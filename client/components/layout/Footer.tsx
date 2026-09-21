@@ -15,7 +15,7 @@ export function Footer() {
             >
                 <Link
                     href="https://vgnz93hs.com/terms-of-use"
-                    className="underline active:no-underline active:scale-95 transition-all duration-200 ease-out flex"
+                    className="underline active:no-underline active:scale-95 transition-all duration-(--duration-etb) ease-etb flex"
                 >
                     Terms of Use
                 </Link>

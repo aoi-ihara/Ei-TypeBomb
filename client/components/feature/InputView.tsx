@@ -173,7 +173,7 @@ export default function TypingView({
             </div>
             <div className="w-full flex justify-center">
                 <div
-                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "animate-[wrongAnswer_400ms_ease-out]" : ""}`}
+                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "animate-[wrongAnswer_400ms_ease-etb]" : ""}`}
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}
@@ -182,7 +182,7 @@ export default function TypingView({
                         {[...english].slice(0, missCount).map((char, index) => (
                             <button
                                 key={index}
-                                className="font-bold font-mono opacity-25 w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out"
+                                className="font-bold font-mono opacity-25 w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb"
                             >
                                 <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                     {char === " " ? "" : char}
@@ -197,7 +197,7 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (currentInput === null)
@@ -211,7 +211,7 @@ export default function TypingView({
                         return (
                             <button
                                 key={index}
-                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
                                 data-cursor="button"
                                 data-cursor-shape={
                                     currentInput === null ? "1" : "2"

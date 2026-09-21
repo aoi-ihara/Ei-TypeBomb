@@ -52,9 +52,7 @@ export default function UsersView({
     const styleIndex = Math.min(Math.max(0, bombStatus), bombStyles.length - 1);
     const style = bombStyles[styleIndex];
     const bombShakeDuration =
-        bombStatus === 0
-            ? null
-            : `${Math.max(100, 700 - bombStatus * 150)}ms`;
+        bombStatus === 0 ? null : `${Math.max(100, 700 - bombStatus * 150)}ms`;
 
     return (
         <div className="h-full w-full flex items-center justify-center">
@@ -76,7 +74,7 @@ export default function UsersView({
                                 top: `calc(${posY + 50}% - ${position.h / 2}px)`,
                             }}
                         >
-                            <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-200 ease-out">
+                            <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb">
                                 <div
                                     className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
@@ -104,7 +102,7 @@ export default function UsersView({
                 })}
 
                 <div
-                    className="absolute flex transition-all duration-500 w-8 h-8 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full animate-[bombBounce_400ms_ease-out]"
+                    className="absolute flex transition-all duration-500 w-8 h-8 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full animate-[bombBounce_400ms_ease-etb]"
                     key={bombStatus}
                     style={{
                         opacity: `${currentTurn !== null ? 1 : 0}`,
@@ -143,7 +141,7 @@ export default function UsersView({
                                     ? undefined
                                     : `bombShake ${bombShakeDuration} ease-in-out infinite`,
                         }}
-                        className={`transition-colors duration-200 ease-out ${bombShakeDuration === null ? "" : "bomb-shake"}`}
+                        className={`transition-colors duration-(--duration-etb) ease-etb ${bombShakeDuration === null ? "" : "bomb-shake"}`}
                     >
                         <path
                             fill="none"
@@ -151,14 +149,14 @@ export default function UsersView({
                             strokeWidth="8"
                             strokeLinecap="square"
                             d="M 89 17 C 89 17 98.633644 0.72097 109 10 C 121.635551 21.310211 103.181946 45.948578 108 52 C 114.241898 59.839752 123 53 123 53"
-                            className="transition-colors duration-200 ease-out"
+                            className="transition-colors duration-(--duration-etb) ease-etb"
                         />
 
                         <path
                             fill={style.body}
                             fillRule="evenodd"
                             d="M 95.835754 43.140877 C 101.60791 51.293633 105 61.250687 105 72 C 105 99.614235 82.614235 122 55 122 C 27.385763 122 5 99.614235 5 72 C 5 44.385765 27.385763 22 55 22 C 57.070099 22 59.110813 22.125801 61.114918 22.370178 L 66.844559 12.446152 C 69.053696 8.619812 73.946419 7.308807 77.772758 9.517952 L 98.950966 21.745193 C 102.777306 23.95433 104.088303 28.847054 101.87"
-                            className="transition-colors duration-200 ease-out"
+                            className="transition-colors duration-(--duration-etb) ease-etb"
                         />
                     </svg>
                 </div>

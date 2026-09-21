@@ -50,44 +50,51 @@ export default function Dialog({
 
     return (
         <div
-            className={`fixed inset-0 z-4 flex items-center justify-center ${!open && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="dialog-title"
-            aria-describedby={description ? "dialog-description" : undefined}
+            className={`fixed inset-0 z-4 ${open ? "bg-(--color-background-secondary)/50" : "opacity-0 pointer-events-none"} transition-all duration-750 ease-etb`}
         >
-            <button
-                type="button"
-                aria-label="Close dialog"
-                onClick={onClose}
-                className={`absolute inset-0 cursor-default ${open && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
-            />
+            <div
+                className={`flex items-center h-full justify-center ${!open && "scale-110"} transition-all duration-(--duration-etb) ease-etb`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="dialog-title"
+                aria-describedby={
+                    description ? "dialog-description" : undefined
+                }
+            >
+                <button
+                    type="button"
+                    aria-label="Close dialog"
+                    onClick={onClose}
+                    className={`absolute inset-0 cursor-default transition-all duration-(--duration-etb) ease-etb`}
+                />
 
-            <div className="max-w-full w-full flex justify-center max-h-dvh p-4 overflow-scroll">
-                <div
-                    className={`relative z-8 w-full ${size === "middle" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
-                    onClick={(event) => event.stopPropagation()}
-                >
-                    <div className="flex flex-col gap-2 pt-1 px-3">
-                        <div
-                            id="dialog-title"
-                            className="text-lg font-bold text-(--color-foreground)"
-                        >
-                            {title}
+                <div className="max-w-full w-full flex justify-center max-h-dvh p-4 overflow-scroll">
+                    <div
+                        className={`relative z-8 w-full ${size === "middle" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} rounded-3xl bg-(--color-background) p-4 ${className}`}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex flex-col gap-2 pt-1 px-3">
+                            <div
+                                id="dialog-title"
+                                className="text-lg font-bold text-(--color-foreground)"
+                                data-cursor="text"
+                            >
+                                {title}
+                            </div>
+
+                            {description && (
+                                <div id="dialog-description">{description}</div>
+                            )}
                         </div>
 
-                        {description && (
-                            <div id="dialog-description">{description}</div>
+                        {children && (
+                            <div
+                                className={`mt-4 flex items-center justify-end gap-4 ${alignment === "vertical" && "flex-col"}`}
+                            >
+                                {children}
+                            </div>
                         )}
                     </div>
-
-                    {children && (
-                        <div
-                            className={`mt-4 flex items-center justify-end gap-4 ${alignment === "vertical" && "flex-col"}`}
-                        >
-                            {children}
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

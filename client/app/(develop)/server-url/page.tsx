@@ -39,13 +39,13 @@ export default function ServerUrl({ initialServerUrl }: Props) {
                         data-cursor-shape="1"
                     >
                         <button
-                            className="active:scale-95 cursor-pointer px-2 py-1 transition-all duration-200 ease-out"
+                            className="active:scale-95 cursor-pointer px-2 py-1 transition-all duration-(--duration-etb) ease-etb"
                             onClick={() => {
                                 setServerUrl("");
                                 setCookie("server-url", "");
                             }}
                         >
-                            <div className="transition-all duration-200 ease-out font-bold text-cyan-600">
+                            <div className="transition-all duration-(--duration-etb) ease-etb font-bold text-cyan-600">
                                 Use Default
                             </div>
                         </button>

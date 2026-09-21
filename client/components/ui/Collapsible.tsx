@@ -28,7 +28,7 @@ export default function Collapsible({
 
             const timeout = window.setTimeout(() => {
                 setHeight(-1);
-            }, 200);
+            }, 400);
 
             return () => window.clearTimeout(timeout);
         }
@@ -42,7 +42,7 @@ export default function Collapsible({
 
     return (
         <div
-            className={`overflow-hidden transition-[height] duration-200 ease-out ${className}`}
+            className={`overflow-hidden transition-[height] duration-(--duration-etb) ease-etb ${className}`}
             style={{
                 height: height === -1 ? "auto" : `${height}px`,
             }}
