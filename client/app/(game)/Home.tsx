@@ -9,11 +9,22 @@ import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import Settings from "./settings/Settings";
+import Dialog from "@/components/ui/Dialog";
 
-export default function Home() {
+type Props = {
+    initialSounDeffects: boolean;
+    initialBackgroundMusic: boolean;
+};
+
+export default function Home({
+    initialSounDeffects,
+    initialBackgroundMusic,
+}: Props) {
     const [showCursor, setShowCursor] = useState(true);
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+    const [showSettings, setShowSettings] = useState(false);
 
     const redesignedSignInButton = useFeatureFlagEnabled(
         "redesignedSignInButton",
@@ -207,10 +218,31 @@ export default function Home() {
                 <Button
                     variant="text"
                     iconName="settings"
-                    onClick={() => router.push("/settings")}
+                    onClick={() => setShowSettings(true)}
                 >
                     Settings
                 </Button>
+
+                <Dialog
+                    title="Settings"
+                    size="middle"
+                    alignment="vertical"
+                    open={showSettings}
+                    onClose={() => setShowSettings(!showSettings)}
+                >
+                    <Settings
+                        initialSounDeffects={initialSounDeffects}
+                        initialBackgroundMusic={initialBackgroundMusic}
+                    />
+                    <Button
+                        className="w-full"
+                        variant="primary"
+                        iconName="check"
+                        onClick={() => setShowSettings(false)}
+                    >
+                        Done
+                    </Button>
+                </Dialog>
             </div>
         </div>
     );

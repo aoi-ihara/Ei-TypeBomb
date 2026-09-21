@@ -1,24 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Shell from "@/components/layout/Shell";
-import Button from "@/components/ui/Button";
 import Toggle from "@/components/ui/Toggle";
 import posthog from "posthog-js";
 
 type Props = {
     initialSounDeffects: boolean;
     initialBackgroundMusic: boolean;
-    initialServerUrl: string;
 };
 
 export default function Settings({
     initialSounDeffects,
     initialBackgroundMusic,
 }: Props) {
-    const router = useRouter();
-
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
     );
@@ -29,8 +23,8 @@ export default function Settings({
     };
 
     return (
-        <Shell title="Settings" className="items-start flex flex-col">
-            <div className="mb-4 w-full items-center flex justify-between">
+        <>
+            <div className="w-full px-3 items-center flex justify-between">
                 <div data-cursor="text">Background Music</div>
                 <Toggle
                     checked={backgroundMusic}
@@ -44,7 +38,7 @@ export default function Settings({
                     }}
                 />
             </div>
-            <div className="mb-4 w-full items-center flex justify-between">
+            <div className="w-full px-3 items-center flex justify-between">
                 <div data-cursor="text">Sound Effects</div>
                 <Toggle
                     checked={sounDeffects}
@@ -58,15 +52,6 @@ export default function Settings({
                     }}
                 />
             </div>
-
-            <Button
-                onClick={() => router.push("/")}
-                className="w-full"
-                variant="primary"
-                iconName="check"
-            >
-                Done
-            </Button>
-        </Shell>
+        </>
     );
 }
