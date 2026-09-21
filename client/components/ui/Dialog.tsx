@@ -72,6 +72,7 @@ export default function Dialog({
                         <div
                             id="dialog-title"
                             className="text-lg font-bold text-(--color-foreground)"
+                            data-cursor="text"
                         >
                             {title}
                         </div>
