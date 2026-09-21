@@ -28,7 +28,7 @@ export default function Collapsible({
 
             const timeout = window.setTimeout(() => {
                 setHeight(-1);
-            }, 200);
+            }, 400);
 
             return () => window.clearTimeout(timeout);
         }
