@@ -27,8 +27,8 @@ export default function Connect({
                     data-cursor="text"
                 >
                     {isConnected
-                        ? "Connected to Server"
-                        : "Connecting to Server"}
+                        ? "サーバーに接続しました"
+                        : "サーバーに接続しています"}
                 </h1>
                 <div
                     className={`w-3 h-1 mb-1 flex ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
@@ -42,14 +42,14 @@ export default function Connect({
                 disabled={!isConnected || room.length >= 4}
                 onClick={() => handleConnect()}
             >
-                Join
+                参加する
             </button>
             {room.length >= 4 && (
                 <p
                     className="text-sm text-(--color-foreground) mt-2 font-bold"
                     data-cursor="text"
                 >
-                    Room is full
+                    ルームは満員です
                 </p>
             )}
         </div>

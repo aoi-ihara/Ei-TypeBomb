@@ -63,7 +63,7 @@ export default function Dialog({
             >
                 <button
                     type="button"
-                    aria-label="Close dialog"
+                    aria-label="ダイアログを閉じる"
                     onClick={onClose}
                     className={`absolute inset-0 cursor-default transition-all duration-(--duration-etb) ease-etb`}
                 />

@@ -317,7 +317,7 @@ export default function Page({
         if (!roomId || words === null) return;
 
         if (!importData) {
-            setImportError("JSON data is required.");
+            setImportError("JSONデータを入力してください。");
             return;
         }
 
@@ -330,7 +330,7 @@ export default function Page({
                 id: crypto.randomUUID(),
             }));
         } catch {
-            setImportError("Invalid JSON format.");
+            setImportError("JSONの形式が正しくありません。");
             return;
         }
 
@@ -351,7 +351,7 @@ export default function Page({
         }
 
         if (newPassword !== confirmPassword && isPrivate) {
-            setVisibilityError("Passwords do not match.");
+            setVisibilityError("パスワードが一致しません。");
             return;
         }
 
@@ -381,7 +381,7 @@ export default function Page({
     const saveRoomData = async () => {
         const roomLinkResult = await getRoomFromLink(roomLink);
         if (roomLinkResult && roomLinkResult !== slug) {
-            setRoomLinkError("Link has already taken.");
+            setRoomLinkError("このリンクはすでに使用されています。");
         } else {
             setRoomLinkError("");
         }
@@ -491,7 +491,7 @@ export default function Page({
                 <input
                     className="w-full outline-none text-2xl font-bold font-mono"
                     value={roomTitle}
-                    placeholder="Room Title"
+                    placeholder="ルーム名"
                     data-cursor="text"
                     onChange={(e) => setRoomTitle(e.target.value)}
                 />
@@ -897,7 +897,16 @@ export default function Page({
                                                 generationPrompt,
                                             );
 
-                                        setGeneratedWords(generatedWords);
+                                        if ("error" in generatedWords) {
+                                            setGeneratedWords([]);
+                                            setGenerationError(
+                                                generatedWords.error,
+                                            );
+                                        } else {
+                                            setGeneratedWords(
+                                                generatedWords.words,
+                                            );
+                                        }
                                     } catch (error) {
                                         console.error(
                                             "Failed to generate words:",
@@ -906,9 +915,7 @@ export default function Page({
 
                                         setGeneratedWords([]);
                                         setGenerationError(
-                                            error instanceof Error
-                                                ? error.message
-                                                : "Failed to generate words. Please try again.",
+                                            "単語の生成に失敗しました。もう一度お試しください。",
                                         );
                                     } finally {
                                         setIsGenerating(false);
@@ -989,7 +996,7 @@ export default function Page({
                                             );
                                         } catch {
                                             setImportError(
-                                                "Invalid JSON format.",
+                                                "JSONの形式が正しくありません。",
                                             );
                                             return;
                                         }
@@ -1021,14 +1028,12 @@ export default function Page({
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            Each object must include a &quot;jp&quot; field for
-                            the Japanese word and an &quot;en&quot; field for
-                            the English word.
+                            各オブジェクトには、日本語訳の &quot;jp&quot; フィールドと英単語の &quot;en&quot; フィールドが必要です。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
                             >
-                                Learn More
+                                詳しく見る
                             </Button>
                         </div>
                         <Input
@@ -1037,7 +1042,7 @@ export default function Page({
                             inputClassName="resize-none h-48"
                             font="mono"
                             onChange={(e) => setImportData(e.target.value)}
-                            label="JSON Data"
+                            label="JSONデータ"
                         />
                         {importData && (
                             <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
@@ -1046,7 +1051,7 @@ export default function Page({
                                     className="w-full"
                                     iconName="x"
                                 >
-                                    Cancel
+                                    キャンセル
                                 </Button>
                                 <Button
                                     variant="primary"
@@ -1054,7 +1059,7 @@ export default function Page({
                                     iconName="plus"
                                     onClick={() => handleImportWords()}
                                 >
-                                    Import
+                                    インポート
                                 </Button>
                             </div>
                         )}
@@ -1108,7 +1113,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            It is too long.
+                                                            32文字以内で入力してください。
                                                         </div>
                                                     )}
                                                     {!word.jp && (
@@ -1116,8 +1121,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            This field is
-                                                            required.
+                                                            この項目は必須です。
                                                         </div>
                                                     )}
                                                 </div>
@@ -1151,13 +1155,7 @@ export default function Page({
                                                     ) &&
                                                         word.en && (
                                                             <div className="text-red-500">
-                                                                You can use only
-                                                                letters,
-                                                                numbers, spaces,
-                                                                and the
-                                                                following
-                                                                punctuation: .,
-                                                                ,, !, ?, and -.
+                                                                半角英数字、スペース、記号（. , ! ? -）のみ使用できます。
                                                             </div>
                                                         )}
                                                     {word.en.length > 32 && (
@@ -1165,7 +1163,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            It is too long.
+                                                            32文字以内で入力してください。
                                                         </div>
                                                     )}
                                                     {!word.en && (
@@ -1173,8 +1171,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            This field is
-                                                            required.
+                                                            この項目は必須です。
                                                         </div>
                                                     )}
                                                 </div>
@@ -1234,7 +1231,7 @@ export default function Page({
                     </div>
                 </div>
                 <div className="opacity-50">
-                    Press escape or click to return.
+                    Escキーを押すか、クリックすると戻ります。
                 </div>
             </div>
 
@@ -1251,7 +1248,7 @@ export default function Page({
             >
                 <button
                     type="button"
-                    aria-label="Close dialog"
+                    aria-label="ダイアログを閉じる"
                     onClick={() => {
                         setShowImportInput(false);
                         setShowGenerationInput(false);

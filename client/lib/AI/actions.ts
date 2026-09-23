@@ -1,36 +1,38 @@
 "use server";
 
 import { generateWords } from "./generateWords";
-import { consumeGeminiGeneration, getGeminiUsage } from "./usage";
+import {
+    consumeGeminiGeneration,
+    GenerationUsageError,
+    getGeminiUsage,
+} from "./usage";
+import type { Word } from "@/type";
 
 export async function getGeminiUsageAction() {
     return getGeminiUsage();
 }
 
-export async function generateWordsAction(theme: string) {
+export async function generateWordsAction(
+    theme: string,
+): Promise<{ words: Word[] } | { error: string }> {
     if (!theme.trim()) {
-        throw new Error("Theme is required");
+        return { error: "テーマを入力してください。" };
     }
 
     if (theme.length > 100) {
-        throw new Error("Theme is too long");
+        return { error: "テーマは100文字以内で入力してください。" };
     }
 
     try {
         await consumeGeminiGeneration();
-        return await generateWords(theme);
+        return { words: await generateWords(theme) };
     } catch (error) {
         console.error("Gemini generation failed:", error);
-
-        if (
-            error &&
-            typeof error === "object" &&
-            "message" in error &&
-            typeof error.message === "string"
-        ) {
-            throw new Error(error.message);
-        }
-
-        throw new Error("Failed to generate words. Please try again.");
+        return {
+            error:
+                error instanceof GenerationUsageError
+                    ? error.message
+                    : "単語の生成に失敗しました。もう一度お試しください。",
+        };
     }
 }

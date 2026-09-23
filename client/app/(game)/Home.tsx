@@ -143,7 +143,7 @@ export default function Home({
                                 )
                             }
                         >
-                            Sign In
+                            ログイン
                         </button>
                     </div>
                 )}

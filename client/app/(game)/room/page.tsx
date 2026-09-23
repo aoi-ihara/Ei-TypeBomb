@@ -58,8 +58,8 @@ export default function Loading() {
         );
 
         if (!roomResult) {
-            posthog.capture("room_entry_failed", { reason: "Room not found." });
-            setError("Room not found.");
+            posthog.capture("room_entry_failed", { reason: "ルームが見つかりません。" });
+            setError("ルームが見つかりません。");
             setLoading(false);
             return;
         }
@@ -120,7 +120,7 @@ export default function Loading() {
                         value={roomPassword}
                         type="password"
                         onChange={(e) => setRoomPassword(e.target.value)}
-                        label="Room Password"
+                        label="ルームのパスワード"
                     />
                 </div>
             )}
@@ -154,6 +154,7 @@ export default function Loading() {
 
             <PopUp show={turnstile}>
                 <Turnstile
+                    options={{ language: "ja" }}
                     siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);

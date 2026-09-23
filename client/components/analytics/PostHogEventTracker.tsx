@@ -55,12 +55,12 @@ export default function PostHogEventTracker() {
             const inFeaturePanel = isFeaturePanelElement(button);
             const roomId = getRoomId(currentPathname);
 
-            if (currentPathname === "/" && text === "Play") {
+            if (currentPathname === "/" && text === "プレイ") {
                 posthog.capture("play_clicked");
                 return;
             }
 
-            if (currentPathname === "/room" && text === "Play Demo") {
+            if (currentPathname === "/room" && text === "デモをプレイ") {
                 posthog.capture("demo_started");
                 return;
             }
@@ -73,7 +73,7 @@ export default function PostHogEventTracker() {
             if (
                 inRoomEditor &&
                 icon === "trash" &&
-                text !== "Delete Room"
+                text !== "ルームを削除"
             ) {
                 posthog.capture("word_deleted", { room_id: roomId });
                 return;
@@ -141,7 +141,7 @@ export default function PostHogEventTracker() {
             if (
                 inRoomEditor &&
                 generationPanelOpen &&
-                text === "Add" &&
+                text === "追加" &&
                 inFeaturePanel
             ) {
                 posthog.capture("generated_words_added", {
@@ -155,7 +155,7 @@ export default function PostHogEventTracker() {
             if (
                 inRoomEditor &&
                 generationPanelOpen &&
-                text === "Cancel" &&
+                text === "キャンセル" &&
                 inFeaturePanel
             ) {
                 posthog.capture("word_generation_cancelled", {
@@ -169,7 +169,7 @@ export default function PostHogEventTracker() {
             if (
                 inRoomEditor &&
                 importPanelOpen &&
-                text === "Learn More"
+                text === "詳しく見る"
             ) {
                 posthog.capture("words_import_help_opened", {
                     room_id: roomId,
@@ -177,7 +177,7 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (inRoomEditor && importPanelOpen && text === "Import") {
+            if (inRoomEditor && importPanelOpen && text === "インポート") {
                 importRequestPending = true;
                 posthog.capture("words_import_submitted", {
                     room_id: roomId,
@@ -188,7 +188,7 @@ export default function PostHogEventTracker() {
             if (
                 inRoomEditor &&
                 importPanelOpen &&
-                text === "Cancel" &&
+                text === "キャンセル" &&
                 inFeaturePanel
             ) {
                 posthog.capture("words_import_cancelled", {
@@ -199,7 +199,7 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (inRoomEditor && text === "Visibility") {
+            if (inRoomEditor && text === "公開設定") {
                 posthog.capture("room_visibility_settings_opened", {
                     room_id: roomId,
                 });
@@ -208,7 +208,7 @@ export default function PostHogEventTracker() {
 
             if (
                 inRoomEditor &&
-                button.getAttribute("aria-label") === "Close dialog"
+                button.getAttribute("aria-label") === "ダイアログを閉じる"
             ) {
                 generationPanelOpen = false;
                 generationRequestPending = false;
@@ -257,7 +257,7 @@ export default function PostHogEventTracker() {
                     document.querySelectorAll("button"),
                 ).find(
                     (element) =>
-                        element.textContent?.trim() === "Add" &&
+                        element.textContent?.trim() === "追加" &&
                         isFeaturePanelElement(element),
                 );
 
@@ -271,7 +271,7 @@ export default function PostHogEventTracker() {
                         document.querySelectorAll(".text-red-500"),
                     ).find((element) =>
                         element.textContent?.includes(
-                            "Failed to generate words",
+                            "単語の生成に失敗しました",
                         ),
                     );
 
@@ -289,7 +289,7 @@ export default function PostHogEventTracker() {
                     document.querySelectorAll("button"),
                 ).find(
                     (element) =>
-                        element.textContent?.trim() === "Import" &&
+                        element.textContent?.trim() === "インポート" &&
                         isFeaturePanelElement(element),
                 );
 
@@ -298,8 +298,8 @@ export default function PostHogEventTracker() {
                 ).find((element) => {
                     const content = element.textContent ?? "";
                     return (
-                        content.includes("JSON data is required") ||
-                        content.includes("Invalid JSON format")
+                        content.includes("JSONデータを入力してください") ||
+                        content.includes("JSONの形式が正しくありません")
                     );
                 });
 
