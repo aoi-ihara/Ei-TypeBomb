@@ -53,7 +53,7 @@ export default function Dialog({
             className={`fixed inset-0 z-4 ${open ? "bg-(--color-background-secondary)/50" : "opacity-0 pointer-events-none"} transition-all duration-750 ease-etb`}
         >
             <div
-                className={`flex items-center h-full justify-center ${!open && "scale-110"} transition-all duration-(--duration-etb) ease-etb`}
+                className={`flex items-center h-full justify-center ${!open && "scale-110 blur-md"} transition-all duration-(--duration-etb) ease-etb`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"

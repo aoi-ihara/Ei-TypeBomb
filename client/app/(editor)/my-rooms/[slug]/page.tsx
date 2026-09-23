@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use, useRef } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
+import { parseImportedWords } from "@/lib/room/importWords";
 import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -316,25 +317,25 @@ export default function Page({
 
         if (!roomId || words === null) return;
 
-        if (!importData) {
-            setImportError("JSONデータを入力してください。");
+        if (!importData.trim()) {
+            setImportError("JSONまたはCSVデータを入力してください。");
             return;
         }
 
-        let parsedWords: Word[];
+        let importedWords: WordWithId[];
 
         try {
-            parsedWords = JSON.parse(importData).map((word: Word) => ({
-                jp: word.jp,
-                en: word.en,
+            importedWords = parseImportedWords(importData).map((word) => ({
+                ...word,
                 id: crypto.randomUUID(),
             }));
         } catch {
-            setImportError("JSONの形式が正しくありません。");
+            setImportError(
+                "JSONまたはCSVの形式が正しくありません。CSVは各行に空欄のない2列で入力してください。",
+            );
             return;
         }
 
-        const importedWords = parsedWords as WordWithId[];
         const newWords = [...importedWords, ...words];
         setWords(newWords);
 
@@ -826,7 +827,7 @@ export default function Page({
                         iconName="upload"
                     />
                     <Dialog
-                        title="JSONからインポート"
+                        title="単語のインポート"
                         size="middle"
                         alignment="vertical"
                         open={showImportDialog}
@@ -855,6 +856,12 @@ export default function Page({
                                 それぞれの単語には、&quot;jp&quot;をつけた日本語訳と、
                                 &quot;en&quot;をつけた英語訳が必要です。
                             </div>
+                            <div data-cursor="text">
+                                CSVはヘッダーなしの2列で貼り付けてください:
+                            </div>
+                            <pre className="text-sm" data-cursor="text">
+                                {"りんご,apple\nねこ,cat"}
+                            </pre>
                         </div>
                         <Button
                             onClick={() => setShowImportDialog(false)}
@@ -1028,9 +1035,8 @@ export default function Page({
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            各オブジェクトには、日本語訳の &quot;jp&quot;
-                            フィールドと英単語の &quot;en&quot;
-                            フィールドが必要です。
+                            単語は2列のCSV、または&quot;jp&quot;（日本語）と
+                            &quot;en&quot;（英語）を含むJSONで貼り付けてください。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
@@ -1044,7 +1050,7 @@ export default function Page({
                             inputClassName="resize-none h-48"
                             font="mono"
                             onChange={(e) => setImportData(e.target.value)}
-                            label="JSONデータ"
+                            label="単語データ"
                         />
                         {importData && (
                             <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
