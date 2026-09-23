@@ -178,18 +178,6 @@ export default function TypingView({
                         if (!isReadonly) inputRef.current?.focus();
                     }}
                 >
-                    <div className="absolute top-1 left-1 pointer-events-none">
-                        {[...english].slice(0, missCount).map((char, index) => (
-                            <button
-                                key={index}
-                                className="font-bold font-mono opacity-25 w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb"
-                            >
-                                <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                    {char === " " ? "" : char}
-                                </div>
-                            </button>
-                        ))}
-                    </div>
                     {[...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
@@ -223,7 +211,12 @@ export default function TypingView({
                                     inputRef.current?.focus();
                                 }}
                             >
-                                <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
+                                {index < missCount && (
+                                    <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
+                                        {char}
+                                    </div>
+                                )}
+                                <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                     {displayChars?.[index] ?? ""}
                                 </div>
                             </button>
