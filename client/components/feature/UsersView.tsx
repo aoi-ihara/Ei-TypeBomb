@@ -64,7 +64,7 @@ export default function UsersView({
                     return (
                         <div
                             key={index}
-                            className="absolute flex transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full"
+                            className="absolute flex transition-all duration-500 ease-etb rounded-full"
                             style={{
                                 opacity: `${position.opacity}`,
                                 width: `${position.w}px`,
@@ -76,7 +76,7 @@ export default function UsersView({
                         >
                             <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb">
                                 <div
-                                    className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-[cubic-bezier(0.1,0.5,0,1)] text-center items-center text-sm pb-2 w-32 flex justify-center"
+                                    className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
                                         left: `calc(${position.w / 2}px - 64px)`,
                                         bottom: `calc(${position.h}px + 4px)`,
@@ -102,7 +102,7 @@ export default function UsersView({
                 })}
 
                 <div
-                    className="absolute flex transition-all duration-500 w-8 h-8 ease-[cubic-bezier(0.1,0.5,0,1)] rounded-full animate-[bombBounce_400ms_ease-etb]"
+                    className="absolute flex transition-all duration-500 w-8 h-8 ease-etb rounded-full animate-[bombBounce_400ms_ease-etb]"
                     key={bombStatus}
                     style={{
                         opacity: `${currentTurn !== null ? 1 : 0}`,
