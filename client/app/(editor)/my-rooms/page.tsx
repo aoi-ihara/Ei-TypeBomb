@@ -39,7 +39,7 @@ export default function Profile() {
 
     return (
         <Shell
-            title="My Rooms"
+            title="ルーム一覧"
             size="large"
             loading={!rooms}
             animateAppear={true}

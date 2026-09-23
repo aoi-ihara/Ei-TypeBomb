@@ -25,7 +25,7 @@ export default function Settings({
     return (
         <>
             <div className="w-full px-3 items-center flex justify-between">
-                <div data-cursor="text">Background Music</div>
+                <div data-cursor="text">BGM</div>
                 <Toggle
                     checked={backgroundMusic}
                     onChange={(next) => {
@@ -39,7 +39,7 @@ export default function Settings({
                 />
             </div>
             <div className="w-full px-3 items-center flex justify-between">
-                <div data-cursor="text">Sound Effects</div>
+                <div data-cursor="text">効果音</div>
                 <Toggle
                     checked={sounDeffects}
                     onChange={(next) => {

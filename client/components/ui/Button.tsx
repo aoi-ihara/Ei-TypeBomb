@@ -42,7 +42,7 @@ export default function Button({
     onClick,
     disabled = false,
     loading = false,
-    loadingText = "Loading…",
+    loadingText = "読み込み中…",
     className = "w-fit",
     type = "button",
     variant = "default",

@@ -22,7 +22,7 @@ export default function Shell({
                     className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${!title && loading && "gradient-text"}`}
                     data-cursor="text"
                 >
-                    {title ? title : "Loading…"}
+                    {title ? title : "読み込み中…"}
                 </h1>
             )}
             <div
@@ -34,7 +34,7 @@ export default function Shell({
                             className="w-fit gradient-text fonr-mono font-bold"
                             data-cursor="text"
                         >
-                            Loading…
+                            読み込み中…
                         </div>
                     </div>
                 )}
