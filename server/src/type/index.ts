@@ -10,6 +10,7 @@ export type Room = {
     explanation?: string;
     words?: Word[];
     maxPlayers?: number;
+    gameDuration?: number;
     password?: string | null;
     createdAt?: string;
     updatedAt?: string;

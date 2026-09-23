@@ -27,6 +27,7 @@ import { notFound, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
+    validateGameDuration,
     validateLink,
     validateMaxPlayers,
     validateTitle,
@@ -100,6 +101,7 @@ export default function Page({
     const [roomExplanation, setRoomExplanation] = useState("");
     const [roomTitle, setRoomTitle] = useState("");
     const [roomPassword, setRoomPassword] = useState("");
+    const [gameDuration, setGameDuration] = useState("20");
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
     const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
@@ -189,6 +191,7 @@ export default function Page({
         roomExplanation,
         roomPassword,
         maxPlayers,
+        gameDuration,
         words,
         roomId,
     });
@@ -199,6 +202,7 @@ export default function Page({
             roomExplanation,
             roomPassword,
             maxPlayers,
+            gameDuration,
             words,
             roomId,
         };
@@ -207,6 +211,7 @@ export default function Page({
         roomExplanation,
         roomPassword,
         maxPlayers,
+        gameDuration,
         words,
         roomId,
         roomLink,
@@ -266,6 +271,7 @@ export default function Page({
             setRoomExplanation(room.explanation ?? "");
             setRoomPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
+            setGameDuration(String(room.gameDuration ?? 20));
             setRoomLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
@@ -387,8 +393,14 @@ export default function Page({
             setRoomLinkError("");
         }
 
-        const { roomId, roomTitle, roomExplanation, maxPlayers, words } =
-            roomDataRef.current;
+        const {
+            roomId,
+            roomTitle,
+            roomExplanation,
+            maxPlayers,
+            gameDuration,
+            words,
+        } = roomDataRef.current;
 
         if (!roomId || !words) return;
 
@@ -398,6 +410,9 @@ export default function Page({
                 title: roomTitle,
                 explanation: roomExplanation,
                 maxPlayers: Number(maxPlayers),
+                gameDuration: validateGameDuration(Number(gameDuration))
+                    ? undefined
+                    : Number(gameDuration),
                 words: words.map(({ jp, en }) => ({ jp, en })),
                 link: roomLink,
             };
@@ -434,7 +449,15 @@ export default function Page({
                 saveRoomData();
             }, 8000);
         }
-    }, [roomTitle, roomExplanation, maxPlayers, words, roomId, roomLink]);
+    }, [
+        roomTitle,
+        roomExplanation,
+        maxPlayers,
+        gameDuration,
+        words,
+        roomId,
+        roomLink,
+    ]);
 
     useEffect(() => {
         return () => {
@@ -535,6 +558,14 @@ export default function Page({
                         </div>
                     )}
                 </div>
+                <Input
+                    label="ゲームの時間（秒）"
+                    type="number"
+                    min={1}
+                    max={2147473}
+                    value={gameDuration}
+                    onChange={(e) => setGameDuration(e.target.value)}
+                />
             </div>
 
             <div className="flex gap-4 w-full">

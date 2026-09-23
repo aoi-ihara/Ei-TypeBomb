@@ -171,3 +171,11 @@ export const validateLink = (link?: string) => {
 
     return null;
 };
+
+export const validateGameDuration = (duration: number) => {
+    // Keep the randomized timeout within Node.js's signed 32-bit timer limit.
+    if (!Number.isInteger(duration) || duration < 1 || duration > 2147473) {
+        return "ゲームの時間は1〜2147473秒の整数で入力してください。";
+    }
+    return null;
+};
