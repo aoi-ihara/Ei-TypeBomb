@@ -4,7 +4,10 @@ import { Icon } from "./Icon";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
-type ButtonProps = {
+type ButtonProps = Pick<
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    "aria-haspopup" | "aria-expanded" | "aria-controls"
+> & {
     children?: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
@@ -49,6 +52,7 @@ export default function Button({
     padding = "middle",
     iconName,
     alignment = "center",
+    ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
@@ -104,6 +108,7 @@ export default function Button({
         >
             <button
                 ref={buttonRef}
+                {...ariaProps}
                 type={type}
                 onClick={handleClick}
                 disabled={disabled}

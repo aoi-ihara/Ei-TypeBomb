@@ -96,7 +96,7 @@ export default function Picker({
                 tabIndex={-1}
                 aria-hidden="true"
                 onClick={() => setOpen(false)}
-                className="fixed inset-0 z-40 cursor-default bg-(--color-background-secondary)/50 motion-reduce:transition-none!"
+                className="fixed inset-0 z-1 cursor-default bg-(--color-background-secondary)/50 motion-reduce:transition-none!"
                 style={{
                     visibility: open ? "visible" : "hidden",
                     opacity: open ? 1 : 0,
@@ -107,7 +107,7 @@ export default function Picker({
                 className="pointer-events-none absolute left-0 top-0 motion-reduce:transition-none!"
                 style={{
                     zIndex: open ? 50 : 0,
-                    transition: `z-index 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
+                    transition: `z-1 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
                 }}
             >
                 <Morph
@@ -132,7 +132,7 @@ export default function Picker({
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex max-h-[min(24rem,80dvh)] w-max max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-y-auto rounded-2xl border border-(--color-border) bg-(--color-background) p-2 shadow-xl outline-none"
+                            className="flex max-h-[min(24rem,80dvh)] w-max max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-y-auto rounded-2xl bg-(--color-background) p-2"
                         >
                             {items.length === 0 && (
                                 <div className="px-3 py-2 text-sm opacity-60">
@@ -149,7 +149,7 @@ export default function Picker({
                                         setOpen(false);
                                         onSelected(index);
                                     }}
-                                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left font-bold break-words hover:bg-(--color-background-secondary) focus-visible:bg-(--color-background-secondary) focus-visible:outline-none"
+                                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left font-bold hover:bg-(--color-background-secondary) focus-visible:bg-(--color-background-secondary) focus-visible:outline-none"
                                 >
                                     {itemIcons[index] && (
                                         <Icon
