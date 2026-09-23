@@ -36,7 +36,13 @@ export default function Morph({ first, last, state }: MorphProps) {
                 height: parseFloat(css.height),
             };
         };
+        const notifyCursor = () => {
+            if (root.closest("[data-picker]")) {
+                window.dispatchEvent(new Event("morphcursorchange"));
+            }
+        };
         const setPointerEvents = (animating: boolean) => {
+            root.dataset.morphAnimating = String(animating);
             layers.forEach((layer, index) => {
                 const active = stateRef.current === (index === 1);
 
@@ -74,6 +80,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             }
             current = next;
             root.style.visibility = "visible";
+            notifyCursor();
         };
         const stop = () => {
             cancelAnimationFrame(frameId);
@@ -105,6 +112,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             if (!current) {
                 paint(target);
                 setPointerEvents(false);
+                notifyCursor();
                 return;
             }
             const start = current;
@@ -116,6 +124,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             if (motion.matches || !Number.isFinite(duration) || duration <= 0) {
                 paint(target, true);
                 setPointerEvents(false);
+                notifyCursor();
                 return;
             }
             clock = new Animation(
@@ -156,6 +165,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                 if (done) {
                     stop();
                     setPointerEvents(false);
+                    notifyCursor();
                 } else frameId = requestAnimationFrame(tick);
             };
             frameId = requestAnimationFrame(tick);

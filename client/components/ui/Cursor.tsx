@@ -3,6 +3,49 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 
+function getMorphCursorTarget(x: number, y: number) {
+    const roots = document.querySelectorAll<HTMLElement>(
+        '[data-picker] [data-morph-animating="true"]',
+    );
+    for (const root of Array.from(roots).reverse()) {
+        const layer = root.querySelector<HTMLElement>(
+            `[data-morph-layer="${root.dataset.morph}"]`,
+        );
+        if (!layer) continue;
+        const bounds = layer.getBoundingClientRect();
+        const css = getComputedStyle(layer);
+        const width = parseFloat(css.width);
+        const height = parseFloat(css.height);
+        if (!bounds.width || !bounds.height || !width || !height) continue;
+        const center = root.getBoundingClientRect();
+        const left = center.left + (center.width - width) / 2;
+        const top = center.top + (center.height - height) / 2;
+        if (x < left || x > left + width || y < top || y > top + height)
+            continue;
+
+        const candidates = layer.querySelectorAll<HTMLElement>("[data-cursor]");
+        for (const element of Array.from(candidates).reverse()) {
+            const rect = element.getBoundingClientRect();
+            const natural = new DOMRect(
+                left + ((rect.left - bounds.left) * width) / bounds.width,
+                top + ((rect.top - bounds.top) * height) / bounds.height,
+                (rect.width * width) / bounds.width,
+                (rect.height * height) / bounds.height,
+            );
+            if (
+                x >= natural.left &&
+                x <= natural.right &&
+                y >= natural.top &&
+                y <= natural.bottom
+            ) {
+                return { element, rect: natural };
+            }
+        }
+        return { element: layer, rect: new DOMRect(left, top, width, height) };
+    }
+    return null;
+}
+
 export default function Cursor() {
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -53,7 +96,9 @@ export default function Cursor() {
             mouse.current.x = x;
             mouse.current.y = y;
 
-            let hit = document.elementFromPoint(x, y);
+            const destination = getMorphCursorTarget(x, y);
+            let hit: Element | null =
+                destination?.element ?? document.elementFromPoint(x, y);
 
             if (hit && rootRef.current?.contains(hit)) {
                 hit = null;
@@ -65,7 +110,10 @@ export default function Cursor() {
             const textEl = hit?.closest<HTMLElement>('[data-cursor="text"]');
 
             if (buttonEl) {
-                const rect = buttonEl.getBoundingClientRect();
+                const rect =
+                    destination?.element === buttonEl
+                        ? destination.rect
+                        : buttonEl.getBoundingClientRect();
                 const style = window.getComputedStyle(buttonEl);
                 const shape = Number(buttonEl.dataset.cursorShape ?? 0);
                 const borderRadius = parseFloat(style.borderRadius) || 0;
@@ -196,6 +244,7 @@ export default function Cursor() {
         window.addEventListener("mousedown", onMouseDown);
         window.addEventListener("mouseup", onMouseUp);
 
+        window.addEventListener("morphcursorchange", refresh);
         window.addEventListener("resize", refresh);
         window.addEventListener("scroll", refresh, true);
         window.addEventListener("animationend", refresh, true);
@@ -207,6 +256,7 @@ export default function Cursor() {
             window.removeEventListener("mousedown", onMouseDown);
             window.removeEventListener("mouseup", onMouseUp);
 
+            window.removeEventListener("morphcursorchange", refresh);
             window.removeEventListener("resize", refresh);
             window.removeEventListener("scroll", refresh, true);
             window.removeEventListener("animationend", refresh, true);
