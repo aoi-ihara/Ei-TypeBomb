@@ -16,7 +16,7 @@ export const verifyToken = async (jwtToken: string): Promise<string | null> => {
 
         const roomId = decoded?.id;
 
-        if (!roomId) {
+        if (typeof roomId !== "string" || !roomId.trim()) {
             console.error("Incorrect JWT Token");
             return null;
         }
