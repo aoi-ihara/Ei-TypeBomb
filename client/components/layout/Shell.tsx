@@ -1,6 +1,6 @@
 type AuthShellProps = {
     title?: string;
-    children: React.ReactNode;
+    children?: React.ReactNode;
     className?: string;
     size?: "large" | "small" | "medium";
     loading?: boolean;
