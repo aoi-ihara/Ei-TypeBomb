@@ -13,6 +13,16 @@ import {
     startConsole,
 } from "./lib/console";
 
+class ClientError extends Error {}
+
+const requireRoomWords = (room: Room) => {
+    if (!room.words?.length) {
+        throw new ClientError(
+            "ルームに単語が設定されていません。単語を設定してから再度お試しください。",
+        );
+    }
+};
+
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
@@ -42,6 +52,7 @@ const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     const loadPromise = (async () => {
         const room = await getRoomFromId(roomId);
         if (!room) return null;
+        requireRoomWords(room);
 
         const roomAfterFetch = rooms.find((item) => item.id === roomId);
         if (roomAfterFetch) return roomAfterFetch;
@@ -95,6 +106,19 @@ io.on("connection", (socket) => {
     logEvent("SERVER", "client connected", { socketId: socket.id });
     socket.emit("auth:request");
 
+    const reportError = (
+        message: string,
+        error: unknown = new Error(message),
+    ) => {
+        logError(message, error, {
+            socketId: socket.id,
+            userId: user.id,
+            displayName: user.displayName,
+            roomId,
+        });
+        socket.emit("error", { message });
+    };
+
     socket.on("room:join", () => {
         if (!roomId) return;
 
@@ -133,15 +157,28 @@ io.on("connection", (socket) => {
         "auth:response",
         async (response: { jwtToken: string; displayName: string }) => {
             try {
+                if (!response || typeof response.jwtToken !== "string") {
+                    throw new ClientError(
+                        "認証情報が不正です。ルームに入り直してください。",
+                    );
+                }
                 const jwtResult = await verifyToken(response.jwtToken);
-                if (!jwtResult) return;
+                if (!jwtResult) {
+                    throw new ClientError(
+                        "認証トークンが無効または有効期限切れです。ルームに入り直してください。",
+                    );
+                }
+
+                const room = await createRoomIfNeeded(jwtResult);
+                if (!room) {
+                    throw new ClientError(
+                        "ルーム情報を取得できませんでした。ルームを確認して再度お試しください。",
+                    );
+                }
+                requireRoomWords(room);
 
                 roomId = jwtResult;
                 user = { ...user, displayName: response.displayName };
-
-                const room = await createRoomIfNeeded(roomId);
-                if (!room) return;
-
                 socket.join(roomId);
                 logEvent("ROOM", `authenticated ${roomId}`, {
                     roomId,
@@ -152,12 +189,12 @@ io.on("connection", (socket) => {
                 capturePostHogEvent("room_authenticated");
                 sendRoomInfo(roomId);
             } catch (error) {
-                logError("auth or room fetch failed", error, {
-                    socketId: socket.id,
-                    userId: user.id,
-                    displayName: user.displayName,
-                    roomId,
-                });
+                reportError(
+                    error instanceof ClientError
+                        ? error.message
+                        : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
+                    error,
+                );
             }
         },
     );
@@ -217,6 +254,12 @@ io.on("connection", (socket) => {
         const index = getRoomIndex();
         if (index === -1) return;
         const room = rooms[index];
+        try {
+            requireRoomWords(room);
+        } catch (error) {
+            reportError((error as ClientError).message, error);
+            return;
+        }
         if (!room.users || room.users.length < 2 || room.isStart) return;
         if (room.bombTimer) {
             clearTimeout(room.bombTimer);
@@ -334,7 +377,10 @@ io.on("connection", (socket) => {
         sendInputUpdate(roomId, "");
     };
 
-    const deleteUser = (userId: string, reason: "disconnect" | "room_leave") => {
+    const deleteUser = (
+        userId: string,
+        reason: "disconnect" | "room_leave",
+    ) => {
         if (!roomId) return;
         const roomIndex = getRoomIndex();
         if (roomIndex === -1) return;
