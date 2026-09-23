@@ -130,6 +130,8 @@ export default function Page({
     const [visibilityError, setVisibilityError] = useState("");
     const [isUpdatingVisibilitySettings, setIsUpdatingVisibilitySettings] =
         useState(false);
+    const [showCopyWarning, setShowCopyWarning] = useState(false);
+    const [showQrWarning, setShowQrWarning] = useState(false);
 
     const isLoadedRef = useRef(false);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -566,15 +568,75 @@ export default function Page({
                     className="w-fit shrink-0"
                     padding="large"
                     iconName="qrCode"
-                    onClick={() => setShowRoomCode(true)}
-                ></Button>
+                    onClick={() => {
+                        if (words && words?.length !== 0) setShowRoomCode(true);
+                        else setShowQrWarning(true);
+                    }}
+                />
+
+                <Dialog
+                    open={showQrWarning}
+                    onClose={() => setShowQrWarning(false)}
+                    title="This room has no words"
+                    description="Add at least one word before sharing this room. Players can't join a room with no words."
+                    alignment="vertical"
+                >
+                    <Button
+                        onClick={() => {
+                            setShowRoomCode(true);
+                            setShowQrWarning(false);
+                        }}
+                        iconName="qrCode"
+                        variant="primary"
+                        className="w-full"
+                    >
+                        Show QR Code
+                    </Button>
+                    <Button
+                        onClick={() => setShowQrWarning(false)}
+                        iconName="x"
+                        className="w-full"
+                    >
+                        Cancel
+                    </Button>
+                </Dialog>
 
                 <Button
                     className="w-fit shrink-0"
-                    onClick={handleCopyRoomLink}
+                    onClick={() => {
+                        if (words && words?.length !== 0) handleCopyRoomLink();
+                        else setShowCopyWarning(true);
+                    }}
                     padding="large"
                     iconName={isLinkCopied ? "check" : "copy"}
-                ></Button>
+                />
+
+                <Dialog
+                    open={showCopyWarning}
+                    onClose={() => setShowCopyWarning(false)}
+                    title="This room has no words"
+                    description="Add at least one word before sharing this room. Players can't join a room with no words."
+                    alignment="vertical"
+                >
+                    <Button
+                        onClick={() => {
+                            handleCopyRoomLink();
+                            setShowCopyWarning(false);
+                        }}
+                        iconName="copy"
+                        variant="primary"
+                        className="w-full"
+                    >
+                        Copy
+                    </Button>
+                    <Button
+                        onClick={() => setShowCopyWarning(false)}
+                        iconName="x"
+                        className="w-full"
+                    >
+                        Cancel
+                    </Button>
+                </Dialog>
             </div>
 
             <div
