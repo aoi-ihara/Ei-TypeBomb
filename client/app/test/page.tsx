@@ -13,6 +13,7 @@ export default function Page() {
         <div className="flex min-h-[80dvh] w-full flex-col gap-12 items-center justify-center">
             <div className="flex items-center gap-6">
                 <Picker
+                    selection={selected ?? -1}
                     name="表示を選択"
                     items={["ホーム", "お気に入り", "アイコンなし"]}
                     itemIcons={["home", "heart", null]}

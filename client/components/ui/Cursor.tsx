@@ -246,7 +246,8 @@ export default function Cursor() {
     return (
         <motion.div
             ref={rootRef}
-            className={`z-10 pointer-events-none fixed`}
+            // Keep the cursor's stacking context above picker menus (z-index: 50).
+            className="z-[100] pointer-events-none fixed"
             style={{
                 opacity: cursorOpacity,
             }}

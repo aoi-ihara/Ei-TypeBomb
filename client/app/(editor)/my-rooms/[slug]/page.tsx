@@ -39,6 +39,7 @@ import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
+import Picker from "@/components/ui/Picker";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -101,7 +102,7 @@ export default function Page({
     const [roomExplanation, setRoomExplanation] = useState("");
     const [roomTitle, setRoomTitle] = useState("");
     const [roomPassword, setRoomPassword] = useState("");
-    const [gameDuration, setGameDuration] = useState("20");
+    const [gameDuration, setGameDuration] = useState(20);
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
     const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
@@ -271,7 +272,7 @@ export default function Page({
             setRoomExplanation(room.explanation ?? "");
             setRoomPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
-            setGameDuration(String(room.gameDuration ?? 20));
+            setGameDuration(room.gameDuration ?? 20);
             setRoomLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
@@ -530,41 +531,48 @@ export default function Page({
                 一般
             </div>
 
-            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                <div className="flex flex-col gap-4">
-                    <Input
-                        onChange={(e) => setRoomExplanation(e.target.value)}
-                        label="説明"
-                        value={roomExplanation}
-                    />
-                    {validateExplanation(roomExplanation) && (
-                        <div className="text-red-500" data-cursor="text">
-                            {validateExplanation(roomExplanation)}
-                        </div>
-                    )}
+            <div className="flex gap-4">
+                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                    <div className="flex flex-col gap-4">
+                        <Input
+                            onChange={(e) => setRoomExplanation(e.target.value)}
+                            label="説明"
+                            value={roomExplanation}
+                        />
+                        {validateExplanation(roomExplanation) && (
+                            <div className="text-red-500" data-cursor="text">
+                                {validateExplanation(roomExplanation)}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        <Input
+                            onChange={(e) => setMaxPlayers(e.target.value)}
+                            label="最大プレイヤー数"
+                            type="number"
+                            min={2}
+                            max={8}
+                            value={maxPlayers}
+                        />
+                        {validateMaxPlayers(Number(maxPlayers)) && (
+                            <div className="text-red-500" data-cursor="text">
+                                {validateMaxPlayers(Number(maxPlayers))}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div className="flex flex-col gap-4">
-                    <Input
-                        onChange={(e) => setMaxPlayers(e.target.value)}
-                        label="最大プレイヤー数"
-                        type="number"
-                        min={2}
-                        max={8}
-                        value={maxPlayers}
-                    />
-                    {validateMaxPlayers(Number(maxPlayers)) && (
-                        <div className="text-red-500" data-cursor="text">
-                            {validateMaxPlayers(Number(maxPlayers))}
-                        </div>
-                    )}
-                </div>
-                <Input
-                    label="ゲームの時間（秒）"
-                    type="number"
-                    min={1}
-                    max={2147473}
-                    value={gameDuration}
-                    onChange={(e) => setGameDuration(e.target.value)}
+                <Picker
+                    name="Game duration"
+                    selection={(gameDuration ?? 0) / 10 - 1}
+                    items={[
+                        "短（50〜100）",
+                        "中（100〜150）",
+                        "長（150〜200）",
+                    ]}
+                    itemIcons={[null, null, null]}
+                    onSelected={(index) => {
+                        setGameDuration(index * 10 + 10);
+                    }}
                 />
             </div>
 

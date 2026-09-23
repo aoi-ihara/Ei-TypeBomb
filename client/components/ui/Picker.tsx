@@ -8,6 +8,7 @@ import Morph from "./Morph";
 export type PickerProps = {
     name: string;
     items: string[];
+    selection: number;
     onSelected: (index: number) => void;
     itemIcons: (string | null)[];
 };
@@ -15,6 +16,7 @@ export type PickerProps = {
 export default function Picker({
     name,
     items,
+    selection,
     onSelected,
     itemIcons,
 }: PickerProps) {
@@ -79,15 +81,21 @@ export default function Picker({
         };
     }, [open]);
 
+    const label = items[selection] ?? name;
+    const showIcon = !itemIcons.every((item) => item === null || item === "");
+
     return (
         <div
-            className="relative inline-block shrink-0 align-middle"
+            className="relative inline-block shrink-0 w-fit align-middle"
             data-picker
         >
-            {/* Only the trigger's natural size occupies document flow. */}
-            <div className="invisible" aria-hidden="true" inert>
-                <Button iconName="chevronsUpDown">
-                    <span>{name}</span>
+            <div className="invisible w-fit" aria-hidden="true" inert>
+                <Button
+                    iconName="chevronsUpDown"
+                    padding="large"
+                    className="w-fit"
+                >
+                    <span>{label}</span>
                 </Button>
             </div>
             <button
@@ -104,7 +112,7 @@ export default function Picker({
                 }}
             />
             <div
-                className="pointer-events-none absolute left-0 top-0 motion-reduce:transition-none!"
+                className="pointer-events-none absolute left-0 top-0 w-full motion-reduce:transition-none!"
                 style={{
                     zIndex: open ? 50 : 0,
                     transition: `z-1 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
@@ -113,15 +121,16 @@ export default function Picker({
                 <Morph
                     state={open}
                     first={
-                        <div ref={triggerRef}>
+                        <div ref={triggerRef} className="w-fit">
                             <Button
                                 iconName="chevronsUpDown"
                                 onClick={() => setOpen(true)}
                                 aria-haspopup="menu"
+                                padding="large"
                                 aria-expanded={open}
                                 aria-controls={menuId}
                             >
-                                <span>{name}</span>
+                                <span>{label}</span>
                             </Button>
                         </div>
                     }
@@ -132,7 +141,7 @@ export default function Picker({
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex max-h-[min(24rem,80dvh)] w-max max-w-[calc(100vw-2rem)] flex-col gap-1 overflow-y-auto rounded-2xl bg-(--color-background) p-2"
+                            className="flex h-fit w-full flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
                         >
                             {items.length === 0 && (
                                 <div className="px-3 py-2 text-sm opacity-60">
@@ -140,25 +149,31 @@ export default function Picker({
                                 </div>
                             )}
                             {items.map((item, index) => (
-                                <button
+                                <div
                                     key={index}
-                                    type="button"
-                                    role="menuitem"
-                                    tabIndex={-1}
-                                    onClick={() => {
-                                        setOpen(false);
-                                        onSelected(index);
-                                    }}
-                                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left font-bold hover:bg-(--color-background-secondary) focus-visible:bg-(--color-background-secondary) focus-visible:outline-none"
+                                    data-cursor="button"
+                                    data-cursor-shape="1"
+                                    className="rounded-xl py-1 px-2"
                                 >
-                                    {itemIcons[index] && (
-                                        <Icon
-                                            name={itemIcons[index]}
-                                            className="shrink-0"
-                                        />
-                                    )}
-                                    <span className="min-w-0">{item}</span>
-                                </button>
+                                    <button
+                                        onClick={() => {
+                                            setOpen(false);
+                                            onSelected(index);
+                                        }}
+                                        className="ease-etb duration-(--duration-etb) active:scale-95 text-left font-bold flex gap-2 py-1 px-0.5"
+                                    >
+                                        {showIcon && (
+                                            <div className="w-6 h-6">
+                                                {itemIcons[index] && (
+                                                    <Icon
+                                                        name={itemIcons[index]}
+                                                    />
+                                                )}
+                                            </div>
+                                        )}
+                                        {item}
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     }
