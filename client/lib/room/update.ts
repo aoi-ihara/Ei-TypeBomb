@@ -8,6 +8,7 @@ import { hashPassword } from "../auth/hash";
 import { getPostHogClient } from "@/lib/posthog-server";
 import {
     validateExplanation,
+    validateGameDuration,
     validateLink,
     validateMaxPlayers,
     validatePassword,
@@ -38,6 +39,12 @@ export const updateRoomFromId = async (room: Room) => {
         const validatorResult = validateMaxPlayers(room.maxPlayers);
         if (validatorResult) validationErrors.push(validatorResult);
         else updateData.max_players = room.maxPlayers;
+    }
+
+    if (room.gameDuration !== undefined) {
+        const validatorResult = validateGameDuration(room.gameDuration);
+        if (validatorResult) validationErrors.push(validatorResult);
+        else updateData.game_duration = room.gameDuration;
     }
 
     let shouldUpdatePassword = false;

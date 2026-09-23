@@ -22,6 +22,7 @@ export const getRoomFromId = async (id: string) => {
         userId: data.user_id,
         explanation: data.explanation,
         maxPlayers: data.max_players,
+        gameDuration: data.game_duration ?? 20,
         password: data.password,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
