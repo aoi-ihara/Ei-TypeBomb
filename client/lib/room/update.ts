@@ -89,9 +89,14 @@ export const updateRoomFromId = async (room: Room) => {
         .select("id")
         .maybeSingle();
 
-    if (updateError) return updateError.message;
+    if (updateError) {
+        console.error(updateError);
+        return updateError.code === "23505"
+            ? "このリンクはすでに使用されています。"
+            : "ルームを保存できませんでした。もう一度お試しください。";
+    }
     if (!data)
-        return "Could not find this room or you do not have access to it.";
+        return "ルームが見つからないか、アクセス権限がありません。";
 
     const posthog = getPostHogClient();
     posthog.capture({

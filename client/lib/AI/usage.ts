@@ -3,6 +3,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/db/server";
 import { getUser } from "@/lib/auth/session";
 
+export class GenerationUsageError extends Error {}
+
 const DEFAULT_GEMINI_DAILY_LIMIT = 20;
 
 export const getGeminiDailyLimit = () => {
@@ -58,7 +60,7 @@ export const getGeminiUsage = async () => {
 
 export const consumeGeminiGeneration = async () => {
     const userId = await getUser();
-    if (!userId) throw new Error("Authentication required");
+    if (!userId) throw new GenerationUsageError("ログインしてください。");
 
     const limit = getGeminiDailyLimit();
     const supabase = await createAdminClient();
@@ -73,7 +75,9 @@ export const consumeGeminiGeneration = async () => {
     const result = Array.isArray(data) ? data[0] : data;
 
     if (!result?.allowed) {
-        throw new Error("Daily Gemini generation limit reached.");
+        throw new GenerationUsageError(
+            "本日のAIによる単語生成の上限に達しました。明日またお試しください。",
+        );
     }
 
     return {

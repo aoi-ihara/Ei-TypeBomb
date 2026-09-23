@@ -47,12 +47,12 @@ export default function SignInPage() {
     };
 
     return (
-        <Shell title="Sign In">
+        <Shell title="ログイン">
             <Input
                 value={email}
                 font="mono"
                 type="email"
-                label="Email"
+                label="メールアドレス"
                 disabled={loading}
                 onChange={(e) => {
                     setEmail(e.target.value);
@@ -62,7 +62,7 @@ export default function SignInPage() {
                 value={password}
                 font="mono"
                 type="password"
-                label="Password"
+                label="パスワード"
                 disabled={loading}
                 onChange={(e) => {
                     setPassword(e.target.value);
@@ -84,13 +84,14 @@ export default function SignInPage() {
                 className="w-full"
                 variant="primary"
             >
-                Sign In
+                ログイン
             </Button>
             <Button className="w-full" onClick={() => router.push("/sign-up")}>
-                Create rcAccount
+                rcAccountを作成
             </Button>
             <PopUp show={turnstile}>
                 <Turnstile
+                    options={{ language: "ja" }}
                     siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);

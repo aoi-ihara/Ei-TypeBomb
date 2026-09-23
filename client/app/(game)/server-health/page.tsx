@@ -44,10 +44,10 @@ function ServerStatus({
                 {health === true
                     ? latency !== null
                         ? `${latency}ms`
-                        : "Healthy"
+                        : "正常"
                     : health === false
-                      ? "Unhealthy"
-                      : "No Data"}
+                      ? "接続できません"
+                      : "未確認"}
             </div>
         </div>
     );
@@ -130,15 +130,15 @@ export default function ServerHealth() {
     }, [primary.checkServer, backup.checkServer]);
 
     return (
-        <Shell title="Server Health" size="small">
+        <Shell title="サーバーの稼働状況" size="small">
             <ServerStatus
-                name="Primary"
+                name="メインサーバー"
                 health={primary.health}
                 latency={primary.latency}
             />
 
             <ServerStatus
-                name="Backup"
+                name="予備サーバー"
                 health={backup.health}
                 latency={backup.latency}
             />
@@ -148,7 +148,7 @@ export default function ServerHealth() {
                 onClick={handleRefresh}
                 className="w-full"
             >
-                Refresh
+                更新
             </Button>
         </Shell>
     );

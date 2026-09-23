@@ -33,16 +33,15 @@ export default function PopUp() {
                             className="text-lg font-semibold w-fit"
                             data-cursor="text"
                         >
-                            Cookie Notice
+                            Cookieの使用について
                         </h2>
                         <p data-cursor="text">
-                            This website uses cookies. By continuing to use this
-                            website, you agree to our use of cookies.
+                            このサイトではCookieを使用しています。サイトの利用を続けることで、Cookieの使用に同意したものとみなされます。
                         </p>
                     </div>
 
                     <Button variant="primary" onClick={accept}>
-                        Accept
+                        同意する
                     </Button>
                 </div>
             </div>

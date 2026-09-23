@@ -102,7 +102,7 @@ export default function Home({
                                                 router.push("/my-rooms")
                                             }
                                         >
-                                            My Rooms
+                                            ルーム一覧
                                         </button>
                                     </div>
                                     <div
@@ -119,7 +119,7 @@ export default function Home({
                                                 setUserId(null);
                                             }}
                                         >
-                                            Sign Out
+                                            サインアウト
                                         </button>
                                     </div>
                                 </div>
@@ -143,7 +143,7 @@ export default function Home({
                                 )
                             }
                         >
-                            Sign In
+                            ログイン
                         </button>
                     </div>
                 )}
@@ -159,26 +159,14 @@ export default function Home({
                 </div>
 
                 <div className="w-64 gap-4 flex flex-col">
-                    {bigPlayButton ? (
-                        <Button
-                            className="w-full"
-                            padding="large"
-                            iconName="play"
-                            onClick={() => router.push("/room")}
-                            variant="primary"
-                        >
-                            Play
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-full"
-                            iconName="play"
-                            onClick={() => router.push("/room")}
-                            variant="primary"
-                        >
-                            Play
-                        </Button>
-                    )}
+                    <Button
+                        className="w-full"
+                        iconName="play"
+                        onClick={() => router.push("/room")}
+                        variant="primary"
+                    >
+                        プレイ
+                    </Button>
 
                     {userId ? (
                         <Button
@@ -186,9 +174,9 @@ export default function Home({
                             iconName="layoutGrid"
                             onClick={() => router.push("/my-rooms")}
                         >
-                            My Rooms
+                            ルーム一覧
                         </Button>
-                    ) : showSignInButton ? (
+                    ) : (
                         <Button
                             className="w-full"
                             iconName="logIn"
@@ -198,19 +186,7 @@ export default function Home({
                                 )
                             }
                         >
-                            Sign In
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-full"
-                            iconName="plus"
-                            onClick={() =>
-                                router.push(
-                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                )
-                            }
-                        >
-                            Create Your Room
+                            サインイン
                         </Button>
                     )}
                 </div>
@@ -220,11 +196,11 @@ export default function Home({
                     iconName="settings"
                     onClick={() => setShowSettings(true)}
                 >
-                    Settings
+                    設定
                 </Button>
 
                 <Dialog
-                    title="Settings"
+                    title="設定"
                     size="middle"
                     alignment="vertical"
                     open={showSettings}
@@ -240,7 +216,7 @@ export default function Home({
                         iconName="check"
                         onClick={() => setShowSettings(false)}
                     >
-                        Done
+                        完了
                     </Button>
                 </Dialog>
             </div>

@@ -42,7 +42,7 @@ export default function Button({
     onClick,
     disabled = false,
     loading = false,
-    loadingText = "Loading…",
+    loadingText = "読み込み中…",
     className = "w-fit",
     type = "button",
     variant = "default",
@@ -60,7 +60,7 @@ export default function Button({
                 ? `rounded-lg ${iconName ? "pl-3.5" : "pl-4"} ${children ? "pr-4" : "pr-3.5"} py-3 gap-2`
                 : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-3`;
 
-    const autoPlayAgain = children === "Play Again";
+    const autoPlayAgain = children === "もう一度プレイ";
     const buttonRef = useRef<HTMLButtonElement | null>(null);
     const autoPlayAgainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,

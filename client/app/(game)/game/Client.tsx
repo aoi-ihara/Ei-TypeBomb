@@ -413,8 +413,8 @@ export default function Clinet({
                     className="flex flex-col"
                     data-cursor={`${connectionAlert !== null && "text"}`}
                 >
-                    <span className="font-bold">Disconnected</span>A player has
-                    left the room.
+                    <span className="font-bold">接続が切れました</span>
+                    プレイヤーがルームから退出しました。
                 </div>
             </div>
             {result !== null && (
@@ -422,8 +422,8 @@ export default function Clinet({
                     <div className="w-sm flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
-                                ? "You Lose"
-                                : `${lostDisplayName} Lose`}
+                                ? "あなたの負けです"
+                                : `${lostDisplayName}の負けです`}
                         </div>
                         <Button
                             iconName="rotateCw"
@@ -431,7 +431,7 @@ export default function Clinet({
                             variant="primary"
                             onClick={handlePlayAgain}
                         >
-                            Play Again
+                            もう一度プレイ
                         </Button>
                         <Button
                             iconName="plus"
@@ -442,14 +442,14 @@ export default function Clinet({
                                 )
                             }
                         >
-                            Create Your Room
+                            ルームを作成
                         </Button>
                     </div>
                 </div>
             )}
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${serverError ? "min-h-14 h-auto justify-center" : isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb ${serverError ? "min-h-14 h-auto justify-center" : isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {serverError ? (
                         <div
@@ -474,7 +474,7 @@ export default function Clinet({
                                                     className="font-mono w-fit font-bold text-2xl"
                                                     data-cursor="text"
                                                 >
-                                                    Game started
+                                                    ゲーム開始
                                                 </div>
                                             ) : (
                                                 <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
@@ -484,7 +484,7 @@ export default function Clinet({
                                                             className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                                                             data-cursor="text"
                                                         >
-                                                            YOUR TURN
+                                                            あなたの番です
                                                         </div>
                                                     ) : currentTurnUser ? (
                                                         <div
@@ -492,7 +492,7 @@ export default function Clinet({
                                                             data-cursor="text"
                                                         >
                                                             {currentTurnUser.displayName +
-                                                                "'s Turn"}
+                                                                "の番です"}
                                                         </div>
                                                     ) : null}
                                                     <TypingView
@@ -541,7 +541,7 @@ export default function Clinet({
                                                     className="gradient-text h-fit px-2 py-1 font-bold flex"
                                                     data-cursor="text"
                                                 >
-                                                    Waiting for other players…
+                                                    ほかのプレイヤーを待っています…
                                                 </div>
                                                 <div
                                                     className="rounded-lg w-48 flex"
@@ -561,7 +561,7 @@ export default function Clinet({
                                                                 handleStartGame();
                                                         }}
                                                     >
-                                                        Start Game
+                                                        ゲームを開始
                                                     </button>
                                                 </div>
                                                 <div
@@ -575,7 +575,7 @@ export default function Clinet({
                                                             handleLeave()
                                                         }
                                                     >
-                                                        Leave
+                                                        退出
                                                     </button>
                                                 </div>
                                             </>
@@ -592,7 +592,7 @@ export default function Clinet({
                                                 className="font-mono animate-appear w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
-                                                Game started
+                                                ゲーム開始
                                             </div>
                                         ) : (
                                             <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
@@ -602,7 +602,7 @@ export default function Clinet({
                                                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                                                         data-cursor="text"
                                                     >
-                                                        YOUR TURN
+                                                        あなたの番です
                                                     </div>
                                                 ) : currentTurnUser ? (
                                                     <div
@@ -610,7 +610,7 @@ export default function Clinet({
                                                         data-cursor="text"
                                                     >
                                                         {currentTurnUser.displayName +
-                                                            "'s Turn"}
+                                                            "の番です"}
                                                     </div>
                                                 ) : null}
                                                 <TypingView
@@ -652,12 +652,12 @@ export default function Clinet({
                                                         className="w-fit pl-4 font-bold"
                                                         data-cursor="text"
                                                     >
-                                                        Connected
+                                                        接続しました
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-2 animate-appear">
                                                     <div
-                                                        className="rounded-lg w-32 flex"
+                                                        className="rounded-lg w-14 flex"
                                                         data-cursor="button"
                                                         data-cursor-shape="1"
                                                     >
@@ -667,11 +667,11 @@ export default function Clinet({
                                                                 handleWatch()
                                                             }
                                                         >
-                                                            Watch Only
+                                                            観戦
                                                         </button>
                                                     </div>
                                                     <div
-                                                        className="rounded-lg w-24 flex"
+                                                        className="rounded-lg w-20 flex"
                                                         data-cursor="button"
                                                         data-cursor-shape="0"
                                                     >
@@ -681,7 +681,7 @@ export default function Clinet({
                                                                 handleJoin()
                                                             }
                                                         >
-                                                            Join
+                                                            参加
                                                         </button>
                                                     </div>
                                                 </div>
@@ -694,7 +694,7 @@ export default function Clinet({
                                             className="font-mono w-fit pl-4 font-bold"
                                             data-cursor="text"
                                         >
-                                            This room is full
+                                            このルームは満員です
                                         </div>
                                     </div>
                                 )}
@@ -706,7 +706,7 @@ export default function Clinet({
                                 className="w-fit pl-4 font-bold gradient-text"
                                 data-cursor="text"
                             >
-                                Connecting to server…
+                                サーバーに接続しています…
                             </div>
                         </div>
                     )}

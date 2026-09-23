@@ -96,7 +96,7 @@ export default function Page({
 
     return (
         <Shell
-            title={showPasswordField ? "Enter Password" : undefined}
+            title={showPasswordField ? "パスワードを入力" : undefined}
             loading={!showPasswordField}
         >
             {showPasswordField && (
@@ -104,7 +104,7 @@ export default function Page({
                     value={roomPassword}
                     type="password"
                     onChange={(e) => setRoomPassword(e.target.value)}
-                    label="Room Password"
+                    label="ルームのパスワード"
                 />
             )}
 
@@ -115,7 +115,7 @@ export default function Page({
                 disabled={!roomId || (showPasswordField && !roomPassword)}
                 loading={loading}
             >
-                Continue
+                続ける
             </Button>
             {error && (
                 <a className="text-red-500" data-cursor="text">
@@ -125,6 +125,7 @@ export default function Page({
 
             <PopUp show={turnstile}>
                 <Turnstile
+                    options={{ language: "ja" }}
                     siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);

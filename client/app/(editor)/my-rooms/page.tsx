@@ -39,7 +39,7 @@ export default function Profile() {
 
     return (
         <Shell
-            title="My Rooms"
+            title="ルーム一覧"
             size="large"
             loading={!rooms}
             animateAppear={true}
@@ -100,7 +100,7 @@ export default function Profile() {
                 className="w-full"
                 iconName="plus"
             >
-                Add
+                追加
             </Button>
         </Shell>
     );

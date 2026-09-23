@@ -16,7 +16,7 @@ export default function ServerUrl({ initialServerUrl }: Props) {
     };
 
     return (
-        <Shell title="Server URL">
+        <Shell title="サーバーURL">
             <div className="inline w-full relative mb-4" data-cursor="text">
                 <Input
                     value={serverUrl}
@@ -31,7 +31,7 @@ export default function ServerUrl({ initialServerUrl }: Props) {
                     font="mono"
                     className="relative w-full"
                     inputClassName="pr-33"
-                    label="Server URL"
+                    label="サーバーURL"
                 >
                     <div
                         className="bg-(--color-background) absolute top-3 rounded-md right-3"
@@ -46,7 +46,7 @@ export default function ServerUrl({ initialServerUrl }: Props) {
                             }}
                         >
                             <div className="transition-all duration-(--duration-etb) ease-etb font-bold text-cyan-600">
-                                Use Default
+                                初期設定に戻す
                             </div>
                         </button>
                     </div>

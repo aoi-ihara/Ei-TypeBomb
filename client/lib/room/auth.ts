@@ -25,7 +25,10 @@ export const prepareRoomJoin = async (link: string) => {
         .eq("link", link)
         .maybeSingle();
 
-    if (error) return { error: error.message };
+    if (error) {
+        console.error(error);
+        return { error: "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。" };
+    }
     if (!data) return null;
 
     if (!data.password) {
@@ -37,14 +40,14 @@ export const prepareRoomJoin = async (link: string) => {
 };
 
 export const signInToRoom = async (room: Room, turnstileToken?: string) => {
-    if (!isUUID(room.id, 4)) return "Incorrect Room ID.";
+    if (!isUUID(room.id, 4)) return "ルームIDが正しくありません。";
 
     if (room.password) {
-        if (validatePassword(room.password)) return "Incorrect password.";
+        if (validatePassword(room.password)) return "パスワードが正しくありません。";
 
-        if (!turnstileToken) return "Turnstile token is required.";
+        if (!turnstileToken) return "ロボットではないことを確認してください。";
         const turnstileResult = await verifyTurnstile(turnstileToken);
-        if (!turnstileResult) return "Incorrect Turnstile token.";
+        if (!turnstileResult) return "ロボットではないことの確認に失敗しました。もう一度お試しください。";
 
         const supabase = await createAdminClient();
         const { data, error } = await supabase
@@ -53,11 +56,14 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             .eq("id", room.id)
             .maybeSingle();
 
-        if (error) return error.message;
-        if (!data?.password) return "Cannot get the password.";
+        if (error) {
+            console.error(error);
+            return "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。";
+        }
+        if (!data?.password) return "ルームのパスワードを確認できませんでした。";
 
         const isValid = await argon2.verify(data.password, room.password);
-        if (!isValid) return "Incorrect password.";
+        if (!isValid) return "パスワードが正しくありません。";
 
         await setAuthCookie(room.id);
     } else {
@@ -68,9 +74,12 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             .eq("id", room.id)
             .maybeSingle();
 
-        if (error) return error.message;
-        if (!data) return "Room not found.";
-        if (data.password) return "Password is required.";
+        if (error) {
+            console.error(error);
+            return "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。";
+        }
+        if (!data) return "ルームが見つかりません。";
+        if (data.password) return "パスワードを入力してください。";
 
         await setAuthCookie(room.id);
     }

@@ -31,8 +31,8 @@ export default function Loading() {
     return (
         <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">
             <div className="flex items-end mb-4">
-                <h1 className="font-mono font-bold text-2xl" data-cursor="text">
-                    Choose a Display Name
+                <h1 className="font-bold text-2xl" data-cursor="text">
+                    表示名を入力
                 </h1>
                 <div
                     className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
@@ -42,7 +42,7 @@ export default function Loading() {
                 <RetchedInput
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Display Name"
+                    placeholder="表示名"
                 />
             </div>
 
@@ -55,7 +55,7 @@ export default function Loading() {
                 disabled={!displayName}
                 iconName="arrowRight"
             >
-                Continue
+                続ける
             </Button>
         </div>
     );

@@ -26,7 +26,7 @@ export default function NotFoundClient() {
                     className="font-mono font-bold mt-4 text-lg"
                     data-cursor="text"
                 >
-                    Not Found
+                    ページが見つかりません
                 </h2>
                 <div
                     className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
@@ -34,7 +34,7 @@ export default function NotFoundClient() {
             </div>
 
             <div data-cursor="text">
-                We could not find the page you are looking for.
+                お探しのページは見つかりませんでした。
             </div>
 
             <Button
@@ -42,7 +42,7 @@ export default function NotFoundClient() {
                 variant="primary"
                 onClick={() => router.push("/")}
             >
-                Go Home
+                ホームに戻る
             </Button>
         </Shell>
     );

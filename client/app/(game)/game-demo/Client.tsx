@@ -67,8 +67,8 @@ export default function Client({
 
     const [users] = useState<User[]>(() => [
         { id: LOCAL_USER_ID, displayName: displayName },
-        { id: "bot-1", displayName: "Bot 1" },
-        { id: "bot-2", displayName: "Bot 2" },
+        { id: "bot-1", displayName: "ボット1" },
+        { id: "bot-2", displayName: "ボット2" },
     ]);
 
     const [room] = useState<Room>(() => ({
@@ -77,8 +77,8 @@ export default function Client({
         isStart: true,
         users: [
             { id: LOCAL_USER_ID, displayName: displayName },
-            { id: "bot-1", displayName: "Bot 1" },
-            { id: "bot-2", displayName: "Bot 2" },
+            { id: "bot-1", displayName: "ボット1" },
+            { id: "bot-2", displayName: "ボット2" },
         ],
         words: MOCK_WORDS,
     }));
@@ -95,8 +95,8 @@ export default function Client({
         newPositions(
             [
                 { id: LOCAL_USER_ID, displayName: displayName },
-                { id: "bot-1", displayName: "Bot 1" },
-                { id: "bot-2", displayName: "Bot 2" },
+                { id: "bot-1", displayName: "ボット1" },
+                { id: "bot-2", displayName: "ボット2" },
             ],
             Array.from({ length: 3 }, () => ({
                 x: 0,
@@ -184,7 +184,7 @@ export default function Client({
                     const didLose = lostUser?.id === userId;
 
                     setResult(didLose);
-                    setLostDisplayName(lostUser?.displayName || "Unknown");
+                    setLostDisplayName(lostUser?.displayName || "不明なプレイヤー");
 
                     posthog.capture(didLose ? "game_lost" : "game_won");
                 }
@@ -289,8 +289,8 @@ export default function Client({
                     <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
-                                ? "You Lose"
-                                : `${lostDisplayName} Lose`}
+                                ? "あなたの負けです"
+                                : `${lostDisplayName}の負けです`}
                         </div>
 
                         <Button
@@ -302,7 +302,7 @@ export default function Client({
                                 startGame();
                             }}
                         >
-                            Play Again
+                            もう一度プレイ
                         </Button>
 
                         <Button
@@ -314,7 +314,7 @@ export default function Client({
                                 )
                             }
                         >
-                            Create Your Room
+                            ルームを作成
                         </Button>
 
                         <Button
@@ -322,7 +322,7 @@ export default function Client({
                             className="w-full"
                             onClick={() => router.push("/room")}
                         >
-                            Join with Invite Link
+                            招待リンクで参加
                         </Button>
                     </div>
                 </div>
@@ -342,7 +342,7 @@ export default function Client({
                                                 className="font-mono w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
-                                                Game started
+                                                ゲーム開始
                                             </div>
                                         ) : (
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
@@ -354,8 +354,8 @@ export default function Client({
                                                         {currentTurnUser?.id !==
                                                         userId
                                                             ? currentTurnUser.displayName +
-                                                              "'s Turn"
-                                                            : "YOUR TURN"}
+                                                              "の番です"
+                                                            : "あなたの番です"}
                                                     </div>
                                                 )}
 
@@ -397,7 +397,7 @@ export default function Client({
                     className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
-                    Demo Room
+                    デモルーム
                 </div>
                 <UsersView
                     users={users}

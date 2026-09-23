@@ -18,15 +18,16 @@ export const deleteRoom = async (roomId: string) => {
         .maybeSingle();
 
     if (selectError) {
-        return selectError.message;
+        console.error(selectError);
+        return "ルーム情報を取得できませんでした。もう一度お試しください。";
     }
 
     if (!data) {
-        return "Could not find this room.";
+        return "ルームが見つかりません。";
     }
 
     if (data.user_id !== userId) {
-        return "You do not have access to this room.";
+        return "このルームへのアクセス権限がありません。";
     }
 
     const { error } = await supabase
@@ -35,7 +36,8 @@ export const deleteRoom = async (roomId: string) => {
         .eq("id", roomId);
 
     if (error) {
-        return error.message;
+        console.error(error);
+        return "ルームを削除できませんでした。もう一度お試しください。";
     }
 
     const posthog = getPostHogClient();
