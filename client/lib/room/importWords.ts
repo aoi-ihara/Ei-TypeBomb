@@ -54,15 +54,22 @@ function parseCsv(source: string): ImportedWord[] {
     const countNonAlphanumeric = (value: string) =>
         Array.from(value).filter((char) => !/[a-zA-Z0-9]/.test(char)).length;
 
-    return rows.map((columns) => {
+    let leftCount = 0;
+    let rightCount = 0;
+    for (const columns of rows) {
         if (columns.length !== 2 || columns.some((value) => !value)) {
             throw new Error("CSV requires two non-empty columns per row");
         }
-        const [first, second] = columns;
-        return countNonAlphanumeric(first) >= countNonAlphanumeric(second)
+        leftCount += countNonAlphanumeric(columns[0]);
+        rightCount += countNonAlphanumeric(columns[1]);
+    }
+
+    const japaneseIsLeft = leftCount >= rightCount;
+    return rows.map(([first, second]) =>
+        japaneseIsLeft
             ? { jp: first, en: second }
-            : { jp: second, en: first };
-    });
+            : { jp: second, en: first },
+    );
 }
 
 export function parseImportedWords(source: string): ImportedWord[] {
