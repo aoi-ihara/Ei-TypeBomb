@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import Button from "./Button";
 import { Icon } from "./Icon";
 import Morph from "./Morph";
@@ -22,9 +22,26 @@ export default function Picker({
 }: PickerProps) {
     const [open, setOpen] = useState(false);
     const menuId = useId();
+    const sizeRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const wasOpen = useRef(false);
+
+    useLayoutEffect(() => {
+        const element = sizeRef.current;
+        if (!element) return;
+
+        // Measure the untransformed trigger copy, never the animated Morph layer.
+        const syncWidth = () => {
+            if (menuRef.current) {
+                menuRef.current.style.width = `${element.getBoundingClientRect().width}px`;
+            }
+        };
+        syncWidth();
+        const observer = new ResizeObserver(syncWidth);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         if (!open) {
@@ -89,7 +106,12 @@ export default function Picker({
             className="relative inline-block shrink-0 w-fit align-middle"
             data-picker
         >
-            <div className="invisible w-fit" aria-hidden="true" inert>
+            <div
+                ref={sizeRef}
+                className="invisible w-fit"
+                aria-hidden="true"
+                inert
+            >
                 <Button
                     iconName="chevronsUpDown"
                     padding="large"
@@ -141,7 +163,7 @@ export default function Picker({
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex h-fit w-full flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
+                            className="flex h-fit flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
                         >
                             {items.length === 0 && (
                                 <div className="px-3 py-2 text-sm opacity-60">
@@ -156,14 +178,17 @@ export default function Picker({
                                     className="rounded-xl py-1 px-2"
                                 >
                                     <button
+                                        type="button"
+                                        role="menuitem"
+                                        tabIndex={-1}
                                         onClick={() => {
                                             setOpen(false);
                                             onSelected(index);
                                         }}
-                                        className="ease-etb duration-(--duration-etb) active:scale-95 text-left font-bold flex gap-2 py-1 px-0.5"
+                                        className="ease-etb duration-(--duration-etb) active:scale-95 text-left font-bold flex w-full min-w-0 gap-2 py-1 px-0.5"
                                     >
                                         {showIcon && (
-                                            <div className="w-6 h-6">
+                                            <div className="w-6 h-6 shrink-0">
                                                 {itemIcons[index] && (
                                                     <Icon
                                                         name={itemIcons[index]}
@@ -171,7 +196,9 @@ export default function Picker({
                                                 )}
                                             </div>
                                         )}
-                                        {item}
+                                        <span className="min-w-0 [overflow-wrap:anywhere]">
+                                            {item}
+                                        </span>
                                     </button>
                                 </div>
                             ))}
