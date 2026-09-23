@@ -457,7 +457,7 @@ export default function Clinet({
                             role="alert"
                         >
                             <div
-                                className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                className="font-mono w-fit pl-4 font-bold"
                                 data-cursor="text"
                             >
                                 {serverError}
@@ -691,7 +691,7 @@ export default function Clinet({
                                 ) : (
                                     <div className="flex justify-start animate-appear w-full">
                                         <div
-                                            className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                            className="font-mono w-fit pl-4 font-bold"
                                             data-cursor="text"
                                         >
                                             This room is full
