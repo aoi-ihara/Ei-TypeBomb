@@ -136,7 +136,7 @@ export default function Picker({
             <div
                 className="pointer-events-none absolute left-0 top-0 w-full motion-reduce:transition-none!"
                 style={{
-                    zIndex: open ? 50 : 0,
+                    zIndex: 4,
                     transition: `z-1 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
                 }}
             >

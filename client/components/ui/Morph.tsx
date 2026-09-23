@@ -5,7 +5,6 @@ import { type ReactNode, useLayoutEffect, useRef } from "react";
 export type MorphProps = {
     first: ReactNode;
     last: ReactNode;
-    /** false displays first; true displays last. */
     state: boolean;
 };
 
@@ -59,17 +58,23 @@ export default function Morph({ first, last, state }: MorphProps) {
         };
         const paint = (next: Frame, preserveCenter = false) => {
             const anchor = preserveCenter ? center() : undefined;
+
             root.style.width = `${next.width}px`;
             root.style.height = `${next.height}px`;
+
             layers.forEach((layer, index) => {
                 const size = sizes[index];
                 const x = size.width > 0 ? next.width / size.width : 1;
                 const y = size.height > 0 ? next.height / size.height : 1;
+
+                const opacity = index === 0 ? 1 - next.mix : next.mix;
+                const blur = (1 - opacity) * 12;
+
                 layer.style.transform = `translate(-50%, -50%) scale(${x}, ${y})`;
-                layer.style.opacity = String(
-                    index === 0 ? 1 - next.mix : next.mix,
-                );
+                layer.style.opacity = String(opacity);
+                layer.style.filter = `blur(${blur}px)`;
             });
+
             if (anchor) {
                 const actual = center();
                 offset = {
@@ -78,9 +83,9 @@ export default function Morph({ first, last, state }: MorphProps) {
                 };
                 root.style.translate = `${offset.x}px ${offset.y}px`;
             }
+
             current = next;
             root.style.visibility = "visible";
-            notifyCursor();
         };
         const stop = () => {
             cancelAnimationFrame(frameId);
@@ -215,7 +220,6 @@ export default function Morph({ first, last, state }: MorphProps) {
                         left: "50%",
                         top: "50%",
                         transformOrigin: "center",
-                        // The animation lifecycle controls interaction after mount.
                         pointerEvents: "none",
                     }}
                 >
