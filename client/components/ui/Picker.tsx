@@ -196,7 +196,7 @@ export default function Picker({
                                                 )}
                                             </div>
                                         )}
-                                        <span className="min-w-0 [overflow-wrap:anywhere]">
+                                        <span className="min-w-0 wrap-any">
                                             {item}
                                         </span>
                                     </button>
