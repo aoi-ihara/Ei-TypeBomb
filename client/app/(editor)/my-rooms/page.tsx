@@ -100,7 +100,7 @@ export default function Profile() {
                 className="w-full"
                 iconName="plus"
             >
-                Add
+                追加
             </Button>
         </Shell>
     );

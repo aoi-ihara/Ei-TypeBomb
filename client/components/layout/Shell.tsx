@@ -19,7 +19,7 @@ export default function Shell({
         <>
             {(title || loading) && (
                 <h1
-                    className={`w-fit text-2xl mt-16 mb-8 font-bold font-mono text-center ${!title && loading && "gradient-text"}`}
+                    className={`w-fit text-2xl mt-16 mb-8 font-bold text-center ${!title && loading && "gradient-text"}`}
                     data-cursor="text"
                 >
                     {title ? title : "読み込み中…"}

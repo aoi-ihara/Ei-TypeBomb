@@ -503,14 +503,14 @@ export default function Page({
             )}
 
             <div data-cursor="text" className="font-bold flex w-fit text-lg">
-                General
+                一般
             </div>
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
                 <div className="flex flex-col gap-4">
                     <Input
                         onChange={(e) => setRoomExplanation(e.target.value)}
-                        label="Explanation"
+                        label="説明"
                         value={roomExplanation}
                     />
                     {validateExplanation(roomExplanation) && (
@@ -522,7 +522,7 @@ export default function Page({
                 <div className="flex flex-col gap-4">
                     <Input
                         onChange={(e) => setMaxPlayers(e.target.value)}
-                        label="Max Players"
+                        label="最大プレイヤー数"
                         type="number"
                         min={2}
                         max={8}
@@ -540,7 +540,7 @@ export default function Page({
                 <div className="w-full flex flex-col gap-4">
                     <Input
                         onChange={(e) => setRoomLink(e.target.value)}
-                        label="Invite Link"
+                        label="招待リンク"
                         font="mono"
                         type="url"
                         inputClassName="pl-19.5"
@@ -577,8 +577,8 @@ export default function Page({
                 <Dialog
                     open={showQrWarning}
                     onClose={() => setShowQrWarning(false)}
-                    title="This room has no words"
-                    description="Add at least one word before sharing this room. Players can't join a room with no words."
+                    title="ルームに単語がありません"
+                    description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
                     alignment="vertical"
                 >
                     <Button
@@ -590,14 +590,14 @@ export default function Page({
                         variant="primary"
                         className="w-full"
                     >
-                        Show QR Code
+                        QRコードを表示
                     </Button>
                     <Button
                         onClick={() => setShowQrWarning(false)}
                         iconName="x"
                         className="w-full"
                     >
-                        Cancel
+                        キャンセル
                     </Button>
                 </Dialog>
 
@@ -614,8 +614,8 @@ export default function Page({
                 <Dialog
                     open={showCopyWarning}
                     onClose={() => setShowCopyWarning(false)}
-                    title="This room has no words"
-                    description="Add at least one word before sharing this room. Players can't join a room with no words."
+                    title="ルームに単語がありません"
+                    description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
                     alignment="vertical"
                 >
                     <Button
@@ -627,14 +627,14 @@ export default function Page({
                         variant="primary"
                         className="w-full"
                     >
-                        Copy
+                        コピー
                     </Button>
                     <Button
                         onClick={() => setShowCopyWarning(false)}
                         iconName="x"
                         className="w-full"
                     >
-                        Cancel
+                        キャンセル
                     </Button>
                 </Dialog>
             </div>
@@ -643,7 +643,7 @@ export default function Page({
                 data-cursor="text"
                 className="font-bold flex w-fit text-lg mt-4"
             >
-                Settings
+                設定
             </div>
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
@@ -660,17 +660,17 @@ export default function Page({
                     className=""
                     iconName="eye"
                 >
-                    Visibility
+                    公開設定
                 </Button>
                 <Dialog
-                    title="Visibility Settings"
+                    title="公開設定"
                     open={showVisibilitySettings}
                     alignment="vertical"
                     size="middle"
                     onClose={() => setShowVisibilitySettings(false)}
                 >
                     <div className="w-full pl-2 items-center flex justify-between">
-                        <div data-cursor="text">Set to Private</div>
+                        <div data-cursor="text">ルームを非公開に設定する</div>
                         <div data-cursor="button" className="rounded-full flex">
                             <button
                                 className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-(--duration-etb) ease-etb active:scale-95`}
@@ -691,7 +691,7 @@ export default function Page({
                         value={newPassword}
                         disabled={!isPrivate}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        label="Room Password"
+                        label="パスワード"
                         type="password"
                     />
 
@@ -699,7 +699,7 @@ export default function Page({
                         value={confirmPassword}
                         disabled={!isPrivate}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        label="Conform Password"
+                        label="パスワードの確認"
                         type="password"
                     />
 
@@ -715,7 +715,7 @@ export default function Page({
                             onClick={() => setShowVisibilitySettings(false)}
                             iconName="x"
                         >
-                            Cancel
+                            キャンセル
                         </Button>
                         <Button
                             variant="primary"
@@ -724,7 +724,7 @@ export default function Page({
                             iconName="check"
                             loading={isUpdatingVisibilitySettings}
                         >
-                            Done
+                            完了
                         </Button>
                     </div>
                     {visibilityError && (
@@ -739,7 +739,7 @@ export default function Page({
                     className=""
                     iconName={isExported ? "check" : "download"}
                 >
-                    {!isExported && "Export"}
+                    {!isExported && "エクスポート"}
                 </Button>
 
                 <Button
@@ -748,28 +748,29 @@ export default function Page({
                     className=""
                     iconName="trash"
                 >
-                    Delete Room
+                    ルームを削除
                 </Button>
                 <Dialog
-                    title="Are you sure you want to delete this room?"
-                    description="This action cannot be undone."
+                    title="本当にこのルームを削除しますか？"
+                    description="この操作は取り消すことができません。"
                     open={showDeleteDialog}
+                    alignment="vertical"
                     onClose={() => setShowDeleteDialog(false)}
                 >
-                    <Button
-                        iconName="x"
-                        className="w-full"
-                        onClick={() => setShowDeleteDialog(false)}
-                    >
-                        Cancel
-                    </Button>
                     <Button
                         variant="danger"
                         iconName="trash"
                         className="w-full"
                         onClick={() => handleDeleteRoom()}
                     >
-                        Delete
+                        削除
+                    </Button>
+                    <Button
+                        iconName="x"
+                        className="w-full"
+                        onClick={() => setShowDeleteDialog(false)}
+                    >
+                        キャンセル
                     </Button>
                 </Dialog>
             </div>
@@ -778,7 +779,7 @@ export default function Page({
                 data-cursor="text"
                 className="font-bold flex w-fit text-lg mt-4"
             >
-                Words
+                単語
             </div>
 
             {words && (
@@ -800,7 +801,7 @@ export default function Page({
                         className="w-full"
                         iconName="plus"
                     >
-                        Add
+                        追加
                     </Button>
 
                     <Button
@@ -825,7 +826,7 @@ export default function Page({
                         iconName="upload"
                     />
                     <Dialog
-                        title="Import from JSON"
+                        title="JSONからインポート"
                         size="middle"
                         alignment="vertical"
                         open={showImportDialog}
@@ -833,8 +834,7 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                Please make sure your JSON file follows this
-                                format:
+                                JSONファイルは以下の形式で貼り付けてください:
                             </div>
                             <div data-cursor="text">
                                 {" "}
@@ -852,9 +852,8 @@ export default function Page({
                                 </pre>
                             </div>
                             <div className="opacity-50" data-cursor="text">
-                                Each object must include a &quot;jp&quot; field
-                                for the Japanese word and an &quot;en&quot;
-                                field for the English word.
+                                それぞれの単語には、&quot;jp&quot;をつけた日本語訳と、
+                                &quot;en&quot;をつけた英語訳が必要です。
                             </div>
                         </div>
                         <Button
@@ -863,7 +862,7 @@ export default function Page({
                             className="w-full"
                             iconName="check"
                         >
-                            Done
+                            完了
                         </Button>
                     </Dialog>
                 </div>
@@ -879,7 +878,7 @@ export default function Page({
                         <div className="flex gap-4 w-full">
                             <Input
                                 value={generationPrompt}
-                                label="Theme"
+                                label="テーマ"
                                 onChange={(e) =>
                                     setGenerationPrompt(e.target.value)
                                 }
@@ -969,7 +968,7 @@ export default function Page({
                                     className="w-full animate-appear"
                                     iconName="x"
                                 >
-                                    Cancel
+                                    キャンセル
                                 </Button>
                                 <Button
                                     variant="primary"
@@ -1005,7 +1004,7 @@ export default function Page({
                                         setShowGenerationInput(false);
                                     }}
                                 >
-                                    Add
+                                    追加
                                 </Button>
                             </div>
                         )}
@@ -1082,7 +1081,7 @@ export default function Page({
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="Label"
+                                                        label="日本語訳"
                                                         value={word.jp}
                                                         onChange={(e) => {
                                                             const newWords =
@@ -1124,7 +1123,7 @@ export default function Page({
                                                 </div>
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="Correct Answer"
+                                                        label="英単語"
                                                         font="mono"
                                                         value={word.en}
                                                         onChange={(e) => {
