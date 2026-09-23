@@ -1028,9 +1028,8 @@ export default function Page({
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            各オブジェクトには、日本語訳の &quot;jp&quot;
-                            フィールドと英単語の &quot;en&quot;
-                            フィールドが必要です。
+                            単語はCSV、それぞれの単語に&quot;jp&quot;をつけた日本語訳と、
+                            &quot;en&quot;をつけた英語訳を含むJSONである必要があります。。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
@@ -1044,7 +1043,7 @@ export default function Page({
                             inputClassName="resize-none h-48"
                             font="mono"
                             onChange={(e) => setImportData(e.target.value)}
-                            label="JSONデータ"
+                            label="単語データ"
                         />
                         {importData && (
                             <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
