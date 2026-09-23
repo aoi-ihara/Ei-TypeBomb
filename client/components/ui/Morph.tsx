@@ -5,7 +5,8 @@ import { type ReactNode, useLayoutEffect, useRef } from "react";
 export type MorphProps = {
     first: ReactNode;
     last: ReactNode;
-    state: "first" | "last";
+    /** false displays first; true displays last. */
+    state: boolean;
 };
 
 type Size = { width: number; height: number };
@@ -34,6 +35,14 @@ export default function Morph({ first, last, state }: MorphProps) {
                 width: parseFloat(css.width),
                 height: parseFloat(css.height),
             };
+        };
+        const setPointerEvents = (animating: boolean) => {
+            layers.forEach((layer, index) => {
+                const active = stateRef.current === (index === 1);
+
+                layer.style.pointerEvents =
+                    !animating && active ? "auto" : "none";
+            });
         };
         const center = () => {
             const rect = root.getBoundingClientRect();
@@ -73,7 +82,7 @@ export default function Morph({ first, last, state }: MorphProps) {
         };
         const update = () => {
             const measured = layers.map(measure);
-            const index = stateRef.current === "first" ? 0 : 1;
+            const index = stateRef.current ? 1 : 0;
             const target = { ...measured[index], mix: index };
             const unchanged =
                 sizes.length > 0 &&
@@ -95,6 +104,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             sizes = measured;
             if (!current) {
                 paint(target);
+                setPointerEvents(false);
                 return;
             }
             const start = current;
@@ -105,6 +115,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                 (durationToken.endsWith("ms") || !durationToken ? 1 : 1000);
             if (motion.matches || !Number.isFinite(duration) || duration <= 0) {
                 paint(target, true);
+                setPointerEvents(false);
                 return;
             }
             clock = new Animation(
@@ -115,6 +126,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                 }),
                 document.timeline,
             );
+            setPointerEvents(true);
             clock.play();
             paint(start, true);
             const tick = () => {
@@ -141,8 +153,10 @@ export default function Morph({ first, last, state }: MorphProps) {
                           },
                     true,
                 );
-                if (done) stop();
-                else frameId = requestAnimationFrame(tick);
+                if (done) {
+                    stop();
+                    setPointerEvents(false);
+                } else frameId = requestAnimationFrame(tick);
             };
             frameId = requestAnimationFrame(tick);
         };
@@ -168,7 +182,7 @@ export default function Morph({ first, last, state }: MorphProps) {
     return (
         <div
             ref={rootRef}
-            data-morph={state}
+            data-morph={state ? "last" : "first"}
             style={{
                 position: "relative",
                 display: "inline-block",
@@ -182,8 +196,8 @@ export default function Morph({ first, last, state }: MorphProps) {
                     key={side}
                     ref={index === 0 ? firstRef : lastRef}
                     data-morph-layer={side}
-                    aria-hidden={state !== side}
-                    inert={state !== side}
+                    aria-hidden={state !== (index === 1)}
+                    inert={state !== (index === 1)}
                     style={{
                         position: "absolute",
                         display: "flow-root",
@@ -191,7 +205,8 @@ export default function Morph({ first, last, state }: MorphProps) {
                         left: "50%",
                         top: "50%",
                         transformOrigin: "center",
-                        pointerEvents: state === side ? "auto" : "none",
+                        // The animation lifecycle controls interaction after mount.
+                        pointerEvents: "none",
                     }}
                 >
                     {index === 0 ? first : last}
