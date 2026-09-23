@@ -261,7 +261,8 @@ io.on("connection", (socket) => {
                 reportError("ルームの設定を取得できませんでした。");
                 return;
             }
-            if (!rooms.includes(room) || room.isStart || roomId !== room.id) return;
+            if (!rooms.includes(room) || room.isStart || roomId !== room.id)
+                return;
             room.gameDuration = savedRoom.gameDuration;
             requireRoomWords(room);
         } catch (error) {
