@@ -31,6 +31,7 @@ export default function Clinet({
     const gameNumberRef = useRef(0);
 
     const [room, setRoom] = useState<Room | null>(null);
+    const [serverError, setServerError] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
@@ -153,6 +154,13 @@ export default function Clinet({
         const attachSocketListeners = (candidate: Candidate) => {
             const { socket } = candidate;
 
+            socket.on("error", (error: { message?: unknown } | null) => {
+                if (!selected || socketRef.current !== socket) return;
+                if (typeof error?.message !== "string" || !error.message.trim())
+                    return;
+                setServerError(error.message);
+            });
+
             socket.on(
                 "room:broadcast",
                 (
@@ -165,6 +173,7 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
+                    setServerError(null);
                     setRoom(newRoom);
                     setUsers(
                         newRoom.users.map((item) => {
@@ -440,9 +449,21 @@ export default function Clinet({
             )}
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${serverError ? "min-h-14 h-auto justify-center" : isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
-                    {room ? (
+                    {serverError ? (
+                        <div
+                            className="flex justify-start animate-appear w-full"
+                            role="alert"
+                        >
+                            <div
+                                className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                data-cursor="text"
+                            >
+                                {serverError}
+                            </div>
+                        </div>
+                    ) : room ? (
                         users.some((user) => user.id === userId) ? (
                             <div className="flex flex-col h-full animate-appear">
                                 <div className="flex h-full">
