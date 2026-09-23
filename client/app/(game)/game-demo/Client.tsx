@@ -184,7 +184,9 @@ export default function Client({
                     const didLose = lostUser?.id === userId;
 
                     setResult(didLose);
-                    setLostDisplayName(lostUser?.displayName || "不明なプレイヤー");
+                    setLostDisplayName(
+                        lostUser?.displayName || "不明なプレイヤー",
+                    );
 
                     posthog.capture(didLose ? "game_lost" : "game_won");
                 }

@@ -46,8 +46,8 @@ function ServerStatus({
                         ? `${latency}ms`
                         : "正常"
                     : health === false
-                      ? "接続できません"
-                      : "未確認"}
+                      ? "エラー"
+                      : "接続中…"}
             </div>
         </div>
     );
@@ -130,15 +130,15 @@ export default function ServerHealth() {
     }, [primary.checkServer, backup.checkServer]);
 
     return (
-        <Shell title="サーバーの稼働状況" size="small">
+        <Shell title="サーバーの状況" size="small">
             <ServerStatus
-                name="メインサーバー"
+                name="プレイマリサーバー"
                 health={primary.health}
                 latency={primary.latency}
             />
 
             <ServerStatus
-                name="予備サーバー"
+                name="バックアップサーバー"
                 health={backup.health}
                 latency={backup.latency}
             />

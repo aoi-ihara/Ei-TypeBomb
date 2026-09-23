@@ -58,7 +58,9 @@ export default function Loading() {
         );
 
         if (!roomResult) {
-            posthog.capture("room_entry_failed", { reason: "ルームが見つかりません。" });
+            posthog.capture("room_entry_failed", {
+                reason: "ルームが見つかりません。",
+            });
             setError("ルームが見つかりません。");
             setLoading(false);
             return;

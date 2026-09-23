@@ -1028,7 +1028,9 @@ export default function Page({
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            各オブジェクトには、日本語訳の &quot;jp&quot; フィールドと英単語の &quot;en&quot; フィールドが必要です。
+                            各オブジェクトには、日本語訳の &quot;jp&quot;
+                            フィールドと英単語の &quot;en&quot;
+                            フィールドが必要です。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
@@ -1155,7 +1157,9 @@ export default function Page({
                                                     ) &&
                                                         word.en && (
                                                             <div className="text-red-500">
-                                                                半角英数字、スペース、記号（. , ! ? -）のみ使用できます。
+                                                                半角英数字、スペース、記号（.
+                                                                , ! ?
+                                                                -）のみ使用できます。
                                                             </div>
                                                         )}
                                                     {word.en.length > 32 && (
@@ -1230,9 +1234,7 @@ export default function Page({
                         </div>
                     </div>
                 </div>
-                <div className="opacity-50">
-                    Escキーを押すか、クリックすると戻ります。
-                </div>
+                <div className="opacity-50">escまたはクリックで戻る。</div>
             </div>
 
             <div
