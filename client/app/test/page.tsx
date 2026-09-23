@@ -10,7 +10,7 @@ export default function Page() {
     return (
         <div className="flex min-h-[80dvh] w-full items-center justify-center">
             <Morph
-                state={open ? "last" : "first"}
+                state={open}
                 first={
                     <Button onClick={() => setOpen(true)}>これはボタン</Button>
                 }
