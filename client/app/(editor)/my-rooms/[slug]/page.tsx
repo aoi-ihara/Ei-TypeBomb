@@ -41,6 +41,7 @@ import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
 import MorphDialog from "@/components/ui/MorphDialog";
+import Morph from "@/components/ui/Morph";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -601,79 +602,87 @@ export default function Page({
                     )}
                 </div>
 
-                <Button
-                    className="w-fit shrink-0"
-                    padding="large"
-                    iconName="qrCode"
-                    onClick={() => {
-                        if (words && words?.length !== 0) setShowRoomCode(true);
-                        else setShowQrWarning(true);
-                    }}
-                />
+                <div className="w-16">
+                    <MorphDialog
+                        button={
+                            <Button
+                                className="w-fit shrink-0"
+                                padding="large"
+                                iconName="qrCode"
+                                onClick={() => {
+                                    if (words && words?.length !== 0)
+                                        setShowRoomCode(true);
+                                    else setShowQrWarning(true);
+                                }}
+                            />
+                        }
+                        open={showQrWarning}
+                        onClose={() => setShowQrWarning(false)}
+                        title="ルームに単語がありません"
+                        description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                        alignment="vertical"
+                    >
+                        <Button
+                            onClick={() => {
+                                setShowRoomCode(true);
+                                setShowQrWarning(false);
+                            }}
+                            iconName="qrCode"
+                            variant="primary"
+                            className="w-full"
+                        >
+                            QRコードを表示
+                        </Button>
+                        <Button
+                            onClick={() => setShowQrWarning(false)}
+                            iconName="x"
+                            className="w-full"
+                        >
+                            キャンセル
+                        </Button>
+                    </MorphDialog>
+                </div>
 
-                <Dialog
-                    open={showQrWarning}
-                    onClose={() => setShowQrWarning(false)}
-                    title="ルームに単語がありません"
-                    description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
-                    alignment="vertical"
-                >
-                    <Button
-                        onClick={() => {
-                            setShowRoomCode(true);
-                            setShowQrWarning(false);
-                        }}
-                        iconName="qrCode"
-                        variant="primary"
-                        className="w-full"
+                <div className="w-16">
+                    <MorphDialog
+                        button={
+                            <Button
+                                className="w-fit shrink-0"
+                                onClick={() => {
+                                    if (words && words?.length !== 0)
+                                        handleCopyRoomLink();
+                                    else setShowCopyWarning(true);
+                                }}
+                                padding="large"
+                                iconName={isLinkCopied ? "check" : "copy"}
+                            />
+                        }
+                        open={showCopyWarning}
+                        onClose={() => setShowCopyWarning(false)}
+                        title="ルームに単語がありません"
+                        description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                        alignment="vertical"
                     >
-                        QRコードを表示
-                    </Button>
-                    <Button
-                        onClick={() => setShowQrWarning(false)}
-                        iconName="x"
-                        className="w-full"
-                    >
-                        キャンセル
-                    </Button>
-                </Dialog>
-
-                <Button
-                    className="w-fit shrink-0"
-                    onClick={() => {
-                        if (words && words?.length !== 0) handleCopyRoomLink();
-                        else setShowCopyWarning(true);
-                    }}
-                    padding="large"
-                    iconName={isLinkCopied ? "check" : "copy"}
-                />
-
-                <Dialog
-                    open={showCopyWarning}
-                    onClose={() => setShowCopyWarning(false)}
-                    title="ルームに単語がありません"
-                    description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
-                    alignment="vertical"
-                >
-                    <Button
-                        onClick={() => {
-                            handleCopyRoomLink();
-                            setShowCopyWarning(false);
-                        }}
-                        iconName="copy"
-                        variant="primary"
-                        className="w-full"
-                    >
-                        コピー
-                    </Button>
-                    <Button
-                        onClick={() => setShowCopyWarning(false)}
-                        iconName="x"
-                        className="w-full"
-                    >
-                        キャンセル
-                    </Button>
-                </Dialog>
+                        <Button
+                            onClick={() => {
+                                handleCopyRoomLink();
+                                setShowCopyWarning(false);
+                            }}
+                            iconName="copy"
+                            variant="primary"
+                            className="w-full"
+                        >
+                            コピー
+                        </Button>
+                        <Button
+                            onClick={() => setShowCopyWarning(false)}
+                            iconName="x"
+                            className="w-full"
+                        >
+                            キャンセル
+                        </Button>
+                    </MorphDialog>
+                </div>
             </div>
 
             <div
