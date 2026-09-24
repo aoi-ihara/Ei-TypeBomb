@@ -5,13 +5,13 @@ import { getUser } from "@/lib/auth/session";
 
 export class GenerationUsageError extends Error {}
 
-const DEFAULT_GEMINI_DAILY_LIMIT = 20;
+const NEXT_PUBLIC_GEMINI_DAILY_LIMIT = 20;
 
 export const getGeminiDailyLimit = () => {
-    const value = Number(process.env.GEMINI_DAILY_LIMIT);
+    const value = Number(process.env.NEXT_PUBLIC_GEMINI_DAILY_LIMIT);
 
     if (!Number.isInteger(value) || value <= 0) {
-        return DEFAULT_GEMINI_DAILY_LIMIT;
+        return NEXT_PUBLIC_GEMINI_DAILY_LIMIT;
     }
 
     return value;
