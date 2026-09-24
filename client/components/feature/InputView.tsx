@@ -30,6 +30,7 @@ export default function TypingView({
     onChangeInput,
     currentInput,
     bombStatus,
+    hasDuplicateMeaning = false,
 }: {
     japanese: string;
     english: string | null;
@@ -37,14 +38,17 @@ export default function TypingView({
     onChangeInput: (input: string) => void;
     currentInput: string | null;
     bombStatus?: number | null;
+    hasDuplicateMeaning?: boolean;
 }) {
     const variant = posthog.getFeatureFlag("showWordPrefix");
     console.log("variant", variant);
     const prefixLength = prefixLengthMap[variant as WordPrefixVariant] ?? 0;
-
-    const [missCount, setMissCount] = useState(
+    const initialPrefixLength = Math.max(
         bombStatus === 0 ? prefixLength : 0,
+        hasDuplicateMeaning ? 1 : 0,
     );
+
+    const [missCount, setMissCount] = useState(initialPrefixLength);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
@@ -54,6 +58,18 @@ export default function TypingView({
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
     const [syncedInput, setSyncedInput] = useState("");
+    const wordKey = JSON.stringify([japanese, english]);
+    const [previousWordKey, setPreviousWordKey] = useState(wordKey);
+
+    if (previousWordKey !== wordKey) {
+        setPreviousWordKey(wordKey);
+        setMissCount(initialPrefixLength);
+        setInput(english ? Array(english.length).fill("") : []);
+        setCurrentSelection(0);
+        setCharInput("");
+        setSyncedInput("");
+        setIsFailAnimating(false);
+    }
 
     const isReadonly = currentInput !== null;
 
@@ -134,7 +150,7 @@ export default function TypingView({
                 setInput(next);
                 setCurrentSelection(0);
                 console.log("bombStatus", bombStatus);
-                setMissCount(bombStatus === 0 ? prefixLength : 0);
+                setMissCount(initialPrefixLength);
                 onChangeInput(next.join(""));
 
                 if (isSoundEffectsEnabled()) {

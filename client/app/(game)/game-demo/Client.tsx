@@ -16,6 +16,8 @@ type Props = {
 };
 
 const MOCK_WORDS: Word[] = [
+    { jp: "見る", en: "see" },
+    { jp: "見る", en: "look" },
     { jp: "りんご", en: "apple" },
     { jp: "猫", en: "cat" },
     { jp: "犬", en: "dog" },
@@ -116,6 +118,10 @@ export default function Client({
     const router = useRouter();
 
     const currentTurnUser = users[currentTurn] as User | undefined;
+    const hasDuplicateMeaning =
+        currentWord !== null &&
+        (room?.words?.filter((word) => word.jp === currentWord.jp).length ??
+            0) > 1;
 
     const currentTurnRef = useRef(currentTurn);
     const usersRef = useRef(users);
@@ -359,8 +365,12 @@ export default function Client({
                                                 )}
 
                                                 <TypingView
+                                                    hasDuplicateMeaning={
+                                                        hasDuplicateMeaning
+                                                    }
                                                     japanese={currentWord.jp}
                                                     english={currentWord.en}
+                                                    bombStatus={bombStatus}
                                                     onSuccess={handleSuccess}
                                                     onChangeInput={(input) => {
                                                         if (
