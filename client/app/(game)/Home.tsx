@@ -168,34 +168,10 @@ export default function Home({
                         プレイ
                     </Button>
 
-                    {userId ? (
-                        <Button
-                            className="w-full"
-                            iconName="layoutGrid"
-                            onClick={() => router.push("/my-rooms")}
-                        >
-                            ルーム一覧
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-full"
-                            iconName="logIn"
-                            onClick={() =>
-                                router.push(
-                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                )
-                            }
-                        >
-                            サインイン
-                        </Button>
-                    )}
-                </div>
-
-                <div className="w-16">
                     <MorphDialog
                         button={
                             <Button
-                                variant="text"
+                                className="w-full"
                                 iconName="settings"
                                 onClick={() => setShowSettings(true)}
                             >
@@ -203,7 +179,6 @@ export default function Home({
                             </Button>
                         }
                         title="設定"
-                        size="middle"
                         alignment="vertical"
                         open={showSettings}
                         onClose={() => setShowSettings(!showSettings)}
@@ -222,6 +197,26 @@ export default function Home({
                         </Button>
                     </MorphDialog>
                 </div>
+
+                {userId ? (
+                    <Button
+                        variant="text"
+                        iconName="layoutGrid"
+                        onClick={() => router.push("/my-rooms")}
+                    >
+                        ルーム一覧
+                    </Button>
+                ) : (
+                    <Button
+                        variant="text"
+                        iconName="logIn"
+                        onClick={() =>
+                            router.push(process.env.NEXT_PUBLIC_SIGN_IN_URL!)
+                        }
+                    >
+                        サインイン
+                    </Button>
+                )}
             </div>
         </div>
     );
