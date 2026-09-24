@@ -50,6 +50,7 @@ export default function TypingView({
     );
     const [currentSelection, setCurrentSelection] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const inputFrameRef = useRef<HTMLDivElement | null>(null);
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
     const [syncedInput, setSyncedInput] = useState("");
@@ -97,9 +98,11 @@ export default function TypingView({
     }, [isReadonly]);
 
     const triggerFailAnimation = () => {
-        setIsFailAnimating(false);
-        requestAnimationFrame(() => setIsFailAnimating(true));
-        setTimeout(() => setIsFailAnimating(false), 400);
+        // Restart an in-flight shake without an older timer stopping it early.
+        inputFrameRef.current?.getAnimations().forEach((animation) => {
+            animation.currentTime = 0;
+        });
+        setIsFailAnimating(true);
     };
 
     if (!english) return null;
@@ -173,7 +176,12 @@ export default function TypingView({
             </div>
             <div className="w-full flex justify-center">
                 <div
-                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "animate-[wrongAnswer_400ms_ease-etb]" : ""}`}
+                    ref={inputFrameRef}
+                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "wrong-answer" : ""}`}
+                    onAnimationEnd={(event) => {
+                        if (event.target === event.currentTarget)
+                            setIsFailAnimating(false);
+                    }}
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}

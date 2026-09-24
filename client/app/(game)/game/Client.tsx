@@ -17,7 +17,6 @@ import Button from "@/components/ui/Button";
 type Props = {
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialServerUrl: string;
 };
 
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
@@ -25,7 +24,6 @@ const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 export default function Clinet({
     initialBackgroundMusic,
     initialSounDeffects,
-    initialServerUrl,
 }: Props) {
     const { bombRef, explode, resetExplosion, explosionLayer } =
         useBombExplosion();
@@ -74,7 +72,7 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl = resolveServerUrl(initialServerUrl);
+        const primaryUrl = resolveServerUrl();
         const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
         let selected = false;
@@ -113,7 +111,7 @@ export default function Clinet({
             if (!authToken || !selected || socketRef.current !== socket) return;
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url)) return;
+            if (!isTrustedServerUrl(candidate.url, primaryUrl)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
