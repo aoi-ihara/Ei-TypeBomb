@@ -35,13 +35,19 @@ export default function Collapsible({
 
         setHeight(element.scrollHeight);
 
-        requestAnimationFrame(() => {
+        const frame = requestAnimationFrame(() => {
             setHeight(0);
         });
+        return () => cancelAnimationFrame(frame);
+    }, [open]);
+
+    useLayoutEffect(() => {
+        window.dispatchEvent(new Event("morphcursorchange"));
     }, [open]);
 
     return (
         <div
+            inert={!open}
             className={`overflow-hidden transition-[height] duration-(--duration-etb) ease-etb ${className}`}
             style={{
                 height: height === -1 ? "auto" : `${height}px`,
