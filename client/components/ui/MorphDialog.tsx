@@ -64,14 +64,14 @@ export default function MorphDialog({
             };
         };
         const showAnchor = () => {
-            element.style.visibility = "visible";
+            element.style.opacity = "1";
             element.inert = false;
             element.removeAttribute("aria-hidden");
             dock.style.opacity = "0";
             dock.inert = true;
         };
         const showMorph = () => {
-            element.style.visibility = "hidden";
+            element.style.opacity = "0";
             element.inert = true;
             element.setAttribute("aria-hidden", "true");
             dock.style.opacity = "1";
@@ -79,8 +79,6 @@ export default function MorphDialog({
         };
         const origin = syncWidth();
         const hadPosition = dock.style.left !== "";
-        // When closed, the real in-flow button scrolls natively. The portal is
-        // only visible during opening, while open, and until closing completes.
         const from =
             dock.style.opacity === "0" || !hadPosition
                 ? origin
@@ -139,7 +137,6 @@ export default function MorphDialog({
         }
         const resize = () => {
             syncWidth();
-            // Observers must not cancel or snap an in-flight closing animation.
             if (open && !animation) {
                 dock.style.left = `${window.innerWidth / 2}px`;
                 dock.style.top = `${window.innerHeight / 2}px`;
@@ -217,7 +214,7 @@ export default function MorphDialog({
         <>
             <div
                 ref={attachAnchor}
-                className="inline-block w-full shrink-0 align-middle [&>*]:w-full"
+                className="inline-block w-full shrink-0 align-middle :w-full"
             >
                 {button}
             </div>
@@ -249,7 +246,7 @@ export default function MorphDialog({
                                 first={
                                     <div
                                         ref={triggerRef}
-                                        className="[&>*]:w-full"
+                                        className=":w-full"
                                         style={{
                                             width: anchor.getBoundingClientRect()
                                                 .width,

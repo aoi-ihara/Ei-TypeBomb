@@ -165,17 +165,12 @@ export default function Picker({
                             tabIndex={-1}
                             className="flex h-fit flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
                         >
-                            {items.length === 0 && (
-                                <div className="px-3 py-2 text-sm opacity-60">
-                                    項目がありません
-                                </div>
-                            )}
                             {items.map((item, index) => (
                                 <div
                                     key={index}
                                     data-cursor="button"
                                     data-cursor-shape="1"
-                                    className="rounded-xl py-1 px-2"
+                                    className="rounded-xl"
                                 >
                                     <button
                                         type="button"
@@ -185,7 +180,7 @@ export default function Picker({
                                             setOpen(false);
                                             onSelected(index);
                                         }}
-                                        className="ease-etb duration-(--duration-etb) active:scale-95 text-left font-bold flex w-full min-w-0 gap-2 py-1 px-0.5"
+                                        className="ease-etb duration-(--duration-etb) active:scale-95 text-left font-bold cursor-pointer flex w-full min-w-0 gap-2 py-2 px-3"
                                     >
                                         {showIcon && (
                                             <div className="w-6 h-6 shrink-0">

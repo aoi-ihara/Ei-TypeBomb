@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 import Settings from "./settings/Settings";
-import Dialog from "@/components/ui/Dialog";
+import MorphDialog from "@/components/ui/MorphDialog";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -191,34 +191,37 @@ export default function Home({
                     )}
                 </div>
 
-                <Button
-                    variant="text"
-                    iconName="settings"
-                    onClick={() => setShowSettings(true)}
-                >
-                    設定
-                </Button>
-
-                <Dialog
-                    title="設定"
-                    size="middle"
-                    alignment="vertical"
-                    open={showSettings}
-                    onClose={() => setShowSettings(!showSettings)}
-                >
-                    <Settings
-                        initialSounDeffects={initialSounDeffects}
-                        initialBackgroundMusic={initialBackgroundMusic}
-                    />
-                    <Button
-                        className="w-full"
-                        variant="primary"
-                        iconName="check"
-                        onClick={() => setShowSettings(false)}
+                <div className="w-16">
+                    <MorphDialog
+                        button={
+                            <Button
+                                variant="text"
+                                iconName="settings"
+                                onClick={() => setShowSettings(true)}
+                            >
+                                設定
+                            </Button>
+                        }
+                        title="設定"
+                        size="middle"
+                        alignment="vertical"
+                        open={showSettings}
+                        onClose={() => setShowSettings(!showSettings)}
                     >
-                        完了
-                    </Button>
-                </Dialog>
+                        <Settings
+                            initialSounDeffects={initialSounDeffects}
+                            initialBackgroundMusic={initialBackgroundMusic}
+                        />
+                        <Button
+                            className="w-full"
+                            variant="primary"
+                            iconName="check"
+                            onClick={() => setShowSettings(false)}
+                        >
+                            完了
+                        </Button>
+                    </MorphDialog>
+                </div>
             </div>
         </div>
     );

@@ -565,7 +565,7 @@ export default function Page({
                 <Picker
                     name="Game duration"
                     selection={(gameDuration ?? 0) / 10 - 1}
-                    items={["50〜100秒", "100〜150秒", "150〜200秒"]}
+                    items={["1分", "2分", "3分"]}
                     itemIcons={[null, null, null]}
                     onSelected={(index) => {
                         setGameDuration(index * 10 + 10);
