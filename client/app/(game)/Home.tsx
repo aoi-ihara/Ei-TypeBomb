@@ -9,8 +9,8 @@ import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
-import Settings from "./settings/Settings";
 import MorphDialog from "@/components/ui/MorphDialog";
+import Toggle from "@/components/ui/Toggle";
 
 type Props = {
     initialSounDeffects: boolean;
@@ -29,8 +29,14 @@ export default function Home({
     const redesignedSignInButton = useFeatureFlagEnabled(
         "redesignedSignInButton",
     );
-    const bigPlayButton = useFeatureFlagEnabled("bigPlayButton");
-    const showSignInButton = useFeatureFlagEnabled("showSignInButton");
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
+    const [sounDeffects, setSounDeffects] = useState(initialSounDeffects);
+
+    const setCookie = (key: string, value: string) => {
+        document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=31536000`;
+    };
 
     const router = useRouter();
 
@@ -183,10 +189,34 @@ export default function Home({
                         open={showSettings}
                         onClose={() => setShowSettings(!showSettings)}
                     >
-                        <Settings
-                            initialSounDeffects={initialSounDeffects}
-                            initialBackgroundMusic={initialBackgroundMusic}
-                        />
+                        <div className="w-full px-3 items-center flex justify-between">
+                            <div data-cursor="text">BGM</div>
+                            <Toggle
+                                checked={backgroundMusic}
+                                onChange={(next) => {
+                                    setBackgroundMusic(next);
+                                    setCookie("background-music", String(next));
+                                    posthog.capture("settings_changed", {
+                                        setting: "background_music",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
+                        <div className="w-full px-3 items-center flex justify-between">
+                            <div data-cursor="text">効果音</div>
+                            <Toggle
+                                checked={sounDeffects}
+                                onChange={(next) => {
+                                    setSounDeffects(next);
+                                    setCookie("sound-effects", String(next));
+                                    posthog.capture("settings_changed", {
+                                        setting: "sound_effects",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
                         <Button
                             className="w-full"
                             variant="primary"
