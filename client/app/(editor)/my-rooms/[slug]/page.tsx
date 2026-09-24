@@ -16,7 +16,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import { parseImportedWords } from "@/lib/room/importWords";
@@ -475,6 +475,10 @@ export default function Page({
     if (roomError) {
         notFound();
     }
+
+    useLayoutEffect(() => {
+        window.dispatchEvent(new Event("morphcursorchange"));
+    }, [showRoomCode]);
 
     return (
         <Shell
@@ -1269,8 +1273,9 @@ export default function Page({
                 className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
                     !showRoomCode &&
                     "opacity-0 scale-95 blur-md pointer-events-none"
-                } z-100 transition-all overlay duration-(--duration-etb) ease-etb`}
+                } z-1000 transition-all overlay duration-(--duration-etb) ease-etb`}
                 onClick={() => setShowRoomCode(false)}
+                inert={!showRoomCode}
             >
                 <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
