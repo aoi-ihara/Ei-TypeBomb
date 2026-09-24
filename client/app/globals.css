@@ -219,3 +219,121 @@ body {
         transform: translateX(0);
     }
 }
+
+.bomb-explosion-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow: hidden;
+    pointer-events: none;
+    --blast-windup: calc(var(--duration-etb, 400ms) * 0.2);
+}
+
+.bomb-explosion-origin {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.bomb-explosion-ring {
+    position: absolute;
+    width: var(--blast-size);
+    height: var(--blast-size);
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: radial-gradient(
+        closest-side,
+        transparent 78%,
+        rgb(250 204 21 / 0.12) 84%,
+        rgb(253 224 71 / 0.65) 90%,
+        transparent 100%
+    );
+    filter: blur(12px);
+    opacity: 0;
+    animation:
+        bombShockwave var(--duration-etb, 400ms) var(--ease-etb, ease-out)
+            var(--blast-windup) backwards,
+        bombShockwaveFade var(--duration-etb, 400ms) linear
+            var(--blast-windup) backwards;
+}
+
+.bomb-explosion-body {
+    position: absolute;
+    translate: -50% -50%;
+    animation: bombRelease calc(var(--duration-etb, 400ms) * 0.65) ease-out both;
+}
+
+.bomb-explosion-body svg {
+    width: 100%;
+    height: 100%;
+}
+
+.bomb-result-enter {
+    animation: appear var(--duration-etb, 400ms) var(--ease-etb, ease-out)
+        calc(var(--duration-etb, 400ms) * 0.3) both;
+}
+
+@keyframes bombRelease {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    30% {
+        transform: scale(0.72);
+        opacity: 1;
+    }
+    45% {
+        transform: scale(0.85);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(0.15);
+        opacity: 0;
+    }
+}
+
+@keyframes bombShockwave {
+    from {
+        transform: scale(var(--blast-start));
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+@keyframes bombShockwaveFade {
+    0% {
+        opacity: 0;
+    }
+    8% {
+        opacity: 0.75;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes bombReducedFlash {
+    from {
+        opacity: 0.6;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bomb-explosion-ring {
+        width: 96px;
+        height: 96px;
+        animation: bombReducedFlash calc(var(--duration-etb, 400ms) * 0.5)
+            linear both;
+    }
+    .bomb-explosion-body {
+        animation: bombReducedFlash calc(var(--duration-etb, 400ms) * 0.3)
+            linear both;
+    }
+    .bomb-result-enter {
+        animation: none;
+    }
+}
