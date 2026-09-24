@@ -91,6 +91,8 @@ export default function MorphDialog({
         const to = open
             ? { x: window.innerWidth / 2, y: window.innerHeight / 2 }
             : origin;
+        dock.dataset.morphCursorX = String(to.x);
+        dock.dataset.morphCursorY = String(to.y);
         dock.style.transition = "none";
         dock.style.left = `${to.x}px`;
         dock.style.top = `${to.y}px`;
@@ -110,6 +112,7 @@ export default function MorphDialog({
                     }, 0);
                 }
             }
+            window.dispatchEvent(new Event("morphcursorchange"));
         };
         if (!open && !hadPosition) {
             showAnchor();
@@ -137,11 +140,15 @@ export default function MorphDialog({
                 animation.onfinish = finish;
             }
         }
+        window.dispatchEvent(new Event("morphcursorchange"));
         const resize = () => {
             syncWidth();
             if (open && !animation) {
                 dock.style.left = `${window.innerWidth / 2}px`;
                 dock.style.top = `${window.innerHeight / 2}px`;
+                dock.dataset.morphCursorX = String(window.innerWidth / 2);
+                dock.dataset.morphCursorY = String(window.innerHeight / 2);
+                window.dispatchEvent(new Event("morphcursorchange"));
             }
         };
         const observer = new ResizeObserver(resize);
@@ -163,7 +170,6 @@ export default function MorphDialog({
         };
     }, [anchor, open]);
 
-    // Parent re-renders must not reset focus while a button is held down.
     useEffect(() => {
         if (!anchor) return;
         if (!open) {
