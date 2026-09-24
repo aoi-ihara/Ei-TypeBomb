@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useLayoutEffect } from "react";
 
 type DialogProps = {
     open: boolean;
@@ -48,9 +48,14 @@ export default function Dialog({
         };
     }, [open]);
 
+    useLayoutEffect(() => {
+        window.dispatchEvent(new Event("morphcursorchange"));
+    }, [open]);
+
     return (
         <div
             className={`fixed inset-0 z-4 ${open ? "bg-(--color-background-secondary)/50" : "opacity-0 pointer-events-none"} transition-all duration-750 ease-etb`}
+            inert={!open}
         >
             <div
                 className={`flex items-center h-full justify-center ${!open && "scale-110 blur-md"} transition-all duration-(--duration-etb) ease-etb`}
