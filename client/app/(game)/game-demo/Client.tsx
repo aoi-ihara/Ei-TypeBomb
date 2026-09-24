@@ -13,7 +13,6 @@ import Button from "@/components/ui/Button";
 type Props = {
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialServerUrl: string;
 };
 
 const MOCK_WORDS: Word[] = [
