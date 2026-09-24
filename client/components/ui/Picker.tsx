@@ -31,10 +31,12 @@ export default function Picker({
         const element = sizeRef.current;
         if (!element) return;
 
-        // Measure the untransformed trigger copy, never the animated Morph layer.
+        // Morph measures max-content layers, so both states need an explicit
+        // width from the untransformed copy that follows the parent's width.
         const syncWidth = () => {
-            if (menuRef.current) {
-                menuRef.current.style.width = `${element.getBoundingClientRect().width}px`;
+            const width = `${element.getBoundingClientRect().width}px`;
+            for (const target of [triggerRef.current, menuRef.current]) {
+                if (target) target.style.width = width;
             }
         };
         syncWidth();
@@ -103,19 +105,19 @@ export default function Picker({
 
     return (
         <div
-            className="relative inline-block shrink-0 w-fit align-middle"
+            className="relative inline-block shrink-0 w-full align-middle"
             data-picker
         >
             <div
                 ref={sizeRef}
-                className="invisible w-fit"
+                className="invisible w-full"
                 aria-hidden="true"
                 inert
             >
                 <Button
                     iconName="chevronsUpDown"
                     padding="large"
-                    className="w-fit"
+                    className="w-full"
                 >
                     <span>{label}</span>
                 </Button>
@@ -143,12 +145,14 @@ export default function Picker({
                 <Morph
                     state={open}
                     first={
-                        <div ref={triggerRef} className="w-fit">
+                        <div ref={triggerRef} className="w-full">
                             <Button
                                 iconName="chevronsUpDown"
+                                className="w-full"
                                 onClick={() => setOpen(true)}
                                 aria-haspopup="menu"
                                 padding="large"
+                                alignment="left"
                                 aria-expanded={open}
                                 aria-controls={menuId}
                             >
