@@ -40,6 +40,7 @@ import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
+import MorphDialog from "@/components/ui/MorphDialog";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -683,22 +684,24 @@ export default function Page({
             </div>
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                <Button
-                    onClick={() => {
-                        if (roomPassword) setIsPrivate(true);
-                        else setIsPrivate(false);
+                <MorphDialog
+                    button={
+                        <Button
+                            onClick={() => {
+                                if (roomPassword) setIsPrivate(true);
+                                else setIsPrivate(false);
 
-                        setNewPassword("");
-                        setConfirmPassword("");
+                                setNewPassword("");
+                                setConfirmPassword("");
 
-                        setShowVisibilitySettings(true);
-                    }}
-                    className=""
-                    iconName="eye"
-                >
-                    公開設定
-                </Button>
-                <Dialog
+                                setShowVisibilitySettings(true);
+                            }}
+                            className="w-full"
+                            iconName="eye"
+                        >
+                            公開設定
+                        </Button>
+                    }
                     title="公開設定"
                     open={showVisibilitySettings}
                     alignment="vertical"
@@ -768,7 +771,7 @@ export default function Page({
                             {visibilityError}
                         </div>
                     )}
-                </Dialog>
+                </MorphDialog>
 
                 <Button
                     onClick={() => handleExportWords()}

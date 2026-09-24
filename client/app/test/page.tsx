@@ -2,10 +2,12 @@
 
 import Button from "@/components/ui/Button";
 import Picker from "@/components/ui/Picker";
+import MorphDialog from "@/components/ui/MorphDialog";
 import Morph from "@/components/ui/Morph";
 import { useState } from "react";
 
 export default function Page() {
+    const [dialogOpen, setDialogOpen] = useState(false);
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState<number | null>(null);
 
@@ -21,6 +23,19 @@ export default function Page() {
                 />
                 <span data-picker-result>選択: {selected ?? "なし"}</span>
             </div>
+            <MorphDialog
+                open={dialogOpen}
+                onClose={() => setDialogOpen(false)}
+                title="モーフダイアログ"
+                description="ボタンから画面中央のダイアログへ変形します。"
+                button={
+                    <Button onClick={() => setDialogOpen(true)}>
+                        ダイアログを開く
+                    </Button>
+                }
+            >
+                <Button onClick={() => setDialogOpen(false)}>閉じる</Button>
+            </MorphDialog>
             <Morph
                 state={open}
                 first={
