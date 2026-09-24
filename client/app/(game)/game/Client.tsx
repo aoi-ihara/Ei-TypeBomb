@@ -66,6 +66,10 @@ export default function Clinet({
     );
 
     const currentTurnUser = users[currentTurn] as User | undefined;
+    const hasDuplicateMeaning =
+        currentWord !== null &&
+        (room?.words?.filter((word) => word.jp === currentWord.jp).length ??
+            0) > 1;
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -500,6 +504,9 @@ export default function Clinet({
                                                         </div>
                                                     ) : null}
                                                     <TypingView
+                                                        hasDuplicateMeaning={
+                                                            hasDuplicateMeaning
+                                                        }
                                                         japanese={
                                                             currentWord.jp
                                                         }
@@ -618,6 +625,9 @@ export default function Clinet({
                                                     </div>
                                                 ) : null}
                                                 <TypingView
+                                                    hasDuplicateMeaning={
+                                                        hasDuplicateMeaning
+                                                    }
                                                     japanese={currentWord.jp}
                                                     english={currentWord.en}
                                                     onSuccess={() => {
