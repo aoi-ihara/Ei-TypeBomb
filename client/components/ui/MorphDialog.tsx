@@ -4,6 +4,7 @@ import {
     type ReactNode,
     useCallback,
     useEffect,
+    useEffectEvent,
     useId,
     useLayoutEffect,
     useRef,
@@ -41,6 +42,7 @@ export default function MorphDialog({
     const triggerRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
     const id = useId();
+    const closeFromKeyboard = useEffectEvent(() => onClose());
     const attachAnchor = useCallback((element: HTMLDivElement | null) => {
         anchorRef.current = element;
         setAnchor(element);
@@ -161,6 +163,7 @@ export default function MorphDialog({
         };
     }, [anchor, open]);
 
+    // Parent re-renders must not reset focus while a button is held down.
     useEffect(() => {
         if (!anchor) return;
         if (!open) {
@@ -181,7 +184,7 @@ export default function MorphDialog({
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 event.preventDefault();
-                onClose();
+                closeFromKeyboard();
             }
             if (event.key === "Tab") {
                 const elements = focusable();
@@ -208,7 +211,7 @@ export default function MorphDialog({
             document.body.style.overflow = previousOverflow;
             document.removeEventListener("keydown", onKeyDown);
         };
-    }, [anchor, open, onClose]);
+    }, [anchor, open]);
 
     return (
         <>
