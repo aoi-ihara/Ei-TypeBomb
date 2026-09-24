@@ -562,7 +562,7 @@ export default function Page({
                         )}
                     </div>
                 </div>
-                <div className="w-32 flex shrink-0">
+                <div className="w-26 flex shrink-0">
                     <Picker
                         name="Game duration"
                         selection={(gameDuration ?? 0) / 10 - 1}
