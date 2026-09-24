@@ -112,6 +112,7 @@ export default function Page({
     const [roomLinkError, setRoomLinkError] = useState("");
     const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [isDeletingRoom, setIsDeletingRoom] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [importData, setImportData] = useState("");
     const [importError, setImportError] = useState("");
@@ -252,11 +253,19 @@ export default function Page({
     };
 
     const handleDeleteRoom = async () => {
-        if (!roomId) return;
-        const result = await deleteRoom(roomId);
+        if (!roomId || isDeletingRoom) return;
 
-        if (result) throw result;
-        else router.push("/my-rooms");
+        setIsDeletingRoom(true);
+
+        try {
+            const result = await deleteRoom(roomId);
+
+            if (result) throw result;
+            router.push("/my-rooms");
+        } catch (error) {
+            setIsDeletingRoom(false);
+            throw error;
+        }
     };
 
     useEffect(() => {
@@ -817,6 +826,7 @@ export default function Page({
                         iconName="trash"
                         className="w-full"
                         onClick={() => handleDeleteRoom()}
+                        loading={isDeletingRoom}
                     >
                         削除
                     </Button>
