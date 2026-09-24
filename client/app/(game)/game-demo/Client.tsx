@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import UsersView from "@/components/feature/UsersView";
+import { useBombExplosion } from "@/components/feature/BombExplosion";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User, Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
@@ -59,6 +60,8 @@ export default function Client({
     initialBackgroundMusic,
     initialSounDeffects,
 }: Props) {
+    const { bombRef, explode, resetExplosion, explosionLayer } =
+        useBombExplosion();
     const [userId] = useState<string>(LOCAL_USER_ID);
     const [displayName] = useState<string>(() => {
         if (typeof window === "undefined") return "たま";
@@ -127,6 +130,7 @@ export default function Client({
     }, [users]);
 
     const startGame = useCallback(() => {
+        resetExplosion();
         setIsStarted(true);
         setBombStatus(0);
         setCurrentTurn(Math.floor(Math.random() * users.length));
@@ -139,7 +143,7 @@ export default function Client({
                 MOCK_WORDS[Math.floor(Math.random() * MOCK_WORDS.length)],
             );
         }, 3000);
-    }, [users.length]);
+    }, [users.length, resetExplosion]);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -176,27 +180,20 @@ export default function Client({
         const duration = Math.floor(Math.random() * 10000) + 20000;
 
         const timer = setTimeout(() => {
-            setBombStatus((prev) => {
-                const nextStatus = prev + 1;
-
-                if (nextStatus > 4) {
-                    const lostUser = usersRef.current[currentTurnRef.current];
-                    const didLose = lostUser?.id === userId;
-
-                    setResult(didLose);
-                    setLostDisplayName(
-                        lostUser?.displayName || "不明なプレイヤー",
-                    );
-
-                    posthog.capture(didLose ? "game_lost" : "game_won");
-                }
-
-                return nextStatus;
-            });
+            const nextStatus = bombStatus + 1;
+            if (nextStatus > 4) {
+                explode();
+                const lostUser = usersRef.current[currentTurnRef.current];
+                const didLose = lostUser?.id === userId;
+                setResult(didLose);
+                setLostDisplayName(lostUser?.displayName || "不明なプレイヤー");
+                posthog.capture(didLose ? "game_lost" : "game_won");
+            }
+            setBombStatus(nextStatus);
         }, duration);
 
         return () => clearTimeout(timer);
-    }, [isStarted, result, bombStatus, userId, startGame]);
+    }, [isStarted, result, bombStatus, userId, startGame, explode]);
 
     useEffect(() => {
         if (
@@ -286,8 +283,9 @@ export default function Client({
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
+            {explosionLayer}
             {(result !== null || lostDisplayName) && (
-                <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
+                <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
@@ -402,6 +400,8 @@ export default function Client({
                     デモルーム
                 </div>
                 <UsersView
+                    bombRef={bombRef}
+                    exploded={result !== null}
                     users={users}
                     positions={userPositions}
                     bombStatus={bombStatus}

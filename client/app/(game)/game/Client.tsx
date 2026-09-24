@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
+import { useBombExplosion } from "@/components/feature/BombExplosion";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
@@ -26,6 +27,8 @@ export default function Clinet({
     initialSounDeffects,
     initialServerUrl,
 }: Props) {
+    const { bombRef, explode, resetExplosion, explosionLayer } =
+        useBombExplosion();
     const [userId, setUserId] = useState<string | null>(null);
     const userIdRef = useRef<string | null>(null);
     const gameNumberRef = useRef(0);
@@ -248,6 +251,7 @@ export default function Clinet({
                     holderDisplayName: string;
                 }) => {
                     if (!selected || socketRef.current !== socket) return;
+                    explode();
                     const didLose = userIdRef.current === holderUserId;
                     setResult(didLose);
                     setLostDisplayName(holderDisplayName);
@@ -283,7 +287,7 @@ export default function Clinet({
             primarySocket.disconnect();
             renderSocket?.disconnect();
         };
-    }, []);
+    }, [explode]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -386,6 +390,7 @@ export default function Clinet({
     };
 
     const handlePlayAgain = () => {
+        resetExplosion();
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
@@ -397,6 +402,7 @@ export default function Clinet({
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
+            {explosionLayer}
             <div
                 className={`${connectionAlert === null && "opacity-0 scale-95"} transition-all duration-(--duration-etb) ease-etb fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
             >
@@ -418,7 +424,7 @@ export default function Clinet({
                 </div>
             </div>
             {result !== null && (
-                <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
+                <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-sm flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
@@ -720,6 +726,8 @@ export default function Clinet({
                     {room?.title}
                 </div>
                 <UsersView
+                    bombRef={bombRef}
+                    exploded={result !== null}
                     users={users ?? []}
                     positions={userPositions}
                     userId={userId}
