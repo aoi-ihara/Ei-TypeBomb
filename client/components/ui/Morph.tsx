@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 export type MorphProps = {
     first: ReactNode;
@@ -12,6 +13,8 @@ type Size = { width: number; height: number };
 type Frame = Size & { mix: number };
 
 export default function Morph({ first, last, state }: MorphProps) {
+    const morphBlurFlag = useFeatureFlagEnabled("morphBlur");
+    const blurEnabled = morphBlurFlag !== false;
     const rootRef = useRef<HTMLDivElement>(null);
     const firstRef = useRef<HTMLDivElement>(null);
     const lastRef = useRef<HTMLDivElement>(null);
@@ -72,7 +75,7 @@ export default function Morph({ first, last, state }: MorphProps) {
 
                 layer.style.transform = `translate(-50%, -50%) scale(${x}, ${y})`;
                 layer.style.opacity = String(opacity);
-                layer.style.filter = `blur(${blur}px)`;
+                layer.style.filter = blurEnabled ? `blur(${blur}px)` : "none";
             });
 
             if (anchor) {
@@ -188,7 +191,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             motion.removeEventListener("change", update);
             updateRef.current = null;
         };
-    }, []);
+    }, [blurEnabled]);
 
     useLayoutEffect(() => {
         stateRef.current = state;
