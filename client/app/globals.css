@@ -199,21 +199,25 @@ body {
     }
 }
 
+.wrong-answer {
+    animation: wrongAnswer var(--duration-etb, 400ms) var(--ease-etb, ease-out);
+}
+
 @keyframes wrongAnswer {
     0% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     15% {
-        transform: translateX(10);
+        transform: translateX(10px);
     }
     30% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     45% {
-        transform: translateX(10);
+        transform: translateX(10px);
     }
     60% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     100% {
         transform: translateX(0);
@@ -253,8 +257,8 @@ body {
     animation:
         bombShockwave var(--duration-etb, 400ms) var(--ease-etb, ease-out)
             var(--blast-windup) backwards,
-        bombShockwaveFade var(--duration-etb, 400ms) linear
-            var(--blast-windup) backwards;
+        bombShockwaveFade var(--duration-etb, 400ms) linear var(--blast-windup)
+            backwards;
 }
 
 .bomb-explosion-body {
