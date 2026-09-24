@@ -40,7 +40,7 @@ export default function PopUp() {
                         </p>
                     </div>
 
-                    <Button variant="primary" onClick={accept}>
+                    <Button variant="primary" onClick={accept} className="shrink-0 whitespace-nowrap">
                         同意する
                     </Button>
                 </div>
