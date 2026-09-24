@@ -781,15 +781,17 @@ export default function Page({
                     {!isExported && "エクスポート"}
                 </Button>
 
-                <Button
-                    onClick={() => setShowDeleteDialog(true)}
-                    variant="danger"
-                    className=""
-                    iconName="trash"
-                >
-                    ルームを削除
-                </Button>
-                <Dialog
+                <MorphDialog
+                    button={
+                        <Button
+                            onClick={() => setShowDeleteDialog(true)}
+                            variant="danger"
+                            className=""
+                            iconName="trash"
+                        >
+                            ルームを削除
+                        </Button>
+                    }
                     title="本当にこのルームを削除しますか？"
                     description="この操作は取り消すことができません。"
                     open={showDeleteDialog}
@@ -811,7 +813,7 @@ export default function Page({
                     >
                         キャンセル
                     </Button>
-                </Dialog>
+                </MorphDialog>
             </div>
 
             <div

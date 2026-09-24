@@ -2,6 +2,7 @@
 
 import {
     type ReactNode,
+    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -35,50 +36,139 @@ export default function MorphDialog({
     size = "small",
 }: MorphDialogProps) {
     const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
+    const anchorRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
-    const wasOpen = useRef(false);
     const id = useId();
+    const attachAnchor = useCallback((element: HTMLDivElement | null) => {
+        anchorRef.current = element;
+        setAnchor(element);
+    }, []);
 
     useLayoutEffect(() => {
         if (!anchor || !dockRef.current) return;
+        const element = anchorRef.current!;
         const dock = dockRef.current;
-        const place = () => {
+        let animation: Animation | undefined;
+        let disposed = false;
+        let focusFrame = 0;
+        const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const syncWidth = () => {
             const rect = anchor.getBoundingClientRect();
-            if (triggerRef.current) {
+            if (triggerRef.current)
                 triggerRef.current.style.width = `${rect.width}px`;
-            }
-            dock.style.left = `${open ? window.innerWidth / 2 : rect.left + rect.width / 2}px`;
-            dock.style.top = `${open ? window.innerHeight / 2 : rect.top + rect.height / 2}px`;
+            return {
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2,
+            };
         };
-        place();
-        dock.getBoundingClientRect();
-        dock.style.transition =
-            "left var(--duration-etb, 400ms) var(--ease-etb, ease), top var(--duration-etb, 400ms) var(--ease-etb, ease)";
-        const observer = new ResizeObserver(place);
+        const showAnchor = () => {
+            element.style.visibility = "visible";
+            element.inert = false;
+            element.removeAttribute("aria-hidden");
+            dock.style.opacity = "0";
+            dock.inert = true;
+        };
+        const showMorph = () => {
+            element.style.visibility = "hidden";
+            element.inert = true;
+            element.setAttribute("aria-hidden", "true");
+            dock.style.opacity = "1";
+            dock.inert = false;
+        };
+        const origin = syncWidth();
+        const hadPosition = dock.style.left !== "";
+        // When closed, the real in-flow button scrolls natively. The portal is
+        // only visible during opening, while open, and until closing completes.
+        const from =
+            dock.style.opacity === "0" || !hadPosition
+                ? origin
+                : {
+                      x: parseFloat(getComputedStyle(dock).left),
+                      y: parseFloat(getComputedStyle(dock).top),
+                  };
+        const to = open
+            ? { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+            : origin;
+        dock.style.transition = "none";
+        dock.style.left = `${to.x}px`;
+        dock.style.top = `${to.y}px`;
+        const finish = () => {
+            if (disposed) return;
+            animation = undefined;
+            if (!open) {
+                showAnchor();
+                if (hadPosition) {
+                    focusFrame = window.setTimeout(() => {
+                        if (!disposed)
+                            element
+                                .querySelector<HTMLElement>(
+                                    "button, a[href], [tabindex]",
+                                )
+                                ?.focus({ preventScroll: true });
+                    }, 0);
+                }
+            }
+        };
+        if (!open && !hadPosition) {
+            showAnchor();
+        } else {
+            showMorph();
+            const css = getComputedStyle(dock);
+            const token =
+                css.getPropertyValue("--duration-etb").trim() || "400ms";
+            const duration =
+                parseFloat(token) * (token.endsWith("ms") ? 1 : 1000);
+            if (motion.matches || !Number.isFinite(duration) || duration <= 0)
+                finish();
+            else {
+                animation = dock.animate(
+                    [
+                        { left: `${from.x}px`, top: `${from.y}px` },
+                        { left: `${to.x}px`, top: `${to.y}px` },
+                    ],
+                    {
+                        duration,
+                        easing:
+                            css.getPropertyValue("--ease-etb").trim() || "ease",
+                    },
+                );
+                animation.onfinish = finish;
+            }
+        }
+        const resize = () => {
+            syncWidth();
+            // Observers must not cancel or snap an in-flight closing animation.
+            if (open && !animation) {
+                dock.style.left = `${window.innerWidth / 2}px`;
+                dock.style.top = `${window.innerHeight / 2}px`;
+            }
+        };
+        const observer = new ResizeObserver(resize);
         observer.observe(anchor);
-        window.addEventListener("resize", place);
-        window.addEventListener("scroll", place, true);
+        window.addEventListener("resize", resize);
         return () => {
+            disposed = true;
+            window.clearTimeout(focusFrame);
+            if (animation) {
+                const css = getComputedStyle(dock);
+                const left = css.left;
+                const top = css.top;
+                animation.cancel();
+                dock.style.left = left;
+                dock.style.top = top;
+            }
             observer.disconnect();
-            window.removeEventListener("resize", place);
-            window.removeEventListener("scroll", place, true);
+            window.removeEventListener("resize", resize);
         };
     }, [anchor, open]);
 
     useEffect(() => {
         if (!anchor) return;
         if (!open) {
-            if (wasOpen.current) {
-                triggerRef.current
-                    ?.querySelector<HTMLElement>("button, a[href], [tabindex]")
-                    ?.focus({ preventScroll: true });
-            }
-            wasOpen.current = false;
             return;
         }
-        wasOpen.current = true;
         const dialog = dialogRef.current;
         const focusable = () =>
             Array.from(
@@ -126,11 +216,8 @@ export default function MorphDialog({
     return (
         <>
             <div
-                ref={setAnchor}
-                className="inline-block w-full shrink-0 align-middle :w-full"
-                style={{ visibility: anchor ? "hidden" : "visible" }}
-                aria-hidden={anchor ? true : undefined}
-                inert={!!anchor}
+                ref={attachAnchor}
+                className="inline-block w-full shrink-0 align-middle [&>*]:w-full"
             >
                 {button}
             </div>
@@ -162,7 +249,7 @@ export default function MorphDialog({
                                 first={
                                     <div
                                         ref={triggerRef}
-                                        className=":w-full"
+                                        className="[&>*]:w-full"
                                         style={{
                                             width: anchor.getBoundingClientRect()
                                                 .width,
