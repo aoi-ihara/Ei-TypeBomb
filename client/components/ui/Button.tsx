@@ -4,7 +4,10 @@ import { Icon } from "./Icon";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
-type ButtonProps = {
+type ButtonProps = Pick<
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
+    "aria-haspopup" | "aria-expanded" | "aria-controls"
+> & {
     children?: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
@@ -21,7 +24,7 @@ type ButtonProps = {
 const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
 
 const baseStyles =
-    "font-bold transition-all duration-200 ease-out cursor-pointer";
+    "font-bold transition-all duration-(--duration-etb) ease-etb cursor-pointer";
 
 const variantStyles = (
     variant: ButtonVariant,
@@ -31,10 +34,10 @@ const variantStyles = (
     return variant === "text"
         ? `${!loading && "underline"} w-fit flex rounded-md active:no-underline active:scale-95`
         : variant === "default" || loading
-          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
+          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
           : variant === "danger"
-            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`
-            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all duration-200 ease-out font-bold`;
+            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
+            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`;
 };
 
 export default function Button({
@@ -42,13 +45,14 @@ export default function Button({
     onClick,
     disabled = false,
     loading = false,
-    loadingText = "Loading…",
+    loadingText = "読み込み中…",
     className = "w-fit",
     type = "button",
     variant = "default",
     padding = "middle",
     iconName,
     alignment = "center",
+    ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
@@ -60,7 +64,7 @@ export default function Button({
                 ? `rounded-lg ${iconName ? "pl-3.5" : "pl-4"} ${children ? "pr-4" : "pr-3.5"} py-3 gap-2`
                 : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4 gap-3`;
 
-    const autoPlayAgain = children === "Play Again";
+    const autoPlayAgain = children === "もう一度プレイ";
     const buttonRef = useRef<HTMLButtonElement | null>(null);
     const autoPlayAgainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
@@ -104,6 +108,7 @@ export default function Button({
         >
             <button
                 ref={buttonRef}
+                {...ariaProps}
                 type={type}
                 onClick={handleClick}
                 disabled={disabled}
@@ -120,7 +125,7 @@ export default function Button({
                 )}
                 {children && (
                     <div
-                        className={`transition-all duration-200 ease-out ${
+                        className={`transition-all duration-(--duration-etb) ease-etb ${
                             loading ? "gradient-text w-fit" : ""
                         }`}
                     >

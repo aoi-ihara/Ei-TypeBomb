@@ -39,7 +39,7 @@ export default function Profile() {
 
     return (
         <Shell
-            title="My Rooms"
+            title="ルーム一覧"
             size="large"
             loading={!rooms}
             animateAppear={true}
@@ -59,7 +59,7 @@ export default function Profile() {
                                 className="rounded-lg"
                             >
                                 <button
-                                    className="flex cursor-pointer w-full active:scale-95 transition-all duration-200 ease-out flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
+                                    className="flex cursor-pointer w-full active:scale-95 transition-all duration-(--duration-etb) ease-etb flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
                                     onClick={() =>
                                         router.push(`/my-rooms/${room.id}`)
                                     }
@@ -100,7 +100,7 @@ export default function Profile() {
                 className="w-full"
                 iconName="plus"
             >
-                Add
+                追加
             </Button>
         </Shell>
     );

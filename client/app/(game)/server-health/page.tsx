@@ -44,10 +44,10 @@ function ServerStatus({
                 {health === true
                     ? latency !== null
                         ? `${latency}ms`
-                        : "Healthy"
+                        : "正常"
                     : health === false
-                      ? "Unhealthy"
-                      : "No Data"}
+                      ? "エラー"
+                      : "接続中…"}
             </div>
         </div>
     );
@@ -121,8 +121,8 @@ export default function ServerHealth() {
     const primaryUrl = process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL;
     const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
-    const primary = useServerHealth(primaryUrl, 5_000);
-    const backup = useServerHealth(backupUrl, 30_000);
+    const primary = useServerHealth(primaryUrl, 4_000);
+    const backup = useServerHealth(backupUrl, 4_000);
 
     const handleRefresh = useCallback(() => {
         primary.checkServer();
@@ -130,15 +130,15 @@ export default function ServerHealth() {
     }, [primary.checkServer, backup.checkServer]);
 
     return (
-        <Shell title="Server Health" size="small">
+        <Shell title="サーバーの状況" size="small">
             <ServerStatus
-                name="Primary"
+                name="プレイマリサーバー"
                 health={primary.health}
                 latency={primary.latency}
             />
 
             <ServerStatus
-                name="Backup"
+                name="バックアップサーバー"
                 health={backup.health}
                 latency={backup.latency}
             />
@@ -148,7 +148,7 @@ export default function ServerHealth() {
                 onClick={handleRefresh}
                 className="w-full"
             >
-                Refresh
+                更新
             </Button>
         </Shell>
     );

@@ -59,7 +59,7 @@ export default function Input(props: InputProps) {
 
     return (
         <div
-            className={`relative flex flex-col transition-all duration-200 ease-out ${className} ${
+            className={`relative flex flex-col transition-all duration-(--duration-etb) ease-etb ${className} ${
                 disabled ? "opacity-50" : ""
             }`}
         >
@@ -77,7 +77,7 @@ export default function Input(props: InputProps) {
                     autoComplete={autoComplete}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-200 ease-out focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
                 />
             ) : (
                 <input
@@ -94,14 +94,14 @@ export default function Input(props: InputProps) {
                     autoComplete={autoComplete}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-200 ease-out focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
                 />
             )}
 
             {label && (
                 <label
                     htmlFor={inputId}
-                    className={`pointer-events-none whitespace-nowrap absolute text-(--color-foreground) transition-all duration-200 ease-out ${
+                    className={`pointer-events-none whitespace-nowrap absolute text-(--color-foreground) transition-all duration-(--duration-etb) ease-etb ${
                         shouldFloat || disableLabelAnimation
                             ? "-top-3.5 left-5 bg-(--color-background) p-1 text-sm opacity-100"
                             : "top-4 left-5 opacity-50"

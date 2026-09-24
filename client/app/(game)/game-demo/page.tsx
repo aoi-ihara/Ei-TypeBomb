@@ -8,13 +8,10 @@ export default async function SettingsPage() {
         cookieStore.get("background-music")?.value !== "false";
     const sounDeffects = cookieStore.get("sound-effects")?.value !== "false";
 
-    const serverUrl = cookieStore.get("server-url")?.value ?? "";
-
     return (
         <Client
             initialSounDeffects={sounDeffects}
             initialBackgroundMusic={backgroundMusic}
-            initialServerUrl={serverUrl}
         />
     );
 }

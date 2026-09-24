@@ -3,6 +3,7 @@
 import {
     DndContext,
     PointerSensor,
+    type Modifier,
     closestCenter,
     useSensor,
     useSensors,
@@ -15,9 +16,10 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, use, useRef } from "react";
+import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
+import { parseImportedWords } from "@/lib/room/importWords";
 import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -25,6 +27,7 @@ import { notFound, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
+    validateGameDuration,
     validateLink,
     validateMaxPlayers,
     validateTitle,
@@ -36,6 +39,8 @@ import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
+import Picker from "@/components/ui/Picker";
+import MorphDialog from "@/components/ui/MorphDialog";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -98,6 +103,7 @@ export default function Page({
     const [roomExplanation, setRoomExplanation] = useState("");
     const [roomTitle, setRoomTitle] = useState("");
     const [roomPassword, setRoomPassword] = useState("");
+    const [gameDuration, setGameDuration] = useState(20);
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
     const [roomId, setRoomId] = useState<string | null>(null);
     const [words, setWords] = useState<WordWithId[] | null>(null);
@@ -129,9 +135,12 @@ export default function Page({
     const [visibilityError, setVisibilityError] = useState("");
     const [isUpdatingVisibilitySettings, setIsUpdatingVisibilitySettings] =
         useState(false);
+    const [showCopyWarning, setShowCopyWarning] = useState(false);
+    const [showQrWarning, setShowQrWarning] = useState(false);
 
     const isLoadedRef = useRef(false);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -184,6 +193,7 @@ export default function Page({
         roomExplanation,
         roomPassword,
         maxPlayers,
+        gameDuration,
         words,
         roomId,
     });
@@ -194,6 +204,7 @@ export default function Page({
             roomExplanation,
             roomPassword,
             maxPlayers,
+            gameDuration,
             words,
             roomId,
         };
@@ -202,10 +213,31 @@ export default function Page({
         roomExplanation,
         roomPassword,
         maxPlayers,
+        gameDuration,
         words,
         roomId,
         roomLink,
     ]);
+
+    const wordListRef = useRef<HTMLDivElement | null>(null);
+
+    const restrictWordDrag: Modifier = ({ transform, activeNodeRect }) => {
+        const list = wordListRef.current;
+
+        if (!list || !activeNodeRect) {
+            return { ...transform, x: 0 };
+        }
+
+        const rect = list.getBoundingClientRect();
+        const minY = rect.top - activeNodeRect.top;
+        const maxY = rect.bottom - activeNodeRect.bottom;
+
+        return {
+            ...transform,
+            x: 0,
+            y: Math.min(Math.max(transform.y, minY), maxY),
+        };
+    };
 
     const sensors = useSensors(useSensor(PointerSensor));
 
@@ -241,6 +273,7 @@ export default function Page({
             setRoomExplanation(room.explanation ?? "");
             setRoomPassword(room.password ?? "");
             setMaxPlayers(room.maxPlayers?.toString() ?? "2");
+            setGameDuration(room.gameDuration ?? 20);
             setRoomLink(room.link ?? room.id);
 
             const wordsWithId: WordWithId[] = (room.words ?? []).map(
@@ -292,25 +325,25 @@ export default function Page({
 
         if (!roomId || words === null) return;
 
-        if (!importData) {
-            setImportError("JSON data is required.");
+        if (!importData.trim()) {
+            setImportError("JSONまたはCSVデータを入力してください。");
             return;
         }
 
-        let parsedWords: Word[];
+        let importedWords: WordWithId[];
 
         try {
-            parsedWords = JSON.parse(importData).map((word: Word) => ({
-                jp: word.jp,
-                en: word.en,
+            importedWords = parseImportedWords(importData).map((word) => ({
+                ...word,
                 id: crypto.randomUUID(),
             }));
         } catch {
-            setImportError("Invalid JSON format.");
+            setImportError(
+                "JSONまたはCSVの形式が正しくありません。CSVは各行に空欄のない2列で入力してください。",
+            );
             return;
         }
 
-        const importedWords = parsedWords as WordWithId[];
         const newWords = [...importedWords, ...words];
         setWords(newWords);
 
@@ -327,7 +360,7 @@ export default function Page({
         }
 
         if (newPassword !== confirmPassword && isPrivate) {
-            setVisibilityError("Passwords do not match.");
+            setVisibilityError("パスワードが一致しません。");
             return;
         }
 
@@ -357,13 +390,19 @@ export default function Page({
     const saveRoomData = async () => {
         const roomLinkResult = await getRoomFromLink(roomLink);
         if (roomLinkResult && roomLinkResult !== slug) {
-            setRoomLinkError("Link has already taken.");
+            setRoomLinkError("このリンクはすでに使用されています。");
         } else {
             setRoomLinkError("");
         }
 
-        const { roomId, roomTitle, roomExplanation, maxPlayers, words } =
-            roomDataRef.current;
+        const {
+            roomId,
+            roomTitle,
+            roomExplanation,
+            maxPlayers,
+            gameDuration,
+            words,
+        } = roomDataRef.current;
 
         if (!roomId || !words) return;
 
@@ -373,6 +412,9 @@ export default function Page({
                 title: roomTitle,
                 explanation: roomExplanation,
                 maxPlayers: Number(maxPlayers),
+                gameDuration: validateGameDuration(Number(gameDuration))
+                    ? undefined
+                    : Number(gameDuration),
                 words: words.map(({ jp, en }) => ({ jp, en })),
                 link: roomLink,
             };
@@ -392,13 +434,51 @@ export default function Page({
         }
 
         saveTimerRef.current = setTimeout(() => {
+            if (maxSaveTimerRef.current) {
+                clearTimeout(maxSaveTimerRef.current);
+                maxSaveTimerRef.current = null;
+            }
             saveRoomData();
-        }, 2000);
-    }, [roomTitle, roomExplanation, maxPlayers, words, roomId, roomLink]);
+        }, 1000);
+
+        if (!maxSaveTimerRef.current) {
+            maxSaveTimerRef.current = setTimeout(() => {
+                if (saveTimerRef.current) {
+                    clearTimeout(saveTimerRef.current);
+                    saveTimerRef.current = null;
+                }
+                maxSaveTimerRef.current = null;
+                saveRoomData();
+            }, 8000);
+        }
+    }, [
+        roomTitle,
+        roomExplanation,
+        maxPlayers,
+        gameDuration,
+        words,
+        roomId,
+        roomLink,
+    ]);
+
+    useEffect(() => {
+        return () => {
+            if (saveTimerRef.current) {
+                clearTimeout(saveTimerRef.current);
+            }
+            if (maxSaveTimerRef.current) {
+                clearTimeout(maxSaveTimerRef.current);
+            }
+        };
+    }, []);
 
     if (roomError) {
         notFound();
     }
+
+    useLayoutEffect(() => {
+        window.dispatchEvent(new Event("morphcursorchange"));
+    }, [showRoomCode]);
 
     return (
         <Shell
@@ -441,7 +521,7 @@ export default function Page({
                 <input
                     className="w-full outline-none text-2xl font-bold font-mono"
                     value={roomTitle}
-                    placeholder="Room Title"
+                    placeholder="ルーム名"
                     data-cursor="text"
                     onChange={(e) => setRoomTitle(e.target.value)}
                 />
@@ -453,36 +533,49 @@ export default function Page({
             )}
 
             <div data-cursor="text" className="font-bold flex w-fit text-lg">
-                General
+                一般
             </div>
 
-            <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                <div className="flex flex-col gap-4">
-                    <Input
-                        onChange={(e) => setRoomExplanation(e.target.value)}
-                        label="Explanation"
-                        value={roomExplanation}
-                    />
-                    {validateExplanation(roomExplanation) && (
-                        <div className="text-red-500" data-cursor="text">
-                            {validateExplanation(roomExplanation)}
-                        </div>
-                    )}
+            <div className="flex gap-4">
+                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                    <div className="flex flex-col gap-4">
+                        <Input
+                            onChange={(e) => setRoomExplanation(e.target.value)}
+                            label="説明"
+                            value={roomExplanation}
+                        />
+                        {validateExplanation(roomExplanation) && (
+                            <div className="text-red-500" data-cursor="text">
+                                {validateExplanation(roomExplanation)}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-4">
+                        <Input
+                            onChange={(e) => setMaxPlayers(e.target.value)}
+                            label="最大プレイヤー数"
+                            type="number"
+                            min={2}
+                            max={8}
+                            value={maxPlayers}
+                        />
+                        {validateMaxPlayers(Number(maxPlayers)) && (
+                            <div className="text-red-500" data-cursor="text">
+                                {validateMaxPlayers(Number(maxPlayers))}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div className="flex flex-col gap-4">
-                    <Input
-                        onChange={(e) => setMaxPlayers(e.target.value)}
-                        label="Max Players"
-                        type="number"
-                        min={2}
-                        max={8}
-                        value={maxPlayers}
+                <div className="w-26 flex shrink-0">
+                    <Picker
+                        name="Game duration"
+                        selection={(gameDuration ?? 0) / 10 - 1}
+                        items={["1分", "2分", "3分"]}
+                        itemIcons={[null, null, null]}
+                        onSelected={(index) => {
+                            setGameDuration(index * 10 + 10);
+                        }}
                     />
-                    {validateMaxPlayers(Number(maxPlayers)) && (
-                        <div className="text-red-500" data-cursor="text">
-                            {validateMaxPlayers(Number(maxPlayers))}
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -490,11 +583,11 @@ export default function Page({
                 <div className="w-full flex flex-col gap-4">
                     <Input
                         onChange={(e) => setRoomLink(e.target.value)}
-                        label="Invite Link"
+                        label="招待リンク"
                         font="mono"
                         type="url"
                         inputClassName="pl-19.5"
-                        className={`transition-all w-full duration-200 ease-out`}
+                        className={`transition-all w-full duration-(--duration-etb) ease-etb`}
                         value={roomLink}
                         disableLabelAnimation={true}
                     >
@@ -514,56 +607,126 @@ export default function Page({
                     )}
                 </div>
 
-                <Button
-                    className="w-fit shrink-0"
-                    padding="large"
-                    iconName="qrCode"
-                    onClick={() => setShowRoomCode(true)}
-                ></Button>
+                <div className="w-16">
+                    <MorphDialog
+                        button={
+                            <Button
+                                className="w-fit shrink-0"
+                                padding="large"
+                                iconName="qrCode"
+                                onClick={() => {
+                                    if (words && words?.length !== 0)
+                                        setShowRoomCode(true);
+                                    else setShowQrWarning(true);
+                                }}
+                            />
+                        }
+                        open={showQrWarning}
+                        onClose={() => setShowQrWarning(false)}
+                        title="ルームに単語がありません"
+                        description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                        alignment="vertical"
+                    >
+                        <Button
+                            onClick={() => {
+                                setShowRoomCode(true);
+                                setShowQrWarning(false);
+                            }}
+                            iconName="qrCode"
+                            variant="primary"
+                            className="w-full"
+                        >
+                            QRコードを表示
+                        </Button>
+                        <Button
+                            onClick={() => setShowQrWarning(false)}
+                            iconName="x"
+                            className="w-full"
+                        >
+                            キャンセル
+                        </Button>
+                    </MorphDialog>
+                </div>
 
-                <Button
-                    className="w-fit shrink-0"
-                    onClick={handleCopyRoomLink}
-                    padding="large"
-                    iconName={isLinkCopied ? "check" : "copy"}
-                ></Button>
+                <div className="w-16">
+                    <MorphDialog
+                        button={
+                            <Button
+                                className="w-fit shrink-0"
+                                onClick={() => {
+                                    if (words && words?.length !== 0)
+                                        handleCopyRoomLink();
+                                    else setShowCopyWarning(true);
+                                }}
+                                padding="large"
+                                iconName={isLinkCopied ? "check" : "copy"}
+                            />
+                        }
+                        open={showCopyWarning}
+                        onClose={() => setShowCopyWarning(false)}
+                        title="ルームに単語がありません"
+                        description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                        alignment="vertical"
+                    >
+                        <Button
+                            onClick={() => {
+                                handleCopyRoomLink();
+                                setShowCopyWarning(false);
+                            }}
+                            iconName="copy"
+                            variant="primary"
+                            className="w-full"
+                        >
+                            コピー
+                        </Button>
+                        <Button
+                            onClick={() => setShowCopyWarning(false)}
+                            iconName="x"
+                            className="w-full"
+                        >
+                            キャンセル
+                        </Button>
+                    </MorphDialog>
+                </div>
             </div>
 
             <div
                 data-cursor="text"
                 className="font-bold flex w-fit text-lg mt-4"
             >
-                Settings
+                設定
             </div>
 
             <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                <Button
-                    onClick={() => {
-                        if (roomPassword) setIsPrivate(true);
-                        else setIsPrivate(false);
+                <MorphDialog
+                    button={
+                        <Button
+                            onClick={() => {
+                                if (roomPassword) setIsPrivate(true);
+                                else setIsPrivate(false);
 
-                        setNewPassword("");
-                        setConfirmPassword("");
+                                setNewPassword("");
+                                setConfirmPassword("");
 
-                        setShowVisibilitySettings(true);
-                    }}
-                    className=""
-                    iconName="eye"
-                >
-                    Visibility
-                </Button>
-                <Dialog
-                    title="Visibility Settings"
+                                setShowVisibilitySettings(true);
+                            }}
+                            className="w-full"
+                            iconName="eye"
+                        >
+                            公開設定
+                        </Button>
+                    }
+                    title="公開設定"
                     open={showVisibilitySettings}
                     alignment="vertical"
                     size="middle"
                     onClose={() => setShowVisibilitySettings(false)}
                 >
                     <div className="w-full pl-2 items-center flex justify-between">
-                        <div data-cursor="text">Set to Private</div>
+                        <div data-cursor="text">ルームを非公開に設定する</div>
                         <div data-cursor="button" className="rounded-full flex">
                             <button
-                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-200 ease-out active:scale-95`}
+                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-(--duration-etb) ease-etb active:scale-95`}
                                 onClick={() => {
                                     const next = !isPrivate;
 
@@ -571,7 +734,7 @@ export default function Page({
                                 }}
                             >
                                 <div
-                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-200 ease-out`}
+                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-(--duration-etb) ease-etb`}
                                 ></div>
                             </button>
                         </div>
@@ -581,7 +744,7 @@ export default function Page({
                         value={newPassword}
                         disabled={!isPrivate}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        label="Room Password"
+                        label="パスワード"
                         type="password"
                     />
 
@@ -589,7 +752,7 @@ export default function Page({
                         value={confirmPassword}
                         disabled={!isPrivate}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        label="Conform Password"
+                        label="パスワードの確認"
                         type="password"
                     />
 
@@ -605,7 +768,7 @@ export default function Page({
                             onClick={() => setShowVisibilitySettings(false)}
                             iconName="x"
                         >
-                            Cancel
+                            キャンセル
                         </Button>
                         <Button
                             variant="primary"
@@ -614,7 +777,7 @@ export default function Page({
                             iconName="check"
                             loading={isUpdatingVisibilitySettings}
                         >
-                            Done
+                            完了
                         </Button>
                     </div>
                     {visibilityError && (
@@ -622,53 +785,56 @@ export default function Page({
                             {visibilityError}
                         </div>
                     )}
-                </Dialog>
+                </MorphDialog>
 
                 <Button
                     onClick={() => handleExportWords()}
                     className=""
                     iconName={isExported ? "check" : "download"}
                 >
-                    {!isExported && "Export"}
+                    {!isExported && "エクスポート"}
                 </Button>
 
-                <Button
-                    onClick={() => setShowDeleteDialog(true)}
-                    variant="danger"
-                    className=""
-                    iconName="trash"
-                >
-                    Delete Room
-                </Button>
-                <Dialog
-                    title="Are you sure you want to delete this room?"
-                    description="This action cannot be undone."
+                <MorphDialog
+                    button={
+                        <Button
+                            onClick={() => setShowDeleteDialog(true)}
+                            variant="danger"
+                            className=""
+                            iconName="trash"
+                        >
+                            ルームを削除
+                        </Button>
+                    }
+                    title="本当にこのルームを削除しますか？"
+                    description="この操作は取り消すことができません。"
                     open={showDeleteDialog}
+                    alignment="vertical"
                     onClose={() => setShowDeleteDialog(false)}
                 >
-                    <Button
-                        iconName="x"
-                        className="w-full"
-                        onClick={() => setShowDeleteDialog(false)}
-                    >
-                        Cancel
-                    </Button>
                     <Button
                         variant="danger"
                         iconName="trash"
                         className="w-full"
                         onClick={() => handleDeleteRoom()}
                     >
-                        Delete
+                        削除
                     </Button>
-                </Dialog>
+                    <Button
+                        iconName="x"
+                        className="w-full"
+                        onClick={() => setShowDeleteDialog(false)}
+                    >
+                        キャンセル
+                    </Button>
+                </MorphDialog>
             </div>
 
             <div
                 data-cursor="text"
                 className="font-bold flex w-fit text-lg mt-4"
             >
-                Words
+                単語
             </div>
 
             {words && (
@@ -690,7 +856,7 @@ export default function Page({
                         className="w-full"
                         iconName="plus"
                     >
-                        Add
+                        追加
                     </Button>
 
                     <Button
@@ -715,7 +881,7 @@ export default function Page({
                         iconName="upload"
                     />
                     <Dialog
-                        title="Import from JSON"
+                        title="単語のインポート"
                         size="middle"
                         alignment="vertical"
                         open={showImportDialog}
@@ -723,8 +889,7 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                Please make sure your JSON file follows this
-                                format:
+                                JSONファイルは以下の形式で貼り付けてください:
                             </div>
                             <div data-cursor="text">
                                 {" "}
@@ -742,10 +907,15 @@ export default function Page({
                                 </pre>
                             </div>
                             <div className="opacity-50" data-cursor="text">
-                                Each object must include a &quot;jp&quot; field
-                                for the Japanese word and an &quot;en&quot;
-                                field for the English word.
+                                それぞれの単語には、&quot;jp&quot;をつけた日本語訳と、
+                                &quot;en&quot;をつけた英語訳が必要です。
                             </div>
+                            <div data-cursor="text">
+                                CSVはヘッダーなしの2列で貼り付けてください:
+                            </div>
+                            <pre className="text-sm" data-cursor="text">
+                                {"りんご,apple\nねこ,cat"}
+                            </pre>
                         </div>
                         <Button
                             onClick={() => setShowImportDialog(false)}
@@ -753,7 +923,7 @@ export default function Page({
                             className="w-full"
                             iconName="check"
                         >
-                            Done
+                            完了
                         </Button>
                     </Dialog>
                 </div>
@@ -763,13 +933,13 @@ export default function Page({
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
-                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div className="flex gap-4 w-full">
                             <Input
                                 value={generationPrompt}
-                                label="Theme"
+                                label="テーマ"
                                 onChange={(e) =>
                                     setGenerationPrompt(e.target.value)
                                 }
@@ -788,7 +958,16 @@ export default function Page({
                                                 generationPrompt,
                                             );
 
-                                        setGeneratedWords(generatedWords);
+                                        if ("error" in generatedWords) {
+                                            setGeneratedWords([]);
+                                            setGenerationError(
+                                                generatedWords.error,
+                                            );
+                                        } else {
+                                            setGeneratedWords(
+                                                generatedWords.words,
+                                            );
+                                        }
                                     } catch (error) {
                                         console.error(
                                             "Failed to generate words:",
@@ -797,9 +976,7 @@ export default function Page({
 
                                         setGeneratedWords([]);
                                         setGenerationError(
-                                            error instanceof Error
-                                                ? error.message
-                                                : "Failed to generate words. Please try again.",
+                                            "単語の生成に失敗しました。もう一度お試しください。",
                                         );
                                     } finally {
                                         setIsGenerating(false);
@@ -833,7 +1010,7 @@ export default function Page({
 
                         {generatedWords.length !== 0 && (
                             <div
-                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-out duration-200`}
+                                className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-etb duration-(--duration-etb)`}
                             >
                                 {generatedWords.map((word, index) => (
                                     <div
@@ -859,7 +1036,7 @@ export default function Page({
                                     className="w-full animate-appear"
                                     iconName="x"
                                 >
-                                    Cancel
+                                    キャンセル
                                 </Button>
                                 <Button
                                     variant="primary"
@@ -880,7 +1057,7 @@ export default function Page({
                                             );
                                         } catch {
                                             setImportError(
-                                                "Invalid JSON format.",
+                                                "JSONの形式が正しくありません。",
                                             );
                                             return;
                                         }
@@ -895,7 +1072,7 @@ export default function Page({
                                         setShowGenerationInput(false);
                                     }}
                                 >
-                                    Add
+                                    追加
                                 </Button>
                             </div>
                         )}
@@ -908,18 +1085,17 @@ export default function Page({
                     </Collapsible>
                     <Collapsible
                         open={showImportInput}
-                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-out transition-all duration-200`}
+                        className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            Each object must include a &quot;jp&quot; field for
-                            the Japanese word and an &quot;en&quot; field for
-                            the English word.
+                            単語は2列のCSV、または&quot;jp&quot;（日本語）と
+                            &quot;en&quot;（英語）を含むJSONで貼り付けてください。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
                             >
-                                Learn More
+                                詳しく見る
                             </Button>
                         </div>
                         <Input
@@ -928,7 +1104,7 @@ export default function Page({
                             inputClassName="resize-none h-48"
                             font="mono"
                             onChange={(e) => setImportData(e.target.value)}
-                            label="JSON Data"
+                            label="単語データ"
                         />
                         {importData && (
                             <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
@@ -937,7 +1113,7 @@ export default function Page({
                                     className="w-full"
                                     iconName="x"
                                 >
-                                    Cancel
+                                    キャンセル
                                 </Button>
                                 <Button
                                     variant="primary"
@@ -945,7 +1121,7 @@ export default function Page({
                                     iconName="plus"
                                     onClick={() => handleImportWords()}
                                 >
-                                    Import
+                                    インポート
                                 </Button>
                             </div>
                         )}
@@ -955,9 +1131,10 @@ export default function Page({
                             </div>
                         )}
                     </Collapsible>
-                    <div className="flex flex-col gap-4">
+                    <div ref={wordListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
+                            modifiers={[restrictWordDrag]}
                             collisionDetection={closestCenter}
                             onDragEnd={handleDragEnd}
                         >
@@ -971,7 +1148,7 @@ export default function Page({
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="Label"
+                                                        label="日本語訳"
                                                         value={word.jp}
                                                         onChange={(e) => {
                                                             const newWords =
@@ -998,7 +1175,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            It is too long.
+                                                            32文字以内で入力してください。
                                                         </div>
                                                     )}
                                                     {!word.jp && (
@@ -1006,14 +1183,13 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            This field is
-                                                            required.
+                                                            この項目は必須です。
                                                         </div>
                                                     )}
                                                 </div>
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="Correct Answer"
+                                                        label="英単語"
                                                         font="mono"
                                                         value={word.en}
                                                         onChange={(e) => {
@@ -1041,13 +1217,9 @@ export default function Page({
                                                     ) &&
                                                         word.en && (
                                                             <div className="text-red-500">
-                                                                You can use only
-                                                                letters,
-                                                                numbers, spaces,
-                                                                and the
-                                                                following
-                                                                punctuation: .,
-                                                                ,, !, ?, and -.
+                                                                半角英数字、スペース、記号（.
+                                                                , ! ?
+                                                                -）のみ使用できます。
                                                             </div>
                                                         )}
                                                     {word.en.length > 32 && (
@@ -1055,7 +1227,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            It is too long.
+                                                            32文字以内で入力してください。
                                                         </div>
                                                     )}
                                                     {!word.en && (
@@ -1063,8 +1235,7 @@ export default function Page({
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            This field is
-                                                            required.
+                                                            この項目は必須です。
                                                         </div>
                                                     )}
                                                 </div>
@@ -1102,8 +1273,9 @@ export default function Page({
                 className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
                     !showRoomCode &&
                     "opacity-0 scale-95 blur-md pointer-events-none"
-                } z-100 transition-all overlay duration-200 ease-out`}
+                } z-1000 transition-all overlay duration-(--duration-etb) ease-etb`}
                 onClick={() => setShowRoomCode(false)}
+                inert={!showRoomCode}
             >
                 <div className="font-extrabold text-cyan-600 text-2xl">
                     Ei-TypeBomb
@@ -1123,13 +1295,11 @@ export default function Page({
                         </div>
                     </div>
                 </div>
-                <div className="opacity-50">
-                    Press escape or click to return.
-                </div>
+                <div className="opacity-50">escまたはクリックで戻る。</div>
             </div>
 
             <div
-                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-200 ease-out`}
+                className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-(--duration-etb) ease-etb`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="dialog-title"
@@ -1141,12 +1311,12 @@ export default function Page({
             >
                 <button
                     type="button"
-                    aria-label="Close dialog"
+                    aria-label="ダイアログを閉じる"
                     onClick={() => {
                         setShowImportInput(false);
                         setShowGenerationInput(false);
                     }}
-                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-200 ease-out`}
+                    className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-(--duration-etb) ease-etb`}
                 />
             </div>
         </Shell>

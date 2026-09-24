@@ -9,11 +9,11 @@ export const signIn = async (
     password: string,
     turnstileToken: string,
 ) => {
-    if (!turnstileToken) return "No Turnstile token provided";
+    if (!turnstileToken) return "ロボットではないことを確認してください。";
 
     const emailError = validateEmail(email);
     const passwordError = validatePassword(password);
-    if (emailError) return "Information is wrong";
+    if (emailError) return "入力内容が正しくありません。";
     if (passwordError) return passwordError;
 
     const supabase = await createClient();
@@ -26,7 +26,8 @@ export const signIn = async (
     });
 
     if (error) {
-        return error.message;
+        console.error(error);
+        return "ログインできませんでした。メールアドレス、パスワード、認証を確認して再度お試しください。";
     }
 
     redirect("/");

@@ -30,6 +30,7 @@ export default function TypingView({
     onChangeInput,
     currentInput,
     bombStatus,
+    hasDuplicateMeaning = false,
 }: {
     japanese: string;
     english: string | null;
@@ -37,22 +38,38 @@ export default function TypingView({
     onChangeInput: (input: string) => void;
     currentInput: string | null;
     bombStatus?: number | null;
+    hasDuplicateMeaning?: boolean;
 }) {
     const variant = posthog.getFeatureFlag("showWordPrefix");
     console.log("variant", variant);
     const prefixLength = prefixLengthMap[variant as WordPrefixVariant] ?? 0;
-
-    const [missCount, setMissCount] = useState(
+    const initialPrefixLength = Math.max(
         bombStatus === 0 ? prefixLength : 0,
+        hasDuplicateMeaning ? 1 : 0,
     );
+
+    const [missCount, setMissCount] = useState(initialPrefixLength);
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
     const [currentSelection, setCurrentSelection] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const inputFrameRef = useRef<HTMLDivElement | null>(null);
     const [charInput, setCharInput] = useState("");
     const [isFailAnimating, setIsFailAnimating] = useState(false);
     const [syncedInput, setSyncedInput] = useState("");
+    const wordKey = JSON.stringify([japanese, english]);
+    const [previousWordKey, setPreviousWordKey] = useState(wordKey);
+
+    if (previousWordKey !== wordKey) {
+        setPreviousWordKey(wordKey);
+        setMissCount(initialPrefixLength);
+        setInput(english ? Array(english.length).fill("") : []);
+        setCurrentSelection(0);
+        setCharInput("");
+        setSyncedInput("");
+        setIsFailAnimating(false);
+    }
 
     const isReadonly = currentInput !== null;
 
@@ -97,9 +114,11 @@ export default function TypingView({
     }, [isReadonly]);
 
     const triggerFailAnimation = () => {
-        setIsFailAnimating(false);
-        requestAnimationFrame(() => setIsFailAnimating(true));
-        setTimeout(() => setIsFailAnimating(false), 400);
+        // Restart an in-flight shake without an older timer stopping it early.
+        inputFrameRef.current?.getAnimations().forEach((animation) => {
+            animation.currentTime = 0;
+        });
+        setIsFailAnimating(true);
     };
 
     if (!english) return null;
@@ -131,7 +150,7 @@ export default function TypingView({
                 setInput(next);
                 setCurrentSelection(0);
                 console.log("bombStatus", bombStatus);
-                setMissCount(bombStatus === 0 ? prefixLength : 0);
+                setMissCount(initialPrefixLength);
                 onChangeInput(next.join(""));
 
                 if (isSoundEffectsEnabled()) {
@@ -173,23 +192,16 @@ export default function TypingView({
             </div>
             <div className="w-full flex justify-center">
                 <div
-                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "animate-[wrongAnswer_400ms_ease-out]" : ""}`}
+                    ref={inputFrameRef}
+                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "wrong-answer" : ""}`}
+                    onAnimationEnd={(event) => {
+                        if (event.target === event.currentTarget)
+                            setIsFailAnimating(false);
+                    }}
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}
                 >
-                    <div className="absolute top-1 left-1 pointer-events-none">
-                        {[...english].slice(0, missCount).map((char, index) => (
-                            <button
-                                key={index}
-                                className="font-bold font-mono opacity-25 w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out"
-                            >
-                                <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                    {char === " " ? "" : char}
-                                </div>
-                            </button>
-                        ))}
-                    </div>
                     {[...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
@@ -197,7 +209,7 @@ export default function TypingView({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (currentInput === null)
@@ -211,7 +223,7 @@ export default function TypingView({
                         return (
                             <button
                                 key={index}
-                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-out ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
                                 data-cursor="button"
                                 data-cursor-shape={
                                     currentInput === null ? "1" : "2"
@@ -223,7 +235,12 @@ export default function TypingView({
                                     inputRef.current?.focus();
                                 }}
                             >
-                                <div className="border-b border-(--color-border) flex items-center justify-center h-full w-full">
+                                {index < missCount && (
+                                    <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
+                                        {char}
+                                    </div>
+                                )}
+                                <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
                                     {displayChars?.[index] ?? ""}
                                 </div>
                             </button>

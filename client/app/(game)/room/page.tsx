@@ -35,6 +35,10 @@ export default function Loading() {
             posthog.capture("room_entered", { room_id: roomId });
             router.push("/display-name");
         } else {
+            posthog.capture("room_entry_failed", {
+                room_id: roomId,
+                reason: result,
+            });
             setError(result);
         }
         setLoading(false);
@@ -54,12 +58,16 @@ export default function Loading() {
         );
 
         if (!roomResult) {
-            setError("Room not found.");
+            posthog.capture("room_entry_failed", {
+                reason: "ルームが見つかりません。",
+            });
+            setError("ルームが見つかりません。");
             setLoading(false);
             return;
         }
 
         if ("error" in roomResult && roomResult.error) {
+            posthog.capture("room_entry_failed", { reason: roomResult.error });
             setError(roomResult.error);
             setLoading(false);
             return;
@@ -91,8 +99,8 @@ export default function Loading() {
     return (
         <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">
             <div className="flex items-end mb-4">
-                <h1 className="font-mono font-bold text-2xl" data-cursor="text">
-                    Choose a Room
+                <h1 className="font-bold text-2xl" data-cursor="text">
+                    ルームを選択
                 </h1>
                 <div
                     className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
@@ -105,7 +113,7 @@ export default function Loading() {
                 font="mono"
                 type="url"
                 onChange={(e) => setLink(e.target.value)}
-                label="Invite Link"
+                label="招待リンク"
             />
 
             {showPasswordField && (
@@ -114,7 +122,7 @@ export default function Loading() {
                         value={roomPassword}
                         type="password"
                         onChange={(e) => setRoomPassword(e.target.value)}
-                        label="Room Password"
+                        label="ルームのパスワード"
                     />
                 </div>
             )}
@@ -127,7 +135,7 @@ export default function Loading() {
                 loading={loading}
                 iconName="arrowRight"
             >
-                Continue
+                続ける
             </Button>
 
             {!link && (
@@ -136,7 +144,7 @@ export default function Loading() {
                     className={`w-full`}
                     iconName="play"
                 >
-                    Play Demo
+                    デモをプレイ
                 </Button>
             )}
 
@@ -148,6 +156,7 @@ export default function Loading() {
 
             <PopUp show={turnstile}>
                 <Turnstile
+                    options={{ language: "ja" }}
                     siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);

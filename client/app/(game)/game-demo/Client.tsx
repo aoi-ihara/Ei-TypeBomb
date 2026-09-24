@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import UsersView from "@/components/feature/UsersView";
+import { useBombExplosion } from "@/components/feature/BombExplosion";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User, Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
@@ -12,10 +13,11 @@ import Button from "@/components/ui/Button";
 type Props = {
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialServerUrl: string;
 };
 
 const MOCK_WORDS: Word[] = [
+    { jp: "見る", en: "see" },
+    { jp: "見る", en: "look" },
     { jp: "りんご", en: "apple" },
     { jp: "猫", en: "cat" },
     { jp: "犬", en: "dog" },
@@ -59,6 +61,8 @@ export default function Client({
     initialBackgroundMusic,
     initialSounDeffects,
 }: Props) {
+    const { bombRef, explode, resetExplosion, explosionLayer } =
+        useBombExplosion();
     const [userId] = useState<string>(LOCAL_USER_ID);
     const [displayName] = useState<string>(() => {
         if (typeof window === "undefined") return "たま";
@@ -67,8 +71,8 @@ export default function Client({
 
     const [users] = useState<User[]>(() => [
         { id: LOCAL_USER_ID, displayName: displayName },
-        { id: "bot-1", displayName: "Bot 1" },
-        { id: "bot-2", displayName: "Bot 2" },
+        { id: "bot-1", displayName: "ボット1" },
+        { id: "bot-2", displayName: "ボット2" },
     ]);
 
     const [room] = useState<Room>(() => ({
@@ -77,8 +81,8 @@ export default function Client({
         isStart: true,
         users: [
             { id: LOCAL_USER_ID, displayName: displayName },
-            { id: "bot-1", displayName: "Bot 1" },
-            { id: "bot-2", displayName: "Bot 2" },
+            { id: "bot-1", displayName: "ボット1" },
+            { id: "bot-2", displayName: "ボット2" },
         ],
         words: MOCK_WORDS,
     }));
@@ -95,8 +99,8 @@ export default function Client({
         newPositions(
             [
                 { id: LOCAL_USER_ID, displayName: displayName },
-                { id: "bot-1", displayName: "Bot 1" },
-                { id: "bot-2", displayName: "Bot 2" },
+                { id: "bot-1", displayName: "ボット1" },
+                { id: "bot-2", displayName: "ボット2" },
             ],
             Array.from({ length: 3 }, () => ({
                 x: 0,
@@ -114,6 +118,10 @@ export default function Client({
     const router = useRouter();
 
     const currentTurnUser = users[currentTurn] as User | undefined;
+    const hasDuplicateMeaning =
+        currentWord !== null &&
+        (room?.words?.filter((word) => word.jp === currentWord.jp).length ??
+            0) > 1;
 
     const currentTurnRef = useRef(currentTurn);
     const usersRef = useRef(users);
@@ -127,6 +135,7 @@ export default function Client({
     }, [users]);
 
     const startGame = useCallback(() => {
+        resetExplosion();
         setIsStarted(true);
         setBombStatus(0);
         setCurrentTurn(Math.floor(Math.random() * users.length));
@@ -139,7 +148,7 @@ export default function Client({
                 MOCK_WORDS[Math.floor(Math.random() * MOCK_WORDS.length)],
             );
         }, 3000);
-    }, [users.length]);
+    }, [users.length, resetExplosion]);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -176,25 +185,20 @@ export default function Client({
         const duration = Math.floor(Math.random() * 10000) + 20000;
 
         const timer = setTimeout(() => {
-            setBombStatus((prev) => {
-                const nextStatus = prev + 1;
-
-                if (nextStatus > 4) {
-                    const lostUser = usersRef.current[currentTurnRef.current];
-                    const didLose = lostUser?.id === userId;
-
-                    setResult(didLose);
-                    setLostDisplayName(lostUser?.displayName || "Unknown");
-
-                    posthog.capture(didLose ? "game_lost" : "game_won");
-                }
-
-                return nextStatus;
-            });
+            const nextStatus = bombStatus + 1;
+            if (nextStatus > 4) {
+                explode();
+                const lostUser = usersRef.current[currentTurnRef.current];
+                const didLose = lostUser?.id === userId;
+                setResult(didLose);
+                setLostDisplayName(lostUser?.displayName || "不明なプレイヤー");
+                posthog.capture(didLose ? "game_lost" : "game_won");
+            }
+            setBombStatus(nextStatus);
         }, duration);
 
         return () => clearTimeout(timer);
-    }, [isStarted, result, bombStatus, userId, startGame]);
+    }, [isStarted, result, bombStatus, userId, startGame, explode]);
 
     useEffect(() => {
         if (
@@ -284,13 +288,14 @@ export default function Client({
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
+            {explosionLayer}
             {(result !== null || lostDisplayName) && (
-                <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
+                <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
-                                ? "You Lose"
-                                : `${lostDisplayName} Lose`}
+                                ? "あなたの負けです"
+                                : `${lostDisplayName}の負けです`}
                         </div>
 
                         <Button
@@ -302,7 +307,7 @@ export default function Client({
                                 startGame();
                             }}
                         >
-                            Play Again
+                            もう一度プレイ
                         </Button>
 
                         <Button
@@ -314,7 +319,7 @@ export default function Client({
                                 )
                             }
                         >
-                            Create Your Room
+                            ルームを作成
                         </Button>
 
                         <Button
@@ -322,7 +327,7 @@ export default function Client({
                             className="w-full"
                             onClick={() => router.push("/room")}
                         >
-                            Join with Invite Link
+                            招待リンクで参加
                         </Button>
                     </div>
                 </div>
@@ -330,7 +335,7 @@ export default function Client({
 
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${currentTurn === 0 ? "h-full" : "h-64"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${currentTurn === 0 ? "h-full" : "h-64"} rounded-2xl p-2 w-full`}
                 >
                     {room && (
                         <div className="flex flex-col h-full">
@@ -342,7 +347,7 @@ export default function Client({
                                                 className="font-mono w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
-                                                Game started
+                                                ゲーム開始
                                             </div>
                                         ) : (
                                             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
@@ -354,14 +359,18 @@ export default function Client({
                                                         {currentTurnUser?.id !==
                                                         userId
                                                             ? currentTurnUser.displayName +
-                                                              "'s Turn"
-                                                            : "YOUR TURN"}
+                                                              "の番です"
+                                                            : "あなたの番です"}
                                                     </div>
                                                 )}
 
                                                 <TypingView
+                                                    hasDuplicateMeaning={
+                                                        hasDuplicateMeaning
+                                                    }
                                                     japanese={currentWord.jp}
                                                     english={currentWord.en}
+                                                    bombStatus={bombStatus}
                                                     onSuccess={handleSuccess}
                                                     onChangeInput={(input) => {
                                                         if (
@@ -397,9 +406,11 @@ export default function Client({
                     className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
-                    Demo Room
+                    デモルーム
                 </div>
                 <UsersView
+                    bombRef={bombRef}
+                    exploded={result !== null}
                     users={users}
                     positions={userPositions}
                     bombStatus={bombStatus}

@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { io } from "socket.io-client";
 import UsersView from "@/components/feature/UsersView";
+import { useBombExplosion } from "@/components/feature/BombExplosion";
 import TypingView from "@/components/feature/InputView";
 import { Room, Word, User } from "@/type";
 import { getAuthToken } from "@/lib/room/auth";
@@ -16,7 +17,6 @@ import Button from "@/components/ui/Button";
 type Props = {
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialServerUrl: string;
 };
 
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
@@ -24,13 +24,15 @@ const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 export default function Clinet({
     initialBackgroundMusic,
     initialSounDeffects,
-    initialServerUrl,
 }: Props) {
+    const { bombRef, explode, resetExplosion, explosionLayer } =
+        useBombExplosion();
     const [userId, setUserId] = useState<string | null>(null);
     const userIdRef = useRef<string | null>(null);
     const gameNumberRef = useRef(0);
 
     const [room, setRoom] = useState<Room | null>(null);
+    const [serverError, setServerError] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [currentWord, setCurrentWord] = useState<Word | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
@@ -64,13 +66,17 @@ export default function Clinet({
     );
 
     const currentTurnUser = users[currentTurn] as User | undefined;
+    const hasDuplicateMeaning =
+        currentWord !== null &&
+        (room?.words?.filter((word) => word.jp === currentWord.jp).length ??
+            0) > 1;
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl = resolveServerUrl(initialServerUrl);
+        const primaryUrl = resolveServerUrl();
         const backupUrl = process.env.NEXT_PUBLIC_BACKUP_SERVER_URL;
 
         let selected = false;
@@ -109,7 +115,7 @@ export default function Clinet({
             if (!authToken || !selected || socketRef.current !== socket) return;
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url)) return;
+            if (!isTrustedServerUrl(candidate.url, primaryUrl)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -153,6 +159,13 @@ export default function Clinet({
         const attachSocketListeners = (candidate: Candidate) => {
             const { socket } = candidate;
 
+            socket.on("error", (error: { message?: unknown } | null) => {
+                if (!selected || socketRef.current !== socket) return;
+                if (typeof error?.message !== "string" || !error.message.trim())
+                    return;
+                setServerError(error.message);
+            });
+
             socket.on(
                 "room:broadcast",
                 (
@@ -165,6 +178,7 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
+                    setServerError(null);
                     setRoom(newRoom);
                     setUsers(
                         newRoom.users.map((item) => {
@@ -239,6 +253,7 @@ export default function Clinet({
                     holderDisplayName: string;
                 }) => {
                     if (!selected || socketRef.current !== socket) return;
+                    explode();
                     const didLose = userIdRef.current === holderUserId;
                     setResult(didLose);
                     setLostDisplayName(holderDisplayName);
@@ -274,7 +289,7 @@ export default function Clinet({
             primarySocket.disconnect();
             renderSocket?.disconnect();
         };
-    }, []);
+    }, [explode]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -377,6 +392,7 @@ export default function Clinet({
     };
 
     const handlePlayAgain = () => {
+        resetExplosion();
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
@@ -388,8 +404,9 @@ export default function Clinet({
 
     return (
         <div className="flex flex-col md:flex-row w-full h-full">
+            {explosionLayer}
             <div
-                className={`${connectionAlert === null && "opacity-0 scale-95"} transition-all duration-200 ease-out fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
+                className={`${connectionAlert === null && "opacity-0 scale-95"} transition-all duration-(--duration-etb) ease-etb fixed top-4 right-4 flex items-center gap-4 w-94 rounded-2xl bg-(--color-foreground) text-(--color-background) py-3 px-4`}
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -404,17 +421,17 @@ export default function Clinet({
                     className="flex flex-col"
                     data-cursor={`${connectionAlert !== null && "text"}`}
                 >
-                    <span className="font-bold">Disconnected</span>A player has
-                    left the room.
+                    <span className="font-bold">接続が切れました</span>
+                    プレイヤーがルームから退出しました。
                 </div>
             </div>
             {result !== null && (
-                <div className="fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
+                <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-sm flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl">
                             {result === true
-                                ? "You Lose"
-                                : `${lostDisplayName} Lose`}
+                                ? "あなたの負けです"
+                                : `${lostDisplayName}の負けです`}
                         </div>
                         <Button
                             iconName="rotateCw"
@@ -422,7 +439,7 @@ export default function Clinet({
                             variant="primary"
                             onClick={handlePlayAgain}
                         >
-                            Play Again
+                            もう一度プレイ
                         </Button>
                         <Button
                             iconName="plus"
@@ -433,16 +450,28 @@ export default function Clinet({
                                 )
                             }
                         >
-                            Create Your Room
+                            ルームを作成
                         </Button>
                     </div>
                 </div>
             )}
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-200 ease-[cubic-bezier(0.1,0.5,0,1)] ${isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-64") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb ${serverError ? "min-h-14 h-auto justify-center" : isSpectator && !isStarted ? "opacity-0 scale-95" : users.some((user) => user.id === userId) ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
-                    {room ? (
+                    {serverError ? (
+                        <div
+                            className="flex justify-start animate-appear w-full"
+                            role="alert"
+                        >
+                            <div
+                                className="font-mono w-fit pl-4 font-bold"
+                                data-cursor="text"
+                            >
+                                {serverError}
+                            </div>
+                        </div>
+                    ) : room ? (
                         users.some((user) => user.id === userId) ? (
                             <div className="flex flex-col h-full animate-appear">
                                 <div className="flex h-full">
@@ -453,7 +482,7 @@ export default function Clinet({
                                                     className="font-mono w-fit font-bold text-2xl"
                                                     data-cursor="text"
                                                 >
-                                                    Game started
+                                                    ゲーム開始
                                                 </div>
                                             ) : (
                                                 <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
@@ -463,7 +492,7 @@ export default function Clinet({
                                                             className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                                                             data-cursor="text"
                                                         >
-                                                            YOUR TURN
+                                                            あなたの番です
                                                         </div>
                                                     ) : currentTurnUser ? (
                                                         <div
@@ -471,10 +500,13 @@ export default function Clinet({
                                                             data-cursor="text"
                                                         >
                                                             {currentTurnUser.displayName +
-                                                                "'s Turn"}
+                                                                "の番です"}
                                                         </div>
                                                     ) : null}
                                                     <TypingView
+                                                        hasDuplicateMeaning={
+                                                            hasDuplicateMeaning
+                                                        }
                                                         japanese={
                                                             currentWord.jp
                                                         }
@@ -520,7 +552,7 @@ export default function Clinet({
                                                     className="gradient-text h-fit px-2 py-1 font-bold flex"
                                                     data-cursor="text"
                                                 >
-                                                    Waiting for other players…
+                                                    ほかのプレイヤーを待っています…
                                                 </div>
                                                 <div
                                                     className="rounded-lg w-48 flex"
@@ -532,7 +564,7 @@ export default function Clinet({
                                                     }
                                                 >
                                                     <button
-                                                        className={`items-center cursor-pointer font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-200 ease-out`}
+                                                        className={`items-center cursor-pointer font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-(--duration-etb) ease-etb`}
                                                         onClick={() => {
                                                             if (
                                                                 users.length > 1
@@ -540,7 +572,7 @@ export default function Clinet({
                                                                 handleStartGame();
                                                         }}
                                                     >
-                                                        Start Game
+                                                        ゲームを開始
                                                     </button>
                                                 </div>
                                                 <div
@@ -549,12 +581,12 @@ export default function Clinet({
                                                     data-cursor-shape="1"
                                                 >
                                                     <button
-                                                        className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                        className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-(--duration-etb) ease-etb active:scale-95"
                                                         onClick={() =>
                                                             handleLeave()
                                                         }
                                                     >
-                                                        Leave
+                                                        退出
                                                     </button>
                                                 </div>
                                             </>
@@ -571,7 +603,7 @@ export default function Clinet({
                                                 className="font-mono animate-appear w-fit font-bold text-2xl"
                                                 data-cursor="text"
                                             >
-                                                Game started
+                                                ゲーム開始
                                             </div>
                                         ) : (
                                             <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
@@ -581,7 +613,7 @@ export default function Clinet({
                                                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                                                         data-cursor="text"
                                                     >
-                                                        YOUR TURN
+                                                        あなたの番です
                                                     </div>
                                                 ) : currentTurnUser ? (
                                                     <div
@@ -589,10 +621,13 @@ export default function Clinet({
                                                         data-cursor="text"
                                                     >
                                                         {currentTurnUser.displayName +
-                                                            "'s Turn"}
+                                                            "の番です"}
                                                     </div>
                                                 ) : null}
                                                 <TypingView
+                                                    hasDuplicateMeaning={
+                                                        hasDuplicateMeaning
+                                                    }
                                                     japanese={currentWord.jp}
                                                     english={currentWord.en}
                                                     onSuccess={() => {
@@ -631,36 +666,36 @@ export default function Clinet({
                                                         className="w-fit pl-4 font-bold"
                                                         data-cursor="text"
                                                     >
-                                                        Connected
+                                                        接続しました
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-2 animate-appear">
                                                     <div
-                                                        className="rounded-lg w-32 flex"
+                                                        className="rounded-lg w-14 flex"
                                                         data-cursor="button"
                                                         data-cursor-shape="1"
                                                     >
                                                         <button
-                                                            className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-200 ease-out active:scale-95"
+                                                            className="items-center text-center justify-center cursor-pointer font-bold py-2 w-full text-cyan-600 h-fit flex transition-all duration-(--duration-etb) ease-etb active:scale-95"
                                                             onClick={() =>
                                                                 handleWatch()
                                                             }
                                                         >
-                                                            Watch Only
+                                                            観戦
                                                         </button>
                                                     </div>
                                                     <div
-                                                        className="rounded-lg w-24 flex"
+                                                        className="rounded-lg w-20 flex"
                                                         data-cursor="button"
                                                         data-cursor-shape="0"
                                                     >
                                                         <button
-                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-200 ease-out active:scale-95"
+                                                            className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-(--duration-etb) ease-etb active:scale-95"
                                                             onClick={() =>
                                                                 handleJoin()
                                                             }
                                                         >
-                                                            Join
+                                                            参加
                                                         </button>
                                                     </div>
                                                 </div>
@@ -670,10 +705,10 @@ export default function Clinet({
                                 ) : (
                                     <div className="flex justify-start animate-appear w-full">
                                         <div
-                                            className="font-mono opacity-50 w-fit pl-4 font-bold"
+                                            className="font-mono w-fit pl-4 font-bold"
                                             data-cursor="text"
                                         >
-                                            This room is full
+                                            このルームは満員です
                                         </div>
                                     </div>
                                 )}
@@ -685,7 +720,7 @@ export default function Clinet({
                                 className="w-fit pl-4 font-bold gradient-text"
                                 data-cursor="text"
                             >
-                                Connecting to server…
+                                サーバーに接続しています…
                             </div>
                         </div>
                     )}
@@ -699,6 +734,8 @@ export default function Clinet({
                     {room?.title}
                 </div>
                 <UsersView
+                    bombRef={bombRef}
+                    exploded={result !== null}
                     users={users ?? []}
                     positions={userPositions}
                     userId={userId}

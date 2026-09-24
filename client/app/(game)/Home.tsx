@@ -9,17 +9,34 @@ import posthog from "posthog-js";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import MorphDialog from "@/components/ui/MorphDialog";
+import Toggle from "@/components/ui/Toggle";
 
-export default function Home() {
+type Props = {
+    initialSounDeffects: boolean;
+    initialBackgroundMusic: boolean;
+};
+
+export default function Home({
+    initialSounDeffects,
+    initialBackgroundMusic,
+}: Props) {
     const [showCursor, setShowCursor] = useState(true);
     const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
+    const [showSettings, setShowSettings] = useState(false);
 
     const redesignedSignInButton = useFeatureFlagEnabled(
         "redesignedSignInButton",
     );
-    const bigPlayButton = useFeatureFlagEnabled("bigPlayButton");
-    const showSignInButton = useFeatureFlagEnabled("showSignInButton");
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
+    const [sounDeffects, setSounDeffects] = useState(initialSounDeffects);
+
+    const setCookie = (key: string, value: string) => {
+        document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=31536000`;
+    };
 
     const router = useRouter();
 
@@ -68,17 +85,17 @@ export default function Home() {
                             data-cursor-shape="1"
                         >
                             <button
-                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all cursor-pointer duration-400 ease-[linear(0,0.009_0.7%,0.038_1.5%,0.145_3.1%,0.763_9.1%,0.99_11.8%,1.13_14.4%,1.17_15.7%,1.194_17.1%,1.2_18.7%,1.186_20.5%,1.01_29.6%,0.977_32.4%,0.961_35.3%,0.963_38.9%,0.997_47.8%,1.008_53.3%,0.999_71.2%,1)]"
+                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb"
                                 onClick={() => setShowPopUp(!showPopUp)}
                             >
                                 <Icon name="circleUserRound" />
                             </button>
 
                             <div
-                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
+                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-(--duration-etb) ease-etb`}
                             >
                                 <div
-                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)]`}
+                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-(--duration-etb) ease-etb`}
                                 >
                                     <div
                                         className="rounded-sm w-full"
@@ -86,12 +103,12 @@ export default function Home() {
                                         data-cursor-shape="1"
                                     >
                                         <button
-                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
                                             onClick={() =>
                                                 router.push("/my-rooms")
                                             }
                                         >
-                                            My Rooms
+                                            ルーム一覧
                                         </button>
                                     </div>
                                     <div
@@ -100,7 +117,7 @@ export default function Home() {
                                         data-cursor-shape="1"
                                     >
                                         <button
-                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
                                             onClick={() => {
                                                 posthog.capture("signed_out");
                                                 posthog.reset();
@@ -108,12 +125,12 @@ export default function Home() {
                                                 setUserId(null);
                                             }}
                                         >
-                                            Sign Out
+                                            サインアウト
                                         </button>
                                     </div>
                                 </div>
                                 <div
-                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-400 ease-[linear(0,0.008_1.4%,0.032_2.8%,0.13_6%,0.259_9%,0.668_17.6%,0.87_22.8%,0.945_25.3%,1.004_27.8%,1.051_30.4%,1.084_33%,1.112_37.4%,1.112_42.5%,1.019_61.7%,0.991_72.3%,0.987_81.8%,1)] bg-(--color-background-secondary)`}
+                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-(--duration-etb) ease-etb bg-(--color-background-secondary)`}
                                 />
                             </div>
                         </div>
@@ -125,14 +142,14 @@ export default function Home() {
                         data-cursor-shape="1"
                     >
                         <button
-                            className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-200 ease-out"
+                            className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
                             onClick={() =>
                                 router.push(
                                     process.env.NEXT_PUBLIC_SIGN_IN_URL!,
                                 )
                             }
                         >
-                            Sign In
+                            ログイン
                         </button>
                     </div>
                 )}
@@ -148,69 +165,88 @@ export default function Home() {
                 </div>
 
                 <div className="w-64 gap-4 flex flex-col">
-                    {bigPlayButton ? (
-                        <Button
-                            className="w-full"
-                            padding="large"
-                            iconName="play"
-                            onClick={() => router.push("/room")}
-                            variant="primary"
-                        >
-                            Play
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-full"
-                            iconName="play"
-                            onClick={() => router.push("/room")}
-                            variant="primary"
-                        >
-                            Play
-                        </Button>
-                    )}
+                    <Button
+                        className="w-full"
+                        iconName="play"
+                        onClick={() => router.push("/room")}
+                        variant="primary"
+                    >
+                        プレイ
+                    </Button>
 
-                    {userId ? (
+                    <MorphDialog
+                        button={
+                            <Button
+                                className="w-full"
+                                iconName="settings"
+                                onClick={() => setShowSettings(true)}
+                            >
+                                設定
+                            </Button>
+                        }
+                        title="設定"
+                        alignment="vertical"
+                        open={showSettings}
+                        onClose={() => setShowSettings(!showSettings)}
+                    >
+                        <div className="w-full px-3 items-center flex justify-between">
+                            <div data-cursor="text">BGM</div>
+                            <Toggle
+                                checked={backgroundMusic}
+                                onChange={(next) => {
+                                    setBackgroundMusic(next);
+                                    setCookie("background-music", String(next));
+                                    posthog.capture("settings_changed", {
+                                        setting: "background_music",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
+                        <div className="w-full px-3 items-center flex justify-between">
+                            <div data-cursor="text">効果音</div>
+                            <Toggle
+                                checked={sounDeffects}
+                                onChange={(next) => {
+                                    setSounDeffects(next);
+                                    setCookie("sound-effects", String(next));
+                                    posthog.capture("settings_changed", {
+                                        setting: "sound_effects",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
                         <Button
                             className="w-full"
-                            iconName="layoutGrid"
-                            onClick={() => router.push("/my-rooms")}
+                            variant="primary"
+                            iconName="check"
+                            onClick={() => setShowSettings(false)}
                         >
-                            My Rooms
+                            完了
                         </Button>
-                    ) : showSignInButton ? (
-                        <Button
-                            className="w-full"
-                            iconName="logIn"
-                            onClick={() =>
-                                router.push(
-                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                )
-                            }
-                        >
-                            Sign In
-                        </Button>
-                    ) : (
-                        <Button
-                            className="w-full"
-                            iconName="plus"
-                            onClick={() =>
-                                router.push(
-                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                )
-                            }
-                        >
-                            Create Your Room
-                        </Button>
-                    )}
+                    </MorphDialog>
                 </div>
 
-                <Button
-                    variant="text"
-                    iconName="settings"
-                    onClick={() => router.push("/settings")}
-                >
-                    Settings
-                </Button>
+                {userId ? (
+                    <Button
+                        variant="text"
+                        iconName="layoutGrid"
+                        onClick={() => router.push("/my-rooms")}
+                    >
+                        ルーム一覧
+                    </Button>
+                ) : (
+                    <Button
+                        variant="text"
+                        iconName="logIn"
+                        onClick={() =>
+                            router.push(process.env.NEXT_PUBLIC_SIGN_IN_URL!)
+                        }
+                    >
+                        サインイン
+                    </Button>
+                )}
             </div>
         </div>
     );

@@ -78,19 +78,80 @@ body {
 @keyframes appear {
     from {
         opacity: 0;
-        transform: scale(0.95);
         filter: blur(12px);
     }
 
     to {
         opacity: 1;
-        transform: scale(1);
         filter: blur(0);
     }
 }
 
 @theme {
-    --animate-appear: appear 0.2s ease-out;
+    --animate-appear: appear 0.4s
+        linear(
+            0,
+            0.001 0.6%,
+            0.007 1.4%,
+            0.028 2.8%,
+            0.065 4.4%,
+            0.113 6%,
+            0.223 9%,
+            0.497 15.6%,
+            0.622 18.8%,
+            0.74 22.2%,
+            0.832 25.4%,
+            0.911 28.8%,
+            0.944 30.6%,
+            0.973 32.4%,
+            0.996 34.2%,
+            1.015 36%,
+            1.031 38%,
+            1.043 40%,
+            1.052 42.2%,
+            1.057 44.4%,
+            1.059 46.8%,
+            1.058 49.4%,
+            1.051 54%,
+            1.023 65.6%,
+            1.011 72%,
+            1.002 79.4%,
+            0.997 87.6%,
+            1
+        );
+
+    --duration-etb: 400ms;
+
+    --ease-etb: linear(
+        0,
+        0.001 0.6%,
+        0.007 1.4%,
+        0.028 2.8%,
+        0.065 4.4%,
+        0.113 6%,
+        0.223 9%,
+        0.497 15.6%,
+        0.622 18.8%,
+        0.74 22.2%,
+        0.832 25.4%,
+        0.911 28.8%,
+        0.944 30.6%,
+        0.973 32.4%,
+        0.996 34.2%,
+        1.015 36%,
+        1.031 38%,
+        1.043 40%,
+        1.052 42.2%,
+        1.057 44.4%,
+        1.059 46.8%,
+        1.058 49.4%,
+        1.051 54%,
+        1.023 65.6%,
+        1.011 72%,
+        1.002 79.4%,
+        0.997 87.6%,
+        1
+    );
 }
 
 .gradient-background {
@@ -119,23 +180,164 @@ body {
     }
 }
 
+@keyframes bombShake {
+    0%,
+    100% {
+        transform: translateX(0) rotate(0deg);
+    }
+    25% {
+        transform: translateX(-1.5px) rotate(-2deg);
+    }
+    75% {
+        transform: translateX(1.5px) rotate(2deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bomb-shake {
+        animation: none !important;
+    }
+}
+
+.wrong-answer {
+    animation: wrongAnswer var(--duration-etb, 400ms) var(--ease-etb, ease-out);
+}
+
 @keyframes wrongAnswer {
     0% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     15% {
-        transform: translateX(10);
+        transform: translateX(10px);
     }
     30% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     45% {
-        transform: translateX(10);
+        transform: translateX(10px);
     }
     60% {
-        transform: translateX(-10);
+        transform: translateX(-10px);
     }
     100% {
         transform: translateX(0);
+    }
+}
+
+.bomb-explosion-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    overflow: hidden;
+    pointer-events: none;
+    --blast-windup: calc(var(--duration-etb, 400ms) * 0.2);
+}
+
+.bomb-explosion-origin {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.bomb-explosion-ring {
+    position: absolute;
+    width: var(--blast-size);
+    height: var(--blast-size);
+    translate: -50% -50%;
+    border-radius: 50%;
+    background: radial-gradient(
+        closest-side,
+        transparent 78%,
+        rgb(250 204 21 / 0.12) 84%,
+        rgb(253 224 71 / 0.65) 90%,
+        transparent 100%
+    );
+    filter: blur(12px);
+    opacity: 0;
+    animation:
+        bombShockwave var(--duration-etb, 400ms) var(--ease-etb, ease-out)
+            var(--blast-windup) backwards,
+        bombShockwaveFade var(--duration-etb, 400ms) linear var(--blast-windup)
+            backwards;
+}
+
+.bomb-explosion-body {
+    position: absolute;
+    translate: -50% -50%;
+    animation: bombRelease calc(var(--duration-etb, 400ms) * 0.65) ease-out both;
+}
+
+.bomb-explosion-body svg {
+    width: 100%;
+    height: 100%;
+}
+
+.bomb-result-enter {
+    animation: appear var(--duration-etb, 400ms) var(--ease-etb, ease-out)
+        calc(var(--duration-etb, 400ms) * 0.3) both;
+}
+
+@keyframes bombRelease {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    30% {
+        transform: scale(0.72);
+        opacity: 1;
+    }
+    45% {
+        transform: scale(0.85);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(0.15);
+        opacity: 0;
+    }
+}
+
+@keyframes bombShockwave {
+    from {
+        transform: scale(var(--blast-start));
+    }
+    to {
+        transform: scale(1);
+    }
+}
+
+@keyframes bombShockwaveFade {
+    0% {
+        opacity: 0;
+    }
+    8% {
+        opacity: 0.75;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes bombReducedFlash {
+    from {
+        opacity: 0.6;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bomb-explosion-ring {
+        width: 96px;
+        height: 96px;
+        animation: bombReducedFlash calc(var(--duration-etb, 400ms) * 0.5)
+            linear both;
+    }
+    .bomb-explosion-body {
+        animation: bombReducedFlash calc(var(--duration-etb, 400ms) * 0.3)
+            linear both;
+    }
+    .bomb-result-enter {
+        animation: none;
     }
 }
