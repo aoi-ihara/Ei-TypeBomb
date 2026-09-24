@@ -41,7 +41,6 @@ import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
 import MorphDialog from "@/components/ui/MorphDialog";
-import Morph from "@/components/ui/Morph";
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -563,15 +562,17 @@ export default function Page({
                         )}
                     </div>
                 </div>
-                <Picker
-                    name="Game duration"
-                    selection={(gameDuration ?? 0) / 10 - 1}
-                    items={["1分", "2分", "3分"]}
-                    itemIcons={[null, null, null]}
-                    onSelected={(index) => {
-                        setGameDuration(index * 10 + 10);
-                    }}
-                />
+                <div className="w-26 flex shrink-0">
+                    <Picker
+                        name="Game duration"
+                        selection={(gameDuration ?? 0) / 10 - 1}
+                        items={["1分", "2分", "3分"]}
+                        itemIcons={[null, null, null]}
+                        onSelected={(index) => {
+                            setGameDuration(index * 10 + 10);
+                        }}
+                    />
+                </div>
             </div>
 
             <div className="flex gap-4 w-full">

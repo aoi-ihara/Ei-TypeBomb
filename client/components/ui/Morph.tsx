@@ -36,7 +36,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             };
         };
         const notifyCursor = () => {
-            if (root.closest("[data-picker]")) {
+            if (root.closest("[data-picker], [data-morph-dialog]")) {
                 window.dispatchEvent(new Event("morphcursorchange"));
             }
         };
@@ -143,6 +143,7 @@ export default function Morph({ first, last, state }: MorphProps) {
             setPointerEvents(true);
             clock.play();
             paint(start, true);
+            notifyCursor();
             const tick = () => {
                 const progress =
                     clock?.effect?.getComputedTiming().progress ?? 0;

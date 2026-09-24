@@ -25,23 +25,66 @@ export default function Picker({
     const sizeRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null);
+    const dockRef = useRef<HTMLDivElement>(null);
     const wasOpen = useRef(false);
 
     useLayoutEffect(() => {
         const element = sizeRef.current;
         if (!element) return;
 
-        // Measure the untransformed trigger copy, never the animated Morph layer.
-        const syncWidth = () => {
-            if (menuRef.current) {
-                menuRef.current.style.width = `${element.getBoundingClientRect().width}px`;
-            }
+        const syncLayout = () => {
+            const rect = element.getBoundingClientRect();
+            if (triggerRef.current)
+                triggerRef.current.style.width = `${rect.width}px`;
+            const menu = menuRef.current;
+            const dock = dockRef.current;
+            if (!menu || !dock) return;
+            const viewport = window.visualViewport;
+            const left = (viewport?.offsetLeft ?? 0) + 16;
+            const top = (viewport?.offsetTop ?? 0) + 16;
+            const width = Math.max(
+                0,
+                (viewport?.width ?? window.innerWidth) - 32,
+            );
+            const height = Math.max(
+                0,
+                (viewport?.height ?? window.innerHeight) - 32,
+            );
+            menu.style.maxWidth = `${width}px`;
+            menu.style.maxHeight = `${height}px`;
+            const menuStyle = getComputedStyle(menu);
+            const menuWidth = parseFloat(menuStyle.width);
+            const menuHeight = parseFloat(menuStyle.height);
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const x = Math.min(
+                Math.max(centerX, left + menuWidth / 2),
+                left + width - menuWidth / 2,
+            );
+            const y = Math.min(
+                Math.max(centerY, top + menuHeight / 2),
+                top + height - menuHeight / 2,
+            );
+            dock.style.transform = open
+                ? `translate(${x - centerX}px, ${y - centerY}px)`
+                : "translate(0px, 0px)";
         };
-        syncWidth();
-        const observer = new ResizeObserver(syncWidth);
+        syncLayout();
+        const observer = new ResizeObserver(syncLayout);
         observer.observe(element);
-        return () => observer.disconnect();
-    }, []);
+        if (menuRef.current) observer.observe(menuRef.current);
+        window.addEventListener("resize", syncLayout);
+        window.addEventListener("scroll", syncLayout, true);
+        window.visualViewport?.addEventListener("resize", syncLayout);
+        window.visualViewport?.addEventListener("scroll", syncLayout);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", syncLayout);
+            window.removeEventListener("scroll", syncLayout, true);
+            window.visualViewport?.removeEventListener("resize", syncLayout);
+            window.visualViewport?.removeEventListener("scroll", syncLayout);
+        };
+    }, [open]);
 
     useEffect(() => {
         if (!open) {
@@ -103,19 +146,19 @@ export default function Picker({
 
     return (
         <div
-            className="relative inline-block shrink-0 w-fit align-middle"
+            className="relative inline-block shrink-0 w-full align-middle"
             data-picker
         >
             <div
                 ref={sizeRef}
-                className="invisible w-fit"
+                className="invisible w-full"
                 aria-hidden="true"
                 inert
             >
                 <Button
                     iconName="chevronsUpDown"
                     padding="large"
-                    className="w-fit"
+                    className="w-full"
                 >
                     <span>{label}</span>
                 </Button>
@@ -134,21 +177,25 @@ export default function Picker({
                 }}
             />
             <div
-                className="pointer-events-none absolute left-0 top-0 w-full motion-reduce:transition-none!"
+                ref={dockRef}
+                className="pointer-events-none absolute left-1/2 top-1/2 flex h-0 w-0 items-center justify-center motion-reduce:transition-none!"
                 style={{
                     zIndex: 4,
-                    transition: `z-1 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
+                    transition:
+                        "transform var(--duration-etb, 400ms) var(--ease-etb, ease)",
                 }}
             >
                 <Morph
                     state={open}
                     first={
-                        <div ref={triggerRef} className="w-fit">
+                        <div ref={triggerRef} className="w-full">
                             <Button
                                 iconName="chevronsUpDown"
+                                className="w-full"
                                 onClick={() => setOpen(true)}
                                 aria-haspopup="menu"
                                 padding="large"
+                                alignment="left"
                                 aria-expanded={open}
                                 aria-controls={menuId}
                             >
@@ -163,14 +210,14 @@ export default function Picker({
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex h-fit flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
+                            className="flex h-fit w-max flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
                         >
                             {items.map((item, index) => (
                                 <div
                                     key={index}
                                     data-cursor="button"
                                     data-cursor-shape="1"
-                                    className="rounded-xl"
+                                    className="shrink-0 rounded-xl"
                                 >
                                     <button
                                         type="button"
@@ -191,7 +238,7 @@ export default function Picker({
                                                 )}
                                             </div>
                                         )}
-                                        <span className="min-w-0 wrap-any">
+                                        <span className="min-w-0 wrap-anywhere">
                                             {item}
                                         </span>
                                     </button>

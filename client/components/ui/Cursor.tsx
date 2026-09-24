@@ -5,7 +5,7 @@ import { motion, useSpring, useTransform } from "framer-motion";
 
 function getMorphCursorTarget(x: number, y: number) {
     const roots = document.querySelectorAll<HTMLElement>(
-        '[data-picker] [data-morph-animating="true"]',
+        '[data-picker] [data-morph-animating="true"], [data-morph-dialog] [data-morph-animating="true"]',
     );
     for (const root of Array.from(roots).reverse()) {
         const layer = root.querySelector<HTMLElement>(
@@ -18,8 +18,15 @@ function getMorphCursorTarget(x: number, y: number) {
         const height = parseFloat(css.height);
         if (!bounds.width || !bounds.height || !width || !height) continue;
         const center = root.getBoundingClientRect();
-        const left = center.left + (center.width - width) / 2;
-        const top = center.top + (center.height - height) / 2;
+        const destination = root.closest<HTMLElement>("[data-morph-cursor-x]");
+        const centerX = destination
+            ? Number(destination.dataset.morphCursorX)
+            : center.left + center.width / 2;
+        const centerY = destination
+            ? Number(destination.dataset.morphCursorY)
+            : center.top + center.height / 2;
+        const left = centerX - width / 2;
+        const top = centerY - height / 2;
         if (x < left || x > left + width || y < top || y > top + height)
             continue;
 
