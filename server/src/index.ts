@@ -13,7 +13,26 @@ import {
     startConsole,
 } from "./lib/console";
 
-class ClientError extends Error {}\n\nconst MAX_DISPLAY_NAME_LENGTH = 50;\nconst INVALID_DISPLAY_NAME_CHARACTERS = /[\\p{Cc}\\p{Cf}]/u;\n\nconst validateDisplayName = (displayName: unknown): string => {\n    if (typeof displayName !== "string") {\n        throw new ClientError("表示名が不正です。");\n    }\n\n    if (\n        displayName.length === 0 ||\n        displayName.length > MAX_DISPLAY_NAME_LENGTH ||\n        INVALID_DISPLAY_NAME_CHARACTERS.test(displayName)\n    ) {\n        throw new ClientError("表示名が不正です。");\n    }\n\n    return displayName;\n};
+class ClientError extends Error {}
+
+const MAX_DISPLAY_NAME_LENGTH = 50;
+const INVALID_DISPLAY_NAME_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+
+const validateDisplayName = (displayName: unknown): string => {
+    if (typeof displayName !== "string") {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    if (
+        displayName.length === 0 ||
+        displayName.length > MAX_DISPLAY_NAME_LENGTH ||
+        INVALID_DISPLAY_NAME_CHARACTERS.test(displayName)
+    ) {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    return displayName;
+};
 
 const requireRoomWords = (room: Room) => {
     if (!room.words?.length) {
