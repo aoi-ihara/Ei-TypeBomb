@@ -328,9 +328,8 @@ function CustomCursor() {
     );
 }
 
-
 export default function Cursor() {
-    const customCursorEnabled = useFeatureFlagEnabled("customCursor");
+    const customCursorEnabled = useFeatureFlagEnabled("customCursor") !== false;
 
     return customCursorEnabled ? <CustomCursor /> : null;
 }

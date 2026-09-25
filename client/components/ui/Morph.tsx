@@ -14,7 +14,7 @@ type Frame = Size & { mix: number };
 
 export default function Morph({ first, last, state }: MorphProps) {
     const morphBlurFlag = useFeatureFlagEnabled("morphBlur");
-    const blurEnabled = morphBlurFlag !== false;
+    const blurEnabled = morphBlurFlag === true;
     const rootRef = useRef<HTMLDivElement>(null);
     const firstRef = useRef<HTMLDivElement>(null);
     const lastRef = useRef<HTMLDivElement>(null);
