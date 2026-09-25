@@ -15,6 +15,25 @@ import {
 
 class ClientError extends Error {}
 
+const MAX_DISPLAY_NAME_LENGTH = 50;
+const INVALID_DISPLAY_NAME_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+
+const validateDisplayName = (displayName: unknown): string => {
+    if (typeof displayName !== "string") {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    if (
+        displayName.length === 0 ||
+        displayName.length > MAX_DISPLAY_NAME_LENGTH ||
+        INVALID_DISPLAY_NAME_CHARACTERS.test(displayName)
+    ) {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    return displayName;
+};
+
 const requireRoomWords = (room: Room) => {
     if (!room.words?.length) {
         throw new ClientError(
@@ -177,8 +196,10 @@ io.on("connection", (socket) => {
                 }
                 requireRoomWords(room);
 
+                const displayName = validateDisplayName(response.displayName);
+
                 roomId = jwtResult;
-                user = { ...user, displayName: response.displayName };
+                user = { ...user, displayName };
                 socket.join(roomId);
                 logEvent("ROOM", `authenticated ${roomId}`, {
                     roomId,
