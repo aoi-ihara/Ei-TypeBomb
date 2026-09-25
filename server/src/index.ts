@@ -17,6 +17,8 @@ import {
 class ClientError extends Error {}
 
 const MAX_DISPLAY_NAME_LENGTH = 50;
+// Keep in sync with the client's typing payload limit (maximum word length).
+const MAX_CURRENT_INPUT_LENGTH = 32;
 const INVALID_DISPLAY_NAME_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
 
 const validateDisplayName = (displayName: unknown): string => {
@@ -229,7 +231,7 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
         if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
-        sendInputUpdate(roomId, input.slice(0, 1000));
+        sendInputUpdate(roomId, input.slice(0, MAX_CURRENT_INPUT_LENGTH));
     };
     socket.on("currentInput", handleCurrentInput);
 
