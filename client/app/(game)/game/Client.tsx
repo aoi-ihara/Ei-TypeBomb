@@ -533,7 +533,7 @@ export default function Clinet({
                                                                 currentTurnUser?.id
                                                             )
                                                                 socketRef.current?.emit(
-                                                                    "cuttentInput",
+                                                                    "currentInput",
                                                                     input,
                                                                 );
                                                         }}
@@ -644,7 +644,7 @@ export default function Clinet({
                                                             currentTurnUser?.id
                                                         )
                                                             socketRef.current?.emit(
-                                                                "cuttentInput",
+                                                                "currentInput",
                                                                 input,
                                                             );
                                                     }}
