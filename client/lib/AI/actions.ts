@@ -24,8 +24,15 @@ export async function generateWordsAction(
     }
 
     try {
+        console.time("usage");
         await consumeGeminiGeneration();
-        return { words: await generateWords(theme) };
+        console.timeEnd("usage");
+
+        console.time("gemini");
+        const words = await generateWords(theme);
+        console.timeEnd("gemini");
+
+        return { words };
     } catch (error) {
         console.error("Gemini generation failed:", error);
         return {
