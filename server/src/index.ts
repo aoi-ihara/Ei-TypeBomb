@@ -6,6 +6,7 @@ import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { capturePostHogEvent } from "./lib/posthog";
+import { createSocketRateLimit } from "./lib/socketRateLimit";
 import {
     logError,
     logEvent,
@@ -119,6 +120,7 @@ const sendInputUpdate = (roomId: string | null, input: string) => {
 };
 
 io.on("connection", (socket) => {
+    socket.use(createSocketRateLimit());
     let user: User = { id: socket.id };
     let roomId: null | string = null;
     const getRoomIndex = () => rooms.findIndex((item) => item.id === roomId);
