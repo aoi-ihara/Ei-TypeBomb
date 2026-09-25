@@ -209,7 +209,6 @@ io.on("connection", (socket) => {
         sendInputUpdate(roomId, input.slice(0, 1000));
     };
     socket.on("currentInput", handleCurrentInput);
-    socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
         const roomIndex = getRoomIndex();
