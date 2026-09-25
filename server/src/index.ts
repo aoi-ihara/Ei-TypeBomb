@@ -6,6 +6,7 @@ import type { Room, User } from "./type";
 import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { capturePostHogEvent } from "./lib/posthog";
+import { createSocketRateLimit } from "./lib/socketRateLimit";
 import {
     logError,
     logEvent,
@@ -14,6 +15,27 @@ import {
 } from "./lib/console";
 
 class ClientError extends Error {}
+
+const MAX_DISPLAY_NAME_LENGTH = 50;
+// Keep in sync with the client's typing payload limit (maximum word length).
+const MAX_CURRENT_INPUT_LENGTH = 32;
+const INVALID_DISPLAY_NAME_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+
+const validateDisplayName = (displayName: unknown): string => {
+    if (typeof displayName !== "string") {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    if (
+        displayName.length === 0 ||
+        displayName.length > MAX_DISPLAY_NAME_LENGTH ||
+        INVALID_DISPLAY_NAME_CHARACTERS.test(displayName)
+    ) {
+        throw new ClientError("表示名が不正です。");
+    }
+
+    return displayName;
+};
 
 const requireRoomWords = (room: Room) => {
     if (!room.words?.length) {
@@ -100,6 +122,7 @@ const sendInputUpdate = (roomId: string | null, input: string) => {
 };
 
 io.on("connection", (socket) => {
+    socket.use(createSocketRateLimit());
     let user: User = { id: socket.id };
     let roomId: null | string = null;
     const getRoomIndex = () => rooms.findIndex((item) => item.id === roomId);
@@ -177,8 +200,10 @@ io.on("connection", (socket) => {
                 }
                 requireRoomWords(room);
 
+                const displayName = validateDisplayName(response.displayName);
+
                 roomId = jwtResult;
-                user = { ...user, displayName: response.displayName };
+                user = { ...user, displayName };
                 socket.join(roomId);
                 logEvent("ROOM", `authenticated ${roomId}`, {
                     roomId,
@@ -206,10 +231,9 @@ io.on("connection", (socket) => {
         const room = rooms[roomIndex];
         const currentUser = room.users?.[room.bombHolder ?? 0];
         if (!room.isStart || !currentUser || currentUser.id !== user.id) return;
-        sendInputUpdate(roomId, input.slice(0, 1000));
+        sendInputUpdate(roomId, input.slice(0, MAX_CURRENT_INPUT_LENGTH));
     };
     socket.on("currentInput", handleCurrentInput);
-    socket.on("cuttentInput", handleCurrentInput);
 
     socket.on("word:success", () => {
         const roomIndex = getRoomIndex();

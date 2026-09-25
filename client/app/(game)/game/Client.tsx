@@ -20,6 +20,7 @@ type Props = {
 };
 
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
+const MAX_CURRENT_INPUT_LENGTH = 32;
 
 export default function Clinet({
     initialBackgroundMusic,
@@ -533,8 +534,11 @@ export default function Clinet({
                                                                 currentTurnUser?.id
                                                             )
                                                                 socketRef.current?.emit(
-                                                                    "cuttentInput",
-                                                                    input,
+                                                                    "currentInput",
+                                                                    input.slice(
+                                                                        0,
+                                                                        MAX_CURRENT_INPUT_LENGTH,
+                                                                    ),
                                                                 );
                                                         }}
                                                         currentInput={
@@ -644,8 +648,11 @@ export default function Clinet({
                                                             currentTurnUser?.id
                                                         )
                                                             socketRef.current?.emit(
-                                                                "cuttentInput",
-                                                                input,
+                                                                "currentInput",
+                                                                input.slice(
+                                                                    0,
+                                                                    MAX_CURRENT_INPUT_LENGTH,
+                                                                ),
                                                             );
                                                     }}
                                                     bombStatus={bombStatus ?? 0}

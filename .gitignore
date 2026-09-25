@@ -42,3 +42,6 @@ next-env.d.ts
 /server/logs/
 *.log
 .env*
+
+# JetBrains IDE local workspace
+.idea/workspace.xml

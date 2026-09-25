@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 function getMorphCursorTarget(x: number, y: number) {
     const roots = document.querySelectorAll<HTMLElement>(
@@ -53,7 +54,7 @@ function getMorphCursorTarget(x: number, y: number) {
     return null;
 }
 
-export default function Cursor() {
+function CustomCursor() {
     const rootRef = useRef<HTMLDivElement>(null);
 
     const mouse = useRef({
@@ -325,4 +326,10 @@ export default function Cursor() {
             />
         </motion.div>
     );
+}
+
+export default function Cursor() {
+    const customCursorEnabled = useFeatureFlagEnabled("customCursor") !== false;
+
+    return customCursorEnabled ? <CustomCursor /> : null;
 }

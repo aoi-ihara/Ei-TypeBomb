@@ -16,7 +16,7 @@ if (
         api_host:
             process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
     });
-    posthog.register({ app: "homepage" });
+    posthog.register({ app: "ei-typebomb" });
 }
 
 function PostHogPageView() {
