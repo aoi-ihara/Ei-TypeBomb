@@ -196,8 +196,10 @@ io.on("connection", (socket) => {
                 }
                 requireRoomWords(room);
 
+                const displayName = validateDisplayName(response.displayName);
+
                 roomId = jwtResult;
-                user = { ...user, displayName: response.displayName };
+                user = { ...user, displayName };
                 socket.join(roomId);
                 logEvent("ROOM", `authenticated ${roomId}`, {
                     roomId,
