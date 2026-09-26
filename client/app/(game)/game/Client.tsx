@@ -372,9 +372,9 @@ export default function Clinet({
         };
     }, [router, initialBackgroundMusic, initialSounDeffects]);
 
-    const handleJoin = () => {
+    const handleJoin = (source: "join_button" | "play_again") => {
         console.log("join request");
-        posthog.capture("room_join_clicked");
+        posthog.capture("room_join_clicked", { source });
         socketRef.current?.emit("room:join");
     };
 
@@ -397,6 +397,9 @@ export default function Clinet({
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
+        // The server removes every player when a round ends, so join again.
+        setIsSpectator(false);
+        handleJoin("play_again");
     };
 
     const handleLeave = () => {
@@ -699,7 +702,9 @@ export default function Clinet({
                                                         <button
                                                             className="items-center font-bold bg-cyan-600 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all cursor-pointer duration-(--duration-etb) ease-etb active:scale-95"
                                                             onClick={() =>
-                                                                handleJoin()
+                                                                handleJoin(
+                                                                    "join_button",
+                                                                )
                                                             }
                                                         >
                                                             参加
