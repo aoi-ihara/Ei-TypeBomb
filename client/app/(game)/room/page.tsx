@@ -5,8 +5,8 @@ import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { prepareRoomJoin, signInToRoom } from "@/lib/room/auth";
-import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
+import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import posthog from "posthog-js";
 
 export default function Loading() {
@@ -44,8 +44,19 @@ export default function Loading() {
         setLoading(false);
     };
 
+    const handleTurnstileFail = (reason: string, errorCode?: string) => {
+        setTurnstile(false);
+        posthog.capture("room_entry_failed", {
+            room_id: roomId,
+            reason,
+            turnstile_error_code: errorCode,
+        });
+        setError(reason);
+    };
+
     const handleContinue = async () => {
         if (showPasswordField) {
+            setError("");
             setTurnstile(true);
             return;
         }
@@ -155,13 +166,13 @@ export default function Loading() {
             )}
 
             <PopUp show={turnstile}>
-                <Turnstile
-                    options={{ language: "ja" }}
-                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                <TurnstileChallenge
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);
                         handleSignIn(turnstileToken);
                     }}
+                    onFail={handleTurnstileFail}
+                    onCancel={() => setTurnstile(false)}
                 />
             </PopUp>
         </div>
