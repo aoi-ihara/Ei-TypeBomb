@@ -99,19 +99,23 @@ export default function Morph({ first, last, state }: MorphProps) {
             const measured = layers.map(measure);
             const index = stateRef.current ? 1 : 0;
             const target = { ...measured[index], mix: index };
+            const resized = measured.some(
+                (size, i) =>
+                    size.width !== sizes[i]?.width ||
+                    size.height !== sizes[i]?.height,
+            );
+            sizes = measured;
             if (
                 goal &&
                 goal.width === target.width &&
                 goal.height === target.height &&
                 goal.mix === target.mix
             ) {
-                sizes = measured;
-                if (!clock) paint(target);
+                if (resized && !clock) paint(target);
                 return;
             }
 
             stop();
-            sizes = measured;
             goal = target;
             if (!current) {
                 paint(target);

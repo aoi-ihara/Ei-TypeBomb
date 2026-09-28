@@ -263,19 +263,18 @@ export default function Page({
         try {
             const result = await deleteRoom(roomId);
 
-            if (result) {
-                setDeleteError(result);
-                setIsDeletingRoom(false);
+            if (!result) {
+                router.push("/my-rooms");
                 return;
             }
-            router.push("/my-rooms");
+            setDeleteError(result);
         } catch (error) {
             console.error("Failed to delete room:", error);
             setDeleteError(
                 "ルームを削除できませんでした。もう一度お試しください。",
             );
-            setIsDeletingRoom(false);
         }
+        setIsDeletingRoom(false);
     };
 
     useEffect(() => {
