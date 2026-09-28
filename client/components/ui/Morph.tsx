@@ -27,6 +27,7 @@ export default function Morph({ first, last, state }: MorphProps) {
         const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
         let sizes: Size[] = [];
         let current: Frame | undefined;
+        let goal: Frame | undefined;
         let frameId = 0;
         let clock: Animation | undefined;
         let offset = { x: 0, y: 0 };
@@ -43,13 +44,12 @@ export default function Morph({ first, last, state }: MorphProps) {
                 window.dispatchEvent(new Event("morphcursorchange"));
             }
         };
-        const setPointerEvents = (animating: boolean) => {
+        const setPointerEvents = (animating: boolean, settled = !animating) => {
             root.dataset.morphAnimating = String(animating);
             layers.forEach((layer, index) => {
                 const active = stateRef.current === (index === 1);
 
-                layer.style.pointerEvents =
-                    !animating && active ? "auto" : "none";
+                layer.style.pointerEvents = settled && active ? "auto" : "none";
             });
         };
         const center = () => {
@@ -99,24 +99,20 @@ export default function Morph({ first, last, state }: MorphProps) {
             const measured = layers.map(measure);
             const index = stateRef.current ? 1 : 0;
             const target = { ...measured[index], mix: index };
-            const unchanged =
-                sizes.length > 0 &&
-                measured.every(
-                    (size, i) =>
-                        size.width === sizes[i].width &&
-                        size.height === sizes[i].height,
-                );
             if (
-                unchanged &&
-                current &&
-                current.width === target.width &&
-                current.height === target.height &&
-                current.mix === target.mix
-            )
+                goal &&
+                goal.width === target.width &&
+                goal.height === target.height &&
+                goal.mix === target.mix
+            ) {
+                sizes = measured;
+                if (!clock) paint(target);
                 return;
+            }
 
             stop();
             sizes = measured;
+            goal = target;
             if (!current) {
                 paint(target);
                 setPointerEvents(false);
@@ -147,10 +143,15 @@ export default function Morph({ first, last, state }: MorphProps) {
             clock.play();
             paint(start, true);
             notifyCursor();
+            let settled = false;
             const tick = () => {
                 const progress =
                     clock?.effect?.getComputedTiming().progress ?? 0;
                 const done = Number(clock?.currentTime ?? 0) >= duration;
+                if (!settled && !done && progress >= 1) {
+                    settled = true;
+                    setPointerEvents(true, true);
+                }
                 const lerp = (a: number, b: number) => a + (b - a) * progress;
                 paint(
                     done

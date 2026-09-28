@@ -113,6 +113,7 @@ export default function Page({
     const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [importData, setImportData] = useState("");
     const [importError, setImportError] = useState("");
@@ -255,16 +256,25 @@ export default function Page({
     const handleDeleteRoom = async () => {
         if (!roomId || isDeletingRoom) return;
 
+        posthog.capture("room_delete_confirmed", { room_id: slug });
         setIsDeletingRoom(true);
+        setDeleteError("");
 
         try {
             const result = await deleteRoom(roomId);
 
-            if (result) throw result;
+            if (result) {
+                setDeleteError(result);
+                setIsDeletingRoom(false);
+                return;
+            }
             router.push("/my-rooms");
         } catch (error) {
+            console.error("Failed to delete room:", error);
+            setDeleteError(
+                "ルームを削除できませんでした。もう一度お試しください。",
+            );
             setIsDeletingRoom(false);
-            throw error;
         }
     };
 
@@ -807,7 +817,10 @@ export default function Page({
                 <MorphDialog
                     button={
                         <Button
-                            onClick={() => setShowDeleteDialog(true)}
+                            onClick={() => {
+                                setDeleteError("");
+                                setShowDeleteDialog(true);
+                            }}
                             variant="danger"
                             className=""
                             iconName="trash"
@@ -837,6 +850,11 @@ export default function Page({
                     >
                         キャンセル
                     </Button>
+                    {deleteError && (
+                        <div className="text-red-500" data-cursor="text">
+                            {deleteError}
+                        </div>
+                    )}
                 </MorphDialog>
             </div>
 
