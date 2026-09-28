@@ -571,17 +571,31 @@ export default function Clinet({
                                                     }
                                                 >
                                                     <button
-                                                        className={`items-center cursor-pointer font-bold ${users.length < 2 ? "opacity-50" : "active:scale-95"} bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-(--duration-etb) ease-etb`}
-                                                        onClick={() => {
-                                                            if (
-                                                                users.length > 1
-                                                            )
-                                                                handleStartGame();
-                                                        }}
+                                                        className="items-center cursor-pointer disabled:cursor-default font-bold active:scale-95 disabled:active:scale-100 bg-cyan-600 disabled:opacity-50 w-full justify-center py-2 rounded-lg text-white h-fit flex transition-all duration-(--duration-etb) ease-etb"
+                                                        disabled={
+                                                            users.length < 2
+                                                        }
+                                                        aria-describedby={
+                                                            users.length < 2
+                                                                ? "start-game-hint"
+                                                                : undefined
+                                                        }
+                                                        onClick={
+                                                            handleStartGame
+                                                        }
                                                     >
                                                         ゲームを開始
                                                     </button>
                                                 </div>
+                                                {users.length < 2 && (
+                                                    <div
+                                                        id="start-game-hint"
+                                                        className="text-sm opacity-50"
+                                                        data-cursor="text"
+                                                    >
+                                                        ゲームを開始するには2人以上のプレイヤーが必要です
+                                                    </div>
+                                                )}
                                                 <div
                                                     className="rounded-lg w-48 flex"
                                                     data-cursor="button"
