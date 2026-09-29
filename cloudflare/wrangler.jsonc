@@ -10,7 +10,9 @@
 		{ "tag": "v1", "new_sqlite_classes": ["MyDurableObject"] },
 		{ "tag": "v2", "new_sqlite_classes": ["GameRoom"], "deleted_classes": ["MyDurableObject"] },
 	],
-	"vars": { "ALLOWED_ORIGINS": "http://localhost:3000" },
+	"vars": {
+		"ALLOWED_ORIGINS": "http://localhost:3000,https://ei-typebomb.vgnz93hs.com,https://beta.ei-typebomb.vgnz93hs.com",
+	},
 	"observability": { "enabled": true },
 	"upload_source_maps": true,
 }
