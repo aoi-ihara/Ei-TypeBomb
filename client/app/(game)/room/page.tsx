@@ -174,7 +174,10 @@ export default function Loading() {
                         onClick={() => handleMode("online")}
                         className="w-full"
                         variant="primary"
-                        disabled={showPasswordField && !roomPassword}
+                        disabled={
+                            loadingMode !== null ||
+                            (showPasswordField && !roomPassword)
+                        }
                         loading={loadingMode === "online"}
                         iconName="userGroup"
                     >
@@ -183,7 +186,10 @@ export default function Loading() {
                     <Button
                         onClick={() => handleMode("playground")}
                         className="w-full"
-                        disabled={showPasswordField && !roomPassword}
+                        disabled={
+                            loadingMode !== null ||
+                            (showPasswordField && !roomPassword)
+                        }
                         loading={loadingMode === "playground"}
                         iconName="user"
                     >
