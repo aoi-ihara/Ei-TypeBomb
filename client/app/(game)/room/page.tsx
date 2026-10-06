@@ -9,20 +9,34 @@ import { PopUp } from "@/components/ui/PopUp";
 import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import posthog from "posthog-js";
 
+type PlayMode = "online" | "playground";
+
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
     const [link, setLink] = useState("");
     const [error, setError] = useState("");
     const [showPasswordField, setShowPasswordField] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loadingMode, setLoadingMode] = useState<PlayMode | null>(null);
+    const [selectedMode, setSelectedMode] = useState<PlayMode | null>(null);
     const [roomPassword, setRoomPassword] = useState("");
     const [turnstile, setTurnstile] = useState(false);
     const [roomId, setRoomId] = useState("");
 
     const router = useRouter();
 
+    const goToMode = (mode: PlayMode) => {
+        if (mode === "online") {
+            router.push("/display-name");
+            return;
+        }
+
+        router.push("/playground");
+    };
+
     const handleSignIn = async (turnstileToken: string) => {
-        setLoading(true);
+        if (!selectedMode) return;
+
+        setLoadingMode(selectedMode);
         const result = await signInToRoom(
             {
                 id: roomId,
@@ -32,36 +46,45 @@ export default function Loading() {
         );
 
         if (result === null) {
-            posthog.capture("room_entered", { room_id: roomId });
-            router.push("/display-name");
+            posthog.capture("room_entered", {
+                room_id: roomId,
+                mode: selectedMode,
+            });
+            goToMode(selectedMode);
         } else {
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
                 reason: result,
+                mode: selectedMode,
             });
             setError(result);
         }
-        setLoading(false);
+        setLoadingMode(null);
     };
 
     const handleTurnstileFail = (reason: string, errorCode?: string) => {
         setTurnstile(false);
+        setLoadingMode(null);
         posthog.capture("room_entry_failed", {
             room_id: roomId,
             reason,
             turnstile_error_code: errorCode,
+            mode: selectedMode,
         });
         setError(reason);
     };
 
-    const handleContinue = async () => {
+    const handleMode = async (mode: PlayMode) => {
+        setSelectedMode(mode);
+
         if (showPasswordField) {
             setError("");
+            setLoadingMode(mode);
             setTurnstile(true);
             return;
         }
 
-        setLoading(true);
+        setLoadingMode(mode);
         setError("");
 
         const roomResult = await prepareRoomJoin(
@@ -71,16 +94,20 @@ export default function Loading() {
         if (!roomResult) {
             posthog.capture("room_entry_failed", {
                 reason: "ルームが見つかりません。",
+                mode,
             });
             setError("ルームが見つかりません。");
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
         if ("error" in roomResult && roomResult.error) {
-            posthog.capture("room_entry_failed", { reason: roomResult.error });
+            posthog.capture("room_entry_failed", {
+                reason: roomResult.error,
+                mode,
+            });
             setError(roomResult.error);
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
@@ -89,12 +116,15 @@ export default function Loading() {
 
         if (roomResult.requiresPassword) {
             setShowPasswordField(true);
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
-        posthog.capture("room_entered", { room_id: normalizedRoomId });
-        router.push("/display-name");
+        posthog.capture("room_entered", {
+            room_id: normalizedRoomId,
+            mode,
+        });
+        goToMode(mode);
     };
 
     useEffect(() => {
@@ -138,21 +168,32 @@ export default function Loading() {
                 </div>
             )}
 
-            <Button
-                onClick={() => handleContinue()}
-                className="w-full"
-                variant="primary"
-                disabled={!link || (showPasswordField && !roomPassword)}
-                loading={loading}
-                iconName="arrowRight"
-            >
-                続ける
-            </Button>
-
-            {!link && (
+            {link ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full animate-appear">
+                    <Button
+                        onClick={() => handleMode("online")}
+                        className="w-full"
+                        variant="primary"
+                        disabled={showPasswordField && !roomPassword}
+                        loading={loadingMode === "online"}
+                        iconName="userGroup"
+                    >
+                        オンラインプレイ
+                    </Button>
+                    <Button
+                        onClick={() => handleMode("playground")}
+                        className="w-full"
+                        disabled={showPasswordField && !roomPassword}
+                        loading={loadingMode === "playground"}
+                        iconName="user"
+                    >
+                        一人で練習
+                    </Button>
+                </div>
+            ) : (
                 <Button
                     onClick={() => router.push("/game-demo")}
-                    className={`w-full`}
+                    className="w-full"
                     iconName="play"
                 >
                     デモをプレイ
@@ -172,7 +213,10 @@ export default function Loading() {
                         handleSignIn(turnstileToken);
                     }}
                     onFail={handleTurnstileFail}
-                    onCancel={() => setTurnstile(false)}
+                    onCancel={() => {
+                        setTurnstile(false);
+                        setLoadingMode(null);
+                    }}
                 />
             </PopUp>
         </div>
