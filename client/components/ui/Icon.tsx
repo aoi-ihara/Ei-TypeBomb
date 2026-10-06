@@ -74,6 +74,7 @@ const icons: Record<string, LucideIcon> = {
     lock: Lock,
     earth: Earth,
     usersRound: UsersRound,
+    userGroup: UsersRound,
     circleUserRound: CircleUserRound,
     qrCode: QrCode,
     info: Info,
