@@ -53,6 +53,7 @@ async function connect(id = roomId) {
 		clear: () => {
 			queue.length = 0;
 		},
+		hasQueued: (event: string) => queue.some((packet) => packet.event === event),
 		send: (event: string, data?: unknown) => ws.send(JSON.stringify({ event, data })),
 	};
 }
@@ -144,6 +145,26 @@ it('rejects invalid/expired JWTs and invalid names', async () => {
 	client.send('auth:response', { jwtToken: await token('different-room'), displayName: 'Player' });
 	expect(await client.next('error')).toHaveProperty('message');
 });
+it('rejects malformed auth payloads through shared validation without authenticating', async () => {
+	const client = await connect();
+	client.send('auth:response', null);
+	expect(await client.next<{ message: string }>('error')).toHaveProperty('message');
+	const stub = env.GAME_ROOMS.getByName(roomId);
+	expect(
+		await runInDurableObject(stub, (_, ctx) => ctx.getWebSockets().some((ws) => (ws.deserializeAttachment() as Session).authenticated)),
+	).toBe(false);
+});
+it('rejects malformed room items through shared validation', async () => {
+	mockRoom([{ id: 'item', type: 'typed_recall', prompt: '猫', answer: 123 }]);
+	const client = await connect();
+	client.send('auth:response', { jwtToken: await token(), displayName: 'Player' });
+	expect(await client.next<{ message: string }>('error')).toHaveProperty(
+		'message',
+		'ルームに問題が設定されていません。問題を設定してから再度お試しください。',
+	);
+	const stub = env.GAME_ROOMS.getByName(roomId);
+	expect(await runInDurableObject(stub, (_, ctx) => ctx.storage.get('game'))).toBeUndefined();
+});
 it('preserves independent event budgets and refill', () => {
 	const session: Session = { id: 'a', roomId, authenticated: true, lastSeen: 0, buckets: {} };
 	for (let i = 0; i < 60; i++) expect(acceptEvent(session, 'currentInput', 0)).toBe(true);
@@ -169,9 +190,11 @@ it('joins, enforces capacity, leaves and rejoins on the same connection', async 
 	b.clear();
 	b.send('room:join');
 	expect((await b.next<Room>('room:broadcast', (room) => room.users.length === 2)).users).toHaveLength(2);
+	c.clear();
 	c.send('room:join');
 	c.send('ping');
 	await c.next('pong');
+	expect(c.hasQueued('room:broadcast')).toBe(false);
 	const stub = env.GAME_ROOMS.getByName(roomId);
 	const state = await runInDurableObject(stub, async (_, ctx) => ctx.storage.get<GameState>('game'));
 	expect(state?.room.users).toHaveLength(2);
@@ -200,6 +223,14 @@ it('runs countdown, holder-only typing/pass, persists through hibernation and fi
 	expect(started.isStart).toBe(true);
 	expect(started.wordIndex).toBeUndefined();
 	const stub = env.GAME_ROOMS.getByName(roomId);
+	// The real adapter uses the core's strict default: countdown passes are ignored.
+	const countdownHolder = started.users[started.bombHolder].id === a.id ? a : b;
+	countdownHolder.send('word:success');
+	countdownHolder.send('ping');
+	await countdownHolder.next('pong');
+	const countdown = await runInDurableObject(stub, (_, ctx) => ctx.storage.get<GameState>('game'));
+	expect(countdown?.room.bombHolder).toBe(started.bombHolder);
+	expect(countdown?.room.wordIndex).toBeUndefined();
 	await evictDurableObject(stub);
 	await runInDurableObject(stub, async (instance, ctx) => {
 		const game = (instance as unknown as { game: GameState }).game;

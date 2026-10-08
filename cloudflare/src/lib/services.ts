@@ -1,8 +1,8 @@
 import { jwtVerify } from 'jose';
 import { createClient } from '@supabase/supabase-js';
 import type { Room, Secrets } from '../types';
-
-export class ClientError extends Error {}
+import { ClientError, requireRoomItems } from '../../../shared/validation';
+export { ClientError, validateDisplayName } from '../../../shared/validation';
 export async function verifyToken(token: unknown, secret: string): Promise<string | null> {
 	if (typeof token !== 'string' || !secret) return null;
 	try {
@@ -11,12 +11,6 @@ export async function verifyToken(token: unknown, secret: string): Promise<strin
 	} catch {
 		return null;
 	}
-}
-export function validateDisplayName(value: unknown): string {
-	if (typeof value !== 'string' || !value.length || value.length > 50 || /[\p{Cc}\p{Cf}]/u.test(value)) {
-		throw new ClientError('表示名が不正です。');
-	}
-	return value;
 }
 export async function getRoom(env: Secrets, id: string): Promise<Room> {
 	const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -30,24 +24,7 @@ export async function getRoom(env: Secrets, id: string): Promise<Room> {
 		.maybeSingle();
 	if (error) throw new Error(`Room lookup failed: ${error.code}`);
 	if (!data) throw new ClientError('ルーム情報を取得できませんでした。ルームを確認して再度お試しください。');
-	if (
-		!Array.isArray(data.items) ||
-		!data.items.length ||
-		data.items.some(
-			(item: unknown) =>
-				!item ||
-				typeof item !== 'object' ||
-				!('id' in item) ||
-				!('type' in item) ||
-				!('prompt' in item) ||
-				!('answer' in item) ||
-				typeof item.id !== 'string' ||
-				item.type !== 'typed_recall' ||
-				typeof item.prompt !== 'string' ||
-				typeof item.answer !== 'string',
-		)
-	)
-		throw new ClientError('ルームに問題が設定されていません。問題を設定してから再度お試しください。');
+	requireRoomItems({ items: data.items });
 	return {
 		id: data.id,
 		title: data.title,

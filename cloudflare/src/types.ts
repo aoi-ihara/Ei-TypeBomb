@@ -6,32 +6,15 @@ export interface Secrets {
 	POSTHOG_HOST?: string;
 }
 export type WorkerEnv = Env & Secrets;
-export type User = { id: string; displayName: string };
-export type TypedRecallItem = {
-	id: string;
-	type: 'typed_recall';
-	prompt: string;
-	answer: string;
-};
-export type Item = TypedRecallItem;
-export type Room = {
-	id: string;
-	title?: string;
-	userId?: string;
-	explanation?: string;
-	maxPlayers?: number;
-	gameDuration: number;
-	createdAt?: string;
-	updatedAt?: string;
-	items: Item[];
+import type { Room as SharedRoom, User, Item } from '../../shared/types';
+export type { User, Item, TypedRecallItem, GameState } from '../../shared/types';
+export type Room = SharedRoom & {
 	users: User[];
+	items: Item[];
 	isStart: boolean;
-	gameId?: string;
 	bombHolder: number;
-	wordIndex?: number;
-	bombStatus: number;
+	gameDuration: number;
 };
-export type GameState = { room: Room; wordAt?: number; bombAt?: number };
 export type Session = {
 	id: string;
 	roomId: string;

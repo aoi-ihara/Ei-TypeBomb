@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks";
+import { EVENT_RATE_LIMITS } from "../../../shared/rateLimit";
 
-const CAPACITY = 2;
-const TOKENS_PER_SECOND = 0.2;
+const { capacity: CAPACITY, perSecond: TOKENS_PER_SECOND } = EVENT_RATE_LIMITS["health:database"];
 const STALE_AFTER_MS = 60_000;
 
 type Bucket = { tokens: number; updatedAt: number };

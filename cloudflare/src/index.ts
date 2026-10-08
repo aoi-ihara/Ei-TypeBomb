@@ -1,7 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { GameState, Session, WorkerEnv } from './types';
-import { capture, checkDatabase, ClientError, getRoom, validateDisplayName, verifyToken } from './lib/services';
+import { capture, checkDatabase, ClientError, getRoom, verifyToken } from './lib/services';
 import { acceptEvent } from './lib/rateLimit';
+import { applyGameEvent, hasPlayerCapacity } from '../../shared/game';
+import { isHealthRequestId, validateAuthResponse } from '../../shared/validation';
+import { roomToWireSnapshot, type ServerWirePayloads, type ClientWirePacket } from '../../shared/protocol';
+import { EVENT_RATE_LIMITS } from '../../shared/rateLimit';
 
 const IDLE_TIMEOUT = 75_000;
 const AUTH_TIMEOUT = 20_000;
@@ -15,27 +19,21 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 			this.game = await ctx.storage.get<GameState>('game');
 		});
 	}
-	private send(ws: WebSocket, event: string, data?: unknown) {
+	private send<E extends keyof ServerWirePayloads>(ws: WebSocket, event: E, data?: ServerWirePayloads[E]) {
 		try {
 			ws.send(JSON.stringify({ event, data }));
 		} catch {
 			/* Close/error handler cleans up membership. */
 		}
 	}
-	private broadcast(event: string, data?: unknown) {
+	private broadcast<E extends keyof ServerWirePayloads>(event: E, data?: ServerWirePayloads[E]) {
 		for (const ws of this.ctx.getWebSockets()) {
 			if ((ws.deserializeAttachment() as Session).authenticated) this.send(ws, event, data);
 		}
 	}
 	private snapshot() {
 		if (!this.game) return;
-		this.broadcast('room:broadcast', {
-			...this.game.room,
-			words: this.game.room.items.map((item) => ({
-				jp: item.prompt,
-				en: item.answer,
-			})),
-		});
+		this.broadcast('room:broadcast', roomToWireSnapshot(this.game.room));
 	}
 	private track(event: string, properties: Record<string, unknown> = {}) {
 		console.log(JSON.stringify({ event, roomId: this.game?.room.id, ...properties }));
@@ -56,8 +54,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		else await this.ctx.storage.deleteAlarm();
 	}
 	private async acceptDatabaseProbe(now = Date.now()) {
-		const capacity = 2;
-		const perSecond = 0.2;
+		const { capacity, perSecond } = EVENT_RATE_LIMITS['health:database'];
 		const bucket = (await this.ctx.storage.get<{ tokens: number; updatedAt: number }>(DATABASE_PROBE_BUCKET_KEY)) ?? {
 			tokens: capacity,
 			updatedAt: now,
@@ -109,8 +106,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				}
 				ws.serializeAttachment(session);
 				const requestId = packet.data;
-				if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId))
-					return;
+				if (!isHealthRequestId(requestId)) return;
 				// Keep probes on the dedicated health Durable Object and use its
 				// persisted bucket across reconnects. Only this tiny storage update
 				// is serialized; the Supabase request itself stays outside the
@@ -133,7 +129,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 					ws.close(1009, 'Message too large');
 					return;
 				}
-				const packet = JSON.parse(message);
+				const packet = JSON.parse(message) as ClientWirePacket;
 				if (!packet || typeof packet.event !== 'string') return;
 				if (packet.event === 'ping') {
 					if (session.authenticated) session.lastSeen = Date.now();
@@ -147,21 +143,26 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				}
 				ws.serializeAttachment(session);
 				if (packet.event === 'health:ping') {
-					if (typeof packet.data === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(packet.data))
+					if (isHealthRequestId(packet.data))
 						this.send(ws, 'health:pong', packet.data);
 					return;
 				}
 				if (packet.event === 'auth:response') {
-					const id = await verifyToken(packet.data?.jwtToken, this.env.JWT_SECRET);
+					const { jwtToken, displayName } = validateAuthResponse(packet.data);
+					const id = await verifyToken(jwtToken, this.env.JWT_SECRET);
 					if (!id || id !== session.roomId) throw new ClientError('認証トークンが無効または有効期限切れです。ルームに入り直してください。');
-					const displayName = validateDisplayName(packet.data?.displayName);
 					if (!this.game) this.game = { room: await getRoom(this.env, id) };
 					session.displayName = displayName;
 					session.authenticated = true;
 					session.lastSeen = Date.now();
 					ws.serializeAttachment(session);
-					const user = this.game.room.users.find((user) => user.id === session.id);
-					if (user) user.displayName = displayName;
+					this.game = {
+						...this.game,
+						room: {
+							...this.game.room,
+							users: (this.game.room.users ?? []).map((user) => user.id === session.id ? { ...user, displayName } : user),
+						},
+					};
 					this.track('room_authenticated');
 					await this.save();
 					this.snapshot();
@@ -173,39 +174,25 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				const room = this.game.room;
 				switch (packet.event) {
 					case 'room:join':
-						if (!room.maxPlayers || room.users.length >= room.maxPlayers) return;
-						if (!room.users.some((user) => user.id === session.id)) {
-							room.users.push({ id: session.id, displayName: session.displayName! });
-							this.track('player_joined', { player_count: room.users.length });
-						}
+						if (!hasPlayerCapacity(room)) return;
+						if (this.apply({ event: 'room:join', player: { id: session.id, displayName: session.displayName! } }))
+							this.track('player_joined', { player_count: this.game.room.users?.length ?? 0 });
 						break;
 					case 'room:leave':
 						this.leave(session, 'room_leave');
 						break;
 					case 'currentInput':
-						if (room.isStart && room.users[room.bombHolder]?.id === session.id && typeof packet.data === 'string') {
-							this.broadcast('typing:input', { input: packet.data.slice(0, 32) });
-						}
+						this.apply({ event: 'currentInput', playerId: session.id, input: packet.data });
 						return;
 					case 'word:success':
-						if (!room.isStart || this.game.wordAt || room.users[room.bombHolder]?.id !== session.id) return;
-						room.bombHolder = (room.bombHolder + 1) % room.users.length;
-						room.wordIndex = Math.floor(Math.random() * room.items.length);
-						this.broadcast('typing:input', { input: '' });
+						if (!this.apply({ event: 'word:success', playerId: session.id })) return;
 						break;
 					case 'game:start': {
-						if (room.isStart || room.users.length < 2 || !room.users.some((user) => user.id === session.id)) return;
+						if (room.isStart || (room.users?.length ?? 0) < 2 || !room.users?.some((user) => user.id === session.id)) return;
 						const saved = await getRoom(this.env, room.id);
-						room.gameDuration = saved.gameDuration;
-						room.gameId = crypto.randomUUID();
-						room.isStart = true;
-						room.bombHolder = Math.floor(Math.random() * room.users.length);
-						room.wordIndex = undefined;
-						room.bombStatus = 0;
-						this.game.wordAt = Date.now() + 3000;
-						this.game.bombAt = this.nextBombAt();
-						this.broadcast('typing:input', { input: '' });
-						this.track('game_started', { player_count: room.users.length });
+						this.game = { ...this.game, room: { ...room, gameDuration: saved.gameDuration } };
+						if (this.apply({ event: 'game:start', playerId: session.id }))
+							this.track('game_started', { player_count: this.game.room.users?.length ?? 0 });
 						break;
 					}
 				}
@@ -218,27 +205,26 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 			}
 		});
 	}
-	private nextBombAt() {
-		const duration = this.game?.room.gameDuration ?? 20;
-		const base = Number.isInteger(duration) && duration >= 1 && duration <= 2147473 ? duration : 20;
-		return Date.now() + (base + Math.random() * 10) * 1000;
-	}
-	private reset() {
-		if (!this.game) return;
-		Object.assign(this.game.room, { isStart: false, gameId: undefined, bombStatus: 0, bombHolder: 0, wordIndex: undefined });
-		this.game.wordAt = this.game.bombAt = undefined;
-		this.broadcast('typing:input', { input: '' });
+	private apply(event: Parameters<typeof applyGameEvent>[1], now = Date.now()) {
+		if (!this.game) return false;
+		const previous = this.game;
+		const result = applyGameEvent(previous, event, {
+			now,
+			random: Math.random,
+			gameId: event.event === 'game:start' ? crypto.randomUUID() : undefined,
+		});
+		this.game = result.state;
+		for (const effect of result.effects) this.broadcast(effect.event, effect.data);
+		return result.state !== previous;
 	}
 	private leave(session: Session, reason: string) {
 		const room = this.game?.room;
-		if (!room || !room.users.some((user) => user.id === session.id)) return;
+		if (!room || !room.users?.some((user) => user.id === session.id)) return;
 		if (room.isStart) {
 			this.track('game_cancelled', { reason, player_count: room.users.length });
-			this.reset();
-			room.users = [];
-			this.broadcast('game:quited');
-		} else room.users = room.users.filter((user) => user.id !== session.id);
-		this.track('player_left', { reason, player_count: room.users.length });
+		}
+		this.apply({ event: 'room:leave', playerId: session.id });
+		this.track('player_left', { reason, player_count: this.game?.room.users?.length ?? 0 });
 	}
 	async webSocketClose(ws: WebSocket) {
 		await this.remove(ws);
@@ -273,26 +259,10 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				}
 			}
 			if (!this.ctx.getWebSockets().some((ws) => (ws.deserializeAttachment() as Session).authenticated)) this.game = undefined;
-			if (this.game?.room.isStart) {
-				const room = this.game.room;
-				if (this.game.wordAt && this.game.wordAt <= now) {
-					this.game.wordAt = undefined;
-					room.wordIndex = Math.floor(Math.random() * room.items.length);
-					this.broadcast('typing:input', { input: '' });
-				}
-				if (this.game.bombAt && this.game.bombAt <= now) {
-					if (room.bombStatus === 4) {
-						const loser = room.users[room.bombHolder];
-						if (loser) this.broadcast('game:end', { holderUserId: loser.id, holderDisplayName: loser.displayName });
-						this.track('game_finished', { player_count: room.users.length });
-						this.reset();
-						room.users = [];
-					} else {
-						room.bombStatus++;
-						this.game.bombAt = this.nextBombAt();
-					}
-				}
-			}
+			const previous = this.game;
+			this.apply({ event: 'deadlines' }, Date.now());
+			if (previous?.room.isStart && !this.game?.room.isStart)
+				this.track('game_finished', { player_count: previous.room.users?.length ?? 0 });
 			await this.save();
 			this.snapshot();
 		});

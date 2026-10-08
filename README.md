@@ -21,7 +21,10 @@ Players join a shared room and pass a virtual bomb by correctly typing the displ
 
 ## Architecture
 
-Ei-TypeBomb consists of a Next.js client and a Node.js server communicating through Socket.IO.
+The Next.js client can connect to Node.js using Socket.IO or to Cloudflare Workers
+using native WebSocket. Both runtimes use the independent game core in `shared/`.
+See [the shared game architecture](docs/shared-game-core.md) for runtime boundaries,
+compatibility decisions, tests, and future session/failover extension points.
 
 ```text
 ┌─────────────────────┐
@@ -60,12 +63,15 @@ Important state includes:
 - `bombHolder` — index of the player currently holding the bomb
 - `wordIndex` — current word
 - `bombStatus` — current bomb state
-- `bombTimer` — timer controlling the bomb
+- `wordAt` / `bombAt` — absolute deadlines stored alongside the room in `GameState`
 - `users` — players currently participating in the game
 
 A unique `gameId` is generated when a game starts.
 
-Asynchronous timers check the current `gameId` before modifying the room. This prevents timers belonging to an older game from affecting a newer game.
+Node.js schedules `setTimeout` callbacks from the deadlines; Cloudflare persists
+them in Durable Object Storage and schedules the earliest deadline with an Alarm.
+Node.js callbacks check the current game generation before applying a transition,
+so old timers cannot affect a newer game.
 
 ## Room Management
 

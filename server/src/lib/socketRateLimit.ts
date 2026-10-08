@@ -1,18 +1,10 @@
 import { performance } from "node:perf_hooks";
 import type { Socket } from "socket.io";
+import { EVENT_RATE_LIMITS } from "../../../shared/rateLimit";
 
 // Independent token buckets: typing cannot consume the budget for game actions.
 // capacity allows brief bursts; perSecond controls the sustained event rate.
-const limits = new Map([
-    ["currentInput", { capacity: 60, perSecond: 30 }],
-    ["word:success", { capacity: 10, perSecond: 5 }],
-    ["room:join", { capacity: 5, perSecond: 2 }],
-    ["room:leave", { capacity: 5, perSecond: 2 }],
-    ["game:start", { capacity: 2, perSecond: 1 }],
-    ["auth:response", { capacity: 3, perSecond: 0.5 }],
-    ["health:ping", { capacity: 2, perSecond: 0.2 }],
-    ["health:database", { capacity: 2, perSecond: 0.2 }],
-]);
+const limits = new Map(Object.entries(EVENT_RATE_LIMITS));
 
 // Create once per connection. State is bounded by the configured event names
 // and is released with the socket; no timers or global socket registry needed.
