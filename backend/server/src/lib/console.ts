@@ -1,6 +1,9 @@
 import { capturePostHogEvent } from "./posthog";
 import { capturePostHogLog } from "./posthogLogs";
 import { logErrorToFile, logToFile } from "./fileLogger";
+import { existsSync, openSync, closeSync, fstatSync, readSync } from "fs";
+import { resolve } from "path";
+import { renameSync, writeFileSync } from "fs";
 
 type ConsolePlayer = {
     id: string;
@@ -27,7 +30,70 @@ type ConsoleEvent = {
 type LogMetadata = Record<string, unknown>;
 type LatencySample = { at: number; value: number };
 
-const isInteractive = Boolean(process.stdout.isTTY);
+const isInteractive = Boolean(process.stdout.isTTY && process.stdin.isTTY);
+const configPath = resolve(__dirname, "../../console.config.json");
+const logPath = resolve(__dirname, "../../logs/server.log");
+const defaultConfig = { port: 3001, width: 120 };
+let config = { ...defaultConfig };
+try {
+    const value = JSON.parse(require("fs").readFileSync(configPath, "utf8"));
+    if (Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535) config.port = value.port;
+    if (Number.isInteger(value.width) && value.width >= 40 && value.width <= 1000) config.width = value.width;
+} catch {}
+const consoleColumns = () => Math.max(40, Math.min(config.width, process.stdout.columns ?? 100));
+export const getConfiguredPort = () => {
+    const env = process.env.PORT;
+    if (env !== undefined && /^\d+$/.test(env) && Number(env) >= 1 && Number(env) <= 65535) return Number(env);
+    return config.port;
+};
+let activePort = 3001;
+let screen: "dashboard" | "menu" | "port" | "width" | "logs" = "dashboard";
+let selected = 0;
+let editValue = "";
+let notice = "";
+let logOffset = 0;
+let followLogs = true;
+const saveConfig = () => {
+    try {
+        const temp = `${configPath}.tmp`;
+        writeFileSync(temp, JSON.stringify(config, null, 2), { mode: 0o600 });
+        renameSync(temp, configPath);
+        return true;
+    } catch { return false; }
+};
+const drawControl = () => {
+    if (!isInteractive) return;
+    process.stdout.write("\x1b[H\x1b[J");
+    const width = Math.max(40, Math.min(config.width, process.stdout.columns ?? 100));
+    const title = screen === "menu" ? "CONTROL MENU" : screen === "logs" ? "VIEW LOGS" : `EDIT ${screen.toUpperCase()}`;
+    const lines = [colorize(title, ansi.cyan600)];
+    if (screen === "menu") {
+        const envPort = process.env.PORT !== undefined;
+        const items = [`Port: ${activePort}${envPort ? ` (PORT override; saved ${config.port})` : ""}`, "View Logs", `Terminal Width: ${config.width}`];
+        lines.push("", ...items.map((item, i) => `${i === selected ? "> " : "  "}${item}`), "", notice || "↑/↓ select  Enter open/edit  Esc back");
+    } else if (screen === "port" || screen === "width") {
+        lines.push("", `Value: ${editValue}`, "", notice || "Enter save  Esc cancel");
+    } else {
+        const tail = readLogTail(Math.max(1, process.stdout.rows - 4));
+        lines.push("", ...tail, "", `${followLogs ? "Following" : "Paused"}  ↑/↓ scroll  PgUp/PgDn  Home/End  Q/Esc back`);
+    }
+    process.stdout.write(lines.map((line) => line.length > width ? `${line.slice(0, width)}` : line).join("\n") + "\n");
+};
+const readLogTail = (count: number) => {
+    try {
+        if (!existsSync(logPath)) return ["No log file found."];
+        const fd = openSync(logPath, "r");
+        try {
+            const size = fstatSync(fd).size;
+            const bytes = Math.min(size, 128 * 1024);
+            const buffer = Buffer.alloc(bytes);
+            readSync(fd, buffer, 0, bytes, size - bytes);
+            const lines = buffer.toString("utf8").split("\n").filter(Boolean);
+            if (followLogs) logOffset = Math.max(0, lines.length - count);
+            return lines.slice(logOffset, logOffset + count).map((line) => line.length > 300 ? `${line.slice(0, 300)}…` : line);
+        } finally { closeSync(fd); }
+    } catch { return ["Unable to read log file safely."]; }
+};
 const recentEvents: ConsoleEvent[] = [];
 const latencySamples: LatencySample[] = [];
 const roomIssues = new Map<string, number>();
@@ -244,7 +310,7 @@ const renderRooms = () => {
     }
 
     const gap = 3;
-    const columns = process.stdout.columns ?? 100;
+    const columns = consoleColumns();
     const perRow = Math.max(
         1,
         Math.floor((columns + gap) / (ROOM_WIDTH + gap)),
@@ -301,14 +367,14 @@ const formatState = () => {
         renderLatency(),
         "",
         colorize(
-            `ROOMS ${"─".repeat(Math.min(process.stdout.columns ?? 67, 67))}`,
+            `ROOMS ${"─".repeat(Math.min(consoleColumns(), 67))}`,
             ansi.sage500,
         ),
         "",
         renderRooms(),
         "",
         colorize(
-            `ACTIVITY ${"─".repeat(Math.min(process.stdout.columns ?? 64, 64))}`,
+            `ACTIVITY ${"─".repeat(Math.min(consoleColumns(), 64))}`,
             ansi.sage500,
         ),
         "",
@@ -321,6 +387,7 @@ const renderState = () => {
 
     if (!isInteractive) return;
 
+    if (screen !== "dashboard") { drawControl(); return; }
     process.stdout.write("\x1b[H\x1b[J");
     process.stdout.write(`${formatState()}\n`);
 };
@@ -419,6 +486,7 @@ export const logError = (
 };
 
 export const startConsole = (port: number) => {
+    activePort = port;
     if (isInteractive && !animationTimer) {
         animationTimer = setInterval(() => {
             for (const [roomId, expiresAt] of roomIssues) {
@@ -429,6 +497,98 @@ export const startConsole = (port: number) => {
         animationTimer.unref();
     }
 
-    if (isInteractive) renderState();
+    if (isInteractive) {
+        process.stdin.setRawMode(true);
+        process.stdin.resume();
+        let inputBuffer = "";
+        let escapeTimer: NodeJS.Timeout | undefined;
+        const handleKey = (key: string) => {
+            if (key === "\u0003") { process.stdin.setRawMode(false); process.exit(130); }
+            if (screen === "dashboard") { if (key.toLowerCase() === "c") { screen = "menu"; drawControl(); } return; }
+            if (screen === "menu") {
+                if (key === "\u001b[A") selected = (selected + 2) % 3;
+                else if (key === "\u001b[B") selected = (selected + 1) % 3;
+                else if (key === "\u001b") { screen = "dashboard"; renderState(); return; }
+                else if (key === "\r") {
+                    if (selected === 1) { screen = "logs"; followLogs = true; }
+                    else { screen = selected === 0 ? "port" : "width"; editValue = String(selected === 0 ? config.port : config.width); notice = ""; }
+                }
+                drawControl(); return;
+            }
+            if (screen === "port" || screen === "width") {
+                if (key === "\u001b") { screen = "menu"; notice = ""; }
+                else if (key === "\r") {
+                    const n = Number(editValue);
+                    const valid = Number.isInteger(n) && (screen === "port" ? n >= 1 && n <= 65535 : n >= 40 && n <= 1000);
+                    if (!valid) notice = "Invalid value.";
+                    else {
+                        if (screen === "port") config.port = n; else config.width = n;
+                        notice = saveConfig() ? (screen === "port" ? "Saved. Restart required." : "Saved.") : "Could not save setting.";
+                        screen = "menu";
+                    }
+                } else if (key === "\u007f") editValue = editValue.slice(0, -1);
+                else if (/^[0-9]$/.test(key)) editValue += key;
+                drawControl(); return;
+            }
+            if (screen === "logs") {
+                if (key.toLowerCase() === "q" || key === "\u001b") { screen = "dashboard"; renderState(); return; }
+                if (key === "\u001b[A") { followLogs = false; logOffset = Math.max(0, logOffset - 1); }
+                else if (key === "\u001b[B") { followLogs = false; logOffset += 1; }
+                else if (key === "\u001b[5~") { followLogs = false; logOffset = Math.max(0, logOffset - 15); }
+                else if (key === "\u001b[6~") { followLogs = false; logOffset += 15; }
+                else if (key === "\u001b[H") { followLogs = false; logOffset = 0; }
+                else if (key === "\u001b[F") followLogs = true;
+                drawControl();
+            }
+        };
+        process.stdin.on("data", (data: Buffer) => {
+            inputBuffer += data.toString();
+            // Escape sequences can arrive in separate chunks. Delay a lone ESC
+            // so arrows and other terminal keys are not mistaken for "back".
+            if (inputBuffer === "\u001b") {
+                if (escapeTimer) clearTimeout(escapeTimer);
+                escapeTimer = setTimeout(() => {
+                    if (inputBuffer === "\u001b") {
+                        inputBuffer = "";
+                        handleKey("\u001b");
+                    }
+                }, 35);
+                return;
+            }
+            if (escapeTimer) clearTimeout(escapeTimer);
+            const sequences = [
+                "\u001b[A", "\u001b[B", "\u001b[5~", "\u001b[6~",
+                "\u001b[H", "\u001b[F", "\u001bOH", "\u001bOF",
+            ];
+            while (inputBuffer) {
+                const sequence = sequences.find((candidate) => inputBuffer.startsWith(candidate));
+                if (sequence) {
+                    inputBuffer = inputBuffer.slice(sequence.length);
+                    handleKey(sequence === "\u001bOH" ? "\u001b[H" : sequence === "\u001bOF" ? "\u001b[F" : sequence);
+                    continue;
+                }
+                if (inputBuffer.startsWith("\u001b") && inputBuffer.length > 1) {
+                    if (sequences.some((candidate) => candidate.startsWith(inputBuffer))) break;
+                    // Unknown escape sequence: discard it rather than treating
+                    // its trailing bytes as menu commands.
+                    inputBuffer = inputBuffer.slice(1);
+                    continue;
+                }
+                const char = String.fromCodePoint(inputBuffer.codePointAt(0)!);
+                if (char.length > 1 && inputBuffer.length === 1) break;
+                inputBuffer = inputBuffer.slice(char.length);
+                handleKey(char);
+            }
+        });
+        const restoreTerminal = () => {
+            if (escapeTimer) clearTimeout(escapeTimer);
+            if (process.stdin.isTTY) process.stdin.setRawMode(false);
+        };
+        process.on("exit", restoreTerminal);
+        process.on("SIGINT", () => { restoreTerminal(); process.exit(130); });
+        process.on("SIGTERM", () => { restoreTerminal(); process.exit(143); });
+        process.stdout.on("resize", () => screen === "dashboard" ? renderState() : drawControl());
+        renderState();
+    }
     logEvent("SERVER", `listening on :${port}`);
 };

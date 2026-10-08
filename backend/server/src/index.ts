@@ -16,6 +16,7 @@ import {
     recordLatencySample,
     setServerState,
     startConsole,
+    getConfiguredPort,
 } from "./lib/console";
 
 import {
@@ -345,6 +346,7 @@ io.on("connection", (socket) => {
     });
 });
 
-httpServer.listen(3001, () => {
-    startConsole(3001);
+const port = getConfiguredPort();
+httpServer.listen(port, () => {
+    startConsole(port);
 });
