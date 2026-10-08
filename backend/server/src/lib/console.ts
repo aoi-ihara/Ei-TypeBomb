@@ -1,9 +1,12 @@
 import { capturePostHogEvent } from "./posthog";
 import { capturePostHogLog } from "./posthogLogs";
 import { logErrorToFile, logToFile } from "./fileLogger";
-import { existsSync, openSync, closeSync, fstatSync, readSync } from "fs";
+import { existsSync, openSync, closeSync, fstatSync, readSync, statSync } from "fs";
 import { resolve } from "path";
 import { renameSync, writeFileSync } from "fs";
+import { ControlState, type ConsoleConfig } from "./controlState";
+import { TerminalInput } from "./terminalInput";
+import { renderControlView, fitLine, menuItemRows, logViewportSize } from "./controlView";
 
 type ConsolePlayer = {
     id: string;
@@ -40,59 +43,67 @@ try {
     if (Number.isInteger(value.port) && value.port >= 1 && value.port <= 65535) config.port = value.port;
     if (Number.isInteger(value.width) && value.width >= 40 && value.width <= 1000) config.width = value.width;
 } catch {}
-const consoleColumns = () => Math.max(40, Math.min(config.width, process.stdout.columns ?? 100));
-export const getConfiguredPort = () => {
+const consoleColumns = () => Math.max(1, Math.min(config.width, process.stdout.columns ?? 100));
+const readPortOverride = () => {
     const env = process.env.PORT;
     if (env !== undefined && /^\d+$/.test(env) && Number(env) >= 1 && Number(env) <= 65535) return Number(env);
-    return config.port;
+    return undefined;
 };
+export const getConfiguredPort = () => readPortOverride() ?? config.port;
 let activePort = 3001;
-let screen: "dashboard" | "menu" | "port" | "width" | "logs" = "dashboard";
-let selected = 0;
-let editValue = "";
-let notice = "";
-let logOffset = 0;
-let followLogs = true;
-const saveConfig = () => {
+const saveConfig = (next: ConsoleConfig) => {
     try {
         const temp = `${configPath}.tmp`;
-        writeFileSync(temp, JSON.stringify(config, null, 2), { mode: 0o600 });
+        writeFileSync(temp, JSON.stringify(next, null, 2), { mode: 0o600 });
         renameSync(temp, configPath);
+        config = next;
         return true;
     } catch { return false; }
 };
-const drawControl = () => {
-    if (!isInteractive) return;
-    process.stdout.write("\x1b[H\x1b[J");
-    const width = Math.max(40, Math.min(config.width, process.stdout.columns ?? 100));
-    const title = screen === "menu" ? "CONTROL MENU" : screen === "logs" ? "VIEW LOGS" : `EDIT ${screen.toUpperCase()}`;
-    const lines = [colorize(title, ansi.cyan600)];
-    if (screen === "menu") {
-        const envPort = process.env.PORT !== undefined;
-        const items = [`Port: ${activePort}${envPort ? ` (PORT override; saved ${config.port})` : ""}`, "View Logs", `Terminal Width: ${config.width}`];
-        lines.push("", ...items.map((item, i) => `${i === selected ? "> " : "  "}${item}`), "", notice || "↑/↓ select  Enter open/edit  Esc back");
-    } else if (screen === "port" || screen === "width") {
-        lines.push("", `Value: ${editValue}`, "", notice || "Enter save  Esc cancel");
-    } else {
-        const tail = readLogTail(Math.max(1, process.stdout.rows - 4));
-        lines.push("", ...tail, "", `${followLogs ? "Following" : "Paused"}  ↑/↓ scroll  PgUp/PgDn  Home/End  Q/Esc back`);
-    }
-    process.stdout.write(lines.map((line) => line.length > width ? `${line.slice(0, width)}` : line).join("\n") + "\n");
+const controls = new ControlState(() => config, saveConfig);
+let lastFrame = "";
+const writeFrame = (frame: string) => {
+    if (frame === lastFrame) return;
+    lastFrame = frame;
+    // Clear each changed frame in the same write; never draw an empty frame.
+    process.stdout.write(`\x1b[?25l\x1b[H${frame.split("\n").map(line => `\x1b[2K${line}`).join("\r\n")}\x1b[J`);
 };
+const drawControl = () => {
+    if (!isInteractive || controls.screen === "dashboard") return;
+    const rows = Math.max(1, (process.stdout.rows ?? 24) - 1);
+    const logLines = controls.screen === "logs" ? readLogTail(logViewportSize(consoleColumns(), rows)) : [];
+    writeFrame(renderControlView({
+        ...controls, screen: controls.screen, ...config, activePort,
+        envOverride: readPortOverride() !== undefined,
+        logLines, logStatus, terminalColumns: process.stdout.columns ?? 100,
+    }, consoleColumns(), rows));
+};
+let logStatus = "";
+let logCache: { signature: string; lines: string[]; truncated: boolean } | undefined;
 const readLogTail = (count: number) => {
     try {
-        if (!existsSync(logPath)) return ["No log file found."];
-        const fd = openSync(logPath, "r");
-        try {
-            const size = fstatSync(fd).size;
-            const bytes = Math.min(size, 128 * 1024);
-            const buffer = Buffer.alloc(bytes);
-            readSync(fd, buffer, 0, bytes, size - bytes);
-            const lines = buffer.toString("utf8").split("\n").filter(Boolean);
-            if (followLogs) logOffset = Math.max(0, lines.length - count);
-            return lines.slice(logOffset, logOffset + count).map((line) => line.length > 300 ? `${line.slice(0, 300)}…` : line);
-        } finally { closeSync(fd); }
-    } catch { return ["Unable to read log file safely."]; }
+        if (!existsSync(logPath)) { logStatus = ""; return ["No log file yet."]; }
+        const stat = statSync(logPath);
+        const signature = `${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+        // Paused snapshots remain stable while new records arrive.
+        if (!logCache || (controls.followLogs && logCache.signature !== signature)) {
+            const fd = openSync(logPath, "r");
+            try {
+                const size = fstatSync(fd).size;
+                const bytes = Math.min(size, 128 * 1024);
+                const buffer = Buffer.alloc(bytes);
+                const read = readSync(fd, buffer, 0, bytes, size - bytes);
+                const lines = buffer.subarray(0, read).toString("utf8").split("\n").filter(Boolean);
+                if (size > bytes) lines.shift();
+                logCache = { signature, lines, truncated: size > bytes };
+            } finally { closeSync(fd); }
+        }
+        const lines = logCache.lines;
+        const maxOffset = Math.max(0, lines.length - count);
+        controls.logOffset = controls.followLogs ? maxOffset : Math.min(maxOffset, controls.logOffset);
+        logStatus = `${controls.logOffset + (lines.length ? 1 : 0)}–${Math.min(lines.length, controls.logOffset + count)} / ${lines.length}${logCache.truncated ? " (recent 128 KiB)" : ""}`;
+        return lines.length ? lines.slice(controls.logOffset, controls.logOffset + count) : ["No log entries yet."];
+    } catch { logStatus = ""; return ["Unable to read logs. Check file permissions."]; }
 };
 const recentEvents: ConsoleEvent[] = [];
 const latencySamples: LatencySample[] = [];
@@ -387,9 +398,11 @@ const renderState = () => {
 
     if (!isInteractive) return;
 
-    if (screen !== "dashboard") { drawControl(); return; }
-    process.stdout.write("\x1b[H\x1b[J");
-    process.stdout.write(`${formatState()}\n`);
+    if (controls.screen !== "dashboard") { drawControl(); return; }
+    const rows = Math.max(1, (process.stdout.rows ?? 24) - 1);
+    const dashboard = formatState().split("\n").slice(0, Math.max(0, rows - 1));
+    dashboard.push(colorize("C  Controls", ansi.slate500));
+    writeFrame(dashboard.map((line) => fitLine(line, consoleColumns())).join("\n"));
 };
 
 const scheduleRender = () => {
@@ -498,96 +511,55 @@ export const startConsole = (port: number) => {
     }
 
     if (isInteractive) {
+        const previousRaw = Boolean(process.stdin.isRaw);
         process.stdin.setRawMode(true);
         process.stdin.resume();
-        let inputBuffer = "";
-        let escapeTimer: NodeJS.Timeout | undefined;
-        const handleKey = (key: string) => {
-            if (key === "\u0003") { process.stdin.setRawMode(false); process.exit(130); }
-            if (screen === "dashboard") { if (key.toLowerCase() === "c") { screen = "menu"; drawControl(); } return; }
-            if (screen === "menu") {
-                if (key === "\u001b[A") selected = (selected + 2) % 3;
-                else if (key === "\u001b[B") selected = (selected + 1) % 3;
-                else if (key === "\u001b") { screen = "dashboard"; renderState(); return; }
-                else if (key === "\r") {
-                    if (selected === 1) { screen = "logs"; followLogs = true; }
-                    else { screen = selected === 0 ? "port" : "width"; editValue = String(selected === 0 ? config.port : config.width); notice = ""; }
-                }
-                drawControl(); return;
-            }
-            if (screen === "port" || screen === "width") {
-                if (key === "\u001b") { screen = "menu"; notice = ""; }
-                else if (key === "\r") {
-                    const n = Number(editValue);
-                    const valid = Number.isInteger(n) && (screen === "port" ? n >= 1 && n <= 65535 : n >= 40 && n <= 1000);
-                    if (!valid) notice = "Invalid value.";
-                    else {
-                        if (screen === "port") config.port = n; else config.width = n;
-                        notice = saveConfig() ? (screen === "port" ? "Saved. Restart required." : "Saved.") : "Could not save setting.";
-                        screen = "menu";
-                    }
-                } else if (key === "\u007f") editValue = editValue.slice(0, -1);
-                else if (/^[0-9]$/.test(key)) editValue += key;
-                drawControl(); return;
-            }
-            if (screen === "logs") {
-                if (key.toLowerCase() === "q" || key === "\u001b") { screen = "dashboard"; renderState(); return; }
-                if (key === "\u001b[A") { followLogs = false; logOffset = Math.max(0, logOffset - 1); }
-                else if (key === "\u001b[B") { followLogs = false; logOffset += 1; }
-                else if (key === "\u001b[5~") { followLogs = false; logOffset = Math.max(0, logOffset - 15); }
-                else if (key === "\u001b[6~") { followLogs = false; logOffset += 15; }
-                else if (key === "\u001b[H") { followLogs = false; logOffset = 0; }
-                else if (key === "\u001b[F") followLogs = true;
-                drawControl();
-            }
+        process.stdout.write("\x1b[?1049h\x1b[?25l");
+        let mouseEnabled = false;
+        const syncMouse = () => {
+            const enabled = controls.screen === "menu" && process.env.TERM !== "dumb";
+            if (enabled === mouseEnabled) return;
+            mouseEnabled = enabled;
+            process.stdout.write(enabled ? "\x1b[?1000h\x1b[?1006h" : "\x1b[?1000l\x1b[?1006l");
         };
-        process.stdin.on("data", (data: Buffer) => {
-            inputBuffer += data.toString();
-            // Escape sequences can arrive in separate chunks. Delay a lone ESC
-            // so arrows and other terminal keys are not mistaken for "back".
-            if (inputBuffer === "\u001b") {
-                if (escapeTimer) clearTimeout(escapeTimer);
-                escapeTimer = setTimeout(() => {
-                    if (inputBuffer === "\u001b") {
-                        inputBuffer = "";
-                        handleKey("\u001b");
-                    }
-                }, 35);
-                return;
-            }
-            if (escapeTimer) clearTimeout(escapeTimer);
-            const sequences = [
-                "\u001b[A", "\u001b[B", "\u001b[5~", "\u001b[6~",
-                "\u001b[H", "\u001b[F", "\u001bOH", "\u001bOF",
-            ];
-            while (inputBuffer) {
-                const sequence = sequences.find((candidate) => inputBuffer.startsWith(candidate));
-                if (sequence) {
-                    inputBuffer = inputBuffer.slice(sequence.length);
-                    handleKey(sequence === "\u001bOH" ? "\u001b[H" : sequence === "\u001bOF" ? "\u001b[F" : sequence);
-                    continue;
-                }
-                if (inputBuffer.startsWith("\u001b") && inputBuffer.length > 1) {
-                    if (sequences.some((candidate) => candidate.startsWith(inputBuffer))) break;
-                    // Unknown escape sequence: discard it rather than treating
-                    // its trailing bytes as menu commands.
-                    inputBuffer = inputBuffer.slice(1);
-                    continue;
-                }
-                const char = String.fromCodePoint(inputBuffer.codePointAt(0)!);
-                if (char.length > 1 && inputBuffer.length === 1) break;
-                inputBuffer = inputBuffer.slice(char.length);
-                handleKey(char);
-            }
-        });
+        let restored = false;
         const restoreTerminal = () => {
-            if (escapeTimer) clearTimeout(escapeTimer);
-            if (process.stdin.isTTY) process.stdin.setRawMode(false);
+            if (restored) return;
+            restored = true;
+            decoder.dispose();
+            if (animationTimer) clearInterval(animationTimer);
+            try { process.stdin.setRawMode(previousRaw); } catch {
+                // stdin may already be closed during exception/signal teardown.
+            } finally {
+                try { process.stdout.write("\x1b[?1000l\x1b[?1006l\x1b[0m\x1b[?25h\x1b[?1049l"); } catch {}
+            }
         };
+        const handleKey = (key: string) => {
+            if (key === "\x03") { restoreTerminal(); process.exit(130); }
+            const mouse = key.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/);
+            if (mouse) {
+                if (controls.screen === "menu" && mouse[1] === "0" && mouse[4] === "M") {
+                    const x = Number(mouse[2]), y = Number(mouse[3]);
+                    const item = menuItemRows(consoleColumns(), Math.max(1, (process.stdout.rows ?? 24) - 1), controls.selected).indexOf(y);
+                    if (item >= 0 && x <= Math.min(consoleColumns(), 54)) {
+                        controls.selected = item;
+                        controls.openSelected();
+                    }
+                }
+            } else {
+                controls.key(key, Math.max(1, logViewportSize(consoleColumns(), Math.max(1, (process.stdout.rows ?? 24) - 1))));
+            }
+            syncMouse();
+            renderState();
+        };
+        const decoder = new TerminalInput(handleKey);
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", (data: string) => decoder.push(data));
         process.on("exit", restoreTerminal);
+        process.on("uncaughtExceptionMonitor", restoreTerminal);
         process.on("SIGINT", () => { restoreTerminal(); process.exit(130); });
         process.on("SIGTERM", () => { restoreTerminal(); process.exit(143); });
-        process.stdout.on("resize", () => screen === "dashboard" ? renderState() : drawControl());
+        process.stdout.on("resize", () => { lastFrame = ""; renderState(); });
         renderState();
     }
     logEvent("SERVER", `listening on :${port}`);
