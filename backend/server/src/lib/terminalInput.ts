@@ -34,7 +34,9 @@ export class TerminalInput {
             if (sequence) {
                 const key = sequence[0];
                 this.pending = this.pending.slice(key.length);
-                this.emit(key.replace(/^\x1bO([ABCDHF])$/, "\x1b[$1"));
+                this.emit(key.replace(/^\x1bO([ABCDHF])$/, "\x1b[$1")
+                    .replace(/^\x1b\[(?:1|7)~$/, "\x1b[H")
+                    .replace(/^\x1b\[(?:4|8)~$/, "\x1b[F"));
                 continue;
             }
             if (this.pending.length > 1 && !/^\x1b(?:\[[0-?]*[ -/]*|O)?$/.test(this.pending)) {

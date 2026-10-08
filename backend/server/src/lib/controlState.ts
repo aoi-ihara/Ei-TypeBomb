@@ -13,6 +13,8 @@ export class ControlState {
     logOffset = 0;
     logHorizontal = 0;
     followLogs = true;
+    logFocus: "follow" | "back" = "follow";
+    undoConfig: ConsoleConfig | undefined;
 
     constructor(
         private readonly currentConfig: () => ConsoleConfig,
@@ -20,11 +22,13 @@ export class ControlState {
     ) {}
 
     openSelected() {
+        if (this.selected === 3) { this.undo(); return; }
         this.notice = "";
         if (this.selected === 1) {
             this.screen = "logs";
             this.followLogs = true;
             this.logHorizontal = 0;
+            this.logFocus = "follow";
             return;
         }
         this.screen = this.selected === 0 ? "port" : "width";
@@ -35,21 +39,37 @@ export class ControlState {
         this.focus = "field";
     }
 
+    private undo() {
+        if (!this.undoConfig) return;
+        if (this.save(this.undoConfig)) {
+            this.undoConfig = undefined;
+            if (this.selected === 3) this.selected = 0;
+            this.notice = "Change undone. Previous settings restored.";
+        } else this.notice = "Not undone. Check file permissions; press U to retry.";
+    }
+
     key(key: string, pageSize: number) {
         const enter = key === "\r" || key === "\n";
         if (this.screen === "dashboard") {
-            if (key.toLowerCase() === "c") { this.screen = "menu"; this.notice = ""; }
+            if (key.toLowerCase() === "c" || enter || key === "\t") this.screen = "menu";
             return;
         }
         if (this.screen === "menu") {
-            if (key === "\x1b[A" || key === "\x1b[Z") this.selected = (this.selected + 2) % 3;
-            else if (key === "\x1b[B" || key === "\t") this.selected = (this.selected + 1) % 3;
+            const count = this.undoConfig ? 4 : 3;
+            if (key === "\x1b[A" || key === "\x1b[Z") this.selected = (this.selected + count - 1) % count;
+            else if (key === "\x1b[B" || key === "\t") this.selected = (this.selected + 1) % count;
             else if (key === "\x1b") this.screen = "dashboard";
             else if (enter) this.openSelected();
+            else if (key.toLowerCase() === "u") this.undo();
             return;
         }
         if (this.screen === "logs") {
-            if (key.toLowerCase() === "q" || key === "\x1b") { this.screen = "menu"; return; }
+            if (key === "\t" || key === "\x1b[Z") {
+                this.logFocus = this.logFocus === "follow" ? "back" : "follow";
+                return;
+            }
+            if (key.toLowerCase() === "q" || key === "\x1b" || (enter && this.logFocus === "back")) { this.screen = "menu"; return; }
+            if (enter) { this.followLogs = true; return; }
             if (key === "\x1b[F" || key.toLowerCase() === "f") this.followLogs = true;
             else if (key === "\x1b[H") { this.followLogs = false; this.logOffset = 0; }
             else if (key === "\x1b[A" || key === "\x1b[5~") {
@@ -65,9 +85,9 @@ export class ControlState {
         if (key === "\x1b" || (enter && this.focus === "cancel")) {
             this.screen = "menu"; this.notice = ""; return;
         }
-        if (key === "\t" || key === "\x1b[Z") {
+        if (key === "\t" || key === "\x1b[Z" || key === "\x1b[A" || key === "\x1b[B") {
             const focuses = ["field", "save", "cancel"] as const;
-            this.focus = focuses[(focuses.indexOf(this.focus) + (key === "\t" ? 1 : 2)) % 3];
+            this.focus = focuses[(focuses.indexOf(this.focus) + (key === "\t" || key === "\x1b[B" ? 1 : 2)) % 3];
             return;
         }
         if (enter) {
@@ -84,15 +104,17 @@ export class ControlState {
                 this.notice = "Not saved. Check file permissions and try again.";
                 return;
             }
+            if (value !== (isPort ? config.port : config.width)) this.undoConfig = { ...config };
             this.screen = "menu";
             this.notice = isPort ? `Saved port ${value}. Restart to apply.` : `Saved width ${value}. Applied now.`;
             return;
         }
         if (this.focus !== "field") return;
         if (key === "\x1b[D" || key === "\x1b[C" || key === "\x1b[H" || key === "\x1b[F") {
+            const selected = this.selectAll;
             this.selectAll = false;
-            if (key === "\x1b[D") this.cursor = Math.max(0, this.cursor - 1);
-            if (key === "\x1b[C") this.cursor = Math.min(this.editValue.length, this.cursor + 1);
+            if (key === "\x1b[D") this.cursor = selected ? 0 : Math.max(0, this.cursor - 1);
+            if (key === "\x1b[C") this.cursor = selected ? this.editValue.length : Math.min(this.editValue.length, this.cursor + 1);
             if (key === "\x1b[H") this.cursor = 0;
             if (key === "\x1b[F") this.cursor = this.editValue.length;
             return;

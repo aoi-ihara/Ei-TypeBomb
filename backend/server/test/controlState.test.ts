@@ -100,3 +100,80 @@ test("Standalone Escape resolves but truncated unknown keys do not navigate", as
     assert.deepEqual(result, ["\x1b"]);
     decoder.dispose();
 });
+
+test("Dashboard Enter/Tab discover controls, and undo persists the previous configuration", () => {
+    const { controls, keys, config } = setup();
+    keys("\r", "\r", ..."4000", "\r");
+    assert.equal(config().port, 4000);
+    assert.deepEqual(controls.undoConfig, { port: 3001, width: 200 });
+    keys("\x1b", "\t", "u");
+    assert.deepEqual(config(), { port: 3001, width: 200 });
+    assert.equal(controls.undoConfig, undefined);
+    assert.match(controls.notice, /undone/);
+});
+
+test("log actions use the same Tab and Enter rules as forms", () => {
+    const { controls, keys } = setup();
+    keys("\r", "\t", "\r", "\x1b[A", "\r");
+    assert.equal(controls.followLogs, true);
+    keys("\t", "\r");
+    assert.equal(controls.screen, "menu");
+    assert.equal(controls.selected, 1);
+});
+
+test("boundary values save; invalid input can be replaced immediately or cancelled", () => {
+    const { controls, keys, config } = setup();
+    keys("c", "\r", ..."65536", "\r");
+    assert.equal(controls.screen, "port");
+    assert.equal(controls.selectAll, true);
+    keys(..."65535", "\r");
+    assert.equal(config().port, 65535);
+    keys("\t", "\t", "\r", ..."39", "\r");
+    assert.equal(config().width, 200);
+    keys(..."40", "\r");
+    assert.equal(config().width, 40);
+    keys("\r", ..."1001", "\r", "\x1b");
+    assert.equal(config().width, 40);
+});
+
+test("Undo is reachable with Tab/Enter and a failed Undo can be retried", () => {
+    let config = { port: 3001, width: 200 };
+    let fail = false;
+    const controls = new ControlState(() => config, next => {
+        if (fail) return false;
+        config = next;
+        return true;
+    });
+    for (const key of ["c", "\r", ..."4000", "\r", "\x1b[Z"]) controls.key(key, 10);
+    assert.equal(controls.selected, 3);
+    fail = true;
+    controls.key("\r", 10);
+    assert.equal(config.port, 4000);
+    assert.match(controls.notice, /Not undone/);
+    assert.ok(controls.undoConfig);
+    fail = false;
+    controls.key("\r", 10);
+    assert.equal(config.port, 3001);
+    assert.equal(controls.selected, 0);
+});
+
+test("arrow keys collapse a selection at familiar text field boundaries", () => {
+    const { controls, keys } = setup();
+    keys("c", "\r", "\x1b[D");
+    assert.equal(controls.cursor, 0);
+    keys("\x1b", "\r", "\x1b[C");
+    assert.equal(controls.cursor, 4);
+});
+
+test("form arrows move focus; common terminal Home/End variants are decoded", () => {
+    const { controls, keys } = setup();
+    keys("c", "\r", "\x1b[B", "\x1b[B");
+    assert.equal(controls.focus, "cancel");
+    keys("\x1b[A");
+    assert.equal(controls.focus, "save");
+    const result: string[] = [];
+    const decoder = new TerminalInput(key => result.push(key));
+    decoder.push("\x1b[1~\x1b[4~\x1b[7~\x1b[8~");
+    assert.deepEqual(result, ["\x1b[H", "\x1b[F", "\x1b[H", "\x1b[F"]);
+    decoder.dispose();
+});

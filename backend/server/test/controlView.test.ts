@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayWidth, fitLine, menuItemRows, logViewportSize, renderControlView, type ControlViewModel } from "../src/lib/controlView";
+import { displayWidth, fitLine, menuItemRows, logViewportSize, renderControlView, layoutControlView, logHorizontalLimit, type ControlViewModel } from "../src/lib/controlView";
 
 const model: ControlViewModel = {
     screen: "menu", selected: 0, port: 3001, activePort: 9000, envOverride: false,
@@ -49,11 +49,11 @@ test("menu keeps aligned values and selected-only override detail", () => {
 
 test("forms retain guides, validation, selection and width preview", () => {
     const frame = renderControlView({ ...model, screen: "width", editValue: "oops", selectAll: true }, 24, 10);
-    assert.match(frame, /\x1b\[48;5;238m\x1b\[97moops/);
+    assert.match(frame, /\x1b\[7moops/);
     assert.match(plain(frame), /whole number/);
-    assert.match(plain(frame), /Range: 40–1000/);
+    assert.match(plain(frame), /40–1000/);
     assert.doesNotMatch(plain(frame), /Preview:/);
-    assert.match(plain(renderControlView({ ...model, screen: "width", editValue: "100" }, 24, 10)), /Preview: 24 columns/);
+    assert.match(plain(renderControlView({ ...model, screen: "width", editValue: "100" }, 24, 10)), /Preview: 24 characters/);
     assert.match(plain(frame), /Enter save · Esc cancel/);
     const port = plain(renderControlView({ ...model, screen: "port" }, 40, 12));
     assert.doesNotMatch(port, /Restart/);
@@ -71,13 +71,13 @@ test("logs sanitize terminal commands and omit JSON metadata", () => {
     assert.match(frame, /broken text/);
     assert.match(frame, /before after/);
     assert.doesNotMatch(frame, /secret|bad title|[\x00-\x09\x0b-\x1f]/);
-    assert.match(frame, /1–3 of 3 · Following/);
-    assert.match(plain(renderControlView({ ...model, screen: "logs", logLines, followLogs: false }, 40, 12)), /Paused/);
+    assert.match(frame, /LIVE · 1–3 of 3/);
+    assert.match(plain(renderControlView({ ...model, screen: "logs", logLines, followLogs: false }, 40, 12)), /PAUSED/);
 });
 
 test("focus, horizontal logs and mouse rows reflect the rendered view", () => {
     const form = renderControlView({ ...model, screen: "port", focus: "cancel" }, 80, 24);
-    assert.match(form, /> \x1b\[48;5;238m\x1b\[97mCancel/);
+    assert.match(form, /> \x1b\[7mCancel/);
     assert.match(plain(form), /Enter cancel · Esc cancel/);
     assert.deepEqual(menuItemRows(80, 24), [2, 3, 4]);
     assert.deepEqual(menuItemRows(24, 4), [2, -1, -1]);
@@ -105,8 +105,9 @@ test("narrow menu preserves complete values and notices do not replace controls"
 test("width preview uses physical columns even when the saved maximum is smaller", () => {
     const frame = plain(renderControlView({
         ...model, screen: "width", width: 40, editValue: "100", terminalColumns: 80,
-    }, 40, 12));
-    assert.match(frame, /Preview: 80 columns/);
+    }, 80, 12));
+    assert.match(frame, /Preview: 80 characters/);
+    assert.equal(displayWidth(frame.split("\n").find(line => line.endsWith("│"))!), 80);
 });
 
 test("logs retain supplied window positions and highlight severity without dropping records", () => {
@@ -118,8 +119,8 @@ test("logs retain supplied window positions and highlight severity without dropp
         ],
     }, 54, 12);
     assert.match(frame, /\x1b\[31mERROR/);
-    assert.match(plain(frame), /10-08 12:00:00 ERROR first/);
-    assert.match(plain(frame), /501–502 \/ 900 · Paused/);
+    assert.match(plain(frame), /10-08 12:00:00Z ERROR first/);
+    assert.match(plain(frame), /PAUSED · 501–502 \/ 900/);
     assert.match(plain(frame), /second/);
 });
 
@@ -143,6 +144,49 @@ test("shared log capacity preserves the newest record and every page at narrow w
 test("form focus shows exactly one highlighted target", () => {
     for (const focus of ["field", "save", "cancel"] as const) {
         const frame = renderControlView({ ...model, screen: "port", focus, selectAll: true }, 54, 12);
-        assert.equal(frame.match(/\x1b\[48;5;238m/g)?.length, 1);
+        assert.equal(frame.match(/\x1b\[7m/g)?.length, 1);
     }
+});
+
+test("saving at short heights preserves full feedback and undo before optional items", () => {
+    const frame = plain(renderControlView({ ...model, notice: "Saved port 4000. Restart to apply.",
+        port: 4000, undoConfig: { port: 3001, width: 200 } }, 24, 8));
+    assert.match(frame, /Saved port 4000\./);
+    assert.match(frame, /Restart\s+to apply\./);
+    assert.match(frame, /Undo last change \(U\)/);
+    assert.match(frame, /Esc back/);
+});
+
+test("mouse targets cover only visible controls, including forms, undo and log actions", () => {
+    for (const screen of ["menu", "port", "width", "logs"] as const) {
+        for (const [width, height] of [[24, 8], [80, 24], [8, 2]]) {
+            const { frame, targets } = layoutControlView({ ...model, screen, undoConfig: { port: 1, width: 40 } }, width, height);
+            const lines = frame.split("\n");
+            for (const target of targets) {
+                assert.ok(target.row >= 1 && target.row <= height);
+                assert.ok(target.left >= 1 && target.right <= displayWidth(lines[target.row - 1]));
+                assert.ok(target.left <= target.right);
+            }
+        }
+    }
+    const { targets } = layoutControlView({ ...model, screen: "port" }, 40, 12);
+    assert.deepEqual(targets.map(target => target.action), ["field", "save", "cancel"]);
+    const logs = layoutControlView({ ...model, screen: "logs", logFocus: "back" }, 24, 12);
+    assert.deepEqual(logs.targets.map(target => target.action), ["follow", "back"]);
+    assert.match(plain(logs.frame), /> Back/);
+});
+
+
+test("PORT overrides never claim a restart will apply the saved port", () => {
+    const frame = plain(renderControlView({ ...model, envOverride: true, notice: "Saved port 4000. Restart to apply." }, 40, 12));
+    assert.match(frame, /PORT still uses 9000/);
+    assert.doesNotMatch(frame, /Restart to apply/);
+});
+
+
+test("log read errors explain recovery in the content area and horizontal movement is bounded", () => {
+    const frame = plain(renderControlView({ ...model, screen: "logs", logStatus: "Cannot read logs; check file permissions" }, 24, 10));
+    assert.match(frame, /check\s+file\s+permissions/);
+    assert.equal(logHorizontalLimit(["short", "界".repeat(20)], 24), 16);
+    assert.equal(logHorizontalLimit([], 24), 0);
 });
