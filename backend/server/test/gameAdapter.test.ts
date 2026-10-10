@@ -42,7 +42,14 @@ test('typing and ignored events retain room identity while forwarding input effe
 test('Node adapter uses absolute deadlines for countdown and every bomb phase', t => {
     t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
     const effects: GameEffect[] = [];
-    const adapter = new NodeGameAdapter(fresh(), result => effects.push(...result.effects), Date.now, () => 0);
+    const traces: { message: string; metadata: Record<string, unknown> }[] = [];
+    const adapter = new NodeGameAdapter(
+        fresh(),
+        result => effects.push(...result.effects),
+        Date.now,
+        () => 0,
+        (message, metadata) => traces.push({ message, metadata }),
+    );
     t.after(() => adapter.dispose());
     adapter.apply({ type: 'game:start', playerId: 'a', gameId: 'game', gameDuration: 1 });
     assert.equal(adapter.state.wordAt, 4000);
@@ -50,6 +57,16 @@ test('Node adapter uses absolute deadlines for countdown and every bomb phase', 
     t.mock.timers.tick(1000);
     assert.equal(adapter.state.room.bombStatus, 1);
     assert.equal(adapter.state.room.wordIndex, undefined);
+    assert.ok(traces.some(({ message, metadata }) =>
+        message === 'deadline_fired' && metadata.bombStatus === 0));
+    assert.ok(traces.some(({ message, metadata }) =>
+        message === 'deadline_applied' &&
+        metadata.previousStatus === 0 &&
+        metadata.nextStatus === 1));
+    assert.ok(traces.some(({ message, metadata }) =>
+        message === 'deadline_scheduled' &&
+        metadata.bombStatus === 1 &&
+        metadata.nextDeadline === 3000));
     t.mock.timers.tick(1000);
     t.mock.timers.tick(1000);
     assert.equal(adapter.state.room.wordIndex, 0);
