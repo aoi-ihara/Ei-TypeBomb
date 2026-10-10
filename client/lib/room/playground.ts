@@ -1,7 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { importJWK, jwtVerify, type JWK } from "jose";
 import isUUID from "validator/es/lib/isUUID";
 import type { Room } from "@/type";
 import { createAdminClient } from "@/lib/db/server";
@@ -15,12 +15,19 @@ export const getPlaygroundRoom = async (): Promise<Room | null> => {
     let roomId: string;
 
     try {
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET!);
-        const { payload } = await jwtVerify(token, secret, {
-            algorithms: ["HS256"],
+        const jwk = JSON.parse(process.env.JWT_PUBLIC_KEY!) as JWK;
+
+        const publicKey = await importJWK(jwk, "ES256");
+
+        const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+            algorithms: ["ES256"],
         });
 
-        if (typeof payload.id !== "string" || !isUUID(payload.id, 4)) {
+        if (
+            protectedHeader.kid !== process.env.JWT_KEY_ID ||
+            typeof payload.id !== "string" ||
+            !isUUID(payload.id, 4)
+        ) {
             return null;
         }
 
