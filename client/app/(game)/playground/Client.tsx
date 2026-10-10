@@ -8,6 +8,7 @@ import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import Button from "@/components/ui/Button";
 import { newPositions } from "@/lib/ui/position";
+import { useFeatureFlagVariantKey } from "@posthog/react";
 import posthog from "posthog-js";
 import { advanceBombClock } from "@/lib/playground/bomb-clock";
 import {
@@ -56,6 +57,8 @@ export default function Client({
     initialBackgroundMusic,
     initialSounDeffects,
 }: Readonly<Props>) {
+    const bombDuration =
+        Number(useFeatureFlagVariantKey("bomb-duration")) || 20;
     const router = useRouter();
     const { bombRef, explode, resetExplosion, explosionLayer } =
         useBombExplosion();
@@ -95,7 +98,7 @@ export default function Client({
     const [bombStatus, setBombStatus] = useState(0);
     const bombStageProgressRef = useRef(0);
     const bombPlanRef = useRef<{ duration: number; paused: boolean }>({
-        duration: 18_000,
+        duration: bombDuration,
         paused: true,
     });
     const [isStarted, setIsStarted] = useState(false);
