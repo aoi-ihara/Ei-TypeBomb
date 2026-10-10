@@ -120,7 +120,7 @@ export default function Loading() {
             return;
         }
 
-        enterRoom(mode, normalizedRoomId);
+        enterRoom(mode ?? selectedMode, normalizedRoomId);
         setLoadingMode(null);
     };
 
