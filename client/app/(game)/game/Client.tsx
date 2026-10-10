@@ -88,9 +88,7 @@ export default function Clinet({
         let secondaryTimer: ReturnType<typeof setTimeout> | null = null;
         let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
-        const showNotice = (
-            nextNotice: Omit<GameNoticeProps, "visible">,
-        ) => {
+        const showNotice = (nextNotice: Omit<GameNoticeProps, "visible">) => {
             if (noticeTimer) clearTimeout(noticeTimer);
 
             setNotice({
@@ -280,8 +278,7 @@ export default function Clinet({
                     if (!selected || socketRef.current !== socket) return;
                     setServerError(null);
                     const normalizedItems =
-                        newRoom.items ??
-                        legacyWireWordsToItems(newRoom.words);
+                        newRoom.items ?? legacyWireWordsToItems(newRoom.words);
                     const normalizedRoom: Room = {
                         ...newRoom,
                         items: normalizedItems,
@@ -547,9 +544,7 @@ export default function Clinet({
         setResult(null);
         setLostDisplayName(null);
         setCurrentInput("");
-        // The server removes every player when a round ends, so join again.
         setIsSpectator(false);
-        handleJoin("play_again");
     };
 
     const handleLeave = () => {
@@ -586,9 +581,7 @@ export default function Clinet({
                 );
             }}
             onPlayAgain={handlePlayAgain}
-            onCreateRoom={() =>
-                router.push(getSignInUrl())
-            }
+            onCreateRoom={() => router.push(getSignInUrl())}
             onJoin={() => handleJoin("join_button")}
             onWatch={handleWatch}
             onStartGame={handleStartGame}
