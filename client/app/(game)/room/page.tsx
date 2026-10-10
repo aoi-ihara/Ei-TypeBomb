@@ -73,16 +73,18 @@ export default function Loading() {
         setError(reason);
     };
 
-    const handleMode = async (mode: PlayMode) => {
-        setSelectedMode(mode);
-
+    const handleMode = async (mode?: PlayMode) => {
         if (showPasswordField) {
             setError("");
             setTurnstile(true);
             return;
         }
 
-        setLoadingMode(mode);
+        if (mode) {
+            setSelectedMode(mode);
+            setLoadingMode(mode);
+        }
+
         setError("");
 
         const roomResult = await prepareRoomJoin(
@@ -164,7 +166,7 @@ export default function Loading() {
                         label="ルームのパスワード"
                     />
                     <Button
-                        onClick={() => handleMode("playground")}
+                        onClick={() => handleMode()}
                         className="w-full"
                         disabled={modeButtonsDisabled}
                         loading={loadingMode === "playground"}
