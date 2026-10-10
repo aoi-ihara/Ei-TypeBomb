@@ -7,7 +7,6 @@ import { verifyToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { capturePostHogEvent } from "./lib/posthog";
 import { createSocketRateLimit } from "./lib/socketRateLimit";
-import { roomDatabase } from "./lib/db";
 import { probeRoomDatabase } from "./lib/databaseHealth";
 import { createDatabaseProbeRateLimit } from "./lib/databaseProbeRateLimit";
 import {
@@ -61,7 +60,10 @@ const refreshServerState = () =>
         })),
     });
 
-const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
+const createRoomIfNeeded = async (
+    roomId: string,
+    jwtToken: string,
+): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
     if (existingRoom) return Promise.resolve(existingRoom);
 
@@ -69,7 +71,7 @@ const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
     if (pendingLoad) return pendingLoad;
 
     const loadPromise = (async () => {
-        const room = await getRoomFromId(roomId);
+        const room = await getRoomFromId(roomId, jwtToken);
         if (!room) return null;
         requireRoomItems(room);
 
@@ -189,33 +191,6 @@ io.on("connection", (socket) => {
         socket.emit("health:pong", pingId);
     });
 
-    socket.on("health:database", async (requestId: unknown) => {
-        if (!isRequestId(requestId)) return;
-
-        // This budget is shared by every connection from an address, so opening
-        // a new unauthenticated socket cannot reset access to the database.
-        if (!acceptDatabaseProbe(socket.handshake.address)) return;
-
-        const startedAt = performance.now();
-        try {
-            await probeRoomDatabase(roomDatabase);
-            socket.emit("health:database-result", {
-                requestId,
-                ok: true,
-                latencyMs: Math.round(performance.now() - startedAt),
-            });
-        } catch (error) {
-            logError("Database health check failed", error, {
-                socketId: socket.id,
-            });
-            socket.emit("health:database-result", {
-                requestId,
-                ok: false,
-                latencyMs: null,
-            });
-        }
-    });
-
     const reportError = (
         message: string,
         error: unknown = new Error(message),
@@ -249,7 +224,10 @@ io.on("connection", (socket) => {
                     );
                 }
 
-                const room = await createRoomIfNeeded(jwtResult);
+                const room = await createRoomIfNeeded(
+                    jwtResult,
+                    response.jwtToken,
+                );
                 if (!room) {
                     throw new ClientError(
                         "ルーム情報を取得できませんでした。ルームを確認して再度お試しください。",
@@ -287,35 +265,19 @@ io.on("connection", (socket) => {
     socket.on("word:success", () => {
         getGame()?.apply({ type: "word:success", playerId: user.id });
     });
-    socket.on("game:start", async () => {
+    socket.on("game:start", () => {
         const game = getGame();
-        if (!game || !canStart(game.state, user.id, NODE_GAME_RULES)) return;
-        try {
-            const savedRoom = await getRoomFromId(game.state.room.id);
-            if (!savedRoom) {
-                reportError("ルームの設定を取得できませんでした。");
-                return;
-            }
-            // DB reads remain in the adapter. Recheck ownership and players after awaiting.
-            if (
-                getGame() !== game ||
-                !canStart(game.state, user.id, NODE_GAME_RULES)
-            )
-                return;
-            game.apply({
-                type: "game:start",
-                playerId: user.id,
-                gameId: randomUUID(),
-                gameDuration: savedRoom.gameDuration,
-            });
-        } catch (error) {
-            reportError(
-                error instanceof Error
-                    ? error.message
-                    : "ルームの設定を取得できませんでした。",
-                error,
-            );
+
+        if (!game || !canStart(game.state, user.id, NODE_GAME_RULES)) {
+            return;
         }
+
+        game.apply({
+            type: "game:start",
+            playerId: user.id,
+            gameId: randomUUID(),
+            gameDuration: game.state.room.gameDuration,
+        });
     });
 
     const deleteUser = (
@@ -326,7 +288,6 @@ io.on("connection", (socket) => {
         const game = getGame();
         if (!game) return;
         game.apply({ type: "room:leave", playerId, reason });
-        // Game membership is separate from Socket.IO membership; observers can rejoin.
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
         if (!socketRoom || socketRoom.size === 0) {
             game.dispose();

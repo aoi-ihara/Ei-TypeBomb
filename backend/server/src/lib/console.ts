@@ -73,7 +73,7 @@ const eventSymbol = (context: EventContext) => {
     if (context === "GAME") return { symbol: "→", color: ansi.cyan600 };
     if (context === "ROOM") return { symbol: "◇", color: ansi.yellow };
     if (context === "ERROR") return { symbol: "!", color: ansi.red };
-    return { symbol: "•", color: ansi.white };
+    return { symbol: "•", color: ansi.slate500 };
 };
 
 const logo = () => {
