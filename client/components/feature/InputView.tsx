@@ -322,7 +322,6 @@ function TypingAttempt({
         }
     };
 
-
     useEffect(() => {
         if (isReadonly || !english) return;
 
@@ -377,10 +376,7 @@ function TypingAttempt({
             currentSelection < hintLength &&
             next[currentSelection] !== english[currentSelection];
 
-        if (
-            typedInsideHint &&
-            (!manualHints || answerRevealed)
-        ) {
+        if (typedInsideHint && (!manualHints || answerRevealed)) {
             resetInput();
             return;
         }
@@ -469,6 +465,8 @@ function TypingAttempt({
                         next.findIndex((char, i) => char !== english[i]),
                     );
                     onChangeInput(next.join(""));
+                    setInput([]);
+                    setCurrentSelection(0);
                     triggerFailAnimation();
                 } else resetInput();
             }
@@ -574,9 +572,7 @@ function TypingAttempt({
                                 {(manualHints
                                     ? answerRevealed
                                     : index < hintLength) && (
-                                    <div
-                                        className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center"
-                                    >
+                                    <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
                                         {char}
                                     </div>
                                 )}
@@ -652,7 +648,6 @@ function TypingAttempt({
     );
 }
 
-// Each answer/role/cue change starts a fresh attempt, including consecutive identical items.
 export default function TypingView(props: Parameters<typeof TypingAttempt>[0]) {
     return (
         <TypingAttempt

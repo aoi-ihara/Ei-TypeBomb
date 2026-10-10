@@ -73,16 +73,18 @@ export default function Loading() {
         setError(reason);
     };
 
-    const handleMode = async (mode: PlayMode) => {
-        setSelectedMode(mode);
-
+    const handleMode = async (mode?: PlayMode) => {
         if (showPasswordField) {
             setError("");
             setTurnstile(true);
             return;
         }
 
-        setLoadingMode(mode);
+        if (mode) {
+            setSelectedMode(mode);
+            setLoadingMode(mode);
+        }
+
         setError("");
 
         const roomResult = await prepareRoomJoin(
@@ -118,7 +120,7 @@ export default function Loading() {
             return;
         }
 
-        enterRoom(mode, normalizedRoomId);
+        enterRoom(mode ?? selectedMode, normalizedRoomId);
         setLoadingMode(null);
     };
 
@@ -155,43 +157,54 @@ export default function Loading() {
                 label="招待リンク"
             />
 
-            {showPasswordField && (
-                <div className="animate-appear w-full">
+            {showPasswordField ? (
+                <div className="animate-appear flex flex-col gap-4 w-full">
                     <Input
                         value={roomPassword}
                         type="password"
                         onChange={(e) => setRoomPassword(e.target.value)}
                         label="ルームのパスワード"
                     />
+                    <Button
+                        onClick={() => handleMode()}
+                        className="w-full"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "playground"}
+                        iconName="arrowRight"
+                        variant="primary"
+                    >
+                        続ける
+                    </Button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-4 w-full">
+                    <Button
+                        onClick={() => handleMode("online")}
+                        className="w-full"
+                        variant="primary"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "online"}
+                        iconName="users"
+                    >
+                        マルチ
+                    </Button>
+                    <Button
+                        onClick={() => handleMode("playground")}
+                        className="w-full"
+                        variant="primary"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "playground"}
+                        iconName="user"
+                    >
+                        シングル
+                    </Button>
                 </div>
             )}
-
-            <div className="grid grid-cols-2 gap-4 w-full">
-                <Button
-                    onClick={() => handleMode("online")}
-                    className="w-full"
-                    variant="primary"
-                    disabled={modeButtonsDisabled}
-                    loading={loadingMode === "online"}
-                    iconName="usersRound"
-                >
-                    オンラインプレイ
-                </Button>
-                <Button
-                    onClick={() => handleMode("playground")}
-                    className="w-full"
-                    disabled={modeButtonsDisabled}
-                    loading={loadingMode === "playground"}
-                    iconName="user"
-                >
-                    一人で練習
-                </Button>
-            </div>
 
             {!link && (
                 <Button
                     onClick={() => router.push("/game-demo")}
-                    className="w-full"
+                    className="w-full animate-appear"
                     iconName="play"
                 >
                     デモをプレイ

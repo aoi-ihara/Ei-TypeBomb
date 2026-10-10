@@ -8,6 +8,7 @@ import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import Button from "@/components/ui/Button";
 import { newPositions } from "@/lib/ui/position";
+import { useFeatureFlagPayload } from "@posthog/react";
 import posthog from "posthog-js";
 import { advanceBombClock } from "@/lib/playground/bomb-clock";
 import {
@@ -56,6 +57,15 @@ export default function Client({
     initialBackgroundMusic,
     initialSounDeffects,
 }: Readonly<Props>) {
+    const bombDurationVariant = useFeatureFlagPayload("bomb-duration");
+    const configuredBombDuration =
+        typeof bombDurationVariant === "string"
+            ? Number(bombDurationVariant)
+            : Number.NaN;
+    const bombDurationSeconds =
+        Number.isFinite(configuredBombDuration) && configuredBombDuration > 0
+            ? configuredBombDuration
+            : 30;
     const router = useRouter();
     const { bombRef, explode, resetExplosion, explosionLayer } =
         useBombExplosion();
@@ -95,7 +105,7 @@ export default function Client({
     const [bombStatus, setBombStatus] = useState(0);
     const bombStageProgressRef = useRef(0);
     const bombPlanRef = useRef<{ duration: number; paused: boolean }>({
-        duration: 18_000,
+        duration: bombDurationSeconds * 1000,
         paused: true,
     });
     const [isStarted, setIsStarted] = useState(false);
@@ -138,6 +148,7 @@ export default function Client({
     );
 
     useEffect(() => {
+        console.log(bombDurationSeconds, bombDurationVariant);
         const timer = setTimeout(
             () =>
                 setDisplayName(
@@ -657,14 +668,20 @@ export default function Client({
     useEffect(() => {
         bombPlanRef.current = {
             duration:
-                (currentTurnPlan?.retrievalWindowMs ?? 32_000) *
+                bombDurationSeconds *
+                1000 *
                 (currentTurnPlan?.bombPressure === "low" ? 1.35 : 1),
             paused:
                 !currentItem ||
                 currentTurnPlan?.bombPressure === "paused" ||
                 recallPressurePaused,
         };
-    }, [currentItem, currentTurnPlan, recallPressurePaused]);
+    }, [
+        bombDurationSeconds,
+        currentItem,
+        currentTurnPlan,
+        recallPressurePaused,
+    ]);
 
     useEffect(() => {
         if (!memoryReady || !isStarted || result !== null) return;
