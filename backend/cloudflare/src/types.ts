@@ -1,7 +1,6 @@
 export interface Secrets {
 	JWT_SECRET: string;
-	NEXT_PUBLIC_SUPABASE_URL: string;
-	SUPABASE_SERVICE_ROLE_KEY: string;
+	SUPABASE_DATABASE_URL: string;
 	NEXT_PUBLIC_POSTHOG_KEY?: string;
 	POSTHOG_HOST?: string;
 }

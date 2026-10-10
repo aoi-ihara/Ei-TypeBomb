@@ -7,8 +7,7 @@ export default defineConfig({
 			miniflare: {
 				bindings: {
 					JWT_SECRET: 'test-only-secret',
-					NEXT_PUBLIC_SUPABASE_URL: 'https://db.example.test',
-					SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
+					SUPABASE_DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
 					NEXT_PUBLIC_POSTHOG_KEY: '',
 				},
 			},

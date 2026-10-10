@@ -18,8 +18,7 @@ npm run dev
 必要な値:
 
 - `JWT_SECRET`: client がルーム入室トークンの署名に使う値と同一。
-- `NEXT_PUBLIC_SUPABASE_URL`: 既存 Supabase プロジェクト URL。
-- `SUPABASE_SERVICE_ROLE_KEY`: サーバー専用キー。ブラウザーには渡さない。
+- `SUPABASE_DATABASE_URL`: `server` と同じ、読み取り専用ロールの PostgreSQL 接続文字列。
 - `NEXT_PUBLIC_POSTHOG_KEY` / `POSTHOG_HOST`: 任意。未設定時はイベント送信を無効化。
 
 `wrangler.jsonc` の `ALLOWED_ORIGINS` にクライアントの origin をカンマ区切りで指定します。
@@ -71,8 +70,7 @@ Worker の **Settings > Build** に以下を設定してください。
 cd backend/cloudflare
 npm ci --include=dev
 npx wrangler secret put JWT_SECRET
-npx wrangler secret put NEXT_PUBLIC_SUPABASE_URL
-npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put SUPABASE_DATABASE_URL
 # 任意: npx wrangler secret put NEXT_PUBLIC_POSTHOG_KEY
 npm run deploy
 ```
@@ -81,7 +79,9 @@ npm run deploy
 `.dev.vars` はローカル専用で、本番にはアップロードされません。
 初期テンプレートの migration `v1` を残し、`v2` でサンプル `MyDurableObject` を削除して
 `GameRoom` を作成します。サンプル Durable Object に独自データを保存していた場合は、
-削除前に移行してください。既存 Supabase データに変更はありません。
+削除前に移行してください。Cloudflare は `pg` で PostgreSQL に読み取り接続します。
+`SUPABASE_DATABASE_URL` は `server` と同じ Supabase PostgreSQL 接続文字列を設定します。
+既存 Supabase データに変更はありません。
 
 ## 通信仕様
 

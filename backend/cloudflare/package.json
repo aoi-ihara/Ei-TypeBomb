@@ -13,15 +13,16 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.22.0",
-		"@types/node": "^26.6.3",
+		"@types/node": "^26.6.5",
+		"@types/pg": "^8.23.1",
 		"prettier": "^3.9.9",
 		"typescript": "^5.5.2",
 		"vitest": "^4.1.11",
 		"wrangler": "^4.143.0"
 	},
 	"dependencies": {
-		"@supabase/supabase-js": "2.110.8",
-		"jose": "^6.2.12"
+		"jose": "^6.2.12",
+		"pg": "^8.23.1"
 	},
 	"overrides": {
 		"@cloudflare/vitest-pool-workers": {

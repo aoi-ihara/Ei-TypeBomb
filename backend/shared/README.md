@@ -7,7 +7,8 @@ The common source lives at `backend/shared/`, beside `backend/server/` and
 `protocol.ts` defines both directions of the existing protocol, Socket.IO handler
 types, and the public room snapshot (including legacy `words`, excluding passwords).
 `validation.ts` validates auth payloads, names, health IDs, item configuration and
-client event payloads. `rateLimits.ts` owns common event budget settings.
+client event payloads. `room.ts` maps the common database room row into the serializable
+`Room` shape. `rateLimits.ts` owns common event budget settings.
 
 `game.ts` exports `applyGameEvent(state, event, context)`. It returns a new state
 and ordered effects: protocol broadcasts and game activities. It does not mutate
@@ -29,6 +30,9 @@ these adapters do not need interchangeable database implementations yet.
   earliest game/session deadline through DO Alarm.
 - Rate-limit bucket storage, unknown-event handling and health-probe scope remain
   runtime-specific (Node addresses vs Worker health DO).
+
+DB loaders keep their runtime-specific access and error handling, then use the shared
+`roomFromRow` mapper so PostgreSQL and Supabase reads produce the same room shape.
 
 `wordAt` and `bombAt` are absolute epoch-millisecond deadlines at the top level of
 `GameState`, preserving the existing Worker storage shape. `nextGameDeadline`

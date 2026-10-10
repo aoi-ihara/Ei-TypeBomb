@@ -1,17 +1,29 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env, SELF, runInDurableObject, runDurableObjectAlarm, evictDurableObject, reset } from 'cloudflare:test';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { SignJWT } from 'jose';
 import { acceptEvent } from '../src/lib/rateLimit';
 import { validateDisplayName, verifyToken } from '../src/lib/services';
 import type { GameState, Room, Session } from '../src/types';
+
+const { responses } = vi.hoisted(() => ({ responses: [] as unknown[] }));
+vi.mock('pg', () => ({
+	Client: class {
+		async connect() {}
+		async end() {}
+		async query() {
+			const rows = responses.shift();
+			if (!rows) throw new Error('Unexpected database query');
+			return { rows };
+		}
+	},
+}));
 
 const roomId = '12345678-1234-4123-8123-123456789abc';
 const sockets: WebSocket[] = [];
 const secret = new TextEncoder().encode('test-only-secret');
 const token = (id = roomId, expiry = '1h') =>
 	new SignJWT({ id }).setProtectedHeader({ alg: 'HS256' }).setExpirationTime(expiry).sign(secret);
-const responses: unknown[] = [];
 function mockRoom(items: unknown = [{ id: 'item-1', type: 'typed_recall', prompt: '猫', answer: 'cat' }]) {
 	responses.push([{ id: roomId, title: 'Test', max_players: 2, game_duration: 1000, items, password: 'must-not-leak' }]);
 }
@@ -60,14 +72,6 @@ async function authenticate(client: Awaited<ReturnType<typeof connect>>, display
 	client.send('auth:response', { jwtToken: await token(), displayName });
 	return client.next<Room>('room:broadcast');
 }
-beforeEach(() => {
-	vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-		expect(String(input)).toContain('https://db.example.test/rest/v1/ei_typebomb_rooms?');
-		const response = responses.shift();
-		if (!response) throw new Error('Unexpected outbound request');
-		return Response.json(response);
-	});
-});
 afterEach(async () => {
 	await Promise.all(
 		sockets.splice(0).map(

@@ -1,9 +1,8 @@
 import { jwtVerify } from 'jose';
-import { createClient } from '@supabase/supabase-js';
-import type { Room, Secrets } from '../types';
-
-import { ClientError, requireRoomItems } from '../../../shared/validation';
+import { Client } from 'pg';
+import type { Secrets } from '../types';
 export { ClientError, validateDisplayName } from '../../../shared/validation';
+
 export async function verifyToken(token: unknown, secret: string): Promise<string | null> {
 	if (typeof token !== 'string' || !secret) return null;
 	try {
@@ -13,43 +12,17 @@ export async function verifyToken(token: unknown, secret: string): Promise<strin
 		return null;
 	}
 }
-export async function getRoom(env: Secrets, id: string): Promise<Room> {
-	const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-		auth: { autoRefreshToken: false, persistSession: false },
-	});
-	const { data, error } = await db
-		.from('ei_typebomb_rooms')
-		.select('id,title,user_id,explanation,max_players,game_duration,created_at,updated_at,items')
-		.eq('id', id)
-		.abortSignal(AbortSignal.timeout(10_000))
-		.maybeSingle();
-	if (error) throw new Error(`Room lookup failed: ${error.code}`);
-	if (!data) throw new ClientError('ルーム情報を取得できませんでした。ルームを確認して再度お試しください。');
-	requireRoomItems({ items: data.items });
-	return {
-		id: data.id,
-		title: data.title,
-		userId: data.user_id,
-		explanation: data.explanation,
-		maxPlayers: data.max_players,
-		gameDuration: data.game_duration ?? 20,
-		createdAt: data.created_at,
-		updatedAt: data.updated_at,
-		items: data.items,
-		users: [],
-		isStart: false,
-		bombHolder: 0,
-		bombStatus: 0,
-	};
-}
+
 export async function checkDatabase(env: Secrets): Promise<number> {
-	const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-		auth: { autoRefreshToken: false, persistSession: false },
-	});
 	const startedAt = performance.now();
-	const { error } = await db.from('ei_typebomb_rooms').select('id').limit(1).abortSignal(AbortSignal.timeout(10_000));
-	if (error) throw new Error(`Database health check failed: ${error.code}`);
-	return Math.round(performance.now() - startedAt);
+	const db = new Client({ connectionString: env.SUPABASE_DATABASE_URL, connectionTimeoutMillis: 5_000 });
+	try {
+		await db.connect();
+		await db.query('SELECT id FROM public.ei_typebomb_rooms LIMIT 1');
+		return Math.round(performance.now() - startedAt);
+	} finally {
+		await db.end();
+	}
 }
 
 export async function capture(env: Secrets, event: string, properties: Record<string, unknown> = {}) {
