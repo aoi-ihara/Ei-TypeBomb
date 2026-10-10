@@ -141,6 +141,13 @@ const createRoomIfNeeded = async (
                         }
                     }
                 },
+                Date.now,
+                Math.random,
+                (message, metadata) =>
+                    logEvent("GAME", `bomb_timer:${message} ${roomId}`, {
+                        roomId,
+                        ...metadata,
+                    }),
             ),
         );
         refreshServerState();
