@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { GameState, Session, WorkerEnv } from './types';
-import { capture, checkDatabase, ClientError, getRoom, verifyToken } from './lib/services';
+import { capture, checkDatabase, ClientError, verifyToken } from './lib/services';
+import { getRoom } from './lib/get';
 import { acceptEvent } from './lib/rateLimit';
 import { WORKER_GAME_RULES } from './lib/gameRules';
 import { applyGameEvent, canStart, nextGameDeadline, type GameEvent, type GameEffect } from '../../shared/game';
@@ -22,13 +23,13 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 			if (saved) this.game = { ...saved, revision: saved.revision ?? 0 };
 		});
 	}
+
 	private send<K extends keyof ServerPayloads>(ws: WebSocket, event: K, data?: ServerPayloads[K]) {
 		try {
 			ws.send(JSON.stringify({ event, data }));
-		} catch {
-			/* Close/error handler cleans up membership. */
-		}
+		} catch {}
 	}
+
 	private broadcast<K extends keyof ServerPayloads>(event: K, data?: ServerPayloads[K]) {
 		for (const ws of this.ctx.getWebSockets()) {
 			if ((ws.deserializeAttachment() as Session).authenticated) this.send(ws, event, data);
@@ -43,6 +44,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		console.log(JSON.stringify({ event, roomId: this.game?.room.id, ...properties }));
 		this.ctx.waitUntil(capture(this.env, event, properties));
 	}
+
 	private async save() {
 		if (this.game) await this.ctx.storage.put('game', this.game);
 		else await this.ctx.storage.delete('game');
@@ -58,6 +60,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		else await this.ctx.storage.deleteAlarm();
 		this.flushEffects();
 	}
+
 	private async acceptDatabaseProbe(now = Date.now()) {
 		const { capacity, perSecond } = EVENT_RATE_LIMITS['health:database'];
 		const bucket = (await this.ctx.storage.get<{ tokens: number; updatedAt: number }>(DATABASE_PROBE_BUCKET_KEY)) ?? {
@@ -74,6 +77,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		await this.ctx.storage.put(DATABASE_PROBE_BUCKET_KEY, bucket);
 		return true;
 	}
+
 	async fetch(request: Request): Promise<Response> {
 		// A fresh connection cannot inherit stale players after all old sockets disappeared.
 		if (!this.ctx.getWebSockets().length) this.game = undefined;
@@ -92,10 +96,8 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		await this.save();
 		return new Response(null, { status: 101, webSocket: pair[0] });
 	}
+
 	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
-		// Database probes do not read or mutate game state. Keep the slow network
-		// request outside the room-wide input gate so gameplay can continue while
-		// Supabase is responding.
 		if (typeof message === 'string' && message.length <= 16_384) {
 			let packet: { event?: unknown; data?: unknown } | undefined;
 			try {
@@ -126,7 +128,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				return;
 			}
 		}
-		// Serialize asynchronous auth/DB reads with joins, disconnects, and alarms.
+
 		await this.ctx.blockConcurrencyWhile(async () => {
 			const session = ws.deserializeAttachment() as Session;
 			try {
@@ -168,6 +170,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 					this.snapshot();
 					return;
 				}
+
 				if (!session.authenticated || !this.game) return;
 				session.lastSeen = Date.now();
 				ws.serializeAttachment(session);
@@ -205,6 +208,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 			}
 		});
 	}
+
 	private apply(event: GameEvent, now = Date.now()) {
 		if (!this.game) return false;
 		const result = applyGameEvent(this.game, event, { now, random: Math.random, rules: WORKER_GAME_RULES });
@@ -213,6 +217,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 		this.pendingEffects.push(...result.effects);
 		return result.effects.length > 0;
 	}
+
 	private flushEffects() {
 		const effects = this.pendingEffects;
 		this.pendingEffects = [];
@@ -227,15 +232,19 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 				});
 		}
 	}
+
 	private leave(session: Session, reason: 'room_leave' | 'disconnect') {
 		this.apply({ type: 'room:leave', playerId: session.id, reason });
 	}
+
 	async webSocketClose(ws: WebSocket) {
 		await this.remove(ws);
 	}
+
 	async webSocketError(ws: WebSocket) {
 		await this.remove(ws);
 	}
+
 	private async remove(ws: WebSocket) {
 		await this.ctx.blockConcurrencyWhile(async () => {
 			this.leave(ws.deserializeAttachment() as Session, 'disconnect');
@@ -250,6 +259,7 @@ export class GameRoom extends DurableObject<WorkerEnv> {
 			this.snapshot();
 		});
 	}
+
 	async alarm() {
 		await this.ctx.blockConcurrencyWhile(async () => {
 			const now = Date.now();

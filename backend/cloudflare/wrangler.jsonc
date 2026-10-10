@@ -14,7 +14,6 @@
 	"vars": {
 		"ALLOWED_ORIGINS": "http://localhost:3000,https://ei-typebomb.vgnz93hs.com,https://beta.ei-typebomb.vgnz93hs.com",
 		"NEXT_PUBLIC_POSTHOG_KEY": "phc_p3eZiwnCZXCSeZ4TBmTzFgshSY3cKiNBXUhMj3oxGB6K",
-		"NEXT_PUBLIC_SUPABASE_URL": "https://gkiniypvnwqhmgviwxws.supabase.co",
 	},
 	"observability": { "enabled": true },
 	"upload_source_maps": true,

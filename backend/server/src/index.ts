@@ -88,51 +88,58 @@ const createRoomIfNeeded = (roomId: string): Promise<Room | null> => {
         rooms.push(newRoom);
         games.set(
             roomId,
-            new NodeGameAdapter({ room: newRoom, revision: 0 }, (result, previous) => {
-                if (result.state.room !== previous.room) {
-                    const index = rooms.findIndex((item) => item.id === roomId);
-                    if (index === -1) return;
-                    rooms[index] = result.state.room;
-                    refreshServerState();
-                }
-                for (const effect of result.effects) {
-                    if (effect.type === "broadcast") {
-                        const packet = effect.packet;
-                        // The protocol union pairs each event with its payload. Socket.IO
-                        // cannot infer that correlation through a variadic generic emit.
-                        const target = io.to(roomId);
-                        const emit = target.emit.bind(target) as (
-                            event: string,
-                            data?: unknown,
-                        ) => boolean;
-                        if (packet.data === undefined) emit(packet.event);
-                        else emit(packet.event, packet.data);
-                    } else {
-                        const activity = effect.activity;
-                        logEvent("GAME", `${activity.event} ${roomId}`, {
-                            roomId,
-                            gameId:
-                                result.state.room.gameId ??
-                                previous.room.gameId,
-                            playerCount: activity.playerCount,
-                            reason: activity.reason,
-                            previousHolder:
-                                previous.room.users[previous.room.bombHolder],
-                            nextHolder:
-                                result.state.room.users[
-                                    result.state.room.bombHolder
-                                ],
-                        });
-                        if (activity.event !== "word_passed")
-                            capturePostHogEvent(activity.event, {
-                                player_count: activity.playerCount,
-                                ...(activity.reason
-                                    ? { reason: activity.reason }
-                                    : {}),
-                            });
+            new NodeGameAdapter(
+                { room: newRoom, revision: 0 },
+                (result, previous) => {
+                    if (result.state.room !== previous.room) {
+                        const index = rooms.findIndex(
+                            (item) => item.id === roomId,
+                        );
+                        if (index === -1) return;
+                        rooms[index] = result.state.room;
+                        refreshServerState();
                     }
-                }
-            }),
+                    for (const effect of result.effects) {
+                        if (effect.type === "broadcast") {
+                            const packet = effect.packet;
+                            // The protocol union pairs each event with its payload. Socket.IO
+                            // cannot infer that correlation through a variadic generic emit.
+                            const target = io.to(roomId);
+                            const emit = target.emit.bind(target) as (
+                                event: string,
+                                data?: unknown,
+                            ) => boolean;
+                            if (packet.data === undefined) emit(packet.event);
+                            else emit(packet.event, packet.data);
+                        } else {
+                            const activity = effect.activity;
+                            logEvent("GAME", `${activity.event} ${roomId}`, {
+                                roomId,
+                                gameId:
+                                    result.state.room.gameId ??
+                                    previous.room.gameId,
+                                playerCount: activity.playerCount,
+                                reason: activity.reason,
+                                previousHolder:
+                                    previous.room.users[
+                                        previous.room.bombHolder
+                                    ],
+                                nextHolder:
+                                    result.state.room.users[
+                                        result.state.room.bombHolder
+                                    ],
+                            });
+                            if (activity.event !== "word_passed")
+                                capturePostHogEvent(activity.event, {
+                                    player_count: activity.playerCount,
+                                    ...(activity.reason
+                                        ? { reason: activity.reason }
+                                        : {}),
+                                });
+                        }
+                    }
+                },
+            ),
         );
         refreshServerState();
         logEvent("ROOM", `created ${roomId}`, { roomId });

@@ -1,6 +1,5 @@
 JWT_SECRET=replace-with-the-same-secret-as-client
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
+SUPABASE_DATABASE_URL=postgresql://READ_ONLY_USER:PASSWORD@HOST:5432/postgres?sslmode=require
 # Optional analytics
 # NEXT_PUBLIC_POSTHOG_KEY=YOUR_POSTHOG_KEY
 # POSTHOG_HOST=https://us.i.posthog.com
