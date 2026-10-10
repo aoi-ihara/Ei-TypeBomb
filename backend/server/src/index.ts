@@ -191,31 +191,6 @@ io.on("connection", (socket) => {
         socket.emit("health:pong", pingId);
     });
 
-    socket.on("health:database", async (requestId: unknown) => {
-        if (!isRequestId(requestId)) return;
-
-        if (!acceptDatabaseProbe(socket.handshake.address)) return;
-
-        const startedAt = performance.now();
-        try {
-            // await probeRoomDatabase(roomDatabase);
-            socket.emit("health:database-result", {
-                requestId,
-                ok: true,
-                latencyMs: Math.round(performance.now() - startedAt),
-            });
-        } catch (error) {
-            logError("Database health check failed", error, {
-                socketId: socket.id,
-            });
-            socket.emit("health:database-result", {
-                requestId,
-                ok: false,
-                latencyMs: null,
-            });
-        }
-    });
-
     const reportError = (
         message: string,
         error: unknown = new Error(message),
