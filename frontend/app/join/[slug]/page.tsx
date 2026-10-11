@@ -104,7 +104,7 @@ export default function Page({
                 />
             )}
 
-            <div className="grid grid-cols-2 gap-4 w-full">
+            <div className="grid grid-cols-2 gap-4 w-full animate-appear">
                 {(["online", "playground"] as const).map((mode) => (
                     <Button
                         key={mode}
