@@ -15,7 +15,6 @@ export function getPostHogClient(): PostHog {
 
     return new PostHog(token ?? "", {
         host: host ?? "https://us.i.posthog.com",
-        personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY,
         flushAt: 1,
         flushInterval: 0,
     });

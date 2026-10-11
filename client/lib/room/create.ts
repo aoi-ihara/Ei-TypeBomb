@@ -1,5 +1,4 @@
 "use server";
-import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { after } from "next/server";
 import { createAdminClient } from "../db/server";
@@ -9,14 +8,14 @@ import { getPostHogClient } from "@/lib/posthog-server";
 
 export const createNewRoom = async () => {
     const userId = await getUser();
-    if (!userId) redirect(getSignInUrl());
+    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
 
     const supabase = await createAdminClient();
     const uuid = crypto.randomUUID();
 
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .insert({ id: uuid, user_id: userId, link: uuid, items: [] })
+        .insert({ id: uuid, user_id: userId, link: uuid })
         .select("id")
         .single();
 

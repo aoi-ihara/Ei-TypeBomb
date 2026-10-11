@@ -1,5 +1,4 @@
 "use client";
-import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -146,7 +145,7 @@ export default function Home({
                             className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
                             onClick={() =>
                                 router.push(
-                                    getSignInUrl(),
+                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
                                 )
                             }
                         >
@@ -242,7 +241,7 @@ export default function Home({
                         variant="text"
                         iconName="logIn"
                         onClick={() =>
-                            router.push(getSignInUrl())
+                            router.push(process.env.NEXT_PUBLIC_SIGN_IN_URL!)
                         }
                     >
                         サインイン

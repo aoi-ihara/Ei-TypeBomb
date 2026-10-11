@@ -14,8 +14,7 @@ const originOf = (url: string | undefined | null): string | null => {
 const trustedOrigins = (selectedPrimary?: string): string[] =>
     [
         process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
-        process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
-        process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+        process.env.NEXT_PUBLIC_BACKUP_SERVER_URL,
         selectedPrimary,
     ]
         .map(originOf)

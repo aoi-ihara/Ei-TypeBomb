@@ -60,7 +60,7 @@ Important state includes:
 - `bombHolder` — index of the player currently holding the bomb
 - `wordIndex` — current word
 - `bombStatus` — current bomb state
-- `bombAt` / `wordAt` — absolute deadlines for bomb phases and the initial word
+- `bombTimer` — timer controlling the bomb
 - `users` — players currently participating in the game
 
 A unique `gameId` is generated when a game starts.
@@ -272,16 +272,15 @@ Ei-TypeBomb/
 │   ├── lib/
 │   └── type/
 │
-├── backend/
-│   ├── server/        # Node.js / Socket.IO / PostgreSQL
-│   ├── cloudflare/    # Workers / Native WebSocket / Durable Objects
-│   └── shared/        # Runtime-independent game core and protocol
+├── server/
+│   └── src/
+│       ├── index.ts
+│       ├── lib/
+│       └── type.ts
 │
 └── docs/
     └── screenshots/
 ```
-
-Backend build, test, and deployment instructions: [backend/README.md](backend/README.md).
 
 ## How to Play
 
@@ -294,9 +293,7 @@ Backend build, test, and deployment instructions: [backend/README.md](backend/RE
 7. Keep passing the bomb before it explodes.
 8. The player holding the bomb when it explodes loses.
 
-> **Playing on a PC is strongly recommended.**
-> 
-> When playing on an Android device, please turn off your keyboard's word prediction feature before starting the game. Leaving word prediction enabled may cause unexpected input behavior.
+> Playing on a PC is strongly recommended.
 
 ## Screenshots
 

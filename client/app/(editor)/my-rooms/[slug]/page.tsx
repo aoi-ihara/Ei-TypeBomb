@@ -20,7 +20,7 @@ import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import { parseImportedWords } from "@/lib/room/importWords";
-import type { LegacyWord, Room, TypedRecallItem } from "@/type";
+import { Room } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound, useRouter } from "next/navigation";
@@ -50,6 +50,15 @@ const EXAMPLES = [
     "入国審査で言われそうな単語",
     "ホテルで使いそうな英単語",
 ];
+
+type Word = {
+    jp: string;
+    en: string;
+};
+
+type WordWithId = Word & {
+    id: string;
+};
 
 function SortableItem({
     id,
@@ -97,7 +106,7 @@ export default function Page({
     const [gameDuration, setGameDuration] = useState(20);
     const [maxPlayers, setMaxPlayers] = useState<string>("2");
     const [roomId, setRoomId] = useState<string | null>(null);
-    const [items, setItems] = useState<TypedRecallItem[] | null>(null);
+    const [words, setWords] = useState<WordWithId[] | null>(null);
     const [isLinkCopied, setIsLinkCopied] = useState(false);
     const [roomLink, setRoomLink] = useState("");
     const [roomLinkError, setRoomLinkError] = useState("");
@@ -118,7 +127,7 @@ export default function Page({
 
     const [showGenerationInput, setShowGenerationInput] = useState(false);
     const [generationPrompt, setGenerationPrompt] = useState("");
-    const [generatedWords, setGeneratedWords] = useState<LegacyWord[]>([]);
+    const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState("");
     const [isGeminiLimitReached, setIsGeminiLimitReached] = useState(false);
@@ -186,7 +195,7 @@ export default function Page({
         roomPassword,
         maxPlayers,
         gameDuration,
-        items,
+        words,
         roomId,
     });
 
@@ -197,7 +206,7 @@ export default function Page({
             roomPassword,
             maxPlayers,
             gameDuration,
-            items,
+            words,
             roomId,
         };
     }, [
@@ -206,15 +215,15 @@ export default function Page({
         roomPassword,
         maxPlayers,
         gameDuration,
-        items,
+        words,
         roomId,
         roomLink,
     ]);
 
-    const itemListRef = useRef<HTMLDivElement | null>(null);
+    const wordListRef = useRef<HTMLDivElement | null>(null);
 
     const restrictWordDrag: Modifier = ({ transform, activeNodeRect }) => {
-        const list = itemListRef.current;
+        const list = wordListRef.current;
 
         if (!list || !activeNodeRect) {
             return { ...transform, x: 0 };
@@ -235,12 +244,12 @@ export default function Page({
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
-        if (!over || active.id === over.id || !items) return;
+        if (!over || active.id === over.id || !words) return;
 
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
+        const oldIndex = words.findIndex((word) => word.id === active.id);
+        const newIndex = words.findIndex((word) => word.id === over.id);
 
-        setItems(arrayMove(items, oldIndex, newIndex));
+        setWords(arrayMove(words, oldIndex, newIndex));
     };
 
     const handleDeleteRoom = async () => {
@@ -276,7 +285,13 @@ export default function Page({
             setGameDuration(room.gameDuration ?? 20);
             setRoomLink(room.link ?? room.id);
 
-            setItems(room.items ?? []);
+            const wordsWithId: WordWithId[] = (room.words ?? []).map(
+                (word: Word) => ({
+                    ...word,
+                    id: crypto.randomUUID(),
+                }),
+            );
+            setWords(wordsWithId);
 
             isLoadedRef.current = true;
         };
@@ -286,10 +301,10 @@ export default function Page({
 
     const handleExportWords = async () => {
         const jsonData = JSON.stringify(
-            (items ?? []).map((item) => {
+            (words ?? []).map((word) => {
                 return {
-                    jp: item.prompt,
-                    en: item.answer,
+                    jp: word.jp,
+                    en: word.en,
                 };
             }),
             null,
@@ -317,21 +332,19 @@ export default function Page({
 
         setImportError("");
 
-        if (!roomId || items === null) return;
+        if (!roomId || words === null) return;
 
         if (!importData.trim()) {
             setImportError("JSONまたはCSVデータを入力してください。");
             return;
         }
 
-        let importedItems: TypedRecallItem[];
+        let importedWords: WordWithId[];
 
         try {
-            importedItems = parseImportedWords(importData).map((word) => ({
+            importedWords = parseImportedWords(importData).map((word) => ({
+                ...word,
                 id: crypto.randomUUID(),
-                type: "typed_recall",
-                prompt: word.jp,
-                answer: word.en,
             }));
         } catch {
             setImportError(
@@ -340,8 +353,8 @@ export default function Page({
             return;
         }
 
-        const newItems = [...importedItems, ...items];
-        setItems(newItems);
+        const newWords = [...importedWords, ...words];
+        setWords(newWords);
 
         setImportData("");
         setShowImportInput(false);
@@ -397,10 +410,10 @@ export default function Page({
             roomExplanation,
             maxPlayers,
             gameDuration,
-            items,
+            words,
         } = roomDataRef.current;
 
-        if (!roomId || !items) return;
+        if (!roomId || !words) return;
 
         try {
             const updatedRoom: Room = {
@@ -411,7 +424,7 @@ export default function Page({
                 gameDuration: validateGameDuration(Number(gameDuration))
                     ? undefined
                     : Number(gameDuration),
-                items,
+                words: words.map(({ jp, en }) => ({ jp, en })),
                 link: roomLink,
             };
 
@@ -423,7 +436,7 @@ export default function Page({
     };
 
     useEffect(() => {
-        if (!isLoadedRef.current || !roomId || items === null) return;
+        if (!isLoadedRef.current || !roomId || words === null) return;
 
         if (saveTimerRef.current) {
             clearTimeout(saveTimerRef.current);
@@ -452,7 +465,7 @@ export default function Page({
         roomExplanation,
         maxPlayers,
         gameDuration,
-        items,
+        words,
         roomId,
         roomLink,
     ]);
@@ -611,7 +624,7 @@ export default function Page({
                                 padding="large"
                                 iconName="qrCode"
                                 onClick={() => {
-                                    if (items && items.length !== 0)
+                                    if (words && words?.length !== 0)
                                         setShowRoomCode(true);
                                     else setShowQrWarning(true);
                                 }}
@@ -650,7 +663,7 @@ export default function Page({
                             <Button
                                 className="w-fit shrink-0"
                                 onClick={() => {
-                                    if (items && items.length !== 0)
+                                    if (words && words?.length !== 0)
                                         handleCopyRoomLink();
                                     else setShowCopyWarning(true);
                                 }}
@@ -834,19 +847,18 @@ export default function Page({
                 単語
             </div>
 
-            {items && (
+            {words && (
                 <div className="w-full flex gap-4">
                     <Button
                         onClick={() => {
                             setShowImportInput(false);
-                            setItems([
+                            setWords([
                                 {
                                     id: crypto.randomUUID(),
-                                    type: "typed_recall",
-                                    prompt: "",
-                                    answer: "",
+                                    en: "",
+                                    jp: "",
                                 },
-                                ...items,
+                                ...words,
                             ]);
 
                             posthog.capture("word_added");
@@ -927,7 +939,7 @@ export default function Page({
                 </div>
             )}
 
-            {items && (
+            {words && (
                 <div className="flex flex-col">
                     <Collapsible
                         open={showGenerationInput}
@@ -1043,17 +1055,29 @@ export default function Page({
                                     onClick={() => {
                                         if (!generatedWords) return;
 
-                                        const generatedItems: TypedRecallItem[] =
-                                            generatedWords.map((word) => ({
-                                                id: crypto.randomUUID(),
-                                                type: "typed_recall",
-                                                prompt: word.jp,
-                                                answer: word.en,
-                                            }));
+                                        let parsedWords: Word[];
 
-                                        setItems([
-                                            ...generatedItems,
-                                            ...items,
+                                        try {
+                                            parsedWords = generatedWords.map(
+                                                (word: Word) => ({
+                                                    jp: word.jp,
+                                                    en: word.en,
+                                                    id: crypto.randomUUID(),
+                                                }),
+                                            );
+                                        } catch {
+                                            setImportError(
+                                                "JSONの形式が正しくありません。",
+                                            );
+                                            return;
+                                        }
+
+                                        const generatedWordsWithId =
+                                            parsedWords as WordWithId[];
+
+                                        setWords([
+                                            ...generatedWordsWithId,
+                                            ...words,
                                         ]);
                                         setShowGenerationInput(false);
                                     }}
@@ -1117,7 +1141,7 @@ export default function Page({
                             </div>
                         )}
                     </Collapsible>
-                    <div ref={itemListRef} className="flex flex-col gap-4">
+                    <div ref={wordListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
                             modifiers={[restrictWordDrag]}
@@ -1125,38 +1149,38 @@ export default function Page({
                             onDragEnd={handleDragEnd}
                         >
                             <SortableContext
-                                items={items.map((item) => item.id)}
+                                items={words.map((word) => word.id)}
                                 strategy={verticalListSortingStrategy}
                             >
-                                {items.map((item, index) => (
-                                    <SortableItem key={item.id} id={item.id}>
+                                {words.map((word, index) => (
+                                    <SortableItem key={word.id} id={word.id}>
                                         <div className="flex items-center gap-4 w-full">
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
                                                         label="日本語訳"
-                                                        value={item.prompt}
+                                                        value={word.jp}
                                                         onChange={(e) => {
-                                                            const newItems =
-                                                                items.map(
+                                                            const newWords =
+                                                                words.map(
                                                                     (
-                                                                        currentItem,
-                                                                        itemIndex,
+                                                                        currentWord,
+                                                                        wordIndex,
                                                                     ) =>
-                                                                        itemIndex ===
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...currentItem,
-                                                                                  prompt: e
+                                                                                  ...currentWord,
+                                                                                  jp: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : currentItem,
+                                                                            : currentWord,
                                                                 );
-                                                            setItems(newItems);
+                                                            setWords(newWords);
                                                         }}
                                                     />
-                                                    {item.prompt.length > 32 && (
+                                                    {word.jp.length > 32 && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
@@ -1164,7 +1188,7 @@ export default function Page({
                                                             32文字以内で入力してください。
                                                         </div>
                                                     )}
-                                                    {!item.prompt && (
+                                                    {!word.jp && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
@@ -1177,38 +1201,38 @@ export default function Page({
                                                     <Input
                                                         label="英単語"
                                                         font="mono"
-                                                        value={item.answer}
+                                                        value={word.en}
                                                         onChange={(e) => {
-                                                            const newItems =
-                                                                items.map(
+                                                            const newWords =
+                                                                words.map(
                                                                     (
-                                                                        currentItem,
-                                                                        itemIndex,
+                                                                        currentWord,
+                                                                        wordIndex,
                                                                     ) =>
-                                                                        itemIndex ===
+                                                                        wordIndex ===
                                                                         index
                                                                             ? {
-                                                                                  ...currentItem,
-                                                                                  answer: e
+                                                                                  ...currentWord,
+                                                                                  en: e
                                                                                       .target
                                                                                       .value,
                                                                               }
-                                                                            : currentItem,
+                                                                            : currentWord,
                                                                 );
-                                                            setItems(newItems);
+                                                            setWords(newWords);
                                                         }}
                                                     />
                                                     {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
-                                                        item.answer,
+                                                        word.en,
                                                     ) &&
-                                                        item.answer && (
+                                                        word.en && (
                                                             <div className="text-red-500">
                                                                 半角英数字、スペース、記号（.
                                                                 , ! ?
                                                                 -）のみ使用できます。
                                                             </div>
                                                         )}
-                                                    {item.answer.length > 32 && (
+                                                    {word.en.length > 32 && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
@@ -1216,7 +1240,7 @@ export default function Page({
                                                             32文字以内で入力してください。
                                                         </div>
                                                     )}
-                                                    {!item.answer && (
+                                                    {!word.en && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
@@ -1230,16 +1254,16 @@ export default function Page({
                                             <div>
                                                 <Button
                                                     onClick={() => {
-                                                        const newItems =
-                                                            items.filter(
+                                                        const newWords =
+                                                            words.filter(
                                                                 (
                                                                     _,
-                                                                    itemIndex,
+                                                                    wordIndex,
                                                                 ) =>
-                                                                    itemIndex !==
+                                                                    wordIndex !==
                                                                     index,
                                                             );
-                                                        setItems(newItems);
+                                                        setWords(newWords);
                                                     }}
                                                     className="h-fit"
                                                     padding="large"
