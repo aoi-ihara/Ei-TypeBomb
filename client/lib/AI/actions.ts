@@ -6,7 +6,7 @@ import {
     GenerationUsageError,
     getGeminiUsage,
 } from "./usage";
-import type { LegacyWord } from "@/type";
+import type { Word } from "@/type";
 
 export async function getGeminiUsageAction() {
     return getGeminiUsage();
@@ -14,7 +14,7 @@ export async function getGeminiUsageAction() {
 
 export async function generateWordsAction(
     theme: string,
-): Promise<{ words: LegacyWord[] } | { error: string }> {
+): Promise<{ words: Word[] } | { error: string }> {
     if (!theme.trim()) {
         return { error: "テーマを入力してください。" };
     }

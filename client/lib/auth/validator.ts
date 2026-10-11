@@ -1,4 +1,4 @@
-import type { Item } from "@/type";
+import type { Word } from "@/type";
 
 export const validateEmail = (email?: string) => {
     const MAX_EMAIL_LENGTH = 254;
@@ -35,38 +35,29 @@ export const validateEmail = (email?: string) => {
     return null;
 };
 
-export const validateItems = (items?: Item[]) => {
-    const MAX_TEXT_LENGTH = 32;
+export const validateWords = (words?: Word[]) => {
+    const MAX_WORD_LENGTH = 32;
     const MAX_ARRAY_LENGTH = 512;
 
-    if (!items) {
-        return "問題を入力してください。";
+    if (!words) {
+        return "単語を入力してください。";
     }
 
-    if (items.length > MAX_ARRAY_LENGTH) {
-        return "問題は512個以内にしてください。";
+    if (words.length > MAX_ARRAY_LENGTH) {
+        return "単語は512個以内にしてください。";
     }
 
-    const ids = new Set<string>();
-
-    for (const item of items) {
-        if (!item.id || ids.has(item.id)) {
-            return "問題IDが不正です。";
+    for (const item of words) {
+        if (item.jp.length > MAX_WORD_LENGTH) {
+            return "日本語訳は32文字以内で入力してください。";
         }
-        ids.add(item.id);
 
-        if (item.type === "typed_recall") {
-            if (item.prompt.length > MAX_TEXT_LENGTH) {
-                return "日本語訳は32文字以内で入力してください。";
-            }
+        if (item.en.length > MAX_WORD_LENGTH) {
+            return "英単語は32文字以内で入力してください。";
+        }
 
-            if (item.answer.length > MAX_TEXT_LENGTH) {
-                return "英単語は32文字以内で入力してください。";
-            }
-
-            if (!/^[a-zA-Z0-9.,?!\- ]+$/.test(item.answer)) {
-                return "英単語には半角英数字、スペース、記号（. , ? ! -）のみ使用できます。";
-            }
+        if (!/^[a-zA-Z0-9.,?!\- ]+$/.test(item.en)) {
+            return "英単語には半角英数字、スペース、記号（. , ? ! -）のみ使用できます。";
         }
     }
 
