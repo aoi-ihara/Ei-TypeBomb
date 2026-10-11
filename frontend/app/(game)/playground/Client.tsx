@@ -37,11 +37,13 @@ import {
 
 type Props = {
     room: Room;
+    isAuthenticated: boolean;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
 
 const LOCAL_USER_ID = "playground-player";
+const GUEST_MEMORY_USER_ID = "playground-guest";
 const BOT_USERS: User[] = [{ id: "playground-bot-1", displayName: "練習相手" }];
 
 const DEFAULT_TYPING_DELAY_MS = 220;
@@ -54,6 +56,7 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
+    isAuthenticated,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Readonly<Props>) {
@@ -96,6 +99,7 @@ export default function Client({
     const [saveError, setSaveError] = useState(false);
     const authenticatedUserIdRef = useRef<string | null>(null);
     const [memoryReady, setMemoryReady] = useState(false);
+    const [guestMode, setGuestMode] = useState(!isAuthenticated);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
@@ -164,6 +168,12 @@ export default function Client({
     }, [users]);
 
     useEffect(() => {
+        // Guests can practice without loading or saving learning data to Supabase.
+        if (!isAuthenticated) {
+            setMemoryReady(true);
+            return;
+        }
+
         let cancelled = false;
 
         const loadMemory = async () => {
@@ -171,7 +181,9 @@ export default function Client({
             if (cancelled) return;
 
             if (!loaded.userId) {
-                router.replace(getSignInUrl());
+                // The account session may have expired after the page was rendered.
+                setGuestMode(true);
+                setMemoryReady(true);
                 return;
             }
 
@@ -226,7 +238,7 @@ export default function Client({
         return () => {
             cancelled = true;
         };
-    }, [room.id, router, items]);
+    }, [room.id, items, isAuthenticated]);
 
     const saveBotExposure = useCallback((item: Item) => {
         const memory = memoryByItemRef.current[item.id];
@@ -236,7 +248,9 @@ export default function Client({
             ...memoryByItemRef.current,
             [item.id]: exposed,
         };
-        pendingMemoryRef.current.set(item.id, exposed);
+        if (authenticatedUserIdRef.current) {
+            pendingMemoryRef.current.set(item.id, exposed);
+        }
         setMemoryByItem(memoryByItemRef.current);
     }, []);
 
@@ -384,8 +398,8 @@ export default function Client({
 
     const updateLocalMemory = useCallback(
         (item: Item, observation: RecallObservation) => {
-            const userId = authenticatedUserIdRef.current;
-            if (!userId) return;
+            const userId =
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
 
             const scheduler = schedulerRef.current;
             const selected = scheduler?.current;
@@ -425,7 +439,9 @@ export default function Client({
 
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
-            pendingMemoryRef.current.set(item.id, nextMemory);
+            if (authenticatedUserIdRef.current) {
+                pendingMemoryRef.current.set(item.id, nextMemory);
+            }
             userReviewCountRef.current += 1;
 
             posthog.capture("playground_item_recalled", {
@@ -483,6 +499,7 @@ export default function Client({
     }, [room.id]);
 
     const flushPendingMemory = useCallback(async () => {
+        if (!authenticatedUserIdRef.current) return;
         cachePendingMemory();
         if (syncInFlightRef.current) return syncInFlightRef.current;
         const sync = async () => {
@@ -521,7 +538,7 @@ export default function Client({
     }, [room.id, cachePendingMemory]);
 
     useEffect(() => {
-        if (!memoryReady) return;
+        if (!memoryReady || !authenticatedUserIdRef.current) return;
         cachePendingMemory();
         const timer = setTimeout(() => {
             void flushPendingMemory();
@@ -530,6 +547,7 @@ export default function Client({
     }, [memoryByItem, memoryReady, cachePendingMemory, flushPendingMemory]);
 
     useEffect(() => {
+        if (!memoryReady || !authenticatedUserIdRef.current) return;
         const retry = () => {
             void flushPendingMemory();
         };
@@ -551,7 +569,7 @@ export default function Client({
             document.removeEventListener("visibilitychange", hidden);
             cachePendingMemory();
         };
-    }, [cachePendingMemory, flushPendingMemory]);
+    }, [memoryReady, cachePendingMemory, flushPendingMemory]);
 
     const handleRecallProgress = useCallback((progress: RecallProgress) => {
         if (usersRef.current[currentTurnRef.current]?.id !== LOCAL_USER_ID) {
@@ -886,6 +904,11 @@ export default function Client({
             }}
             resultExtraActions={
                 <>
+                    {guestMode && (
+                        <p role="status" className="text-sm text-center opacity-70">
+                            ゲストプレイ中：学習データは保存されません。
+                        </p>
+                    )}
                     {saveError && (
                         <p role="status">
                             学習データは保存待ちです。接続が戻ると再送します。
