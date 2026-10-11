@@ -5,10 +5,8 @@ import { getPlaygroundRoom } from "@/lib/room/playground";
 import { getUser } from "@/lib/auth/session";
 
 export default async function PlaygroundPage() {
-    const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
-
-    const [cookieStore, room] = await Promise.all([
+    const [userId, cookieStore, room] = await Promise.all([
+        getUser(),
         cookies(),
         getPlaygroundRoom(),
     ]);
@@ -22,6 +20,7 @@ export default async function PlaygroundPage() {
     return (
         <Client
             room={room}
+            isAuthenticated={Boolean(userId)}
             initialSounDeffects={sounDeffects}
             initialBackgroundMusic={backgroundMusic}
         />
