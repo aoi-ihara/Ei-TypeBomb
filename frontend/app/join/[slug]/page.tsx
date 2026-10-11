@@ -22,7 +22,8 @@ export default function Page({
     const [roomId, setRoomId] = useState("");
     const [error, setError] = useState("");
     const [showPasswordField, setShowPasswordField] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [roomLoading, setRoomLoading] = useState(true);
+    const [joiningMode, setJoiningMode] = useState<PlayMode | null>(null);
     const [roomPassword, setRoomPassword] = useState("");
     const [turnstile, setTurnstile] = useState(false);
     const [selectedMode, setSelectedMode] = useState<PlayMode>("online");
@@ -31,7 +32,7 @@ export default function Page({
     const router = useRouter();
 
     const handleSignIn = async (turnstileToken?: string, mode: PlayMode = selectedMode) => {
-        setLoading(true);
+        setJoiningMode(mode);
         const result = await signInToRoom(
             {
                 id: roomId,
@@ -50,7 +51,7 @@ export default function Page({
             });
             setError(result);
         }
-        setLoading(false);
+        setJoiningMode(null);
     };
 
     const handleTurnstileFail = (reason: string, errorCode?: string) => {
@@ -73,7 +74,7 @@ export default function Page({
             setRoomId(roomIdResult);
 
             const result = await getRoomStatusFromId(roomIdResult);
-            setLoading(false);
+            setRoomLoading(false);
 
             if (result === null) {
                 setIsNotFound(true);
@@ -92,7 +93,7 @@ export default function Page({
     return (
         <Shell
             title={showPasswordField ? "パスワードを入力" : "プレイモードを選択"}
-            loading={loading && !roomId}
+            loading={roomLoading}
         >
             {showPasswordField && (
                 <Input
@@ -119,8 +120,8 @@ export default function Page({
                         className="w-full"
                         variant="primary"
                         iconName={mode === "online" ? "users" : "user"}
-                        disabled={!roomId || loading || (showPasswordField && !roomPassword)}
-                        loading={loading && selectedMode === mode}
+                        disabled={!roomId || roomLoading || joiningMode !== null || (showPasswordField && !roomPassword)}
+                        loading={joiningMode === mode}
                     >
                         {mode === "online" ? "マルチ" : "シングル"}
                     </Button>
