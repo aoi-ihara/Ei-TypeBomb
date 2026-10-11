@@ -9,6 +9,17 @@ const MEMORY_COLUMNS =
 
 export const loadPlaygroundMemory = async (roomId: string) => {
     const supabase = createClient();
+    // A missing session allows guest play; an authentication error does not.
+    const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+    if (sessionError || !sessionData.session) {
+        return {
+            userId: null,
+            memoryByItem: {} as Record<string, ItemMemoryState>,
+            error: sessionError,
+        };
+    }
+
     const {
         data: { user },
         error: userError,
@@ -18,7 +29,7 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         return {
             userId: null,
             memoryByItem: {} as Record<string, ItemMemoryState>,
-            error: userError ?? new Error("No authenticated user"),
+            error: userError ?? new Error("Could not verify authenticated user"),
         };
     }
 

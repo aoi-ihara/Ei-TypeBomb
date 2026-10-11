@@ -2,12 +2,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
-import { getUser } from "@/lib/auth/session";
 
 export default async function PlaygroundPage() {
-    const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
-
     const [cookieStore, room] = await Promise.all([
         cookies(),
         getPlaygroundRoom(),
