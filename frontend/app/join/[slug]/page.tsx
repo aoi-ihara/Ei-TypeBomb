@@ -30,7 +30,7 @@ export default function Page({
 
     const router = useRouter();
 
-    const handleSignIn = async (turnstileToken: string) => {
+    const handleSignIn = async (turnstileToken?: string, mode: PlayMode = selectedMode) => {
         setLoading(true);
         const result = await signInToRoom(
             {
@@ -41,8 +41,8 @@ export default function Page({
         );
 
         if (result === null) {
-            posthog.capture("room_entered", { room_id: roomId, play_mode: selectedMode });
-            router.push(selectedMode === "online" ? "/display-name" : "/playground");
+            posthog.capture("room_entered", { room_id: roomId, play_mode: mode });
+            router.push(mode === "online" ? "/display-name" : "/playground");
         } else {
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
@@ -110,7 +110,11 @@ export default function Page({
                         onClick={() => {
                             setSelectedMode(mode);
                             setError("");
-                            setTurnstile(true);
+                            if (showPasswordField) {
+                                setTurnstile(true);
+                            } else {
+                                void handleSignIn(undefined, mode);
+                            }
                         }}
                         className="w-full"
                         variant="primary"
