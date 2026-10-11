@@ -264,7 +264,7 @@ This makes it possible to trace game and server events when debugging production
 
 ```text
 Ei-TypeBomb/
-├── client/
+├── frontend/
 │   ├── app/
 │   │   ├── (editor)/
 │   │   └── (game)/
@@ -295,7 +295,7 @@ Backend build, test, and deployment instructions: [backend/README.md](backend/RE
 8. The player holding the bomb when it explodes loses.
 
 > **Playing on a PC is strongly recommended.**
-> 
+>
 > When playing on an Android device, please turn off your keyboard's word prediction feature before starting the game. Leaving word prediction enabled may cause unexpected input behavior.
 
 ## Screenshots
