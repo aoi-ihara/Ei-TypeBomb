@@ -654,6 +654,7 @@ export default function Page({
                                         handleCopyRoomLink();
                                     else setShowCopyWarning(true);
                                 }}
+                                variant="primary"
                                 padding="large"
                                 iconName={isLinkCopied ? "check" : "copy"}
                             />
@@ -1051,10 +1052,7 @@ export default function Page({
                                                 answer: word.en,
                                             }));
 
-                                        setItems([
-                                            ...generatedItems,
-                                            ...items,
-                                        ]);
+                                        setItems([...generatedItems, ...items]);
                                         setShowGenerationInput(false);
                                     }}
                                 >
@@ -1156,7 +1154,8 @@ export default function Page({
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {item.prompt.length > 32 && (
+                                                    {item.prompt.length >
+                                                        32 && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
@@ -1208,7 +1207,8 @@ export default function Page({
                                                                 -）のみ使用できます。
                                                             </div>
                                                         )}
-                                                    {item.answer.length > 32 && (
+                                                    {item.answer.length >
+                                                        32 && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
