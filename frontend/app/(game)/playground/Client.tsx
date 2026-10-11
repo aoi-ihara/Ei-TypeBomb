@@ -98,7 +98,7 @@ export default function Client({
     const expectedTypingAtStartRef = useRef(0);
     const [saveError, setSaveError] = useState(false);
     const authenticatedUserIdRef = useRef<string | null>(null);
-    const [memoryReady, setMemoryReady] = useState(false);
+    const [memoryReady, setMemoryReady] = useState(!isAuthenticated);
     const [guestMode, setGuestMode] = useState(!isAuthenticated);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
@@ -169,10 +169,7 @@ export default function Client({
 
     useEffect(() => {
         // Guests can practice without loading or saving learning data to Supabase.
-        if (!isAuthenticated) {
-            setMemoryReady(true);
-            return;
-        }
+        if (!isAuthenticated) return;
 
         let cancelled = false;
 
