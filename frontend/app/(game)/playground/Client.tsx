@@ -37,7 +37,6 @@ import {
 
 type Props = {
     room: Room;
-    isAuthenticated: boolean;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
@@ -56,7 +55,6 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
-    isAuthenticated,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Readonly<Props>) {
@@ -98,8 +96,8 @@ export default function Client({
     const expectedTypingAtStartRef = useRef(0);
     const [saveError, setSaveError] = useState(false);
     const authenticatedUserIdRef = useRef<string | null>(null);
-    const [memoryReady, setMemoryReady] = useState(!isAuthenticated);
-    const [guestMode, setGuestMode] = useState(!isAuthenticated);
+    const [memoryReady, setMemoryReady] = useState(false);
+    const [guestMode, setGuestMode] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
@@ -168,21 +166,11 @@ export default function Client({
     }, [users]);
 
     useEffect(() => {
-        // Guests can practice without loading or saving learning data to Supabase.
-        if (!isAuthenticated) return;
-
         let cancelled = false;
 
         const loadMemory = async () => {
             const loaded = await loadPlaygroundMemory(room.id);
             if (cancelled) return;
-
-            if (!loaded.userId) {
-                // The account session may have expired after the page was rendered.
-                setGuestMode(true);
-                setMemoryReady(true);
-                return;
-            }
 
             if (loaded.error) {
                 console.error("Failed to load playground memory", loaded.error);
@@ -192,6 +180,12 @@ export default function Client({
                 setMemoryError(
                     "学習データを取得できませんでした。もう一度お試しください。",
                 );
+                return;
+            }
+
+            if (!loaded.userId) {
+                setGuestMode(true);
+                setMemoryReady(true);
                 return;
             }
 
@@ -235,7 +229,7 @@ export default function Client({
         return () => {
             cancelled = true;
         };
-    }, [room.id, items, isAuthenticated]);
+    }, [room.id, items]);
 
     const saveBotExposure = useCallback((item: Item) => {
         const memory = memoryByItemRef.current[item.id];
