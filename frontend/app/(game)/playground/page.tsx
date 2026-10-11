@@ -2,11 +2,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
-import { getUser } from "@/lib/auth/session";
 
 export default async function PlaygroundPage() {
-    const [userId, cookieStore, room] = await Promise.all([
-        getUser(),
+    const [cookieStore, room] = await Promise.all([
         cookies(),
         getPlaygroundRoom(),
     ]);
@@ -20,7 +18,6 @@ export default async function PlaygroundPage() {
     return (
         <Client
             room={room}
-            isAuthenticated={Boolean(userId)}
             initialSounDeffects={sounDeffects}
             initialBackgroundMusic={backgroundMusic}
         />
