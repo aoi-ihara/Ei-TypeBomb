@@ -144,11 +144,7 @@ export default function Home({
                     >
                         <button
                             className="flex h-8 items-center px-2 font-semibold cursor-pointer rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
-                            onClick={() =>
-                                router.push(
-                                    getSignInUrl(),
-                                )
-                            }
+                            onClick={() => router.push(getSignInUrl())}
                         >
                             ログイン
                         </button>
@@ -190,7 +186,7 @@ export default function Home({
                         open={showSettings}
                         onClose={() => setShowSettings(!showSettings)}
                     >
-                        <div className="w-full px-3 items-center flex justify-between">
+                        <div className="w-full pl-3 items-center flex justify-between">
                             <div data-cursor="text">BGM</div>
                             <Toggle
                                 checked={backgroundMusic}
@@ -204,7 +200,7 @@ export default function Home({
                                 }}
                             />
                         </div>
-                        <div className="w-full px-3 items-center flex justify-between">
+                        <div className="w-full pl-3 items-center flex justify-between">
                             <div data-cursor="text">効果音</div>
                             <Toggle
                                 checked={sounDeffects}
@@ -241,9 +237,7 @@ export default function Home({
                     <Button
                         variant="text"
                         iconName="logIn"
-                        onClick={() =>
-                            router.push(getSignInUrl())
-                        }
+                        onClick={() => router.push(getSignInUrl())}
                     >
                         サインイン
                     </Button>
