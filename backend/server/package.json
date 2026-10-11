@@ -1,0 +1,37 @@
+{
+    "name": "server",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "tsx --test test/*.test.ts",
+        "dev": "tsx watch src/index.ts",
+        "start": "tsx src/index.ts",
+        "build": "tsc && node scripts/write-build-entry.cjs",
+        "typecheck": "tsc --noEmit && tsc --project test/tsconfig.json"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "@supabase/supabase-js": "^2.110.8",
+        "dotenv": "^17.4.2",
+        "express": "^5.2.1",
+        "jose": "^6.2.12",
+        "js-cookie": "^3.0.8",
+        "jsonwebtoken": "^9.0.3",
+        "pg": "^8.16.3",
+        "posthog-node": "^5.51.6",
+        "socket.io": "^4.8.3"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.6",
+        "@types/js-cookie": "^3.0.6",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^26.6.5",
+        "socket.io-client": "^4.8.4",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3"
+    }
+}

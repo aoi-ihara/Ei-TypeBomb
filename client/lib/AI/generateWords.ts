@@ -1,27 +1,16 @@
 import "server-only";
 import { z } from "zod";
-import { gemini } from "./gemini";
-import { Word } from "@/type";
+import { Prompts } from "@posthog/ai";
+import { gemini, posthog } from "./gemini";
+import type { LegacyWord } from "@/type";
 
-const wordSchema = z.object({
-    words: z
-        .array(
-            z.object({
-                en: z.string().min(1),
-                jp: z.string().min(1),
-            }),
-        )
-        .length(24),
-});
-
-export async function generateWords(theme: string) {
-    const response = await gemini.models.generateContent({
-        model: "gemini-3.5-flash-lite",
-
-        contents: `
+const prompts = new Prompts({ posthog });
+const defaultModel = "gemini-3.5-flash-lite";
+const defaultLength = 24;
+const fallbackPrompt = `
 You are an English vocabulary generator for a typing game.
 
-Generate exactly 24 English words based on the theme provided below.
+Generate exactly {{length}} English words based on the theme provided below.
 
 For each word:
 - "en" must contain the English word.
@@ -32,8 +21,34 @@ For each word:
 - Do not include explanations or additional text.
 
 Theme:
-${theme}
-`,
+{{theme}}
+`;
+
+export async function generateWords(theme: string) {
+    const prompt = await prompts.get("etb-word-creation", {
+        fallback: fallbackPrompt,
+    });
+    const model = z
+        .string()
+        .trim()
+        .min(1)
+        .catch(defaultModel)
+        .parse(prompt.config?.model);
+    const length = z
+        .number()
+        .int()
+        .positive()
+        .catch(defaultLength)
+        .parse(prompt.config?.length);
+    const contents = prompts.compile(prompt.prompt, { theme, length });
+    const response = await gemini.models.generateContent({
+        model,
+        contents: `${contents}\n${theme}`,
+        posthogPrivacyMode: true,
+        posthogProperties: {
+            $ai_prompt_name: prompt.name,
+            $ai_prompt_version: prompt.version,
+        },
 
         config: {
             responseMimeType: "application/json",
@@ -42,8 +57,8 @@ ${theme}
                 properties: {
                     words: {
                         type: "array",
-                        minItems: 24,
-                        maxItems: 24,
+                        minItems: length,
+                        maxItems: length,
                         items: {
                             type: "object",
                             properties: {
@@ -65,7 +80,18 @@ ${theme}
 
     const parsed = JSON.parse(response.text);
 
-    const result = wordSchema.parse(parsed);
+    const result = z
+        .object({
+            words: z
+                .array(
+                    z.object({
+                        en: z.string().min(1),
+                        jp: z.string().min(1),
+                    }),
+                )
+                .length(length),
+        })
+        .parse(parsed);
 
-    return result.words as Word[];
+    return result.words as LegacyWord[];
 }

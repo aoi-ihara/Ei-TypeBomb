@@ -1,11 +1,11 @@
 "use client";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import UsersView from "@/components/feature/UsersView";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
-import TypingView from "@/components/feature/InputView";
-import { Room, Word, User, Position } from "@/type";
+import GameView from "@/components/feature/GameView";
+import { Item, Room, User, Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
@@ -15,45 +15,54 @@ type Props = {
     initialSounDeffects: boolean;
 };
 
-const MOCK_WORDS: Word[] = [
-    { jp: "見る", en: "see" },
-    { jp: "見る", en: "look" },
-    { jp: "りんご", en: "apple" },
-    { jp: "猫", en: "cat" },
-    { jp: "犬", en: "dog" },
-    { jp: "太陽", en: "sun" },
-    { jp: "月", en: "moon" },
-    { jp: "星", en: "star" },
-    { jp: "水", en: "water" },
-    { jp: "火", en: "fire" },
-    { jp: "本", en: "book" },
-    { jp: "学校", en: "school" },
-    { jp: "未来", en: "future" },
-    { jp: "技術", en: "technology" },
-    { jp: "科学", en: "science" },
-    { jp: "世界", en: "world" },
-    { jp: "自然", en: "nature" },
-    { jp: "冒険", en: "adventure" },
-    { jp: "挑戦", en: "challenge" },
-    { jp: "創造", en: "create" },
-    { jp: "発見", en: "discover" },
-    { jp: "成長", en: "growth" },
-    { jp: "コンピューター", en: "computer" },
-    { jp: "プログラム", en: "program" },
-    { jp: "インターネット", en: "internet" },
-    { jp: "人工知能", en: "ai" },
-    { jp: "ロボット", en: "robot" },
-    { jp: "ゲーム", en: "game" },
-    { jp: "音楽", en: "music" },
-    { jp: "映画", en: "movie" },
-    { jp: "写真", en: "photo" },
-    { jp: "旅行", en: "travel" },
-    { jp: "素晴らしい", en: "amazing" },
-    { jp: "楽しい", en: "fun" },
-    { jp: "速い", en: "fast" },
-    { jp: "強い", en: "strong" },
-    { jp: "美しい", en: "beautiful" },
-];
+const MOCK_ITEM_CONTENT = [
+    ["見る", "see"],
+    ["見る", "look"],
+    ["りんご", "apple"],
+    ["猫", "cat"],
+    ["犬", "dog"],
+    ["太陽", "sun"],
+    ["月", "moon"],
+    ["星", "star"],
+    ["水", "water"],
+    ["火", "fire"],
+    ["本", "book"],
+    ["学校", "school"],
+    ["未来", "future"],
+    ["技術", "technology"],
+    ["科学", "science"],
+    ["世界", "world"],
+    ["自然", "nature"],
+    ["冒険", "adventure"],
+    ["挑戦", "challenge"],
+    ["創造", "create"],
+    ["発見", "discover"],
+    ["成長", "growth"],
+    ["コンピューター", "computer"],
+    ["プログラム", "program"],
+    ["インターネット", "internet"],
+    ["人工知能", "ai"],
+    ["ロボット", "robot"],
+    ["ゲーム", "game"],
+    ["音楽", "music"],
+    ["映画", "movie"],
+    ["写真", "photo"],
+    ["旅行", "travel"],
+    ["素晴らしい", "amazing"],
+    ["楽しい", "fun"],
+    ["速い", "fast"],
+    ["強い", "strong"],
+    ["美しい", "beautiful"],
+] as const;
+
+const MOCK_ITEMS: Item[] = MOCK_ITEM_CONTENT.map(
+    ([prompt, answer], index) => ({
+        id: `demo-${index}`,
+        type: "typed_recall",
+        prompt,
+        answer,
+    }),
+);
 
 const LOCAL_USER_ID = "player-1";
 
@@ -84,10 +93,11 @@ export default function Client({
             { id: "bot-1", displayName: "ボット1" },
             { id: "bot-2", displayName: "ボット2" },
         ],
-        words: MOCK_WORDS,
+        items: MOCK_ITEMS,
+        title: "デモルーム",
     }));
 
-    const [currentWord, setCurrentWord] = useState<Word | null>(null);
+    const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
     const [bombStatus, setBombStatus] = useState<number>(0);
     const [isStarted, setIsStarted] = useState<boolean>(true);
@@ -118,11 +128,6 @@ export default function Client({
     const router = useRouter();
 
     const currentTurnUser = users[currentTurn] as User | undefined;
-    const hasDuplicateMeaning =
-        currentWord !== null &&
-        (room?.words?.filter((word) => word.jp === currentWord.jp).length ??
-            0) > 1;
-
     const currentTurnRef = useRef(currentTurn);
     const usersRef = useRef(users);
 
@@ -139,13 +144,13 @@ export default function Client({
         setIsStarted(true);
         setBombStatus(0);
         setCurrentTurn(Math.floor(Math.random() * users.length));
-        setCurrentWord(null);
+        setCurrentItem(null);
         setCurrentInput("");
         setResult(null);
         setLostDisplayName(null);
         setTimeout(() => {
-            setCurrentWord(
-                MOCK_WORDS[Math.floor(Math.random() * MOCK_WORDS.length)],
+            setCurrentItem(
+                MOCK_ITEMS[Math.floor(Math.random() * MOCK_ITEMS.length)],
             );
         }, 3000);
     }, [users.length, resetExplosion]);
@@ -172,8 +177,8 @@ export default function Client({
 
         setCurrentInput("");
         setCurrentTurn((prev) => (prev + 1) % users.length);
-        setCurrentWord(
-            MOCK_WORDS[Math.floor(Math.random() * MOCK_WORDS.length)],
+        setCurrentItem(
+            MOCK_ITEMS[Math.floor(Math.random() * MOCK_ITEMS.length)],
         );
 
         posthog.capture("word_succeeded");
@@ -204,7 +209,7 @@ export default function Client({
         if (
             !isStarted ||
             result !== null ||
-            !currentWord ||
+            !currentItem ||
             currentTurnUser?.id === userId
         )
             return;
@@ -212,7 +217,9 @@ export default function Client({
         let timeoutId: NodeJS.Timeout;
         let isCancelled = false;
 
-        const target = currentWord.en;
+        if (currentItem.type !== "typed_recall") return;
+
+        const target = currentItem.answer;
         let charIndex = 0;
 
         const typeNextChar = () => {
@@ -243,7 +250,7 @@ export default function Client({
     }, [
         isStarted,
         currentTurn,
-        currentWord,
+        currentItem,
         result,
         currentTurnUser,
         userId,
@@ -287,137 +294,38 @@ export default function Client({
     }, [initialBackgroundMusic, router]);
 
     return (
-        <div className="flex flex-col md:flex-row w-full h-full">
-            {explosionLayer}
-            {(result !== null || lostDisplayName) && (
-                <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
-                    <div className="w-sm flex flex-col gap-4 items-center animate-[resultAnimation_1000ms_cubic-bezier(0.1,0.5,0,1)]">
-                        <div data-cursor="text" className="font-bold text-4xl">
-                            {result === true
-                                ? "あなたの負けです"
-                                : `${lostDisplayName}の負けです`}
-                        </div>
-
-                        <Button
-                            iconName="rotateCw"
-                            className="w-full"
-                            variant="primary"
-                            onClick={() => {
-                                setResult(null);
-                                startGame();
-                            }}
-                        >
-                            もう一度プレイ
-                        </Button>
-
-                        <Button
-                            iconName="plus"
-                            className="w-full"
-                            onClick={() =>
-                                router.push(
-                                    process.env.NEXT_PUBLIC_SIGN_IN_URL!,
-                                )
-                            }
-                        >
-                            ルームを作成
-                        </Button>
-
-                        <Button
-                            iconName="link"
-                            className="w-full"
-                            onClick={() => router.push("/room")}
-                        >
-                            招待リンクで参加
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
-                <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-[cubic-bezier(0.1,0.5,0,1)] ${currentTurn === 0 ? "h-full" : "h-64"} rounded-2xl p-2 w-full`}
+        <GameView
+            room={room}
+            users={users}
+            positions={userPositions}
+            userId={userId}
+            currentTurn={currentTurn}
+            bombStatus={bombStatus}
+            currentItem={currentItem}
+            currentInput={currentInput}
+            isStarted={isStarted}
+            result={result}
+            lostDisplayName={lostDisplayName}
+            bombRef={bombRef}
+            explosionLayer={explosionLayer}
+            onSuccess={handleSuccess}
+            onChangeInput={setCurrentInput}
+            onPlayAgain={() => {
+                setResult(null);
+                startGame();
+            }}
+            onCreateRoom={() =>
+                router.push(getSignInUrl())
+            }
+            resultExtraActions={
+                <Button
+                    iconName="link"
+                    className="w-full"
+                    onClick={() => router.push("/room")}
                 >
-                    {room && (
-                        <div className="flex flex-col h-full">
-                            <div className="flex h-full">
-                                <div className="w-full flex flex-col items-center justify-center gap-4">
-                                    {isStarted ? (
-                                        currentWord === null ? (
-                                            <div
-                                                className="font-mono w-fit font-bold text-2xl"
-                                                data-cursor="text"
-                                            >
-                                                ゲーム開始
-                                            </div>
-                                        ) : (
-                                            <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                                                {currentTurnUser && (
-                                                    <div
-                                                        className="font-bold opacity-50 px-2 pt-1 pb-1 w-fit flex"
-                                                        data-cursor="text"
-                                                    >
-                                                        {currentTurnUser?.id !==
-                                                        userId
-                                                            ? currentTurnUser.displayName +
-                                                              "の番です"
-                                                            : "あなたの番です"}
-                                                    </div>
-                                                )}
-
-                                                <TypingView
-                                                    hasDuplicateMeaning={
-                                                        hasDuplicateMeaning
-                                                    }
-                                                    japanese={currentWord.jp}
-                                                    english={currentWord.en}
-                                                    bombStatus={bombStatus}
-                                                    onSuccess={handleSuccess}
-                                                    onChangeInput={(input) => {
-                                                        if (
-                                                            userId ==
-                                                            currentTurnUser?.id
-                                                        ) {
-                                                            setCurrentInput(
-                                                                input,
-                                                            );
-                                                        }
-                                                    }}
-                                                    currentInput={
-                                                        result !== null
-                                                            ? ""
-                                                            : userId ===
-                                                                currentTurnUser?.id
-                                                              ? null
-                                                              : currentInput
-                                                    }
-                                                />
-                                            </div>
-                                        )
-                                    ) : null}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div className="w-full relative md:order-1 flex justify-center items-center h-full">
-                <div
-                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
-                    data-cursor="text"
-                >
-                    デモルーム
-                </div>
-                <UsersView
-                    bombRef={bombRef}
-                    exploded={result !== null}
-                    users={users}
-                    positions={userPositions}
-                    bombStatus={bombStatus}
-                    currentTurn={currentTurn}
-                    userId={userId}
-                />
-            </div>
-        </div>
+                    招待リンクで参加
+                </Button>
+            }
+        />
     );
 }

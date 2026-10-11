@@ -1,4 +1,5 @@
 "use server";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
@@ -13,7 +14,7 @@ import {
     validateMaxPlayers,
     validatePassword,
     validateTitle,
-    validateWords,
+    validateItems,
 } from "../auth/validator";
 
 export const updateRoomFromId = async (room: Room) => {
@@ -64,10 +65,10 @@ export const updateRoomFromId = async (room: Room) => {
         newHashedPassword = null;
     }
 
-    if (room.words !== undefined) {
-        const validatorResult = validateWords(room.words);
+    if (room.items !== undefined) {
+        const validatorResult = validateItems(room.items);
         if (validatorResult) validationErrors.push(validatorResult);
-        else updateData.words = room.words;
+        else updateData.items = room.items;
     }
 
     if (room.link !== undefined) {
@@ -83,7 +84,7 @@ export const updateRoomFromId = async (room: Room) => {
     }
 
     const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
+    if (!userId) redirect(getSignInUrl());
 
     updateData.updated_at = new Date();
 

@@ -14,7 +14,7 @@ export function Footer() {
                 className="rounded-xs px-0.5"
             >
                 <Link
-                    href="https://vgnz93hs.com/terms-of-use"
+                    href="https://vgnz93hs.com/jp/terms-of-use"
                     className="underline active:no-underline active:scale-95 transition-all duration-(--duration-etb) ease-etb flex"
                 >
                     利用規約

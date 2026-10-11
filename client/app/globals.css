@@ -152,6 +152,7 @@ body {
         0.997 87.6%,
         1
     );
+    --ease-etb-game: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .gradient-background {

@@ -5,24 +5,40 @@ import Input from "@/components/ui/Input";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import { prepareRoomJoin, signInToRoom } from "@/lib/room/auth";
-import { Turnstile } from "@marsidev/react-turnstile";
 import { PopUp } from "@/components/ui/PopUp";
+import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import posthog from "posthog-js";
+
+type PlayMode = "online" | "playground";
+
+const pathForMode = (mode: PlayMode) =>
+    mode === "online" ? "/display-name" : "/playground";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
     const [link, setLink] = useState("");
     const [error, setError] = useState("");
     const [showPasswordField, setShowPasswordField] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loadingMode, setLoadingMode] = useState<PlayMode | null>(null);
     const [roomPassword, setRoomPassword] = useState("");
     const [turnstile, setTurnstile] = useState(false);
     const [roomId, setRoomId] = useState("");
+    const [selectedMode, setSelectedMode] = useState<PlayMode>("online");
 
     const router = useRouter();
 
+    const enterRoom = (mode: PlayMode, normalizedRoomId: string) => {
+        posthog.capture("room_entered", {
+            room_id: normalizedRoomId,
+            play_mode: mode,
+        });
+        router.push(pathForMode(mode));
+    };
+
     const handleSignIn = async (turnstileToken: string) => {
-        setLoading(true);
+        const mode = selectedMode;
+        setLoadingMode(mode);
+
         const result = await signInToRoom(
             {
                 id: roomId,
@@ -32,25 +48,43 @@ export default function Loading() {
         );
 
         if (result === null) {
-            posthog.capture("room_entered", { room_id: roomId });
-            router.push("/display-name");
+            enterRoom(mode, roomId);
         } else {
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
                 reason: result,
+                play_mode: mode,
             });
             setError(result);
         }
-        setLoading(false);
+
+        setLoadingMode(null);
     };
 
-    const handleContinue = async () => {
+    const handleTurnstileFail = (reason: string, errorCode?: string) => {
+        setTurnstile(false);
+        setLoadingMode(null);
+        posthog.capture("room_entry_failed", {
+            room_id: roomId,
+            reason,
+            turnstile_error_code: errorCode,
+            play_mode: selectedMode,
+        });
+        setError(reason);
+    };
+
+    const handleMode = async (mode?: PlayMode) => {
         if (showPasswordField) {
+            setError("");
             setTurnstile(true);
             return;
         }
 
-        setLoading(true);
+        if (mode) {
+            setSelectedMode(mode);
+            setLoadingMode(mode);
+        }
+
         setError("");
 
         const roomResult = await prepareRoomJoin(
@@ -60,16 +94,20 @@ export default function Loading() {
         if (!roomResult) {
             posthog.capture("room_entry_failed", {
                 reason: "ルームが見つかりません。",
+                play_mode: mode,
             });
             setError("ルームが見つかりません。");
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
         if ("error" in roomResult && roomResult.error) {
-            posthog.capture("room_entry_failed", { reason: roomResult.error });
+            posthog.capture("room_entry_failed", {
+                reason: roomResult.error,
+                play_mode: mode,
+            });
             setError(roomResult.error);
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
@@ -78,12 +116,12 @@ export default function Loading() {
 
         if (roomResult.requiresPassword) {
             setShowPasswordField(true);
-            setLoading(false);
+            setLoadingMode(null);
             return;
         }
 
-        posthog.capture("room_entered", { room_id: normalizedRoomId });
-        router.push("/display-name");
+        enterRoom(mode ?? selectedMode, normalizedRoomId);
+        setLoadingMode(null);
     };
 
     useEffect(() => {
@@ -95,6 +133,9 @@ export default function Loading() {
             clearInterval(intervalId);
         };
     }, []);
+
+    const modeButtonsDisabled =
+        !link || (showPasswordField && !roomPassword) || loadingMode !== null;
 
     return (
         <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">
@@ -116,32 +157,54 @@ export default function Loading() {
                 label="招待リンク"
             />
 
-            {showPasswordField && (
-                <div className="animate-appear w-full">
+            {showPasswordField ? (
+                <div className="animate-appear flex flex-col gap-4 w-full">
                     <Input
                         value={roomPassword}
                         type="password"
                         onChange={(e) => setRoomPassword(e.target.value)}
                         label="ルームのパスワード"
                     />
+                    <Button
+                        onClick={() => handleMode()}
+                        className="w-full"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "playground"}
+                        iconName="arrowRight"
+                        variant="primary"
+                    >
+                        続ける
+                    </Button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-4 w-full">
+                    <Button
+                        onClick={() => handleMode("online")}
+                        className="w-full"
+                        variant="primary"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "online"}
+                        iconName="users"
+                    >
+                        マルチ
+                    </Button>
+                    <Button
+                        onClick={() => handleMode("playground")}
+                        className="w-full"
+                        variant="primary"
+                        disabled={modeButtonsDisabled}
+                        loading={loadingMode === "playground"}
+                        iconName="user"
+                    >
+                        シングル
+                    </Button>
                 </div>
             )}
-
-            <Button
-                onClick={() => handleContinue()}
-                className="w-full"
-                variant="primary"
-                disabled={!link || (showPasswordField && !roomPassword)}
-                loading={loading}
-                iconName="arrowRight"
-            >
-                続ける
-            </Button>
 
             {!link && (
                 <Button
                     onClick={() => router.push("/game-demo")}
-                    className={`w-full`}
+                    className="w-full animate-appear"
                     iconName="play"
                 >
                     デモをプレイ
@@ -155,13 +218,13 @@ export default function Loading() {
             )}
 
             <PopUp show={turnstile}>
-                <Turnstile
-                    options={{ language: "ja" }}
-                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                <TurnstileChallenge
                     onSuccess={(turnstileToken: string) => {
                         setTurnstile(false);
-                        handleSignIn(turnstileToken);
+                        void handleSignIn(turnstileToken);
                     }}
+                    onFail={handleTurnstileFail}
+                    onCancel={() => setTurnstile(false)}
                 />
             </PopUp>
         </div>

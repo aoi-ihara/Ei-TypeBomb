@@ -1,4 +1,5 @@
 "use server";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
@@ -7,7 +8,7 @@ import { getPostHogClient } from "@/lib/posthog-server";
 
 export const deleteRoom = async (roomId: string) => {
     const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
+    if (!userId) redirect(getSignInUrl());
 
     const supabase = await createAdminClient();
 

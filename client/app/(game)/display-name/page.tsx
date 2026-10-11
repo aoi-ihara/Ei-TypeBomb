@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RetchedInput } from "@/components/ui/RetchedInput";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
+import Input from "@/components/ui/Input";
 
 export default function Loading() {
     const [showCursor, setShowCursor] = useState(true);
@@ -39,10 +39,10 @@ export default function Loading() {
                 />
             </div>
             <div data-cursor="text" className="w-full rounded-2xl">
-                <RetchedInput
+                <Input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="表示名"
+                    label="表示名"
                 />
             </div>
 

@@ -32,7 +32,6 @@ export default function Profile() {
     const addRoom = async () => {
         setCreating(true);
         const roomId = await createNewRoom();
-        setCreating(false);
         posthog.capture("room_created");
         router.push(`/my-rooms/${roomId}`);
     };

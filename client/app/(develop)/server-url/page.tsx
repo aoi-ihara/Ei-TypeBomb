@@ -40,7 +40,7 @@ export default function ServerUrl() {
                     type="url"
                     font="mono"
                     className="relative w-full"
-                    inputClassName="pr-33"
+                    inputClassName="pr-35"
                     label="サーバーURL"
                 >
                     <div

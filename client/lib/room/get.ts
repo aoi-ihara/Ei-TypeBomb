@@ -1,4 +1,5 @@
 "use server";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
@@ -49,14 +50,14 @@ export const getRoomFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, password, created_at, updated_at, words, link, game_duration",
+                "id, title, user_id, explanation, max_players, password, created_at, updated_at, items, link, game_duration",
             )
             .eq("id", id)
             .maybeSingle(),
         getUser(),
     ]);
 
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
+    if (!userId) redirect(getSignInUrl());
 
     if (error) {
         serverError("failed to fetch room", error, "DB");
@@ -79,19 +80,21 @@ export const getRoomFromId = async (id: string) => {
         password: data.password,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
-        words: data.words,
+        items: data.items,
         link: data.link,
     } as Room;
 };
 
 export const getMyRooms = async () => {
     const userId = await getUser();
-    if (!userId) redirect(process.env.NEXT_PUBLIC_SIGN_IN_URL!);
+    if (!userId) redirect(getSignInUrl());
 
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("*")
+        .select(
+            "id, title, user_id, explanation, max_players, password, created_at, updated_at, items, link, game_duration",
+        )
         .eq("user_id", userId);
 
     if (error) {
@@ -109,7 +112,7 @@ export const getMyRooms = async () => {
         password: room.password,
         createdAt: room.created_at,
         updatedAt: room.updated_at,
-        words: room.words,
+        items: room.items,
         link: room.link,
     }));
 

@@ -1,14 +1,23 @@
-export type Word = {
+export type LegacyWord = {
     jp: string;
     en: string;
 };
+
+export type TypedRecallItem = {
+    id: string;
+    type: "typed_recall";
+    prompt: string;
+    answer: string;
+};
+
+export type Item = TypedRecallItem;
 
 export type Room = {
     id: string;
     userId?: string;
     title?: string;
     explanation?: string;
-    words?: Word[];
+    items?: Item[];
     maxPlayers?: number;
     gameDuration?: number;
     password?: string | null;

@@ -39,7 +39,7 @@ yarn-error.log*
 next-env.d.ts
 
 # server logs
-/server/logs/
+/backend/server/logs/
 *.log
 .env*
 
