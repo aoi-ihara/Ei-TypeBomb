@@ -47,6 +47,7 @@ export default function Page({
         } else {
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
+                play_mode: mode,
                 reason: result,
             });
             setError(result);
@@ -58,6 +59,7 @@ export default function Page({
         setTurnstile(false);
         posthog.capture("room_entry_failed", {
             room_id: roomId,
+            play_mode: selectedMode,
             reason,
             turnstile_error_code: errorCode,
         });
