@@ -9,6 +9,7 @@ import { capturePostHogEvent } from "./lib/posthog";
 import { createSocketRateLimit } from "./lib/socketRateLimit";
 import { probeRoomDatabase } from "./lib/databaseHealth";
 import { createDatabaseProbeRateLimit } from "./lib/databaseProbeRateLimit";
+import { createHealthRttProbeRateLimit } from "./lib/healthRttProbeRateLimit";
 import {
     logError,
     logEvent,
@@ -46,6 +47,7 @@ const io = new Server<
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
 const acceptDatabaseProbe = createDatabaseProbeRateLimit();
+const acceptHealthRttProbe = createHealthRttProbeRateLimit();
 
 const refreshServerState = () =>
     setServerState({
@@ -195,6 +197,7 @@ io.on("connection", (socket) => {
 
     socket.on("health:ping", (pingId: unknown) => {
         if (!isRequestId(pingId)) return;
+        if (!acceptHealthRttProbe(socket.handshake.address)) return;
         socket.emit("health:pong", pingId);
     });
 
