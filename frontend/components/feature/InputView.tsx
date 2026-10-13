@@ -32,6 +32,7 @@ function TypingAttempt({
     english,
     onSuccess,
     onChangeInput,
+    failureCount = 0,
     currentInput,
     bombStatus,
     hasDuplicateMeaning = false,
@@ -46,8 +47,9 @@ function TypingAttempt({
     japanese: string;
     english: string | null;
     onSuccess: () => void;
-    onChangeInput: (input: string) => void;
+    onChangeInput: (input: string, failed?: boolean) => void;
     currentInput: string | null;
+    failureCount?: number;
     bombStatus?: number | null;
     hasDuplicateMeaning?: boolean;
     enableRemoteTypingSync?: boolean;
@@ -270,24 +272,16 @@ function TypingAttempt({
         };
     }, [enableRemoteTypingSync, isReadonly]);
 
-    // A remote attempt being cleared after typing means the other player failed.
-    // A new word/turn remounts this view, so successful passes do not shake.
-    const remoteDisplayInput =
-        enableRemoteTypingSync && currentInput === ""
-            ? syncedInput
-            : currentInput;
-    const previousRemoteInputRef = useRef(remoteDisplayInput);
+    // Explicit failures avoid confusing Backspace corrections with wrong answers.
+    const previousFailureCountRef = useRef(failureCount);
     useEffect(() => {
-        if (!isReadonly) return;
-        const previous = previousRemoteInputRef.current;
-        previousRemoteInputRef.current = remoteDisplayInput;
-        if (previous && remoteDisplayInput === "") {
-            inputFrameRef.current?.getAnimations().forEach((animation) => {
-                animation.currentTime = 0;
-            });
-            setIsFailAnimating(true);
-        }
-    }, [isReadonly, remoteDisplayInput]);
+        if (!isReadonly || previousFailureCountRef.current === failureCount) return;
+        previousFailureCountRef.current = failureCount;
+        inputFrameRef.current?.getAnimations().forEach((animation) => {
+            animation.currentTime = 0;
+        });
+        setIsFailAnimating(true);
+    }, [failureCount, isReadonly]);
 
     const triggerFailAnimation = () => {
         // Restart an in-flight shake without an older timer stopping it early.
@@ -306,7 +300,7 @@ function TypingAttempt({
         setCurrentSelection(0);
         setCharInput("");
         triggerFailAnimation();
-        onChangeInput("");
+        onChangeInput("", true);
     };
 
     const hintCount = manualHints
@@ -487,6 +481,7 @@ function TypingAttempt({
                     setInput([]);
                     setCurrentSelection(0);
                     triggerFailAnimation();
+                    onChangeInput("", true);
                 } else resetInput();
             }
         }
