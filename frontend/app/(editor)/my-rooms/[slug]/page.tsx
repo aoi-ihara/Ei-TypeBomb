@@ -615,6 +615,7 @@ export default function Page({
                                         setShowRoomCode(true);
                                     else setShowQrWarning(true);
                                 }}
+                                variant="primary"
                             />
                         }
                         open={showQrWarning}
