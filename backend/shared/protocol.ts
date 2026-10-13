@@ -5,7 +5,7 @@ export type ClientPayloads = {
     "room:leave": undefined;
     "game:start": undefined;
     "word:success": undefined;
-    currentInput: string;
+    currentInput: string | { input: string; failed: true };
     "health:ping": string;
     "health:database": string;
     ping: undefined;
@@ -18,7 +18,7 @@ export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
     "room:broadcast": WireRoom;
-    "typing:input": { input: string };
+    "typing:input": { input: string; failed?: boolean };
     "game:end": { holderUserId: string; holderDisplayName?: string };
     "game:quited": undefined;
     "health:pong": string;
