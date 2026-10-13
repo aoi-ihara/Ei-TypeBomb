@@ -103,6 +103,7 @@ export default function Client({
     const [isStarted, setIsStarted] = useState<boolean>(true);
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
+    const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>(null);
 
     const [userPositions] = useState<Position[]>(() =>
@@ -243,6 +244,7 @@ export default function Client({
                 timeoutId = setTimeout(() => {
                     if (isCancelled) return;
                     setCurrentInput("");
+                    setFailureCount((count) => count + 1);
                     charIndex = 0;
                     attempt = target;
                     timeoutId = setTimeout(typeNextChar, 500);
@@ -317,6 +319,8 @@ export default function Client({
             bombStatus={bombStatus}
             currentItem={currentItem}
             currentInput={currentInput}
+            failureCount={failureCount}
+            enableRemoteTypingSync={false}
             isStarted={isStarted}
             result={result}
             lostDisplayName={lostDisplayName}
