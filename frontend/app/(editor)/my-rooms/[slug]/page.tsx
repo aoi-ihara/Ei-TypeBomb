@@ -1252,6 +1252,15 @@ export default function Page({
                                 ))}
                             </SortableContext>
                         </DndContext>
+
+                        <Button
+                            onClick={() => router.push(`/join/${roomLink}`)}
+                            iconName="play"
+                            className="w-full"
+                            variant="primary"
+                        >
+                            プレイ
+                        </Button>
                     </div>
                 </div>
             )}
