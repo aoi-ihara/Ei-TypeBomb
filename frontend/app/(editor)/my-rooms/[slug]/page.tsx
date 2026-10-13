@@ -129,6 +129,7 @@ export default function Page({
         useState(false);
     const [showCopyWarning, setShowCopyWarning] = useState(false);
     const [showQrWarning, setShowQrWarning] = useState(false);
+    const [showPlayWarning, setShowPlayWarning] = useState(false);
 
     const isLoadedRef = useRef(false);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1253,14 +1254,46 @@ export default function Page({
                             </SortableContext>
                         </DndContext>
 
-                        <Button
-                            onClick={() => router.push(`/join/${roomLink}`)}
-                            iconName="play"
-                            className="w-full"
-                            variant="primary"
+                        <MorphDialog
+                            button={
+                                <Button
+                                    onClick={() => {
+                                        if (items && items.length !== 0)
+                                            router.push(`/join/${roomLink}`);
+                                        else setShowPlayWarning(true);
+                                    }}
+                                    iconName="play"
+                                    className="w-full"
+                                    variant="primary"
+                                >
+                                    プレイ
+                                </Button>
+                            }
+                            open={showPlayWarning}
+                            onClose={() => setShowPlayWarning(false)}
+                            title="ルームに単語がありません"
+                            description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                            alignment="vertical"
                         >
-                            プレイ
-                        </Button>
+                            <Button
+                                onClick={() => {
+                                    router.push(`/join/${roomLink}`);
+                                    setShowPlayWarning(false);
+                                }}
+                                iconName="play"
+                                variant="primary"
+                                className="w-full"
+                            >
+                                プレイ
+                            </Button>
+                            <Button
+                                onClick={() => setShowPlayWarning(false)}
+                                iconName="x"
+                                className="w-full"
+                            >
+                                キャンセル
+                            </Button>
+                        </MorphDialog>
                     </div>
                 </div>
             )}
