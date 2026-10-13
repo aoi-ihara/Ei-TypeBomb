@@ -180,11 +180,17 @@ export function applyGameEvent(
             break;
         }
         case "currentInput":
-            if (!isHolder(event.playerId) || typeof event.input !== "string")
-                return ignored();
+            if (!isHolder(event.playerId)) return ignored();
+            const raw = event.input;
+            const input = typeof raw === "string" ? raw :
+                raw && typeof raw === "object" && "input" in raw && typeof raw.input === "string"
+                    ? raw.input : null;
+            if (input === null) return ignored();
+            const failed = typeof raw === "object" && raw !== null &&
+                "failed" in raw && raw.failed === true;
             broadcast({
                 event: "typing:input",
-                data: { input: event.input.slice(0, MAX_CURRENT_INPUT_LENGTH) },
+                data: { input: input.slice(0, MAX_CURRENT_INPUT_LENGTH), ...(failed ? { failed: true } : {}) },
             });
             return { state, effects };
         case "deadline": {

@@ -103,6 +103,7 @@ export default function Client({
     const [isStarted, setIsStarted] = useState<boolean>(true);
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
+    const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>(null);
 
     const [userPositions] = useState<Position[]>(() =>
@@ -220,22 +221,37 @@ export default function Client({
         if (currentItem.type !== "typed_recall") return;
 
         const target = currentItem.answer;
+        // Occasionally simulate a wrong answer so the same feedback is visible
+        // for computer players. They clear the attempt before retrying.
+        const shouldMiss = Math.random() < 0.35;
+        const wrongTarget = shouldMiss
+            ? target.slice(0, -1) +
+              (target.endsWith("x") ? "z" : "x")
+            : target;
+        let attempt = shouldMiss ? wrongTarget : target;
         let charIndex = 0;
 
         const typeNextChar = () => {
             if (isCancelled) return;
 
-            if (charIndex < target.length) {
+            if (charIndex < attempt.length) {
                 charIndex++;
-                setCurrentInput(target.slice(0, charIndex));
+                setCurrentInput(attempt.slice(0, charIndex));
 
                 const speed = Math.floor(Math.random() * 100) + 180;
                 timeoutId = setTimeout(typeNextChar, speed);
+            } else if (attempt !== target) {
+                timeoutId = setTimeout(() => {
+                    if (isCancelled) return;
+                    setCurrentInput("");
+                    setFailureCount((count) => count + 1);
+                    charIndex = 0;
+                    attempt = target;
+                    timeoutId = setTimeout(typeNextChar, 500);
+                }, 300);
             } else {
                 timeoutId = setTimeout(() => {
-                    if (!isCancelled) {
-                        handleSuccess();
-                    }
+                    if (!isCancelled) handleSuccess();
                 }, 200);
             }
         };
@@ -303,6 +319,8 @@ export default function Client({
             bombStatus={bombStatus}
             currentItem={currentItem}
             currentInput={currentInput}
+            failureCount={failureCount}
+            enableRemoteTypingSync={false}
             isStarted={isStarted}
             result={result}
             lostDisplayName={lostDisplayName}

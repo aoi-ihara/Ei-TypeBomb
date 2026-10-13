@@ -9,10 +9,11 @@ import type {
 type Props = {
     item: Item;
     currentInput: string | null;
+    failureCount?: number;
     bombStatus: number;
     hasDuplicatePrompt?: boolean;
     onSuccess: () => void;
-    onChangeInput: (input: string) => void;
+    onChangeInput: (input: string, failed?: boolean) => void;
     enableRemoteTypingSync?: boolean;
     learningMode?: LearningMode;
     initialCueRatio?: number;
