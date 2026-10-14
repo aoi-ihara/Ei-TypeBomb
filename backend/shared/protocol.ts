@@ -18,7 +18,7 @@ export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
     "room:broadcast": WireRoom;
-    "typing:input": { input: string; failed?: boolean; playerId?: string };
+    "typing:input": { input: string; failed?: boolean; playerId?: string; focusPlayerId?: string };
     "game:end": { holderUserId: string; holderDisplayName?: string; losers?: GameLoser[] };
     "game:quited": undefined;
     "health:pong": string;
