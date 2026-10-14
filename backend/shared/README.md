@@ -37,8 +37,12 @@ DB loaders keep their runtime-specific access and error handling, then use the s
 `wordAt` and `bombAt` are absolute epoch-millisecond deadlines at the top level of
 `GameState`, preserving the existing Worker storage shape. `nextGameDeadline`
 selects the earliest deadline; `deadline` consumes due events and schedules the
-next bomb phase from the supplied current time. Bomb phases remain 0–4, with
-explosion on the following deadline. The countdown remains 3 seconds and each
+next bomb phase from the supplied current time. Each bomb has its own absolute deadline, holder, phase (0–4), question, and
+turn counter. At game start the count is fixed to one per four participants
+(rounding up); a bomb disappears after exploding and its holder becomes a loser.
+Other bombs skip eliminated players and continue until all bombs explode.
+The final result contains the distinct losers. One player's overlapping bombs
+are handled one question at a time, with no new gameplay screen. The countdown remains 3 seconds and each
 bomb phase lasts configured duration + random 0–10 seconds. Late execution advances
 one bomb phase, matching the existing behavior.
 
