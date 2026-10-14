@@ -591,6 +591,8 @@ export default function Clinet({
             result={result}
             lostDisplayName={lostDisplayName}
             loserNames={loserNames}
+            loserIds={room?.losers?.map(loser => loser.id)}
+            bombs={room?.bombs}
             bombRef={bombRef}
             explosionLayer={explosionLayer}
             onSuccess={() => {
