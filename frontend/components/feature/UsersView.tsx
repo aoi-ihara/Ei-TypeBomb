@@ -84,6 +84,7 @@ export default function UsersView({
                 }])).map((bomb, index) => {
                     const place = positions[bomb.holder];
                     if (!place) return null;
+                    const stackIndex = (bombs ?? []).slice(0, index).filter(item => item.holder === bomb.holder).length;
                     return (
                         <div
                             key={bomb.id}
@@ -93,8 +94,8 @@ export default function UsersView({
                             style={{
                                 visibility: exploded ? "hidden" : undefined,
                                 opacity: 1,
-                                left: `calc(${Number(place.x.toFixed(4)) + 50}% - ${place.w / 2 + 16 - (index % 3) * 12}px)`,
-                                top: `calc(${Number(place.y.toFixed(4)) + 50}% - ${place.h / 2 + 8 + (index % 3) * 10}px)`,
+                                left: `calc(${Number(place.x.toFixed(4)) + 50}% - ${place.w / 2 + 16 - stackIndex * 14}px)`,
+                                top: `calc(${Number(place.y.toFixed(4)) + 50}% - ${place.h / 2 + 8 + stackIndex * 10}px)`,
                             }}
                         >
                             <Bomb bombStatus={bomb.status} />
