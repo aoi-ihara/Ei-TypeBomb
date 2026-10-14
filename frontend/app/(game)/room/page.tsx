@@ -223,7 +223,6 @@ export default function Loading() {
             {!link && (
                 <>
                     <Button
-                        variant="primary"
                         iconName="plus"
                         className="w-full animate-appear"
                         onClick={() =>
