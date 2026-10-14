@@ -112,6 +112,11 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             break;
         case "room:leave":
             if (!room.users.some(user => user.id === event.playerId)) return ignored();
+            // Keep eliminated players as immutable seats (50% opacity) so
+            // holder indices and the final loser list remain stable.
+            // Their connection leaving must not interrupt surviving bombs.
+            if (room.isStart && room.losers?.some(loser => loser.id === event.playerId))
+                return ignored();
             if (room.isStart) {
                 activity("game_cancelled", event.reason);
                 reset();
