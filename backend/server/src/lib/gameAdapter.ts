@@ -21,6 +21,7 @@ export class NodeGameAdapter {
         private readonly onResult: (
             result: GameResult,
             previous: GameState,
+            event: GameEvent,
         ) => void,
         private readonly now = Date.now,
         private readonly random = Math.random,
@@ -77,7 +78,7 @@ export class NodeGameAdapter {
             previous.room.gameId !== result.state.room.gameId
         )
             this.schedule();
-        this.onResult(result, previous);
+        this.onResult(result, previous, event);
         return result;
     }
     private schedule() {
