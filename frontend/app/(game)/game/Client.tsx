@@ -63,6 +63,8 @@ export default function Clinet({
     const [currentInput, setCurrentInput] = useState("");
     const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
+    const [loserNames, setLoserNames] = useState<string[]>([]);
+    const viewedHolderIdRef = useRef<string | null>(null);
     const [userPositions, setUserPositions] = useState<Position[]>(
         Array.from({ length: 6 }, () => ({
             x: 0,
@@ -303,14 +305,19 @@ export default function Clinet({
                         setCurrentItem(null);
                     }
                     setBombStatus(newRoom.bombStatus);
+                    const focus = newRoom.bombs?.find(
+                        bomb => newRoom.users[bomb.holder]?.id === userIdRef.current,
+                    ) ?? newRoom.bombs?.[0];
+                    viewedHolderIdRef.current = newRoom.users[focus?.holder ?? newRoom.bombHolder]?.id ?? null;
                     setUserPositions(
                         newPositions(newRoom.users, userPositions),
                     );
                 },
             );
 
-            socket.on("typing:input", ({ input, failed }: { input: string; failed?: boolean }) => {
+            socket.on("typing:input", ({ input, failed, playerId }: { input: string; failed?: boolean; playerId?: string }) => {
                 if (!selected || socketRef.current !== socket) return;
+                if (playerId && playerId !== viewedHolderIdRef.current) return;
                 setCurrentInput(input);
                 if (failed) setFailureCount((count) => count + 1);
             });
@@ -350,15 +357,20 @@ export default function Clinet({
                 ({
                     holderUserId,
                     holderDisplayName,
+                    losers,
                 }: {
                     holderUserId: string;
-                    holderDisplayName: string;
+                    holderDisplayName?: string;
+                    losers?: { id: string; displayName?: string }[];
                 }) => {
                     if (!selected || socketRef.current !== socket) return;
                     explode();
-                    const didLose = userIdRef.current === holderUserId;
+                    const didLose = losers
+                        ? losers.some(loser => loser.id === userIdRef.current)
+                        : userIdRef.current === holderUserId;
                     setResult(didLose);
-                    setLostDisplayName(holderDisplayName);
+                    setLostDisplayName(holderDisplayName ?? null);
+                    setLoserNames(losers?.map(loser => loser.displayName ?? "プレイヤー") ?? []);
 
                     if (didLose) {
                         posthog.capture("game_lost", {
@@ -545,6 +557,7 @@ export default function Clinet({
         resetExplosion();
         setResult(null);
         setLostDisplayName(null);
+        setLoserNames([]);
         setCurrentInput("");
         setIsSpectator(false);
     };
@@ -553,15 +566,22 @@ export default function Clinet({
         socketRef.current?.emit("room:leave");
     };
 
+    const focusedBomb = room?.bombs?.find(bomb => users[bomb.holder]?.id === userId)
+        ?? room?.bombs?.[0];
+    const focusedItem = focusedBomb
+        ? (focusedBomb.wordIndex === undefined ? null : room?.items?.[focusedBomb.wordIndex] ?? null)
+        : currentItem;
+
     return (
         <GameView
             room={room}
             users={users}
             positions={userPositions}
             userId={userId}
-            currentTurn={currentTurn}
-            bombStatus={bombStatus ?? 0}
-            currentItem={currentItem}
+            currentTurn={focusedBomb?.holder ?? currentTurn}
+            bombStatus={focusedBomb?.status ?? bombStatus ?? 0}
+            currentItem={focusedItem}
+            itemPresentationKey={focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0}
             currentInput={currentInput}
             failureCount={failureCount}
             isStarted={isStarted}
@@ -570,6 +590,7 @@ export default function Clinet({
             notice={notice}
             result={result}
             lostDisplayName={lostDisplayName}
+            loserNames={loserNames}
             bombRef={bombRef}
             explosionLayer={explosionLayer}
             onSuccess={() => {
