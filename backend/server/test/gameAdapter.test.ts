@@ -12,6 +12,7 @@ test('typing and ignored events retain room identity while forwarding input effe
     const state = fresh();
     state.room.isStart = true;
     state.room.gameId = 'game';
+    state.room.bombs = [{ id: '0', holder: 0, status: 0, at: Date.now() + 60000, turn: 0 }];
     const callbacks: { result: GameResult; previous: GameState }[] = [];
     const adapter = new NodeGameAdapter(state, (result, previous) => callbacks.push({ result, previous }));
     t.after(() => adapter.dispose());
@@ -23,7 +24,7 @@ test('typing and ignored events retain room identity while forwarding input effe
     for (const [i, { result, previous }] of callbacks.entries()) {
         assert.equal(result.state.room, previous.room);
         assert.deepEqual(result.effects, [{ type: 'broadcast', packet: {
-            event: 'typing:input', data: { input: String(i) },
+            event: 'typing:input', data: { input: String(i), playerId: 'a' },
         } }]);
     }
 
