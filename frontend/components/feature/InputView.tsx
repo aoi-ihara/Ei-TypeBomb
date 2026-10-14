@@ -43,6 +43,8 @@ function TypingAttempt({
     hintDelaysMs = DEFAULT_HINT_DELAYS_MS,
     onRecallProgress,
     onRecallComplete,
+    remoteHintLength,
+    onHintChange,
 }: {
     japanese: string;
     english: string | null;
@@ -59,6 +61,8 @@ function TypingAttempt({
     hintDelaysMs?: number[] | null;
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
+    remoteHintLength?: number;
+    onHintChange?: (length: number) => void;
 }) {
     // Adaptive practice must offer a genuinely unaided attempt.
     const baseHintCount = hasDuplicateMeaning && !learningMode ? 1 : 0;
@@ -74,6 +78,7 @@ function TypingAttempt({
     const inputStateRef = useRef(input);
     const revealedHintLengthRef = useRef(initialCueLength);
     const onChangeInputRef = useRef(onChangeInput);
+    const onHintChangeRef = useRef(onHintChange);
     const [currentSelection, setCurrentSelection] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const inputFrameRef = useRef<HTMLDivElement | null>(null);
@@ -101,7 +106,8 @@ function TypingAttempt({
     useEffect(() => {
         inputStateRef.current = input;
         onChangeInputRef.current = onChangeInput;
-    }, [input, onChangeInput]);
+        onHintChangeRef.current = onHintChange;
+    }, [input, onChangeInput, onHintChange]);
 
     useEffect(() => {
         if (isReadonly || !english) return;
@@ -192,6 +198,7 @@ function TypingAttempt({
 
                 revealedHintLengthRef.current = nextLength;
                 setRevealedHintLength(nextLength);
+                onHintChangeRef.current?.(nextLength);
                 setTimedHintCount((count) => count + 1);
                 lastHintAtRef.current = firedAt;
                 hintIndex += 1;
@@ -306,11 +313,15 @@ function TypingAttempt({
     const hintCount = manualHints
         ? Number(answerRevealed)
         : baseHintCount + timedHintCount;
-    const hintLength = manualHints
+    const localHintLength = manualHints
         ? answerRevealed
             ? (english?.length ?? 0)
             : 0
         : revealedHintLength;
+
+    const hintLength = isReadonly && remoteHintLength !== undefined
+        ? Math.max(0, Math.min(english?.length ?? 0, remoteHintLength))
+        : localHintLength;
 
     const requestHint = () => {
         if (!manualHints || !english || answerRevealed || completedRef.current)
@@ -326,6 +337,7 @@ function TypingAttempt({
         });
         lastKeyWasSpaceRef.current = false;
         setAnswerRevealed(true);
+        onHintChange?.(english.length);
 
         const hasIncorrectInput = input.some(
             (char, index) => char !== "" && char !== english[index],
