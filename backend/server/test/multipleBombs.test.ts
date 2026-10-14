@@ -84,6 +84,36 @@ test("one explosion removes only its bomb, loser becomes ineligible, and other b
     assert.equal(state.room.isStart, false);
 });
 
+test("eliminated player's disconnect or room leave preserves live bombs and seats", () => {
+    for (const reason of ["disconnect", "room_leave"] as const) {
+        let state = started(5);
+        state.room.bombs![1].at = 200000;
+        state.bombAt = 21000;
+        state = finishBomb(state, "0");
+        const previous = structuredClone(state);
+        assert.deepEqual(state.room.losers?.map(loser => loser.id), ["0"]);
+        const leave = apply(state, { type: "room:leave", playerId: "0", reason }, 120000);
+        assert.equal(leave.state, state);
+        assert.deepEqual(leave.effects, []);
+        assert.deepEqual(state, previous);
+        assert.equal(leave.state.room.users.length, 5);
+        assert.equal(leave.state.room.isStart, true);
+        assert.equal(leave.state.room.bombs?.length, 1);
+        // Remaining holders still skip the eliminated seat.
+        leave.state.room.bombs![0].holder = 4;
+        const passed = apply(leave.state, { type: "word:success", playerId: "4" }, 120000);
+        assert.equal(passed.state.room.bombs?.[0].holder, 1);
+    }
+});
+
+test("living player's disconnect still cancels the running match", () => {
+    const state = started(5);
+    const left = apply(state, { type: "room:leave", playerId: "1", reason: "disconnect" });
+    assert.equal(left.state.room.isStart, false);
+    assert.ok(left.effects.some(effect =>
+        effect.type === "broadcast" && effect.packet.event === "game:quited"));
+});
+
 test("declined joins cannot change the fixed bomb count during a match", () => {
     const state = started(5);
     const ignored = apply(state, { type: "room:join", player: { id: "new" } });
