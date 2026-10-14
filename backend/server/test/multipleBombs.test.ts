@@ -42,6 +42,7 @@ test("hint visibility is scoped to active bomb holders", () => {
     assert.ok(revealed.effects.some(effect => effect.type === "broadcast"
         && effect.packet.event === "hint:updated"
         && effect.packet.data.playerId === first
+        && effect.packet.data.bombId === one.id
         && effect.packet.data.length === 2));
     assert.equal(apply(state, { type: "hint:update", playerId: "observer", length: 2 }).state, state);
     assert.equal(apply(state, { type: "hint:update", playerId: second, length: -1 }).state, state);
