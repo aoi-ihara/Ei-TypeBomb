@@ -98,6 +98,13 @@ function TypingAttempt({
 
     const isReadonly = currentInput !== null;
     const manualHints = Boolean(learningMode) && !isReadonly;
+    // Duplicate prompts may start with a visible cue before any timed hint.
+    // Publish that initial cue too, so read-only spectators see the same letters.
+    useEffect(() => {
+        if (!isReadonly && english && initialCueLength > 0)
+            onHintChangeRef.current?.(initialCueLength);
+    }, [isReadonly, english, initialCueLength, wordKey]);
+
     const [answerRevealed, setAnswerRevealed] = useState(false);
     const lastKeyWasSpaceRef = useRef(false);
     const hintEventsRef = useRef<NonNullable<RecallProgress["hintEvents"]>>([]);
