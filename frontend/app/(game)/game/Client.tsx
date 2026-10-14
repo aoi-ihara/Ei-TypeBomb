@@ -61,6 +61,7 @@ export default function Clinet({
     });
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
+    const [hintLengths, setHintLengths] = useState<Record<string, number>>({});
     const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
     const [loserNames, setLoserNames] = useState<string[]>([]);
@@ -288,6 +289,10 @@ export default function Clinet({
                         items: normalizedItems,
                     };
                     setRoom(normalizedRoom);
+                    setHintLengths(Object.fromEntries((newRoom.bombs ?? []).map(bomb => [
+                        newRoom.users[bomb.holder]?.id,
+                        bomb.hintLength ?? 0,
+                    ]).filter(([id]) => !!id)));
                     setUsers(
                         newRoom.users.map((item) => {
                             return {
@@ -332,6 +337,11 @@ export default function Clinet({
                 }
                 setCurrentInput(input);
                 if (failed) setFailureCount((count) => count + 1);
+            });
+
+            socket.on("hint:updated", ({ playerId, length }: { playerId: string; length: number }) => {
+                if (!selected || socketRef.current !== socket) return;
+                setHintLengths(current => ({ ...current, [playerId]: length }));
             });
 
             socket.on("game:quited", () => {
@@ -571,6 +581,7 @@ export default function Clinet({
         setLostDisplayName(null);
         setLoserNames([]);
         setCurrentInput("");
+        setHintLengths({});
         setSharedFocusPlayerId(null);
         setIsSpectator(false);
     };
@@ -597,6 +608,8 @@ export default function Clinet({
             currentItem={focusedItem}
             itemPresentationKey={focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0}
             currentInput={currentInput}
+            remoteHintLength={hintLengths[users[focusedBomb?.holder ?? -1]?.id ?? ""] ?? focusedBomb?.hintLength ?? 0}
+            onHintChange={(length) => socketRef.current?.emit("hint:update", { length })}
             failureCount={failureCount}
             isStarted={isStarted}
             isSpectator={isSpectator}
