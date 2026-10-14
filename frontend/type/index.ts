@@ -29,6 +29,8 @@ export type Room = {
     revision?: number;
     bombs?: GameBomb[];
     losers?: GameLoser[];
+    typingFocusPlayerId?: string;
+    typingFocusInput?: string;
 };
 
 export type User = {

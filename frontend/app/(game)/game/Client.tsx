@@ -64,6 +64,7 @@ export default function Clinet({
     const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
     const [loserNames, setLoserNames] = useState<string[]>([]);
+    const [sharedFocusPlayerId, setSharedFocusPlayerId] = useState<string | null>(null);
     const viewedHolderIdRef = useRef<string | null>(null);
     const [userPositions, setUserPositions] = useState<Position[]>(
         Array.from({ length: 6 }, () => ({
@@ -305,19 +306,30 @@ export default function Clinet({
                         setCurrentItem(null);
                     }
                     setBombStatus(newRoom.bombStatus);
-                    const focus = newRoom.bombs?.find(
-                        bomb => newRoom.users[bomb.holder]?.id === userIdRef.current,
-                    ) ?? newRoom.bombs?.[0];
-                    viewedHolderIdRef.current = newRoom.users[focus?.holder ?? newRoom.bombHolder]?.id ?? null;
+                    const sharedPlayerId = newRoom.typingFocusPlayerId
+                        ?? newRoom.users[newRoom.bombs?.[0]?.holder ?? newRoom.bombHolder]?.id
+                        ?? null;
+                    setSharedFocusPlayerId(sharedPlayerId);
+                    viewedHolderIdRef.current = sharedPlayerId;
+                    setCurrentInput(newRoom.typingFocusInput ?? "");
                     setUserPositions(
                         newPositions(newRoom.users, userPositions),
                     );
                 },
             );
 
-            socket.on("typing:input", ({ input, failed, playerId }: { input: string; failed?: boolean; playerId?: string }) => {
+            socket.on("typing:input", ({
+                input, failed, focusPlayerId,
+            }: {
+                input: string; failed?: boolean; focusPlayerId?: string;
+            }) => {
                 if (!selected || socketRef.current !== socket) return;
-                if (playerId && playerId !== viewedHolderIdRef.current) return;
+                // The server arbitrates the single shared display across typists.
+                // All observers follow the same focus, not their own packet timing.
+                if (focusPlayerId) {
+                    viewedHolderIdRef.current = focusPlayerId;
+                    setSharedFocusPlayerId(focusPlayerId);
+                }
                 setCurrentInput(input);
                 if (failed) setFailureCount((count) => count + 1);
             });
@@ -559,6 +571,7 @@ export default function Clinet({
         setLostDisplayName(null);
         setLoserNames([]);
         setCurrentInput("");
+        setSharedFocusPlayerId(null);
         setIsSpectator(false);
     };
 
@@ -567,6 +580,7 @@ export default function Clinet({
     };
 
     const focusedBomb = room?.bombs?.find(bomb => users[bomb.holder]?.id === userId)
+        ?? room?.bombs?.find(bomb => users[bomb.holder]?.id === sharedFocusPlayerId)
         ?? room?.bombs?.[0];
     const focusedItem = focusedBomb
         ? (focusedBomb.wordIndex === undefined ? null : room?.items?.[focusedBomb.wordIndex] ?? null)

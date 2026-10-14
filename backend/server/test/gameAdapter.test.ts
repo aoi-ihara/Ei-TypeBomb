@@ -8,23 +8,27 @@ const fresh = (): GameState => ({ room: {
     id: 'room', users: [{ id: 'a' }, { id: 'b' }], items: [{ id: 'item', type: 'typed_recall', prompt: '猫', answer: 'cat' }],
     maxPlayers: 2, gameDuration: 1, isStart: false, bombStatus: 0, bombHolder: 0,
 }, revision: 0 });
-test('typing and ignored events retain room identity while forwarding input effects', t => {
+test('typing updates shared focus while ignored events retain room identity', t => {
     const state = fresh();
     state.room.isStart = true;
     state.room.gameId = 'game';
+    state.room.typingFocusPlayerId = 'a';
+    state.room.typingFocusInput = '';
     state.room.bombs = [{ id: '0', holder: 0, status: 0, at: Date.now() + 60000, turn: 0 }];
-    const callbacks: { result: GameResult; previous: GameState }[] = [];
-    const adapter = new NodeGameAdapter(state, (result, previous) => callbacks.push({ result, previous }));
+    const callbacks: { result: GameResult; previous: GameState; eventType: string }[] = [];
+    const adapter = new NodeGameAdapter(state, (result, previous, event) =>
+        callbacks.push({ result, previous, eventType: event.type }));
     t.after(() => adapter.dispose());
 
     for (let i = 0; i < 30; i++) {
         adapter.apply({ type: 'currentInput', playerId: 'a', input: String(i) });
     }
     assert.equal(callbacks.length, 30);
+    assert.ok(callbacks.every(({ eventType }) => eventType === 'currentInput'));
     for (const [i, { result, previous }] of callbacks.entries()) {
-        assert.equal(result.state.room, previous.room);
+        assert.notEqual(result.state.room, previous.room);
         assert.deepEqual(result.effects, [{ type: 'broadcast', packet: {
-            event: 'typing:input', data: { input: String(i), playerId: 'a' },
+            event: 'typing:input', data: { input: String(i), playerId: 'a', focusPlayerId: 'a' },
         } }]);
     }
 
@@ -37,6 +41,7 @@ test('typing and ignored events retain room identity while forwarding input effe
 
     adapter.apply({ type: 'word:success', playerId: 'a' });
     const transition = callbacks.at(-1)!;
+    assert.equal(transition.eventType, 'word:success');
     assert.notEqual(transition.result.state.room, transition.previous.room);
     assert.equal(transition.result.state.room.bombHolder, 1);
 });

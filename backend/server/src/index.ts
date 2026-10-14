@@ -94,14 +94,16 @@ const createRoomIfNeeded = async (
             roomId,
             new NodeGameAdapter(
                 { room: newRoom, revision: 0 },
-                (result, previous) => {
+                (result, previous, event) => {
                     if (result.state.room !== previous.room) {
                         const index = rooms.findIndex(
                             (item) => item.id === roomId,
                         );
                         if (index === -1) return;
                         rooms[index] = result.state.room;
-                        refreshServerState();
+                        // Typing focus/input is deliberately lightweight: don't
+                        // scan every room or emit server-state logs per keystroke.
+                        if (event.type !== "currentInput") refreshServerState();
                     }
                     for (const effect of result.effects) {
                         if (effect.type === "broadcast") {

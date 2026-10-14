@@ -61,8 +61,29 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
     const broadcast = (packet: ServerGameEvent) => effects.push({ type: "broadcast", packet });
     const activity = (event: Activity["event"], reason?: Activity["reason"]) =>
         effects.push({ type: "activity", activity: { event, playerCount: room.users.length, reason } });
-    const clearInput = (playerId?: string) =>
-        broadcast({ event: "typing:input", data: { input: "", ...(playerId ? { playerId } : {}) } });
+    // The focus is authoritative, so every viewer sees the same remote textbox.
+    const publishFocus = (failed = false) =>
+        broadcast({
+            event: "typing:input",
+            data: {
+                input: room.typingFocusInput ?? "",
+                ...(room.typingFocusPlayerId ? { playerId: room.typingFocusPlayerId, focusPlayerId: room.typingFocusPlayerId } : {}),
+                ...(failed ? { failed: true } : {}),
+            },
+        });
+    const chooseFocus = () => {
+        const holders = [...new Set((room.bombs ?? [])
+            .map(bomb => room.users[bomb.holder]?.id)
+            .filter((id): id is string => !!id))];
+        room.typingFocusPlayerId = holders.length ? holders[index(holders.length)] : undefined;
+        room.typingFocusInput = "";
+        publishFocus();
+    };
+    const clearInput = (playerId?: string) => {
+        if (playerId && playerId !== room.typingFocusPlayerId) return;
+        room.typingFocusInput = "";
+        publishFocus();
+    };
     const snapshot = () => broadcast({ event: "room:broadcast", data: roomSnapshot(room, next.revision) });
     const ignored = (): GameResult => ({ state, effects: [] });
     const random = () => Math.max(0, Math.min(1 - Number.EPSILON, context.random()));
@@ -84,6 +105,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
         Object.assign(room, {
             isStart: false, gameId: undefined, bombStatus: 0, bombHolder: 0,
             wordIndex: undefined, bombs: undefined, losers: undefined,
+            typingFocusPlayerId: undefined, typingFocusInput: undefined,
         });
         next.wordAt = next.bombAt = undefined;
         if (context.rules.clearInputOnStop) clearInput();
@@ -144,7 +166,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             }));
             next.wordAt = context.now + 3000;
             syncLegacy();
-            clearInput();
+            chooseFocus();
             activity("game_started");
             break;
         case "word:success": {
@@ -155,7 +177,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             bomb.wordIndex = index(room.items.length);
             bomb.turn++;
             syncLegacy();
-            clearInput(event.playerId);
+            if (room.typingFocusPlayerId === event.playerId) chooseFocus();
             activity("word_passed");
             break;
         }
@@ -172,17 +194,21 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 raw && typeof raw === "object" && "input" in raw && typeof raw.input === "string"
                     ? raw.input : null;
             if (input === null) return ignored();
+            const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
             const failed = typeof raw === "object" && raw !== null &&
                 "failed" in raw && raw.failed === true;
-            broadcast({
-                event: "typing:input",
-                data: {
-                    input: input.slice(0, MAX_CURRENT_INPUT_LENGTH),
-                    playerId: event.playerId,
-                    ...(failed ? { failed: true } : {}),
-                },
-            });
-            return { state, effects };
+
+            // A new typist may claim the shared view only when its current
+            // textbox is blank. Empty packets from other players never steal it.
+            if (event.playerId !== room.typingFocusPlayerId) {
+                if (!value || room.typingFocusInput) return ignored();
+                room.typingFocusPlayerId = event.playerId;
+            }
+            room.typingFocusInput = value;
+            publishFocus(failed);
+            // Typing updates have their own lightweight packet rather than
+            // broadcasting the entire room on each keypress.
+            return { state: next, effects };
         }
         case "deadline": {
             if (!room.isStart) return ignored();
@@ -211,7 +237,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                             other.wordIndex = index(room.items.length);
                         }
                     }
-                    clearInput(loser?.id);
+                    if (loser?.id === room.typingFocusPlayerId) chooseFocus();
                 } else {
                     bomb.status++;
                     bomb.at = bombAt();
@@ -232,7 +258,11 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 activity("game_finished");
                 reset();
                 room.users = [];
-            } else syncLegacy();
+            } else {
+                syncLegacy();
+                if (!room.bombs?.some(bomb => room.users[bomb.holder]?.id === room.typingFocusPlayerId))
+                    chooseFocus();
+            }
             break;
         }
     }

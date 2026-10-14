@@ -114,6 +114,49 @@ test("living player's disconnect still cancels the running match", () => {
         effect.type === "broadcast" && effect.packet.event === "game:quited"));
 });
 
+test("shared typing focus switches only when the visible textbox is empty", () => {
+    let state = started(5);
+    const [a, b] = state.room.bombs!;
+    const first = state.room.users[a.holder].id;
+    const other = state.room.users[b.holder].id;
+    assert.equal(state.room.typingFocusPlayerId, first);
+    assert.equal(state.room.typingFocusInput, "");
+
+    // Another bomb's holder begins typing; everyone sees their textbox.
+    const switched = apply(state, { type: "currentInput", playerId: other, input: "c" });
+    state = switched.state;
+    assert.equal(state.room.typingFocusPlayerId, other);
+    assert.equal(state.room.typingFocusInput, "c");
+    assert.ok(switched.effects.some(effect =>
+        effect.type === "broadcast" && effect.packet.event === "typing:input"
+        && effect.packet.data.focusPlayerId === other));
+
+    // The original holder cannot steal the nonempty focused textbox.
+    const busy = apply(state, { type: "currentInput", playerId: first, input: "ca" });
+    assert.equal(busy.state, state);
+    assert.deepEqual(busy.effects, []);
+
+    // Empty typing from an unfocused player must not switch or clear it.
+    assert.equal(apply(state, { type: "currentInput", playerId: first, input: "" }).state, state);
+    state = apply(state, { type: "currentInput", playerId: other, input: "" }).state;
+    assert.equal(state.room.typingFocusPlayerId, other);
+    assert.equal(state.room.typingFocusInput, "");
+
+    state = apply(state, { type: "currentInput", playerId: first, input: "d" }).state;
+    assert.equal(state.room.typingFocusPlayerId, first);
+    assert.equal(state.room.typingFocusInput, "d");
+});
+
+test("shared focus resets after the displayed holder passes", () => {
+    let state = started(5);
+    const initial = state.room.typingFocusPlayerId!;
+    state = apply(state, { type: "currentInput", playerId: initial, input: "c" }).state;
+    state = apply(state, { type: "word:success", playerId: initial }).state;
+    assert.equal(state.room.typingFocusInput, "");
+    assert.ok(state.room.bombs?.some(bomb =>
+        state.room.users[bomb.holder].id === state.room.typingFocusPlayerId));
+});
+
 test("declined joins cannot change the fixed bomb count during a match", () => {
     const state = started(5);
     const ignored = apply(state, { type: "room:join", player: { id: "new" } });
