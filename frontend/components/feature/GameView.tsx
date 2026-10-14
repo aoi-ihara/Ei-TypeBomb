@@ -175,11 +175,9 @@ export default function GameView({
                 <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-full max-w-sm px-4 flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl text-center break-words">
-                            {loserNames && loserNames.length > 1
-                                ? "敗者：" + loserNames.join("・")
-                                : result
-                                  ? "あなたの負けです"
-                                  : `${lostDisplayName ?? "相手"}の負けです`}
+                            {loserNames?.length
+                                ? `${loserNames.join(", ")}の負け`
+                                : `${lostDisplayName ?? "相手"}の負け`}
                         </div>
                         {stopRecommended && onStop ? (
                             <>
