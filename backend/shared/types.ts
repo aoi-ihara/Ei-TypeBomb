@@ -27,6 +27,8 @@ export type Room = {
     bombStatus: number;
     bombs?: BombState[];
     losers?: GameLoser[];
+    typingFocusPlayerId?: string;
+    typingFocusInput?: string;
 };
 // Serializable deadlines in epoch milliseconds. Transport IDs are opaque player IDs.
 export type GameState = {
