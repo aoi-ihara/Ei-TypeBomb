@@ -25,6 +25,7 @@ type Props = {
     currentItem: Item | null;
     itemPresentationKey?: number;
     currentInput: string;
+    failureCount?: number;
     isStarted: boolean;
     isSpectator?: boolean;
     serverError?: string | null;
@@ -35,7 +36,7 @@ type Props = {
     explosionLayer?: ReactNode;
     resultExtraActions?: ReactNode;
     onSuccess: () => void;
-    onChangeInput: (input: string) => void;
+    onChangeInput: (input: string, failed?: boolean) => void;
     onPlayAgain: () => void;
     onCreateRoom: () => void;
     onJoin?: () => void;
@@ -63,6 +64,7 @@ export default function GameView({
     currentItem,
     itemPresentationKey = 0,
     currentInput,
+    failureCount,
     isStarted,
     isSpectator = false,
     serverError = null,
@@ -132,12 +134,13 @@ export default function GameView({
                 <ItemView
                     key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
                     item={currentItem}
+                    failureCount={failureCount}
                     hasDuplicatePrompt={hasDuplicatePrompt}
                     bombStatus={bombStatus}
                     onSuccess={onSuccess}
-                    onChangeInput={(input) => {
+                    onChangeInput={(input, failed) => {
                         if (userId === currentTurnUser?.id)
-                            onChangeInput(input);
+                            onChangeInput(input, failed);
                     }}
                     currentInput={
                         result !== null

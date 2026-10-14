@@ -11,6 +11,8 @@ import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import posthog from "posthog-js";
 import Shell from "@/components/layout/Shell";
 
+type PlayMode = "online" | "playground";
+
 export default function Page({
     params,
 }: {
@@ -20,15 +22,17 @@ export default function Page({
     const [roomId, setRoomId] = useState("");
     const [error, setError] = useState("");
     const [showPasswordField, setShowPasswordField] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [roomLoading, setRoomLoading] = useState(true);
+    const [joiningMode, setJoiningMode] = useState<PlayMode | null>(null);
     const [roomPassword, setRoomPassword] = useState("");
     const [turnstile, setTurnstile] = useState(false);
+    const [selectedMode, setSelectedMode] = useState<PlayMode>("online");
     const [isNotFound, setIsNotFound] = useState(false);
 
     const router = useRouter();
 
-    const handleSignIn = async (turnstileToken: string) => {
-        setLoading(true);
+    const handleSignIn = async (turnstileToken?: string, mode: PlayMode = selectedMode) => {
+        setJoiningMode(mode);
         const result = await signInToRoom(
             {
                 id: roomId,
@@ -38,22 +42,24 @@ export default function Page({
         );
 
         if (result === null) {
-            posthog.capture("room_entered", { room_id: roomId });
-            router.push("/display-name");
+            posthog.capture("room_entered", { room_id: roomId, play_mode: mode });
+            router.push(mode === "online" ? "/display-name" : "/playground");
         } else {
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
+                play_mode: mode,
                 reason: result,
             });
             setError(result);
         }
-        setLoading(false);
+        setJoiningMode(null);
     };
 
     const handleTurnstileFail = (reason: string, errorCode?: string) => {
         setTurnstile(false);
         posthog.capture("room_entry_failed", {
             room_id: roomId,
+            play_mode: selectedMode,
             reason,
             turnstile_error_code: errorCode,
         });
@@ -70,33 +76,15 @@ export default function Page({
             setRoomId(roomIdResult);
 
             const result = await getRoomStatusFromId(roomIdResult);
-            setLoading(false);
+            setRoomLoading(false);
 
             if (result === null) {
                 setIsNotFound(true);
                 return;
             }
 
-            if (result === false) {
-                const result = await signInToRoom({
-                    id: roomIdResult,
-                    password: roomPassword,
-                });
-
-                if (result === null) {
-                    posthog.capture("room_entered", { room_id: roomIdResult });
-                    router.replace("/display-name");
-                } else {
-                    posthog.capture("room_entry_failed", {
-                        room_id: roomIdResult,
-                        reason: result,
-                    });
-                    setError(result);
-                }
-            } else {
-                setShowPasswordField(true);
-                setError("");
-            }
+            setShowPasswordField(result === true);
+            setError("");
         };
 
         fetchData();
@@ -106,8 +94,8 @@ export default function Page({
 
     return (
         <Shell
-            title={showPasswordField ? "パスワードを入力" : undefined}
-            loading={!showPasswordField}
+            title={showPasswordField ? "パスワードを入力" : "プレイモードを選択"}
+            loading={roomLoading}
         >
             {showPasswordField && (
                 <Input
@@ -118,18 +106,29 @@ export default function Page({
                 />
             )}
 
-            <Button
-                onClick={() => {
-                    setError("");
-                    setTurnstile(true);
-                }}
-                className="w-full"
-                variant="primary"
-                disabled={!roomId || (showPasswordField && !roomPassword)}
-                loading={loading}
-            >
-                続ける
-            </Button>
+            <div className="grid grid-cols-2 gap-4 w-full animate-appear">
+                {(["online", "playground"] as const).map((mode) => (
+                    <Button
+                        key={mode}
+                        onClick={() => {
+                            setSelectedMode(mode);
+                            setError("");
+                            if (showPasswordField) {
+                                setTurnstile(true);
+                            } else {
+                                void handleSignIn(undefined, mode);
+                            }
+                        }}
+                        className="w-full"
+                        variant="primary"
+                        iconName={mode === "online" ? "users" : "user"}
+                        disabled={!roomId || roomLoading || joiningMode !== null || (showPasswordField && !roomPassword)}
+                        loading={joiningMode === mode}
+                    >
+                        {mode === "online" ? "マルチ" : "シングル"}
+                    </Button>
+                ))}
+            </div>
             {error && (
                 <a className="text-red-500" data-cursor="text">
                     {error}

@@ -9,10 +9,11 @@ import type {
 type Props = {
     item: TypedRecallItem;
     currentInput: string | null;
+    failureCount?: number;
     bombStatus: number;
     hasDuplicatePrompt?: boolean;
     onSuccess: () => void;
-    onChangeInput: (input: string) => void;
+    onChangeInput: (input: string, failed?: boolean) => void;
     enableRemoteTypingSync?: boolean;
     learningMode?: LearningMode;
     initialCueRatio?: number;
@@ -25,6 +26,7 @@ type Props = {
 export default function TypedRecallView({
     item,
     currentInput,
+    failureCount,
     bombStatus,
     hasDuplicatePrompt = false,
     onSuccess,
@@ -46,6 +48,7 @@ export default function TypedRecallView({
             onSuccess={onSuccess}
             onChangeInput={onChangeInput}
             currentInput={currentInput}
+            failureCount={failureCount}
             enableRemoteTypingSync={enableRemoteTypingSync}
             learningMode={learningMode}
             initialCueRatio={initialCueRatio}

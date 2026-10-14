@@ -61,6 +61,7 @@ export default function Clinet({
     });
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
+    const [failureCount, setFailureCount] = useState(0);
     const [lostDisplayName, setLostDisplayName] = useState<string | null>();
     const [userPositions, setUserPositions] = useState<Position[]>(
         Array.from({ length: 6 }, () => ({
@@ -308,9 +309,10 @@ export default function Clinet({
                 },
             );
 
-            socket.on("typing:input", ({ input }: { input: string }) => {
+            socket.on("typing:input", ({ input, failed }: { input: string; failed?: boolean }) => {
                 if (!selected || socketRef.current !== socket) return;
                 setCurrentInput(input);
+                if (failed) setFailureCount((count) => count + 1);
             });
 
             socket.on("game:quited", () => {
@@ -561,6 +563,7 @@ export default function Clinet({
             bombStatus={bombStatus ?? 0}
             currentItem={currentItem}
             currentInput={currentInput}
+            failureCount={failureCount}
             isStarted={isStarted}
             isSpectator={isSpectator}
             serverError={serverError}
@@ -574,10 +577,11 @@ export default function Clinet({
                 posthog.capture("word_succeeded");
                 socketRef.current?.emit("word:success");
             }}
-            onChangeInput={(input) => {
+            onChangeInput={(input, failed) => {
+                const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
                 socketRef.current?.emit(
                     "currentInput",
-                    input.slice(0, MAX_CURRENT_INPUT_LENGTH),
+                    failed ? { input: value, failed: true } : value,
                 );
             }}
             onPlayAgain={handlePlayAgain}

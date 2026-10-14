@@ -148,14 +148,16 @@ export default function Loading() {
                 />
             </div>
 
-            <Input
-                disabled={showPasswordField}
-                value={link}
-                font="mono"
-                type="url"
-                onChange={(e) => setLink(e.target.value)}
-                label="招待リンク"
-            />
+            <div className="animate-appear">
+                <Input
+                    disabled={showPasswordField}
+                    value={link}
+                    font="mono"
+                    type="url"
+                    onChange={(e) => setLink(e.target.value)}
+                    label="招待リンク"
+                />
+            </div>
 
             {showPasswordField ? (
                 <div className="animate-appear flex flex-col gap-4 w-full">

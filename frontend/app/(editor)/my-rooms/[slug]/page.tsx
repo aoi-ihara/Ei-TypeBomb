@@ -129,10 +129,14 @@ export default function Page({
         useState(false);
     const [showCopyWarning, setShowCopyWarning] = useState(false);
     const [showQrWarning, setShowQrWarning] = useState(false);
+    const [showPlayWarning, setShowPlayWarning] = useState(false);
 
     const isLoadedRef = useRef(false);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+    const [isStartingPlay, setIsStartingPlay] = useState(false);
+    const [playError, setPlayError] = useState("");
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -188,6 +192,7 @@ export default function Page({
         gameDuration,
         items,
         roomId,
+        roomLink,
     });
 
     useEffect(() => {
@@ -199,6 +204,7 @@ export default function Page({
             gameDuration,
             items,
             roomId,
+            roomLink,
         };
     }, [
         roomTitle,
@@ -383,43 +389,77 @@ export default function Page({
         }
     };
 
-    const saveRoomData = async () => {
-        const roomLinkResult = await getRoomFromLink(roomLink);
-        if (roomLinkResult && roomLinkResult !== slug) {
-            setRoomLinkError("このリンクはすでに使用されています。");
-        } else {
-            setRoomLinkError("");
+    // Serialize writes so an older autosave cannot overwrite the Play-time flush.
+    const saveRoomData = (): Promise<boolean> => {
+        const snapshot = { ...roomDataRef.current };
+        const attempt = saveQueueRef.current.then(async () => {
+            const {
+                roomId, roomTitle, roomExplanation, maxPlayers,
+                gameDuration, items, roomLink,
+            } = snapshot;
+            if (!roomId || !items) return false;
+
+            const linkError = validateLink(roomLink);
+            if (linkError) {
+                setRoomLinkError(linkError);
+                return false;
+            }
+
+            try {
+                const existingRoomId = await getRoomFromLink(roomLink);
+                if (existingRoomId && existingRoomId !== roomId) {
+                    setRoomLinkError("このリンクはすでに使用されています。");
+                    return false;
+                }
+
+                const updatedRoom: Room = {
+                    id: roomId,
+                    title: roomTitle,
+                    explanation: roomExplanation,
+                    maxPlayers: Number(maxPlayers),
+                    gameDuration: Number(gameDuration),
+                    items,
+                    link: roomLink,
+                };
+                const error = await updateRoomFromId(updatedRoom);
+                if (error) {
+                    setRoomLinkError(error);
+                    return false;
+                }
+                setRoomLinkError("");
+                return true;
+            } catch (error) {
+                console.error("Failed to save room:", error);
+                setRoomLinkError("ルームを保存できませんでした。もう一度お試しください。");
+                return false;
+            }
+        });
+        saveQueueRef.current = attempt.then(() => {}, () => {});
+        return attempt;
+    };
+
+    const handlePlay = async () => {
+        if (isStartingPlay || !roomId) return;
+        setPlayError("");
+        const linkError = validateLink(roomLink) || roomLinkError;
+        if (linkError) {
+            setPlayError(linkError);
+            return;
         }
-
-        const {
-            roomId,
-            roomTitle,
-            roomExplanation,
-            maxPlayers,
-            gameDuration,
-            items,
-        } = roomDataRef.current;
-
-        if (!roomId || !items) return;
-
-        try {
-            const updatedRoom: Room = {
-                id: roomId,
-                title: roomTitle,
-                explanation: roomExplanation,
-                maxPlayers: Number(maxPlayers),
-                gameDuration: validateGameDuration(Number(gameDuration))
-                    ? undefined
-                    : Number(gameDuration),
-                items,
-                link: roomLink,
-            };
-
-            const result = await updateRoomFromId(updatedRoom);
-            console.log("Auto-saved successfully", result);
-        } catch (err) {
-            console.error("Failed to auto-save room:", err);
+        setIsStartingPlay(true);
+        // Cancel scheduled saves; the queued write and latest snapshot are flushed below.
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        if (maxSaveTimerRef.current) clearTimeout(maxSaveTimerRef.current);
+        saveTimerRef.current = null;
+        maxSaveTimerRef.current = null;
+        const saved = await saveRoomData();
+        if (!saved) {
+            setPlayError("変更を保存できませんでした。入力内容を確認して再試行してください。");
+            setIsStartingPlay(false);
+            return;
         }
+        setShowPlayWarning(false);
+        router.push(`/join/${encodeURIComponent(roomLink)}`);
     };
 
     useEffect(() => {
@@ -434,7 +474,7 @@ export default function Page({
                 clearTimeout(maxSaveTimerRef.current);
                 maxSaveTimerRef.current = null;
             }
-            saveRoomData();
+            void saveRoomData();
         }, 1000);
 
         if (!maxSaveTimerRef.current) {
@@ -615,6 +655,7 @@ export default function Page({
                                         setShowRoomCode(true);
                                     else setShowQrWarning(true);
                                 }}
+                                variant="primary"
                             />
                         }
                         open={showQrWarning}
@@ -1251,6 +1292,47 @@ export default function Page({
                                 ))}
                             </SortableContext>
                         </DndContext>
+
+                        {playError && <div role="alert" className="text-red-500">{playError}</div>}
+                        <MorphDialog
+                            button={
+                                <Button
+                                    onClick={() => {
+                                        if (items && items.length !== 0)
+                                            void handlePlay();
+                                        else setShowPlayWarning(true);
+                                    }}
+                                    iconName="play"
+                                    disabled={isStartingPlay}
+                                    className="w-full"
+                                    variant="primary"
+                                >
+                                    プレイ
+                                </Button>
+                            }
+                            open={showPlayWarning}
+                            onClose={() => setShowPlayWarning(false)}
+                            title="ルームに単語がありません"
+                            description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                            alignment="vertical"
+                        >
+                            <Button
+                                onClick={() => void handlePlay()}
+                                iconName="play"
+                                disabled={isStartingPlay}
+                                variant="primary"
+                                className="w-full"
+                            >
+                                プレイ
+                            </Button>
+                            <Button
+                                onClick={() => setShowPlayWarning(false)}
+                                iconName="x"
+                                className="w-full"
+                            >
+                                キャンセル
+                            </Button>
+                        </MorphDialog>
                     </div>
                 </div>
             )}
