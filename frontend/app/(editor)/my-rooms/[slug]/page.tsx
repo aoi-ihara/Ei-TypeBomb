@@ -592,7 +592,7 @@ export default function Page({
                             label="最大プレイヤー数"
                             type="number"
                             min={2}
-                            max={8}
+                            max={16}
                             value={maxPlayers}
                         />
                         {validateMaxPlayers(Number(maxPlayers)) && (
