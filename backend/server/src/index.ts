@@ -103,7 +103,7 @@ const createRoomIfNeeded = async (
                         rooms[index] = result.state.room;
                         // Typing focus/input is deliberately lightweight: don't
                         // scan every room or emit server-state logs per keystroke.
-                        if (event.type !== "currentInput") refreshServerState();
+                        if (event.type !== "currentInput" && event.type !== "hint:update") refreshServerState();
                     }
                     for (const effect of result.effects) {
                         if (effect.type === "broadcast") {
