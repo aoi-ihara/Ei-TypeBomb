@@ -290,7 +290,7 @@ export default function Clinet({
                     };
                     setRoom(normalizedRoom);
                     setHintLengths(Object.fromEntries((newRoom.bombs ?? []).map(bomb => [
-                        newRoom.users[bomb.holder]?.id,
+                        bomb.id,
                         bomb.hintLength ?? 0,
                     ]).filter(([id]) => !!id)));
                     setUsers(
@@ -339,9 +339,9 @@ export default function Clinet({
                 if (failed) setFailureCount((count) => count + 1);
             });
 
-            socket.on("hint:updated", ({ playerId, length }: { playerId: string; length: number }) => {
+            socket.on("hint:updated", ({ bombId, length }: { bombId: string; length: number }) => {
                 if (!selected || socketRef.current !== socket) return;
-                setHintLengths(current => ({ ...current, [playerId]: length }));
+                setHintLengths(current => ({ ...current, [bombId]: length }));
             });
 
             socket.on("game:quited", () => {
@@ -608,7 +608,7 @@ export default function Clinet({
             currentItem={focusedItem}
             itemPresentationKey={focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0}
             currentInput={currentInput}
-            remoteHintLength={hintLengths[users[focusedBomb?.holder ?? -1]?.id ?? ""] ?? focusedBomb?.hintLength ?? 0}
+            remoteHintLength={hintLengths[focusedBomb?.id ?? ""] ?? focusedBomb?.hintLength ?? 0}
             onHintChange={(length) => socketRef.current?.emit("hint:update", { length })}
             failureCount={failureCount}
             isStarted={isStarted}
