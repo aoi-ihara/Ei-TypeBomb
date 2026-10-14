@@ -206,7 +206,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                             other.wordIndex = index(room.items.length);
                         }
                     }
-                    clearInput();
+                    clearInput(loser?.id);
                 } else {
                     bomb.status++;
                     bomb.at = bombAt();
