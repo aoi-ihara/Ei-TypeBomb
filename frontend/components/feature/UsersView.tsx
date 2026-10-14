@@ -43,7 +43,7 @@ export default function UsersView({
                             key={index}
                             className="absolute flex transition-all duration-500 ease-etb rounded-full"
                             style={{
-                                opacity: position.opacity * (loserIds.includes(users[index]?.id) ? 0.5 : 1),
+                                opacity: position.opacity * (loserIds.includes(users[index]?.id ?? "") ? 0.5 : 1),
                                 width: `${position.w}px`,
                                 height: `${position.h}px`,
                                 filter: `blur(${(1 - position.opacity) * 12}px)`,
