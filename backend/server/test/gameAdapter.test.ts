@@ -28,7 +28,7 @@ test('typing updates shared focus while ignored events retain room identity', t 
     for (const [i, { result, previous }] of callbacks.entries()) {
         assert.notEqual(result.state.room, previous.room);
         assert.deepEqual(result.effects, [{ type: 'broadcast', packet: {
-            event: 'typing:input', data: { input: String(i), playerId: 'a', focusPlayerId: 'a' },
+            event: 'typing:input', data: { input: String(i), playerId: 'a', focusPlayerId: 'a', hintLength: 0 },
         } }]);
     }
 
