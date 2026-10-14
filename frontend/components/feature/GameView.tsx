@@ -28,6 +28,8 @@ type Props = {
     loserIds?: string[];
     loserNames?: string[];
     currentInput: string;
+    remoteHintLength?: number;
+    onHintChange?: (length: number) => void;
     failureCount?: number;
     isStarted: boolean;
     isSpectator?: boolean;
@@ -70,6 +72,8 @@ export default function GameView({
     loserIds,
     loserNames,
     currentInput,
+    remoteHintLength,
+    onHintChange,
     failureCount,
     isStarted,
     isSpectator = false,
@@ -141,6 +145,8 @@ export default function GameView({
                     key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
                     item={currentItem}
                     failureCount={failureCount}
+                    remoteHintLength={remoteHintLength}
+                    onHintChange={onHintChange}
                     hasDuplicatePrompt={hasDuplicatePrompt}
                     bombStatus={bombStatus}
                     onSuccess={onSuccess}

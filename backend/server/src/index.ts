@@ -103,7 +103,7 @@ const createRoomIfNeeded = async (
                         rooms[index] = result.state.room;
                         // Typing focus/input is deliberately lightweight: don't
                         // scan every room or emit server-state logs per keystroke.
-                        if (event.type !== "currentInput") refreshServerState();
+                        if (event.type !== "currentInput" && event.type !== "hint:update") refreshServerState();
                     }
                     for (const effect of result.effects) {
                         if (effect.type === "broadcast") {
@@ -273,6 +273,13 @@ io.on("connection", (socket) => {
 
     socket.on("currentInput", (input: unknown) => {
         getGame()?.apply({ type: "currentInput", playerId: user.id, input });
+    });
+    socket.on("hint:update", (payload: unknown) => {
+        if (!payload || typeof payload !== "object" || !("length" in payload)) return;
+        const length = payload.length;
+        if (typeof length !== "number" || !Number.isInteger(length) || length < 0 || length > 32)
+            return;
+        getGame()?.apply({ type: "hint:update", playerId: user.id, length });
     });
     socket.on("word:success", () => {
         getGame()?.apply({ type: "word:success", playerId: user.id });

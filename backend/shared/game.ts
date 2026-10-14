@@ -8,6 +8,7 @@ export type GameEvent =
     | { type: "room:leave"; playerId: string; reason: "disconnect" | "room_leave" }
     | { type: "game:start"; playerId: string; gameId: string; gameDuration: number }
     | { type: "word:success"; playerId: string }
+    | { type: "hint:update"; playerId: string; length: number }
     | { type: "player:rename"; playerId: string; displayName: string }
     | { type: "currentInput"; playerId: string; input: unknown }
     | { type: "deadline" };
@@ -67,6 +68,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             event: "typing:input",
             data: {
                 input: room.typingFocusInput ?? "",
+                hintLength: room.bombs?.find(bomb => room.users[bomb.holder]?.id === room.typingFocusPlayerId)?.hintLength ?? 0,
                 ...(room.typingFocusPlayerId ? { playerId: room.typingFocusPlayerId, focusPlayerId: room.typingFocusPlayerId } : {}),
                 ...(failed ? { failed: true } : {}),
             },
@@ -175,11 +177,25 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 return ignored();
             bomb.holder = nextLivingHolder(bomb.holder);
             bomb.wordIndex = index(room.items.length);
+            bomb.hintLength = 0;
             bomb.turn++;
             syncLegacy();
             if (room.typingFocusPlayerId === event.playerId) chooseFocus();
             activity("word_passed");
             break;
+        }
+        case "hint:update": {
+            const bomb = activeBomb(event.playerId);
+            if (!bomb || next.wordAt !== undefined || bomb.wordIndex === undefined) return ignored();
+            const answerLength = room.items[bomb.wordIndex]?.answer.length ?? 0;
+            if (!Number.isInteger(event.length) || event.length < 0 || event.length > answerLength)
+                return ignored();
+            if (bomb.hintLength === event.length) return ignored();
+            bomb.hintLength = event.length;
+            broadcast({ event: "hint:updated", data: { playerId: event.playerId, bombId: bomb.id, length: event.length } });
+            // The current viewer receives the hint without disrupting the typed input.
+            if (room.typingFocusPlayerId === event.playerId) publishFocus();
+            return { state: next, effects };
         }
         case "player:rename": {
             const player = room.users.find(user => user.id === event.playerId);
@@ -216,7 +232,10 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             if (next.wordAt !== undefined && next.wordAt <= context.now) {
                 due = true;
                 next.wordAt = undefined;
-                for (const bomb of room.bombs ?? []) bomb.wordIndex = index(room.items.length);
+                for (const bomb of room.bombs ?? []) {
+                    bomb.wordIndex = index(room.items.length);
+                    bomb.hintLength = 0;
+                }
                 clearInput();
             }
             // Independent bomb timers. A loser can only be counted once:
@@ -235,6 +254,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                             other.holder = nextLivingHolder(other.holder);
                             other.turn++;
                             other.wordIndex = index(room.items.length);
+                            other.hintLength = 0;
                         }
                     }
                     if (loser?.id === room.typingFocusPlayerId) chooseFocus();

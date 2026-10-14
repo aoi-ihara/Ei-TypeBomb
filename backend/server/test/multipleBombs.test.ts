@@ -30,6 +30,51 @@ const finishBomb = (state: GameState, id: string) => {
     return current;
 };
 
+test("hint visibility is scoped to active bomb holders", () => {
+    let state = started(5);
+    const [one, two] = state.room.bombs!;
+    const first = state.room.users[one.holder].id;
+    const second = state.room.users[two.holder].id;
+    const revealed = apply(state, { type: "hint:update", playerId: first, length: 2 });
+    state = revealed.state;
+    assert.equal(state.room.bombs?.[0].hintLength, 2);
+    assert.equal(state.room.bombs?.[1].hintLength, 0);
+    assert.ok(revealed.effects.some(effect => effect.type === "broadcast"
+        && effect.packet.event === "hint:updated"
+        && effect.packet.data.playerId === first
+        && effect.packet.data.bombId === one.id
+        && effect.packet.data.length === 2));
+    assert.equal(apply(state, { type: "hint:update", playerId: "observer", length: 2 }).state, state);
+    assert.equal(apply(state, { type: "hint:update", playerId: second, length: -1 }).state, state);
+    assert.equal(apply(state, { type: "hint:update", playerId: second, length: 100 }).state, state);
+
+    // A focused typist's packet also carries the latest hint.
+    const typing = apply(state, { type: "currentInput", playerId: first, input: "c" });
+    assert.ok(typing.effects.some(effect => effect.type === "broadcast"
+        && effect.packet.event === "typing:input"
+        && effect.packet.data.hintLength === 2));
+    state = apply(state, { type: "word:success", playerId: first }).state;
+    assert.equal(state.room.bombs?.[0].hintLength, 0);
+    assert.equal(state.room.bombs?.[1].hintLength, 0);
+});
+
+test("hint updates from a non-focused holder do not replace shared input", () => {
+    let state = started(5);
+    const [first, second] = state.room.bombs!;
+    const focus = state.room.typingFocusPlayerId;
+    const other = state.room.users[first.holder].id === focus
+        ? state.room.users[second.holder].id
+        : state.room.users[first.holder].id;
+    state = apply(state, { type: "currentInput", playerId: focus!, input: "c" }).state;
+    const hint = apply(state, { type: "hint:update", playerId: other, length: 1 });
+    assert.equal(hint.state.room.typingFocusPlayerId, focus);
+    assert.equal(hint.state.room.typingFocusInput, "c");
+    assert.ok(hint.effects.some(effect => effect.type === "broadcast"
+        && effect.packet.event === "hint:updated"));
+    assert.ok(!hint.effects.some(effect => effect.type === "broadcast"
+        && effect.packet.event === "typing:input"));
+});
+
 test("initial bomb count is fixed for each player bracket", () => {
     for (const [players, expected] of [[2, 1], [4, 1], [5, 2], [8, 2], [9, 3], [16, 4]]) {
         assert.equal(bombsForPlayers(players), expected);
