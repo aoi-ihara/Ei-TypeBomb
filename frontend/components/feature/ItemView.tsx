@@ -15,6 +15,8 @@ type Props = {
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     enableRemoteTypingSync?: boolean;
+    remoteHintLength?: number;
+    onHintChange?: (length: number) => void;
     learningMode?: LearningMode;
     initialCueRatio?: number;
     cueSteps?: number[];
