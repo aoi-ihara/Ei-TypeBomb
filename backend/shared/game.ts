@@ -1,4 +1,4 @@
-import type { BombState, GameState, User } from "./types";
+import type { GameState, User } from "./types";
 import type { ServerGameEvent } from "./protocol";
 import { roomSnapshot } from "./protocol";
 import { MAX_CURRENT_INPUT_LENGTH, requireRoomItems } from "./validation";
