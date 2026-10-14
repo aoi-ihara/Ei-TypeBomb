@@ -148,7 +148,7 @@ export default function Loading() {
                 />
             </div>
 
-            <div className="animate-appear">
+            <div className="animate-appear w-full">
                 <Input
                     disabled={showPasswordField}
                     value={link}
@@ -166,6 +166,7 @@ export default function Loading() {
                         type="password"
                         onChange={(e) => setRoomPassword(e.target.value)}
                         label="ルームのパスワード"
+                        className="w-full"
                     />
                     <Button
                         onClick={() => handleMode()}
