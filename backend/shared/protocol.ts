@@ -1,10 +1,11 @@
-import type { Room } from "./types";
+import type { Room, GameLoser } from "./types";
 export type ClientPayloads = {
     "auth:response": { jwtToken: string; displayName: string };
     "room:join": undefined;
     "room:leave": undefined;
     "game:start": undefined;
     "word:success": undefined;
+    "hint:update": { length: number };
     currentInput: string | { input: string; failed: true };
     "health:ping": string;
     "health:database": string;
@@ -18,8 +19,9 @@ export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
     "room:broadcast": WireRoom;
-    "typing:input": { input: string; failed?: boolean };
-    "game:end": { holderUserId: string; holderDisplayName?: string };
+    "typing:input": { input: string; failed?: boolean; playerId?: string; focusPlayerId?: string; hintLength?: number };
+    "hint:updated": { playerId: string; bombId: string; length: number };
+    "game:end": { holderUserId: string; holderDisplayName?: string; losers?: GameLoser[] };
     "game:quited": undefined;
     "health:pong": string;
     "health:database-result": {

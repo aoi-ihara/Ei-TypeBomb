@@ -4,7 +4,7 @@ import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/feature/ItemView";
 import UsersView from "@/components/feature/UsersView";
 import Button from "@/components/ui/Button";
-import type { Item, Position, Room, User } from "@/type";
+import type { GameBomb, Item, Position, Room, User } from "@/type";
 import type {
     LearningMode,
     RecallObservation,
@@ -23,8 +23,13 @@ type Props = {
     currentTurn: number;
     bombStatus: number;
     currentItem: Item | null;
-    itemPresentationKey?: number;
+    itemPresentationKey?: number | string;
+    bombs?: GameBomb[];
+    loserIds?: string[];
+    loserNames?: string[];
     currentInput: string;
+    remoteHintLength?: number;
+    onHintChange?: (length: number) => void;
     failureCount?: number;
     isStarted: boolean;
     isSpectator?: boolean;
@@ -63,7 +68,12 @@ export default function GameView({
     bombStatus,
     currentItem,
     itemPresentationKey = 0,
+    bombs,
+    loserIds,
+    loserNames,
     currentInput,
+    remoteHintLength,
+    onHintChange,
     failureCount,
     isStarted,
     isSpectator = false,
@@ -135,6 +145,8 @@ export default function GameView({
                     key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
                     item={currentItem}
                     failureCount={failureCount}
+                    remoteHintLength={remoteHintLength}
+                    onHintChange={onHintChange}
                     hasDuplicatePrompt={hasDuplicatePrompt}
                     bombStatus={bombStatus}
                     onSuccess={onSuccess}
@@ -167,11 +179,11 @@ export default function GameView({
 
             {result !== null && (
                 <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
-                    <div className="w-sm flex flex-col gap-4 items-center animate-appear">
-                        <div data-cursor="text" className="font-bold text-4xl">
-                            {result
-                                ? "あなたの負けです"
-                                : `${lostDisplayName ?? "相手"}の負けです`}
+                    <div className="w-full max-w-sm px-4 flex flex-col gap-4 items-center animate-appear">
+                        <div data-cursor="text" className="font-bold text-4xl text-center break-words">
+                            {loserNames?.length
+                                ? `${loserNames.join(", ")}の負け`
+                                : `${lostDisplayName ?? "相手"}の負け`}
                         </div>
                         {stopRecommended && onStop ? (
                             <>
@@ -367,6 +379,8 @@ export default function GameView({
                     userId={userId}
                     currentTurn={isStarted ? currentTurn : null}
                     bombStatus={bombStatus}
+                    bombs={bombs}
+                    loserIds={loserIds}
                 />
             </div>
         </div>

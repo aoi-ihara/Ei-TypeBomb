@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import Bomb from "./Bomb";
-import type { User } from "@/type";
+import type { GameBomb, User } from "@/type";
 
 type Position = {
     x: number;
@@ -18,6 +18,8 @@ export default function UsersView({
     bombStatus,
     bombRef,
     exploded = false,
+    bombs,
+    loserIds = [],
 }: Readonly<{
     users: User[];
     positions: Position[];
@@ -26,6 +28,8 @@ export default function UsersView({
     bombStatus: number;
     bombRef?: Ref<HTMLDivElement>;
     exploded?: boolean;
+    bombs?: GameBomb[];
+    loserIds?: string[];
 }>) {
     return (
         <div className="h-full w-full flex items-center justify-center">
@@ -39,7 +43,7 @@ export default function UsersView({
                             key={index}
                             className="absolute flex transition-all duration-500 ease-etb rounded-full"
                             style={{
-                                opacity: `${position.opacity}`,
+                                opacity: position.opacity * (loserIds.includes(users[index]?.id ?? "") ? 0.5 : 1),
                                 width: `${position.w}px`,
                                 height: `${position.h}px`,
                                 filter: `blur(${(1 - position.opacity) * 12}px)`,
@@ -74,38 +78,30 @@ export default function UsersView({
                     );
                 })}
 
-                <div
-                    className="absolute flex transition-all duration-500 w-8 h-8 ease-etb rounded-full animate-[bombBounce_400ms_ease-etb]"
-                    key={bombStatus}
-                    ref={bombRef}
-                    data-bomb-status={bombStatus}
-                    style={{
-                        visibility: exploded ? "hidden" : undefined,
-                        opacity: `${currentTurn !== null ? 1 : 0}`,
-                        left: `calc(${
-                            currentTurn !== null
-                                ? Number(positions[currentTurn]?.x.toFixed(4)) +
-                                  50
-                                : 50
-                        }% - ${
-                            currentTurn !== null
-                                ? positions[currentTurn]?.w / 2 + 16
-                                : 16
-                        }px)`,
-                        top: `calc(${
-                            currentTurn !== null
-                                ? Number(positions[currentTurn]?.y.toFixed(4)) +
-                                  50
-                                : 50
-                        }% - ${
-                            currentTurn !== null
-                                ? positions[currentTurn]?.h / 2 + 8
-                                : 16
-                        }px)`,
-                    }}
-                >
-                    <Bomb bombStatus={bombStatus} />
-                </div>
+                {(bombs ?? (currentTurn === null ? [] : [{
+                    id: "legacy", holder: currentTurn, status: bombStatus,
+                    at: 0, turn: 0,
+                }])).map((bomb, index) => {
+                    const place = positions[bomb.holder];
+                    if (!place) return null;
+                    const stackIndex = (bombs ?? []).slice(0, index).filter(item => item.holder === bomb.holder).length;
+                    return (
+                        <div
+                            key={bomb.id}
+                            className="absolute flex transition-all duration-500 w-8 h-8 ease-etb rounded-full animate-[bombBounce_400ms_ease-etb]"
+                            ref={index === 0 ? bombRef : undefined}
+                            data-bomb-status={bomb.status}
+                            style={{
+                                visibility: exploded ? "hidden" : undefined,
+                                opacity: 1,
+                                left: `calc(${Number(place.x.toFixed(4)) + 50}% - ${place.w / 2 + 16 - stackIndex * 14}px)`,
+                                top: `calc(${Number(place.y.toFixed(4)) + 50}% - ${place.h / 2 + 8 + stackIndex * 10}px)`,
+                            }}
+                        >
+                            <Bomb bombStatus={bomb.status} />
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

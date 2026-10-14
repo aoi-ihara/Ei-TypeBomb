@@ -15,6 +15,8 @@ type Props = {
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     enableRemoteTypingSync?: boolean;
+    remoteHintLength?: number;
+    onHintChange?: (length: number) => void;
     learningMode?: LearningMode;
     initialCueRatio?: number;
     cueSteps?: number[];
@@ -32,6 +34,8 @@ export default function TypedRecallView({
     onSuccess,
     onChangeInput,
     enableRemoteTypingSync = true,
+    remoteHintLength,
+    onHintChange,
     learningMode,
     initialCueRatio,
     cueSteps,
@@ -50,6 +54,8 @@ export default function TypedRecallView({
             currentInput={currentInput}
             failureCount={failureCount}
             enableRemoteTypingSync={enableRemoteTypingSync}
+            remoteHintLength={remoteHintLength}
+            onHintChange={onHintChange}
             learningMode={learningMode}
             initialCueRatio={initialCueRatio}
             cueSteps={cueSteps}
