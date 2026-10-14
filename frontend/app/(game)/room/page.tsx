@@ -8,6 +8,8 @@ import { prepareRoomJoin, signInToRoom } from "@/lib/room/auth";
 import { PopUp } from "@/components/ui/PopUp";
 import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import posthog from "posthog-js";
+import { getUserDetails } from "@/lib/auth/session";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 type PlayMode = "online" | "playground";
 
@@ -24,6 +26,7 @@ export default function Loading() {
     const [turnstile, setTurnstile] = useState(false);
     const [roomId, setRoomId] = useState("");
     const [selectedMode, setSelectedMode] = useState<PlayMode>("online");
+    const [userId, setUserId] = useState<null | string>(null);
 
     const router = useRouter();
 
@@ -129,10 +132,24 @@ export default function Loading() {
             setShowCursor((prev) => !prev);
         }, 500);
 
+        const fetchUserData = async () => {
+            const user = await getUserDetails();
+            if (!user) return;
+
+            setUserId(user.id);
+
+            posthog.identify(user.id, {
+                email: user.email,
+                display_name: user.displayName,
+            });
+        };
+
+        fetchUserData();
+
         return () => {
             clearInterval(intervalId);
         };
-    }, []);
+    }, [router]);
 
     const modeButtonsDisabled =
         !link || (showPasswordField && !roomPassword) || loadingMode !== null;
@@ -205,13 +222,24 @@ export default function Loading() {
             )}
 
             {!link && (
-                <Button
-                    onClick={() => router.push("/game-demo")}
-                    className="w-full animate-appear"
-                    iconName="play"
-                >
-                    デモをプレイ
-                </Button>
+                <>
+                    <Button
+                        iconName="plus"
+                        className="w-full animate-appear"
+                        onClick={() =>
+                            router.push(userId ? "/my-rooms" : getSignInUrl())
+                        }
+                    >
+                        ルームを作成
+                    </Button>
+                    <Button
+                        onClick={() => router.push("/game-demo")}
+                        className="w-full animate-appear"
+                        iconName="play"
+                    >
+                        デモをプレイ
+                    </Button>
+                </>
             )}
 
             {error && (
