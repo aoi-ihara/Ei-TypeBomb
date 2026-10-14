@@ -12,6 +12,8 @@ export type TypedRecallItem = {
 
 export type Item = TypedRecallItem;
 
+export type GameBomb = { id: string; holder: number; status: number; wordIndex?: number; turn: number; at: number };
+export type GameLoser = { id: string; displayName?: string };
 export type Room = {
     id: string;
     userId?: string;
@@ -24,6 +26,9 @@ export type Room = {
     createdAt?: string;
     updatedAt?: string;
     link?: string;
+    revision?: number;
+    bombs?: GameBomb[];
+    losers?: GameLoser[];
 };
 
 export type User = {

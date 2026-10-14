@@ -93,7 +93,7 @@ export const validatePassword = (password?: string) => {
 };
 
 export const validateMaxPlayers = (maxPlayers: number) => {
-    const MAX_MAX_PLAYERS = 8;
+    const MAX_MAX_PLAYERS = 16;
     const MIN_MAX_PLAYERS = 2;
 
     if (!maxPlayers) {
@@ -105,7 +105,7 @@ export const validateMaxPlayers = (maxPlayers: number) => {
     }
 
     if (maxPlayers > MAX_MAX_PLAYERS) {
-        return "最大プレイヤー数は8人以下にしてください。";
+        return "最大プレイヤー数は16人以下にしてください。";
     }
 
     return null;

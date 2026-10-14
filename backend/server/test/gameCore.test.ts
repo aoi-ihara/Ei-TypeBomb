@@ -134,7 +134,7 @@ for (const [runtime, rules] of [
                     type: "broadcast",
                     packet: {
                         event: "typing:input",
-                        data: { input: "x".repeat(32) },
+                        data: { input: "x".repeat(32), playerId: "a" },
                     },
                 },
             ],

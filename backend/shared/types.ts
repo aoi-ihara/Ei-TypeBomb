@@ -6,6 +6,8 @@ export type TypedRecallItem = {
 };
 export type Item = TypedRecallItem;
 export type User = { id: string; displayName?: string; pulse?: string };
+export type BombState = { id: string; holder: number; status: number; wordIndex?: number; at: number; turn: number };
+export type GameLoser = { id: string; displayName?: string };
 export type Room = {
     id: string;
     userId?: string;
@@ -23,6 +25,8 @@ export type Room = {
     bombHolder: number;
     wordIndex?: number;
     bombStatus: number;
+    bombs?: BombState[];
+    losers?: GameLoser[];
 };
 // Serializable deadlines in epoch milliseconds. Transport IDs are opaque player IDs.
 export type GameState = {
