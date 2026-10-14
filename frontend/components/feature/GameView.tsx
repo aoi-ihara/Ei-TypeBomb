@@ -4,7 +4,7 @@ import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/feature/ItemView";
 import UsersView from "@/components/feature/UsersView";
 import Button from "@/components/ui/Button";
-import type { Item, Position, Room, User } from "@/type";
+import type { GameBomb, Item, Position, Room, User } from "@/type";
 import type {
     LearningMode,
     RecallObservation,
@@ -23,7 +23,10 @@ type Props = {
     currentTurn: number;
     bombStatus: number;
     currentItem: Item | null;
-    itemPresentationKey?: number;
+    itemPresentationKey?: number | string;
+    bombs?: GameBomb[];
+    loserIds?: string[];
+    loserNames?: string[];
     currentInput: string;
     failureCount?: number;
     isStarted: boolean;
@@ -63,6 +66,9 @@ export default function GameView({
     bombStatus,
     currentItem,
     itemPresentationKey = 0,
+    bombs,
+    loserIds,
+    loserNames,
     currentInput,
     failureCount,
     isStarted,
@@ -169,9 +175,11 @@ export default function GameView({
                 <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-sm flex flex-col gap-4 items-center animate-appear">
                         <div data-cursor="text" className="font-bold text-4xl">
-                            {result
-                                ? "あなたの負けです"
-                                : `${lostDisplayName ?? "相手"}の負けです`}
+                            {loserNames && loserNames.length > 1
+                                ? "敗者：" + loserNames.join("・")
+                                : result
+                                  ? "あなたの負けです"
+                                  : `${lostDisplayName ?? "相手"}の負けです`}
                         </div>
                         {stopRecommended && onStop ? (
                             <>
@@ -367,6 +375,8 @@ export default function GameView({
                     userId={userId}
                     currentTurn={isStarted ? currentTurn : null}
                     bombStatus={bombStatus}
+                    bombs={bombs}
+                    loserIds={loserIds}
                 />
             </div>
         </div>
