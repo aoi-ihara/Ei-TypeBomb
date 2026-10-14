@@ -2,7 +2,6 @@ import { User, Position } from "@/type";
 
 export const newPositions = (users: User[], positions: Position[]) => {
     return Array.from({ length: Math.max(users.length, positions.length) }, (_, index) => {
-        const position = positions[index];
         if (users.length === 1 && index === 0) {
             return {
                 x: 0,
