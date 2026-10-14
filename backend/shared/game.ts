@@ -192,7 +192,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 return ignored();
             if (bomb.hintLength === event.length) return ignored();
             bomb.hintLength = event.length;
-            broadcast({ event: "hint:updated", data: { playerId: event.playerId, length: event.length } });
+            broadcast({ event: "hint:updated", data: { playerId: event.playerId, bombId: bomb.id, length: event.length } });
             // The current viewer receives the hint without disrupting the typed input.
             if (room.typingFocusPlayerId === event.playerId) publishFocus();
             return { state: next, effects };
