@@ -593,6 +593,7 @@ export default function Clinet({
             loserNames={loserNames}
             loserIds={room?.losers?.map(loser => loser.id)}
             bombs={room?.bombs}
+            enableRemoteTypingSync={false}
             bombRef={bombRef}
             explosionLayer={explosionLayer}
             onSuccess={() => {
