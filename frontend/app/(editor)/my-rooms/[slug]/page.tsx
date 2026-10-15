@@ -120,6 +120,7 @@ export default function Page({
     const [confirmPassword, setConfirmPassword] = useState("");
 
     const [isExported, setIsExported] = useState(false);
+    const [exportError, setExportError] = useState("");
 
     const [showGenerationInput, setShowGenerationInput] = useState(false);
     const [generationPrompt, setGenerationPrompt] = useState("");
@@ -296,12 +297,17 @@ export default function Page({
     }, [slug]);
 
     const handleExportWords = async () => {
-        const jsonData = exportAnswerPairs(items ?? []);
-        await navigator.clipboard.writeText(jsonData);
-        setIsExported(true);
-        setTimeout(() => {
-            setIsExported(false);
-        }, 3000);
+        setExportError("");
+        try {
+            const jsonData = exportAnswerPairs(items ?? []);
+            await navigator.clipboard.writeText(jsonData);
+            setIsExported(true);
+            setTimeout(() => {
+                setIsExported(false);
+            }, 3000);
+        } catch (error) {
+            setExportError(error instanceof Error ? error.message : "JSONのエクスポートに失敗しました。");
+        }
     };
 
     const handleCopyRoomLink = async () => {
@@ -844,6 +850,7 @@ export default function Page({
                 >
                     {!isExported && "エクスポート"}
                 </Button>
+                {exportError && <div className="text-red-500" role="alert">{exportError}</div>}
 
                 <MorphDialog
                     button={
@@ -941,12 +948,12 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                JSONは問題と回答のペアを次の形式で貼り付けてください:
+                                JSONは、問題文をキー、回答を値にした1つのオブジェクトで貼り付けてください:
                             </div>
                             <div data-cursor="text">
                                 {" "}
                                 <pre className="text-sm">
-                                    {`[\n    { "question": "りんご", "answer": "apple" },\n    { "question": "日本の憲法の名前は？", "answer": "にほんこくけんぽう" }\n]`}
+                                    {`{\n    "ねこ": "cat",\n    "日本の憲法の名前は？": "にほんこくけんぽう"\n}`}
                                 </pre>
                             </div>
                             <div data-cursor="text">
