@@ -5,6 +5,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
 import {
+    advanceKanaInput,
     decodeKanaProgress,
     editKanaCell,
     hasHiragana,
@@ -438,7 +439,7 @@ function TypingAttempt({
         // Romanized kana answers are editable at any position, including
         // positions that have subsequently received an automatic hint.
         // Keep the pre-existing strict English hint behaviour unchanged.
-        if (!isKanaAnswer && typedInsideHint && (!manualHints || answerRevealed)) {
+        if (typedInsideHint && (!manualHints || answerRevealed) && (!isKanaAnswer || answerRevealed)) {
             resetInput();
             return;
         }
@@ -766,6 +767,17 @@ function TypingAttempt({
                                         // An impossible roman sequence (e.g. zz)
                                         // fails immediately, even with no hints.
                                         resetInput();
+                                        return;
+                                    }
+                                    if (answerRevealed && !advanceKanaInput(
+                                        english.slice(currentSelection),
+                                        { committed: "", composing: kanaComposing },
+                                        char,
+                                    ).accepted) {
+                                        // During a full hint, reject the first
+                                        // incorrect roman key without waiting.
+                                        resetInput();
+                                        setCharInput("");
                                         return;
                                     }
                                     if (edit.accepted) {
