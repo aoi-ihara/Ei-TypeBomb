@@ -18,7 +18,14 @@ export type GameRules = {
     allowCountdownPass: boolean;
     clearInputOnStop: boolean;
 };
-export type GameContext = { now: number; random: () => number; rules: GameRules };
+export type GameContext = {
+    now: number;
+    random: () => number;
+    rules: GameRules;
+    // Optional per-holder recommendation. The core validates its range and
+    // falls back to the original random selection for unavailable clients.
+    chooseItemIndex?: (playerId: string, room: GameState["room"]) => number | undefined;
+};
 export type Activity = {
     event: "player_joined" | "player_left" | "game_started" | "game_cancelled" | "game_finished" | "word_passed";
     playerCount: number;
@@ -90,6 +97,15 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
     const ignored = (): GameResult => ({ state, effects: [] });
     const random = () => Math.max(0, Math.min(1 - Number.EPSILON, context.random()));
     const index = (length: number) => Math.floor(random() * length);
+    const itemForHolder = (holder: number) => {
+        const playerId = room.users[holder]?.id;
+        const preferred = playerId
+            ? context.chooseItemIndex?.(playerId, room)
+            : undefined;
+        return typeof preferred === "number" && Number.isInteger(preferred) &&
+            preferred >= 0 && preferred < room.items.length
+            ? preferred : index(room.items.length);
+    };
     const bombAt = () => {
         const duration = room.gameDuration;
         const base = Number.isInteger(duration) && duration >= 1 && duration <= 2147473 ? duration : 20;
@@ -178,7 +194,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             if (!bomb || (!context.rules.allowCountdownPass && next.wordAt !== undefined))
                 return ignored();
             bomb.holder = nextLivingHolder(bomb.holder);
-            bomb.wordIndex = index(room.items.length);
+            bomb.wordIndex = itemForHolder(bomb.holder);
             bomb.hintLength = 0;
             bomb.turn++;
             syncLegacy();
@@ -235,7 +251,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 due = true;
                 next.wordAt = undefined;
                 for (const bomb of room.bombs ?? []) {
-                    bomb.wordIndex = index(room.items.length);
+                    bomb.wordIndex = itemForHolder(bomb.holder);
                     bomb.hintLength = 0;
                 }
                 clearInput();
@@ -255,7 +271,7 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                         if (other.holder === bomb.holder) {
                             other.holder = nextLivingHolder(other.holder);
                             other.turn++;
-                            other.wordIndex = index(room.items.length);
+                            other.wordIndex = itemForHolder(other.holder);
                             other.hintLength = 0;
                         }
                     }
