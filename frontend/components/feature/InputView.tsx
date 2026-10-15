@@ -220,7 +220,11 @@ function TypingAttempt({
                 lastHintAtRef.current = firedAt;
                 hintIndex += 1;
 
+                // Kana text remains editable even when a timed hint expands
+                // across a nonmatching cell. Previously this branch cleared
+                // the entire answer before a user had finished correcting it.
                 if (
+                    !isKanaAnswer &&
                     hintCoversError(inputStateRef.current, english, nextLength)
                 ) {
                     attemptCountRef.current += 1;
@@ -427,7 +431,10 @@ function TypingAttempt({
         const typedInsideHint = Array.from({ length: advance }, (_, offset) => currentSelection + offset)
             .some((index) => index < hintLength && next[index] !== english[index]);
 
-        if (typedInsideHint && (!manualHints || answerRevealed)) {
+        // Romanized kana answers are editable at any position, including
+        // positions that have subsequently received an automatic hint.
+        // Keep the pre-existing strict English hint behaviour unchanged.
+        if (!isKanaAnswer && typedInsideHint && (!manualHints || answerRevealed)) {
             resetInput();
             return;
         }
@@ -515,6 +522,23 @@ function TypingAttempt({
                     });
                 }
             } else {
+                if (isKanaAnswer) {
+                    // Never erase kana merely because all boxes happen to be
+                    // filled (they can also be filled while revisiting an
+                    // earlier cell). Keep the answer editable, point at the
+                    // first mismatched cell, and provide failure feedback only
+                    // after finishing a forward pass through the final box.
+                    if (nextIndex >= english.length && !pendingRoman) {
+                        triggerFailAnimation();
+                        attemptCountRef.current += 1;
+                    }
+                    const firstMismatch = next.findIndex(
+                        (char, index) => char !== english[index],
+                    );
+                    if (firstMismatch >= 0) setCurrentSelection(firstMismatch);
+                    onChangeInput(result);
+                    return;
+                }
                 console.log("Wrong answer. Query:", result);
                 if (manualHints) {
                     attemptCountRef.current += 1;
