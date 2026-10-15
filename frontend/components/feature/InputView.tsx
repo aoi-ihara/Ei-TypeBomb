@@ -10,6 +10,8 @@ import {
     editKanaCell,
     hasHiragana,
     nextKanaCursor,
+    normalizeHyphenInput,
+    displayTypingCharacter,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
 } from "@/lib/romaji-input.mjs";
@@ -709,11 +711,11 @@ function TypingAttempt({
                                     ? answerRevealed
                                     : index < hintLength) && (
                                     <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
-                                        {char}
+                                        {displayTypingCharacter(char)}
                                     </div>
                                 )}
                                 <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                    {displayChars?.[index] ?? ""}
+                                    {displayTypingCharacter(displayChars?.[index] ?? "")}
                                 </div>
                             </button>
                         );
@@ -807,7 +809,7 @@ function TypingAttempt({
                                 }
                                 if (char !== " ") {
                                     const next = [...input];
-                                    next[currentSelection] = char;
+                                    next[currentSelection] = normalizeHyphenInput(targetChar, char);
                                     setInput(next);
                                     moveToNext(next);
                                 }
