@@ -18,6 +18,8 @@ import { loadPlaygroundMemory, syncPlaygroundMemory } from "@/lib/playground/mem
 import type { RecallObservation } from "@/lib/playground/memory";
 import {
     createOnlineMemorySession,
+    cacheOnlinePendingMemory,
+    loadOnlinePendingMemory,
     loadOnlineGuestMemory,
     nextOnlineRecommendation,
     recordOnlineRecall,
@@ -105,8 +107,10 @@ export default function Clinet({
                         if (session.pending.get(saved.itemId) === saved)
                             session.pending.delete(saved.itemId);
                     }
+                    cacheOnlinePendingMemory(session);
                 } catch (error) {
                     console.error("Online memory sync failed", error);
+                    cacheOnlinePendingMemory(session);
                     break;
                 }
             }
@@ -136,10 +140,26 @@ export default function Clinet({
             const memory = result.userId
                 ? result.memoryByItem
                 : loadOnlineGuestMemory(memoryRoomId, itemIds);
-            onlineMemoryRef.current = createOnlineMemorySession(
+            const session = createOnlineMemorySession(
                 memoryRoomId, itemIds, result.userId, memory,
             );
+            if (result.userId) {
+                // Playground and online play share the same unsent-write queue.
+                for (const pending of loadOnlinePendingMemory(
+                    memoryRoomId, result.userId, itemIds,
+                )) {
+                    const remote = session.memory[pending.itemId];
+                    if (!remote ||
+                        (Date.parse(pending.updatedAt ?? "") || 0) >=
+                            (Date.parse(remote.updatedAt ?? "") || 0)) {
+                        session.memory[pending.itemId] = pending;
+                        session.pending.set(pending.itemId, pending);
+                    }
+                }
+            }
+            onlineMemoryRef.current = session;
             setOnlineMemoryReady(n => n + 1);
+            void flushOnlineMemory();
         };
         void load();
         return () => {
@@ -161,7 +181,11 @@ export default function Clinet({
     }, [room, userId, onlineMemoryReady]);
 
     useEffect(() => {
-        const retry = () => { void flushOnlineMemory(); };
+        const retry = () => {
+            const session = onlineMemoryRef.current;
+            if (session) cacheOnlinePendingMemory(session);
+            void flushOnlineMemory();
+        };
         const interval = setInterval(retry, 5_000);
         const visibility = () => {
             if (document.visibilityState === "hidden") retry();
@@ -732,6 +756,7 @@ export default function Clinet({
                 if (!session || session.roomId !== room?.id) return;
                 const updated = recordOnlineRecall(session, focusedItem.id, observation);
                 if (!updated) return;
+                cacheOnlinePendingMemory(session);
                 const nextItemId = nextOnlineRecommendation(session);
                 // This is emitted before word:success, so the socket server
                 // already has our next recommendation when the bomb returns.
