@@ -34,6 +34,8 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 
 const games = new Map<string, NodeGameAdapter>();
+// Socket-scoped IDs are never shared between players or persisted on the server.
+const recommendedItems = new Map<string, string>();
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
@@ -152,6 +154,12 @@ const createRoomIfNeeded = async (
                         roomId,
                         ...metadata,
                     }),
+                (playerId, currentRoom) => {
+                    const itemId = recommendedItems.get(playerId);
+                    if (!itemId) return undefined;
+                    const index = currentRoom.items.findIndex(item => item.id === itemId);
+                    return index >= 0 ? index : undefined;
+                },
             ),
         );
         refreshServerState();
@@ -281,6 +289,16 @@ io.on("connection", (socket) => {
             return;
         getGame()?.apply({ type: "hint:update", playerId: user.id, length });
     });
+    socket.on("item:recommend", (payload: unknown) => {
+        const game = getGame();
+        if (!game || !roomId || !payload || typeof payload !== "object" ||
+            !("itemId" in payload) || typeof payload.itemId !== "string") return;
+        // Only an authenticated room participant may influence their own
+        // next question; unknown item IDs are ignored.
+        if (!game.state.room.users.some(player => player.id === user.id)) return;
+        if (!game.state.room.items.some(item => item.id === payload.itemId)) return;
+        recommendedItems.set(user.id, payload.itemId);
+    });
     socket.on("word:success", () => {
         getGame()?.apply({ type: "word:success", playerId: user.id });
     });
@@ -303,6 +321,7 @@ io.on("connection", (socket) => {
         playerId: string,
         reason: "disconnect" | "room_leave",
     ) => {
+        recommendedItems.delete(playerId);
         if (!roomId) return;
         const game = getGame();
         if (!game) return;
