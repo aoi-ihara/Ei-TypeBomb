@@ -6,10 +6,10 @@ import {
 import { useEffect, useRef, useState } from "react";
 import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
 import {
-    advanceKanaInput,
     decodeKanaProgress,
-    encodeKanaProgress,
+    editKanaCell,
     hasHiragana,
+    nextKanaCursor,
 } from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
@@ -432,11 +432,15 @@ function TypingAttempt({
             return;
         }
 
-        if (
-            nextIndex < english.length &&
-            !(manualHints && next.join("") === english)
-        ) {
-            setCurrentSelection(nextIndex);
+        // Kana cells may be edited out of order. A wrong answer is only
+        // evaluated after all cells are filled, not at the first mistake
+        // or merely because the cursor reached the last position.
+        const needsMoreInput = isKanaAnswer
+            ? next.some((character) => character === "")
+            : nextIndex < english.length &&
+              !(manualHints && next.join("") === english);
+        if (needsMoreInput) {
+            setCurrentSelection(Math.min(english.length - 1, nextIndex));
             onChangeInput(next.join("") + pendingRoman);
         } else {
             const result = next.join("");
@@ -539,6 +543,21 @@ function TypingAttempt({
     const confirmedKana = remoteKanaProgress?.committed ?? input.join("");
     const composingKana = remoteKanaProgress?.composing ?? kanaComposing;
 
+    const selectKanaIndex = (index: number) => {
+        if (isReadonly || index < 0 || index >= english.length) return;
+        if (index !== currentSelection) {
+            setCurrentSelection(index);
+            // The roman prefix belongs to its original cell. Changing the
+            // selected cell cancels only that unfinished prefix, not any
+            // previously confirmed answer cells.
+            if (kanaComposing) {
+                setKanaComposing("");
+                onChangeInput(input.join(""));
+            }
+        }
+        inputRef.current?.focus();
+    };
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
@@ -562,10 +581,12 @@ function TypingAttempt({
                     }}
                     onKeyDown={(e) => {
                         if (isKanaAnswer) {
-                            // Kana conversion is sequential. Undo a whole combined
-                            // syllable (ちゃ, きょ, etc.) on Backspace.
                             if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                                 e.preventDefault();
+                                const direction = e.key === "ArrowLeft" ? -1 : 1;
+                                selectKanaIndex(
+                                    nextKanaCursor(currentSelection, direction, english.length),
+                                );
                                 return;
                             }
                             if (e.key === "Backspace") {
@@ -574,13 +595,14 @@ function TypingAttempt({
                                     const pending = kanaComposing.slice(0, -1);
                                     setKanaComposing(pending);
                                     onChangeInput(input.join("") + pending);
-                                } else if (currentSelection > 0) {
-                                    const count = kanaCommitSpansRef.current.pop() ?? 1;
-                                    const start = Math.max(0, currentSelection - count);
+                                } else {
+                                    const target = input[currentSelection] !== ""
+                                        ? currentSelection
+                                        : Math.max(0, currentSelection - 1);
                                     const next = [...input];
-                                    next.fill("", start, currentSelection);
+                                    next[target] = "";
                                     setInput(next);
-                                    setCurrentSelection(start);
+                                    setCurrentSelection(target);
                                     onChangeInput(next.join(""));
                                 }
                                 return;
@@ -624,11 +646,12 @@ function TypingAttempt({
                         <KanaTypingBoxes
                             answer={english}
                             confirmed={confirmedKana}
+                            cells={isReadonly ? undefined : input}
                             composing={composingKana}
                             activeIndex={currentSelection}
                             hintLength={hintLength}
                             readonly={isReadonly}
-                            onSelect={() => inputRef.current?.focus()}
+                            onSelect={selectKanaIndex}
                         />
                     ) : [...english].map((char, index) => {
                         const isSelected =
@@ -708,25 +731,22 @@ function TypingAttempt({
                                     firstKeyAtRef.current = performance.now();
                                 }
                                 if (isKanaAnswer) {
-                                    const previous = { committed: input.join(""), composing: kanaComposing };
-                                    const result = advanceKanaInput(english, previous, char);
-                                    if (!result.accepted) {
-                                        incorrectInputCountRef.current += 1;
-                                        triggerFailAnimation();
-                                        onChangeInput(encodeKanaProgress(previous), true);
-                                    } else {
-                                        const added = result.committed.slice(previous.committed.length);
-                                        const next = [...input];
-                                        Array.from(added).forEach((letter, offset) => {
-                                            next[currentSelection + offset] = letter;
-                                        });
-                                        setKanaComposing(result.composing);
-                                        if (added.length > 0) {
-                                            kanaCommitSpansRef.current.push(added.length);
-                                            setInput(next);
-                                            moveToNext(next, added.length, result.composing);
+                                    const edit = editKanaCell(
+                                        english,
+                                        input,
+                                        currentSelection,
+                                        kanaComposing,
+                                        char,
+                                    );
+                                    if (edit.accepted) {
+                                        setKanaComposing(edit.composing);
+                                        if (edit.advance > 0) {
+                                            setInput(edit.cells);
+                                            moveToNext(edit.cells, edit.advance, edit.composing);
                                         } else {
-                                            onChangeInput(encodeKanaProgress(result));
+                                            // Invalid or incomplete roman prefixes stay visible
+                                            // for Backspace correction; no premature failure.
+                                            onChangeInput(edit.cells.join("") + edit.composing);
                                         }
                                     }
                                     setCharInput("");
