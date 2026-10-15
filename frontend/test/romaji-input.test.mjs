@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
     advanceKanaInput, decodeKanaProgress, encodeKanaProgress,
-    hasHiragana, romanSlotCount,
+    hasHiragana, kanaCompositionLayout, romanSlotCount,
 } from "../lib/romaji-input.mjs";
 
 function type(answer, keys) {
@@ -72,4 +72,49 @@ test("wire representation round-trips mid-composition and completed syllables", 
         const answer = progress.committed.startsWith("こ") ? "こんにちは" : "ちゃ";
         assert.deepEqual(decodeKanaProgress(answer, encodeKanaProgress(progress)), progress);
     }
+});
+
+test("ん followed by n-row kana accepts shared or explicit extra n", () => {
+    assert.deepEqual(type("だんな", "danna"), { committed: "だんな", composing: "" });
+    assert.deepEqual(type("だんな", "dannna"), { committed: "だんな", composing: "" });
+    assert.deepEqual(type("こんにちは", "konnnichiha"), { committed: "こんにちは", composing: "" });
+    assert.deepEqual(type("かんな", "kan'na"), { committed: "かんな", composing: "" });
+});
+
+test("roman boxes expand immediately when the whole syllable is hinted", () => {
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "t", 2),
+        { slots: 3, hintRoman: "tya", occupies: 1 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "ty", 2),
+        { slots: 3, hintRoman: "tya", occupies: 2 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "t", 0),
+        { slots: 2, hintRoman: "", occupies: 1 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "ty", 0),
+        { slots: 3, hintRoman: "", occupies: 2 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "ch", 2),
+        { slots: 3, hintRoman: "cha", occupies: 2 },
+    );
+});
+
+test("incomplete kana hints do not reveal unseen small kana", () => {
+    assert.deepEqual(
+        kanaCompositionLayout("ちゃ", 0, "t", 1),
+        { slots: 2, hintRoman: "", occupies: 1 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("きょう", 0, "ky", 2),
+        { slots: 3, hintRoman: "kyo", occupies: 2 },
+    );
+    assert.deepEqual(
+        kanaCompositionLayout("きょう", 2, "u", 3),
+        { slots: 2, hintRoman: "u", occupies: 1 },
+    );
 });
