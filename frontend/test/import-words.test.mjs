@@ -63,11 +63,16 @@ test("JSON export roundtrips pair records", () => {
 });
 
 test("restrict answer to ASCII alphanumeric, hiragana, hyphen, spaces and specified punctuation", () => {
-    assert.equal(isAllowedTypingAnswer("A9- ひらがな,.!?、。！？"), true);
+    assert.equal(isAllowedTypingAnswer("A9- ひらがなー,.!?、。！？"), true);
     for (const invalid of ["漢字", "カタカナ", "é", "😀", "テスト", "ABC＿123", ""]) {
         assert.equal(isAllowedTypingAnswer(invalid), false, invalid);
     }
-    assert.equal(filterTypingAnswer("漢字カタカナabc-さくら?!。"), "abc-さくら?!。");
+    assert.equal(filterTypingAnswer("漢字カタカナabc-さくらー?!。"), "abc-さくらー?!。");
+});
+
+test("CSV and JSON preserve prolonged sound marks", () => {
+    assert.deepEqual(parseImportedPairs("食べ物は？,らーめん"), [{ jp: "食べ物は？", en: "らーめん" }]);
+    assert.deepEqual(parseImportedPairs('{"食べ物は？":"らーめん"}'), [{ jp: "食べ物は？", en: "らーめん" }]);
 });
 
 test("invalid answer, malformed JSON and invalid CSV raise readable errors", () => {

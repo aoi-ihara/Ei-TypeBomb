@@ -66,7 +66,7 @@ export const validateItems = (items?: Item[]) => {
             }
 
             if (!isAllowedTypingAnswer(item.answer)) {
-                return "回答には英数字、ひらがな、スペース、ハイフン、句読点（,.!?、。！？）のみ使用できます。";
+                return "回答には英数字、ひらがな、スペース、ハイフン、長音符（ー）、句読点（,.!?、。！？）のみ使用できます。";
             }
         }
     }
