@@ -45,14 +45,6 @@ const LOCAL_USER_ID = "playground-player";
 const GUEST_MEMORY_USER_ID = "playground-guest";
 const guestMemoryKey = (roomId: string) => `playground-memory:guest:${roomId}`;
 
-const saveGuestMemory = (roomId: string, memory: Record<string, ItemMemoryState>) => {
-    try {
-        localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(memory));
-    } catch {
-        // Storage may be unavailable or full; practice remains playable.
-    }
-};
-
 const loadGuestMemory = (
     roomId: string,
     itemIds: Set<string>,
@@ -76,6 +68,52 @@ const loadGuestMemory = (
         ) as Record<string, ItemMemoryState>;
     } catch {
         // Ignore corrupted or blocked storage.
+        return {};
+    }
+};
+
+// Preserve newer updates from other tabs instead of overwriting the whole room.
+const mergeGuestMemory = (
+    current: Record<string, ItemMemoryState>,
+    incoming: Record<string, ItemMemoryState>,
+): Record<string, ItemMemoryState> => {
+    const merged = { ...current };
+    for (const [id, memory] of Object.entries(incoming)) {
+        const previous = merged[id];
+        if (!previous || Date.parse(memory.updatedAt ?? "") >= Date.parse(previous.updatedAt ?? "")) {
+            merged[id] = memory;
+        }
+    }
+    return merged;
+};
+
+const saveGuestMemory = (
+    roomId: string,
+    memory: Record<string, ItemMemoryState>,
+): Record<string, ItemMemoryState> => {
+    const merged = mergeGuestMemory(
+        loadGuestMemory(roomId, new Set(Object.keys(memory).concat(
+            // Include items added in another tab.
+            Object.keys(readGuestMemoryKeys(roomId)),
+        ))),
+        memory,
+    );
+    try {
+        localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(merged));
+    } catch {
+        // Storage may be unavailable or full; practice remains playable.
+    }
+    return merged;
+};
+
+// Read only keys here; loadGuestMemory validates the actual values.
+const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
+    try {
+        const value: unknown = JSON.parse(localStorage.getItem(guestMemoryKey(roomId)) ?? "{}");
+        return value && typeof value === "object" && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : {};
+    } catch {
         return {};
     }
 };
@@ -281,7 +319,7 @@ export default function Client({
         if (authenticatedUserIdRef.current) {
             pendingMemoryRef.current.set(item.id, exposed);
         } else {
-            saveGuestMemory(room.id, memoryByItemRef.current);
+            memoryByItemRef.current = saveGuestMemory(room.id, memoryByItemRef.current);
         }
         setMemoryByItem(memoryByItemRef.current);
     }, [room.id]);
@@ -456,26 +494,32 @@ export default function Client({
             };
             const evaluation = evaluateRecall(evidence);
             if (scheduler) recordUserAnswer(scheduler, evaluation);
+            const freshestMemory = authenticatedUserIdRef.current
+                ? memoryByItemRef.current
+                : mergeGuestMemory(
+                    memoryByItemRef.current,
+                    loadGuestMemory(room.id, new Set(items.map((entry) => entry.id))),
+                );
             const nextMemory = applyRecallObservation({
-                memory: memoryByItemRef.current[item.id],
+                memory: freshestMemory[item.id],
                 observation: evidence,
                 userId,
                 roomId: room.id,
                 itemId: item.id,
             });
 
-            const nextMemoryByItem = {
-                ...memoryByItemRef.current,
+            let nextMemoryByItem = {
+                ...freshestMemory,
                 [item.id]: nextMemory,
             };
 
-            memoryByItemRef.current = nextMemoryByItem;
-            setMemoryByItem(nextMemoryByItem);
             if (authenticatedUserIdRef.current) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
             } else {
-                saveGuestMemory(room.id, nextMemoryByItem);
+                nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
+            memoryByItemRef.current = nextMemoryByItem;
+            setMemoryByItem(nextMemoryByItem);
             userReviewCountRef.current += 1;
 
             posthog.capture("playground_item_recalled", {
@@ -940,7 +984,7 @@ export default function Client({
                 <>
                     {guestMode && (
                         <p role="status" className="text-sm text-center opacity-70">
-                            ゲストプレイ中：学習データは保存されません。
+                            ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
                         </p>
                     )}
                     {saveError && (
