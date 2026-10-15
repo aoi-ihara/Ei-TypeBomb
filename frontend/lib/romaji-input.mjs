@@ -53,7 +53,8 @@ const asciiHyphenTargets = new Set(["ー", "－"]);
 
 /** @param {string | undefined} expected @param {string} key */
 export const normalizeHyphenInput = (expected, key) =>
-    key === "-" && asciiHyphenTargets.has(expected) ? expected : key;
+    key === "-" && typeof expected === "string" && asciiHyphenTargets.has(expected)
+        ? expected : key;
 
 /** Input cells show the physical key, not the stored fullwidth glyph. */
 /** @param {string} character */
