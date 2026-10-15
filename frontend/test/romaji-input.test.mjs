@@ -161,16 +161,16 @@ test("skipping ahead never treats the last box as the end of a word", () => {
     assert.equal(result.correct, false);
 });
 
-test("invalid roman prefix can be corrected without premature failure", () => {
-    const result = editKanaCell("さ", [""], 0, "s", "q");
-    assert.equal(result.accepted, true);
-    assert.equal(result.advance, 0);
-    assert.equal(result.composing, "sq");
-    assert.equal(result.complete, false);
-    // Backspace in the UI removes q; sa still resolves to さ.
-    const fixed = editKanaCell("さ", [""], 0, "s", "a");
-    assert.deepEqual(fixed.cells, ["さ"]);
-    assert.equal(fixed.correct, true);
+test("impossible romaji fails immediately; a valid but wrong kana does not", () => {
+    for (const [prefix, key] of [["s", "q"], ["z", "z"], ["t", "z"]]) {
+        const failure = editKanaCell("てすと", ["", "", ""], 0, prefix, key);
+        assert.equal(failure.accepted, false);
+        assert.deepEqual(failure.cells, ["", "", ""]);
+    }
+    const wrongButValid = editKanaCell("てすと", ["", "", ""], 0, "t", "a");
+    assert.equal(wrongButValid.accepted, true);
+    assert.deepEqual(wrongButValid.cells, ["た", "", ""]);
+    assert.equal(wrongButValid.complete, false);
 });
 
 test("editable typing supports kana combinations and n-row carry", () => {
@@ -261,4 +261,39 @@ test("input in a blank unhinted kana slot remains editable through completion", 
     const finished = editKanaCell(answer, composed.cells, 2, "k", "u");
     assert.deepEqual(finished.cells, ["ふ", "ぁ", "く"]);
     assert.equal(finished.correct, true);
+});
+
+test("てすと -> たちつ: first two wrong kana are held; third ends the failed attempt", () => {
+    const answer = "てすと";
+    let cells = ["", "", ""];
+    const steps = [
+        ["t", "a", ["た", "", ""]],
+        ["ch", "i", ["た", "ち", ""]],
+        ["ts", "u", ["た", "ち", "つ"]],
+    ];
+    for (const [prefix, vowel, expected] of steps) {
+        const position = cells.findIndex((letter) => letter === "");
+        const next = editKanaCell(answer, cells, position, prefix, vowel);
+        assert.equal(next.accepted, true);
+        assert.deepEqual(next.cells, expected);
+        assert.equal(next.complete, position === 2);
+        assert.equal(next.correct, false);
+        cells = next.cells;
+    }
+    // The UI resets to an empty array and index 0 on the final incorrect kana.
+    assert.deepEqual(Array.from(answer, () => ""), ["", "", ""]);
+});
+
+test("valid complete sequences preserve input until the last kana even without hints", () => {
+    let cells = ["", "", ""];
+    for (const [position, consonant, vowel, expected] of [
+        [0, "t", "a", ["た", "", ""]],
+        [1, "ch", "i", ["た", "ち", ""]],
+        [2, "ts", "u", ["た", "ち", "つ"]],
+    ]) {
+        const result = editKanaCell("てすと", cells, position, consonant, vowel);
+        assert.equal(result.accepted, true);
+        assert.deepEqual(result.cells, expected);
+        cells = result.cells;
+    }
 });
