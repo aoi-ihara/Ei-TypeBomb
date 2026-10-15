@@ -19,7 +19,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
-import { parseImportedWords, isAllowedTypingAnswer, exportAnswerPairs } from "@/lib/room/importWords";
+import {
+    parseImportedWords,
+    isAllowedTypingAnswer,
+    exportAnswerPairs,
+} from "@/lib/room/importWords";
 import type { LegacyWord, Room, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -332,7 +336,11 @@ export default function Page({
                 answer: word.en,
             }));
         } catch (error) {
-            setImportError(error instanceof Error ? error.message : "JSONまたはCSVの形式が正しくありません。");
+            setImportError(
+                error instanceof Error
+                    ? error.message
+                    : "JSONまたはCSVの形式が正しくありません。",
+            );
             return;
         }
 
@@ -385,8 +393,13 @@ export default function Page({
         const snapshot = { ...roomDataRef.current };
         const attempt = saveQueueRef.current.then(async () => {
             const {
-                roomId, roomTitle, roomExplanation, maxPlayers,
-                gameDuration, items, roomLink,
+                roomId,
+                roomTitle,
+                roomExplanation,
+                maxPlayers,
+                gameDuration,
+                items,
+                roomLink,
             } = snapshot;
             if (!roomId || !items) return false;
 
@@ -422,11 +435,16 @@ export default function Page({
                 return true;
             } catch (error) {
                 console.error("Failed to save room:", error);
-                setRoomSaveError("ルームを保存できませんでした。もう一度お試しください。");
+                setRoomSaveError(
+                    "ルームを保存できませんでした。もう一度お試しください。",
+                );
                 return false;
             }
         });
-        saveQueueRef.current = attempt.then(() => {}, () => {});
+        saveQueueRef.current = attempt.then(
+            () => {},
+            () => {},
+        );
         return attempt;
     };
 
@@ -446,7 +464,9 @@ export default function Page({
         maxSaveTimerRef.current = null;
         const saved = await saveRoomData();
         if (!saved) {
-            setPlayError("変更を保存できませんでした。入力内容を確認して再試行してください。");
+            setPlayError(
+                "変更を保存できませんでした。入力内容を確認して再試行してください。",
+            );
             setIsStartingPlay(false);
             return;
         }
@@ -921,24 +941,21 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                JSONは問題と回答のペアを次の形式で貼り付けてください。エクスポートは回答を固定する形式です:
+                                JSONは問題と回答のペアを次の形式で貼り付けてください:
                             </div>
                             <div data-cursor="text">
                                 {" "}
                                 <pre className="text-sm">
-                                    {`[\n    { "question": "りんご", "answer": "apple" },\n    { "question": "桜の読み方", "answer": "さくら" }\n]`}
+                                    {`[\n    { "question": "りんご", "answer": "apple" },\n    { "question": "日本の憲法の名前は？", "answer": "にほんこくけんぽう" }\n]`}
                                 </pre>
-                            </div>
-                            <div className="opacity-50" data-cursor="text">
-                                英数字とひらがなの文字数が一方で2倍以上なら長い方を回答に、
-                                そうでなければ右側を回答にします（CSVと1組形式のJSON）。
-                                question / answer と書かれたJSONは指定した回答側を維持します。
                             </div>
                             <div data-cursor="text">
                                 CSVはヘッダーなしの2列で貼り付けてください:
                             </div>
                             <pre className="text-sm" data-cursor="text">
-                                {"りんご,apple\nねこ,cat"}
+                                {
+                                    "りんご,apple\n日本の憲法の名前は？,にほんこくけんぽう"
+                                }
                             </pre>
                         </div>
                         <Button
@@ -1140,7 +1157,11 @@ export default function Page({
                         )}
                     </Collapsible>
                     {roomSaveError && (
-                        <div className="text-red-500 mb-4" role="alert" data-cursor="text">
+                        <div
+                            className="text-red-500 mb-4"
+                            role="alert"
+                            data-cursor="text"
+                        >
                             {roomSaveError}
                         </div>
                     )}
@@ -1217,19 +1238,26 @@ export default function Page({
                                                                         index
                                                                             ? {
                                                                                   ...currentItem,
-                                                                                  answer: e.target.value,
+                                                                                  answer: e
+                                                                                      .target
+                                                                                      .value,
                                                                               }
                                                                             : currentItem,
                                                                 );
-                                                            setRoomSaveError("");
+                                                            setRoomSaveError(
+                                                                "",
+                                                            );
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {!isAllowedTypingAnswer(item.answer) && item.answer && (
-                                                        <div className="text-red-500">
-                                                            英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
-                                                        </div>
-                                                    )}
+                                                    {!isAllowedTypingAnswer(
+                                                        item.answer,
+                                                    ) &&
+                                                        item.answer && (
+                                                            <div className="text-red-500">
+                                                                英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
+                                                            </div>
+                                                        )}
                                                     {item.answer.length >
                                                         32 && (
                                                         <div
@@ -1275,7 +1303,11 @@ export default function Page({
                             </SortableContext>
                         </DndContext>
 
-                        {playError && <div role="alert" className="text-red-500">{playError}</div>}
+                        {playError && (
+                            <div role="alert" className="text-red-500">
+                                {playError}
+                            </div>
+                        )}
                         <MorphDialog
                             button={
                                 <Button
