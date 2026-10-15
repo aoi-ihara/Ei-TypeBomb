@@ -4,6 +4,13 @@ import {
     hintCoversError,
 } from "@/lib/playground/recall-input";
 import { useEffect, useRef, useState } from "react";
+import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
+import {
+    advanceKanaInput,
+    decodeKanaProgress,
+    encodeKanaProgress,
+    hasHiragana,
+} from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
 import type {
@@ -75,6 +82,9 @@ function TypingAttempt({
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
+    const [kanaComposing, setKanaComposing] = useState("");
+    const kanaCommitSpansRef = useRef<number[]>([]);
+    const isKanaAnswer = Boolean(english && hasHiragana(english));
     const inputStateRef = useRef(input);
     const revealedHintLengthRef = useRef(initialCueLength);
     const onChangeInputRef = useRef(onChangeInput);
@@ -216,6 +226,8 @@ function TypingAttempt({
                     attemptCountRef.current += 1;
                     inputStateRef.current = Array(english.length).fill("");
                     setInput(inputStateRef.current);
+                    setKanaComposing("");
+                    kanaCommitSpansRef.current = [];
                     setCurrentSelection(0);
                     setCharInput("");
                     setIsFailAnimating(true);
@@ -307,10 +319,12 @@ function TypingAttempt({
 
     const resetInput = () => {
         if (!english) return;
-        if (input.some((character) => character !== "")) {
+        if (kanaComposing || input.some((character) => character !== "")) {
             attemptCountRef.current += 1;
         }
         setInput(Array(english.length).fill(""));
+        setKanaComposing("");
+        kanaCommitSpansRef.current = [];
         setCurrentSelection(0);
         setCharInput("");
         triggerFailAnimation();
@@ -393,20 +407,21 @@ function TypingAttempt({
 
     if (!english) return null;
 
-    const moveToNext = (next: string[]) => {
+    const moveToNext = (next: string[], advance = 1, pendingRoman = "") => {
         if (completedRef.current) return;
-        // Record the incorrect character when entered, before Backspace/reset can erase it.
-        if (next[currentSelection] !== english[currentSelection])
-            incorrectInputCountRef.current += 1;
-        const nextIndex = currentSelection + 1;
+        // Kana combinations such as ちゃ may confirm two cells at once.
+        for (let offset = 0; offset < advance; offset++) {
+            if (next[currentSelection + offset] !== english[currentSelection + offset])
+                incorrectInputCountRef.current += 1;
+        }
+        const nextIndex = currentSelection + advance;
         const nextCorrectPrefixLength = correctPrefixLength(next, english);
         if (nextCorrectPrefixLength > maxCorrectPrefixRef.current) {
             maxCorrectPrefixRef.current = nextCorrectPrefixLength;
             lastCorrectProgressAtRef.current = performance.now();
         }
-        const typedInsideHint =
-            currentSelection < hintLength &&
-            next[currentSelection] !== english[currentSelection];
+        const typedInsideHint = Array.from({ length: advance }, (_, offset) => currentSelection + offset)
+            .some((index) => index < hintLength && next[index] !== english[index]);
 
         if (typedInsideHint && (!manualHints || answerRevealed)) {
             resetInput();
@@ -418,7 +433,7 @@ function TypingAttempt({
             !(manualHints && next.join("") === english)
         ) {
             setCurrentSelection(nextIndex);
-            onChangeInput(next.join(""));
+            onChangeInput(next.join("") + pendingRoman);
         } else {
             const result = next.join("");
             if (result === english) {
@@ -474,6 +489,8 @@ function TypingAttempt({
                 onSuccess();
                 const next = Array(english.length).fill("");
                 setInput(next);
+                setKanaComposing("");
+                kanaCommitSpansRef.current = [];
                 setCurrentSelection(0);
                 console.log("bombStatus", bombStatus);
                 setTimedHintCount(0);
@@ -512,6 +529,11 @@ function TypingAttempt({
             : currentInput
         : input.join("");
     const displayChars = isReadonly ? [...displayInput] : input;
+    const remoteKanaProgress = isKanaAnswer && isReadonly
+        ? decodeKanaProgress(english, displayInput)
+        : null;
+    const confirmedKana = remoteKanaProgress?.committed ?? input.join("");
+    const composingKana = remoteKanaProgress?.composing ?? kanaComposing;
 
     return (
         <div className="flex flex-col gap-4">
@@ -535,6 +557,31 @@ function TypingAttempt({
                         if (!isReadonly) inputRef.current?.focus();
                     }}
                     onKeyDown={(e) => {
+                        if (isKanaAnswer) {
+                            // Kana conversion is sequential. Undo a whole combined
+                            // syllable (ちゃ, きょ, etc.) on Backspace.
+                            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                                e.preventDefault();
+                                return;
+                            }
+                            if (e.key === "Backspace") {
+                                e.preventDefault();
+                                if (kanaComposing) {
+                                    const pending = kanaComposing.slice(0, -1);
+                                    setKanaComposing(pending);
+                                    onChangeInput(input.join("") + pending);
+                                } else if (currentSelection > 0) {
+                                    const count = kanaCommitSpansRef.current.pop() ?? 1;
+                                    const start = Math.max(0, currentSelection - count);
+                                    const next = [...input];
+                                    next.fill("", start, currentSelection);
+                                    setInput(next);
+                                    setCurrentSelection(start);
+                                    onChangeInput(next.join(""));
+                                }
+                                return;
+                            }
+                        }
                         if (e.key === "ArrowLeft") {
                             e.preventDefault();
                             setCurrentSelection(
@@ -569,7 +616,17 @@ function TypingAttempt({
                         }
                     }}
                 >
-                    {[...english].map((char, index) => {
+                    {isKanaAnswer ? (
+                        <KanaTypingBoxes
+                            answer={english}
+                            confirmed={confirmedKana}
+                            composing={composingKana}
+                            activeIndex={currentSelection}
+                            hintLength={hintLength}
+                            readonly={isReadonly}
+                            onSelect={() => inputRef.current?.focus()}
+                        />
+                    ) : [...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
                         if (char === " ")
@@ -638,6 +695,31 @@ function TypingAttempt({
                                 if (firstKeyAtRef.current === null) {
                                     firstKeyAtRef.current = performance.now();
                                 }
+                                if (isKanaAnswer) {
+                                    const previous = { committed: input.join(""), composing: kanaComposing };
+                                    const result = advanceKanaInput(english, previous, char);
+                                    if (!result.accepted) {
+                                        incorrectInputCountRef.current += 1;
+                                        triggerFailAnimation();
+                                        onChangeInput(encodeKanaProgress(previous), true);
+                                    } else {
+                                        const added = result.committed.slice(previous.committed.length);
+                                        const next = [...input];
+                                        Array.from(added).forEach((letter, offset) => {
+                                            next[currentSelection + offset] = letter;
+                                        });
+                                        setKanaComposing(result.composing);
+                                        if (added.length > 0) {
+                                            kanaCommitSpansRef.current.push(added.length);
+                                            setInput(next);
+                                            moveToNext(next, added.length, result.composing);
+                                        } else {
+                                            onChangeInput(encodeKanaProgress(result));
+                                        }
+                                    }
+                                    setCharInput("");
+                                    return;
+                                }
                                 const targetChar = english[currentSelection];
                                 if (targetChar === " ") {
                                     if (char === " ") {
@@ -666,7 +748,7 @@ function TypingAttempt({
                                 }, 300);
                             }}
                             className="absolute inset-0 w-full h-full opacity-[0.01] z-10"
-                            aria-label="英語の回答"
+                            aria-label={isKanaAnswer ? "日本語の回答" : "英語の回答"}
                             autoComplete="off"
                             autoCapitalize="off"
                             autoCorrect="off"
