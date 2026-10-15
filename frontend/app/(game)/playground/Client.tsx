@@ -34,6 +34,7 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
+import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
 
 type Props = {
     room: Room;
@@ -878,7 +879,10 @@ export default function Client({
         const charDelay = clampTypingDelay(userTypingDelayRef.current);
         const initialDelay = Math.min(1000, Math.max(250, charDelay * 2.5));
 
-        const target = currentItem.answer;
+        // Simulate the bot pressing roman keys, not directly revealing each
+        // kana. The same read-only KanaTypingBoxes used by spectators shows
+        // the pending roman letters and animated kana conversions.
+        const typingFrames = getBotTypingFrames(currentItem.answer);
         let charIndex = 0;
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout>;
@@ -886,9 +890,9 @@ export default function Client({
         const typeNextCharacter = () => {
             if (cancelled) return;
 
-            if (charIndex < target.length) {
+            if (charIndex < typingFrames.length) {
+                setCurrentInput(typingFrames[charIndex]);
                 charIndex += 1;
-                setCurrentInput(target.slice(0, charIndex));
                 const jitter = 0.9 + Math.random() * 0.2;
                 timer = setTimeout(
                     typeNextCharacter,
