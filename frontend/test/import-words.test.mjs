@@ -71,7 +71,7 @@ test("restrict answer to ASCII alphanumeric, hiragana, hyphen, spaces and specif
 });
 
 test("invalid answer, malformed JSON and invalid CSV raise readable errors", () => {
-    assert.throws(() => parseImportedPairs("answer,漢字"), /回答/);
+    assert.throws(() => parseImportedPairs("漢字,漢語"), /回答/);
     assert.throws(() => parseImportedPairs('[{"問題":"漢字"}]'), /回答/);
     assert.throws(() => parseImportedPairs('[{"a":"b"'), /構文/);
     assert.throws(() => parseImportedPairs("one,two,three"), /2列/);
