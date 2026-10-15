@@ -688,6 +688,10 @@ test("actual input callbacks retain a wrong character through Backspace correcti
         completedRef: ref(false),
         answerRevealed: false,
         manualHints: true,
+        isKanaAnswer: false,
+        kanaComposing: "",
+        setKanaComposing: noop,
+        kanaCommitSpansRef: ref([]),
         assistedPositions: [],
         hintEventsRef: ref([]),
         hintLength: 0,
@@ -855,7 +859,7 @@ test("full hint clears existing incorrect input and resets on later wrong typing
     );
     assert.match(
         source,
-        /const hasIncorrectInput = input\.some\(/,
+        /const hasIncorrectInput = isKanaAnswer\s*\?/,
     );
     assert.match(
         source,
@@ -876,8 +880,11 @@ test("actual manual hint callback reveals the full answer and records one answer
         manualHints: true,
         english: "receive",
         answerRevealed: false,
+        isKanaAnswer: false,
         completedRef: { current: false },
         input: typed,
+        onHintChange: () => {},
+        resetInput: () => {},
         hintEventsRef: events,
         performance: { now: () => 7000 },
         recallStartedAtRef: { current: 0 },
@@ -927,6 +934,10 @@ test("correcting an interior letter completes a retained learning answer", () =>
         english: "apple",
         currentSelection: 2,
         manualHints: true,
+        isKanaAnswer: false,
+        setKanaComposing: noop,
+        kanaCommitSpansRef: ref([]),
+        setCharInput: noop,
         hintLength: 1,
         hintCount: 1,
         assistedPositions: [2],
