@@ -8,11 +8,12 @@ import {
 type Props = {
     answer: string;
     confirmed: string;
+    cells?: string[];
     composing: string;
     activeIndex: number;
     hintLength?: number;
     readonly?: boolean;
-    onSelect?: () => void;
+    onSelect?: (index: number) => void;
 };
 
 /**
@@ -22,6 +23,7 @@ type Props = {
 export default function KanaTypingBoxes({
     answer,
     confirmed,
+    cells,
     composing,
     activeIndex,
     hintLength = 0,
@@ -29,7 +31,7 @@ export default function KanaTypingBoxes({
     onSelect,
 }: Readonly<Props>) {
     const filled = Array.from(confirmed);
-    const compositionStart = filled.length;
+    const compositionStart = cells ? activeIndex : filled.length;
     const layout = kanaCompositionLayout(
         answer,
         compositionStart,
@@ -70,7 +72,7 @@ export default function KanaTypingBoxes({
                                         type="button"
                                         data-cursor="button"
                                         data-cursor-shape={readonly ? "2" : "1"}
-                                        onClick={onSelect}
+                                        onClick={() => onSelect?.(index)}
                                         tabIndex={-1}
                                         className={`relative h-16 w-8 shrink-0 cursor-text rounded-sm p-1 font-mono text-3xl font-bold transition-colors duration-150 ease-etb ${isActive && slot === composing.length ? "bg-(--color-border)" : ""}`}
                                         aria-label={`ローマ字 ${slot + 1}`}
@@ -92,7 +94,7 @@ export default function KanaTypingBoxes({
                                 tabIndex={-1}
                                 data-cursor="button"
                                 data-cursor-shape={readonly ? "2" : "1"}
-                                onClick={onSelect}
+                                onClick={() => onSelect?.(index)}
                                 className={`relative h-16 cursor-text rounded-sm p-1 font-bold transition-colors duration-150 ease-etb ${char === " " ? "w-4 text-2xl" : isHiragana(char) ? "w-10 text-3xl" : "w-8 font-mono text-3xl"} ${isActive ? "bg-(--color-border)" : ""}`}
                                 aria-label={`文字 ${index + 1}`}
                             >
@@ -102,7 +104,7 @@ export default function KanaTypingBoxes({
                                     </div>
                                 )}
                                 <div className="relative flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                    {filled[index] ?? ""}
+                                    {cells?.[index] ?? filled[index] ?? ""}
                                 </div>
                             </button>
                         )}
