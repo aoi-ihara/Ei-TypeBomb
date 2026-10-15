@@ -76,6 +76,7 @@ export default function TypingSyncOverlay({
     );
 
     if (!shouldShow || currentItem?.type !== "typed_recall") return null;
+    const kanaProgress = decodeKanaProgress(currentItem.answer, currentInput);
 
     return (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 md:left-1/2 md:w-1/2 md:translate-x-0">
@@ -84,7 +85,8 @@ export default function TypingSyncOverlay({
                     {hasHiragana(currentItem.answer) ? (
                         <KanaTypingBoxes
                             answer={currentItem.answer}
-                            {...decodeKanaProgress(currentItem.answer, currentInput)}
+                            confirmed={kanaProgress.committed}
+                            composing={kanaProgress.composing}
                             activeIndex={-1}
                             readonly
                         />
