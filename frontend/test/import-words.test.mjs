@@ -58,7 +58,7 @@ test("JSON array of question-answer maps uses the same orientation", () => {
 test("JSON export roundtrips pair records", () => {
     const imported = [{ prompt: "りんご", answer: "apple" }, { prompt: "桜の読み方", answer: "さくら" }];
     const exportText = exportAnswerPairs(imported);
-    assert.deepEqual(JSON.parse(exportText), [{ "りんご": "apple" }, { "桜の読み方": "さくら" }]);
+    assert.deepEqual(JSON.parse(exportText), [{ question: "りんご", answer: "apple" }, { question: "桜の読み方", answer: "さくら" }]);
     assert.deepEqual(parseImportedPairs(exportText), [{ jp: "りんご", en: "apple" }, { jp: "桜の読み方", en: "さくら" }]);
 });
 
@@ -76,4 +76,32 @@ test("invalid answer, malformed JSON and invalid CSV raise readable errors", () 
     assert.throws(() => parseImportedPairs('[{"a":"b"'), /構文/);
     assert.throws(() => parseImportedPairs("one,two,three"), /2列/);
     assert.throws(() => parseImportedPairs('[{"問題":"a","追加":"b"}]'), /1組/);
+});
+
+test("role-labelled export roundtrips even when prompt is more than 2x answer", () => {
+    const original = [
+        { prompt: "what is one", answer: "yes" },
+        { prompt: "長い漢字の説明を含む問題", answer: "あ" },
+    ];
+    const exported = exportAnswerPairs(original);
+    assert.deepEqual(parseImportedPairs(exported), original.map(item => ({ jp: item.prompt, en: item.answer })));
+    // Unlabelled one-pair JSON remains subject to the user-requested heuristic.
+    assert.deepEqual(parseImportedPairs('[{"what is one":"yes"}]'), [
+        { jp: "yes", en: "what is one" },
+    ]);
+    // Even legacy role-labelled records retain their original direction.
+    assert.deepEqual(parseImportedPairs('[{"jp":"what is one","en":"yes"}]'), [
+        { jp: "what is one", en: "yes" },
+    ]);
+});
+
+test("reject unsupported kana but permit all kana emitted by romanizer", async () => {
+    const { ROMAJI } = await import("../lib/romaji-input.mjs");
+    for (const kana of new Set(Object.values(ROMAJI).flatMap(value => Array.from(value)))) {
+        assert.equal(isAllowedTypingAnswer(kana), true, kana);
+    }
+    for (const kana of ["ゎ", "ゐ", "ゑ", "ゔ", "ゕ", "ゖ"]) {
+        assert.equal(isAllowedTypingAnswer(kana), false, kana);
+        assert.throws(() => parseImportedPairs(JSON.stringify([{ question: "test", answer: kana }])), /回答/);
+    }
 });
