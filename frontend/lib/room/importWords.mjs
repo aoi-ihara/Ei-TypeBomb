@@ -1,3 +1,5 @@
+import { ROMAJI } from "../romaji-input.mjs";
+
 // The importer treats the two columns as *values*. It does not assume
 // that Japanese is always the question or that English is the answer.
 const ANSWER_CHAR = /^[a-zA-Z0-9\- ぁ-ゖ,.!?、。！？]$/u;
@@ -6,11 +8,11 @@ const COUNTED_CHAR = /^[a-zA-Z0-9ぁ-ゖ]$/u;
 export function isAllowedTypingAnswer(value) {
     return typeof value === "string" &&
         value.length > 0 &&
-        Array.from(value).every((char) => ANSWER_CHAR.test(char));
+        Array.from(value).every(allowedAnswerChar);
 }
 
 export function filterTypingAnswer(value) {
-    return Array.from(value).filter((char) => ANSWER_CHAR.test(char)).join("");
+    return Array.from(value).filter(allowedAnswerChar).join("");
 }
 
 export function countTypingCharacters(value) {
@@ -28,12 +30,14 @@ export function orientImportPair(left, right) {
     return { jp: question, en: answer };
 }
 
-function validatePair(left, right, rowNumber) {
+function validatePair(left, right, rowNumber, rolesExplicit = false) {
     if (typeof left !== "string" || typeof right !== "string" ||
         !left.trim() || !right.trim()) {
         throw new Error(`行${rowNumber}: 問題と回答はどちらも文字列で入力してください。`);
     }
-    const item = orientImportPair(left.trim(), right.trim());
+    const item = rolesExplicit
+        ? { jp: left.trim(), en: right.trim() }
+        : orientImportPair(left.trim(), right.trim());
     if (!isAllowedTypingAnswer(item.en)) {
         throw new Error(`行${rowNumber}: 回答には英数字・ひらがな・スペース・ハイフン・指定の句読点のみ使用できます。`);
     }
@@ -98,10 +102,10 @@ function parseJson(parsed) {
             throw new Error(`行${i + 1}: JSONの各要素はオブジェクトにしてください。`);
         }
         if (Object.hasOwn(entry, "question") && Object.hasOwn(entry, "answer")) {
-            return validatePair(entry.question, entry.answer, i + 1);
+            return validatePair(entry.question, entry.answer, i + 1, true);
         }
         if (Object.hasOwn(entry, "jp") && Object.hasOwn(entry, "en")) {
-            return validatePair(entry.jp, entry.en, i + 1);
+            return validatePair(entry.jp, entry.en, i + 1, true);
         }
         const entries = Object.entries(entry);
         if (entries.length !== 1) {
@@ -128,5 +132,7 @@ export function parseImportedPairs(source) {
 }
 
 export function exportAnswerPairs(items) {
-    return JSON.stringify(items.map(item => ({ [item.prompt]: item.answer })), null, 4);
+    // A role-labelled export must remain lossless on re-import even if the
+    // prompt is twice as long as the answer.
+    return JSON.stringify(items.map(item => ({ question: item.prompt, answer: item.answer })), null, 4);
 }
