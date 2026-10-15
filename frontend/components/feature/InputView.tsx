@@ -526,20 +526,10 @@ function TypingAttempt({
                 }
             } else {
                 if (isKanaAnswer) {
-                    // Never erase kana merely because all boxes happen to be
-                    // filled (they can also be filled while revisiting an
-                    // earlier cell). Keep the answer editable, point at the
-                    // first mismatched cell, and provide failure feedback only
-                    // after finishing a forward pass through the final box.
-                    if (nextIndex >= english.length && !pendingRoman) {
-                        triggerFailAnimation();
-                        attemptCountRef.current += 1;
-                    }
-                    const firstMismatch = next.findIndex(
-                        (char, index) => char !== english[index],
-                    );
-                    if (firstMismatch >= 0) setCurrentSelection(firstMismatch);
-                    onChangeInput(result);
+                    // Every cell is filled and the final kana is incorrect:
+                    // this is a completed failed attempt, so clear *all*
+                    // boxes and begin at the first one.
+                    resetInput();
                     return;
                 }
                 console.log("Wrong answer. Query:", result);
@@ -765,6 +755,12 @@ function TypingAttempt({
                                         kanaComposing,
                                         char,
                                     );
+                                    if (!edit.accepted) {
+                                        // An impossible roman sequence (e.g. zz)
+                                        // fails immediately, even with no hints.
+                                        resetInput();
+                                        return;
+                                    }
                                     if (edit.accepted) {
                                         setKanaComposing(edit.composing);
                                         if (edit.advance > 0) {
