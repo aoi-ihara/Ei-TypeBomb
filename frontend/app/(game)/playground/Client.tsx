@@ -63,7 +63,8 @@ const loadGuestMemory = (
                     Number.isFinite(m.difficulty) &&
                     Number.isFinite(m.reviewCount) &&
                     (m.lastReviewedAt == null || !Number.isNaN(Date.parse(m.lastReviewedAt))) &&
-                    (m.lastPresentedAt == null || !Number.isNaN(Date.parse(m.lastPresentedAt)));
+                    (m.lastPresentedAt == null || !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
+                    (m.updatedAt == null || !Number.isNaN(Date.parse(m.updatedAt)));
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
@@ -80,7 +81,7 @@ const mergeGuestMemory = (
     const merged = { ...current };
     for (const [id, memory] of Object.entries(incoming)) {
         const previous = merged[id];
-        if (!previous || Date.parse(memory.updatedAt ?? "") >= Date.parse(previous.updatedAt ?? "")) {
+        if (!previous || (Date.parse(memory.updatedAt ?? "") || 0) >= (Date.parse(previous.updatedAt ?? "") || 0)) {
             merged[id] = memory;
         }
     }
@@ -92,10 +93,10 @@ const saveGuestMemory = (
     memory: Record<string, ItemMemoryState>,
 ): Record<string, ItemMemoryState> => {
     const merged = mergeGuestMemory(
-        loadGuestMemory(roomId, new Set(Object.keys(memory).concat(
-            // Include items added in another tab.
-            Object.keys(readGuestMemoryKeys(roomId)),
-        ))),
+        loadGuestMemory(roomId, new Set([
+            ...Object.keys(memory),
+            ...Object.keys(readGuestMemoryKeys(roomId)),
+        ])),
         memory,
     );
     try {
@@ -560,7 +561,7 @@ export default function Client({
                 difficulty_after: nextMemory.difficulty,
             });
         },
-        [room.id],
+        [room.id, items],
     );
 
     const cachePendingMemory = useCallback(() => {
