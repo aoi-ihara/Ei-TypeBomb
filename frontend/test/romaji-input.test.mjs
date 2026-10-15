@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
     advanceKanaInput, decodeKanaProgress, encodeKanaProgress,
     hasHiragana, kanaCompositionLayout, romanSlotCount,
+    advanceEditableKanaAt, editKanaCell, nextKanaCursor,
 } from "../lib/romaji-input.mjs";
 
 function type(answer, keys) {
@@ -117,4 +118,89 @@ test("incomplete kana hints do not reveal unseen small kana", () => {
         kanaCompositionLayout("きょう", 2, "u", 3),
         { slots: 2, hintRoman: "u", occupies: 1 },
     );
+});
+
+test("incorrect kana stays until the whole answer is attempted", () => {
+    const answer = "さくら";
+    let cells = ["", "", ""];
+    const sa = editKanaCell(answer, cells, 0, "s", "a");
+    assert.equal(sa.accepted, true);
+    assert.deepEqual(sa.cells, ["さ", "", ""]);
+    assert.equal(sa.complete, false);
+
+    // た is wrong for く, but is still a valid kana input.
+    const ta = editKanaCell(answer, sa.cells, 1, "t", "a");
+    assert.deepEqual(ta.cells, ["さ", "た", ""]);
+    assert.equal(ta.complete, false);
+    assert.equal(ta.correct, false);
+    const ra = editKanaCell(answer, ta.cells, 2, "r", "a");
+    assert.deepEqual(ra.cells, ["さ", "た", "ら"]);
+    assert.equal(ra.complete, true);
+    assert.equal(ra.correct, false);
+});
+
+test("clicking or arrowing to an earlier kana allows editing without clearing later letters", () => {
+    const answer = "さくら";
+    const existing = ["さ", "た", "ら"];
+    assert.equal(nextKanaCursor(2, -1, 3), 1);
+    assert.equal(nextKanaCursor(1, -1, 3), 0);
+    assert.equal(nextKanaCursor(0, -1, 3), 0);
+    assert.equal(nextKanaCursor(2, 1, 3), 2);
+
+    const correction = editKanaCell(answer, existing, 1, "k", "u");
+    assert.deepEqual(correction.cells, ["さ", "く", "ら"]);
+    assert.equal(correction.complete, true);
+    assert.equal(correction.correct, true);
+});
+
+test("skipping ahead never treats the last box as the end of a word", () => {
+    const result = editKanaCell("さくら", ["", "", ""], 2, "r", "a");
+    assert.deepEqual(result.cells, ["", "", "ら"]);
+    assert.equal(result.complete, false);
+    assert.equal(result.correct, false);
+});
+
+test("invalid roman prefix can be corrected without premature failure", () => {
+    const result = editKanaCell("さ", [""], 0, "s", "q");
+    assert.equal(result.accepted, true);
+    assert.equal(result.advance, 0);
+    assert.equal(result.composing, "sq");
+    assert.equal(result.complete, false);
+    // Backspace in the UI removes q; sa still resolves to さ.
+    const fixed = editKanaCell("さ", [""], 0, "s", "a");
+    assert.deepEqual(fixed.cells, ["さ"]);
+    assert.equal(fixed.correct, true);
+});
+
+test("editable typing supports kana combinations and n-row carry", () => {
+    assert.deepEqual(
+        advanceEditableKanaAt("ちゃ", 0, "ty", "a"),
+        { accepted: true, emitted: "ちゃ", composing: "" },
+    );
+    assert.deepEqual(
+        advanceEditableKanaAt("だんな", 1, "n", "n"),
+        { accepted: true, emitted: "ん", composing: "n" },
+    );
+    assert.deepEqual(
+        advanceEditableKanaAt("だんな", 2, "n", "a"),
+        { accepted: true, emitted: "な", composing: "" },
+    );
+    assert.deepEqual(
+        advanceEditableKanaAt("だんな", 2, "n", "n"),
+        { accepted: true, emitted: "", composing: "n" },
+    );
+    const first = editKanaCell("ちゃ", ["", ""], 0, "ty", "a");
+    assert.deepEqual(first.cells, ["ち", "ゃ"]);
+    assert.equal(first.correct, true);
+});
+
+test("editing a kana + English mixed answer remains position-aware", () => {
+    const next = editKanaCell("さ-a", ["さ", "", ""], 1, "", "-");
+    assert.deepEqual(next.cells, ["さ", "-", ""]);
+    const wrong = editKanaCell("さ-a", next.cells, 2, "", "b");
+    assert.deepEqual(wrong.cells, ["さ", "-", "b"]);
+    assert.equal(wrong.complete, true);
+    assert.equal(wrong.correct, false);
+    const corrected = editKanaCell("さ-a", wrong.cells, 2, "", "a");
+    assert.equal(corrected.correct, true);
 });
