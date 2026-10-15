@@ -927,7 +927,9 @@ export default function Page({
                                 </pre>
                             </div>
                             <div className="opacity-50" data-cursor="text">
-                                英数字とひらがなの文字数が一方で2倍以上なら長い方を回答に、\n                                そうでなければ右側を回答にします（CSV・JSON共通）。\n                            </div>
+                                英数字とひらがなの文字数が一方で2倍以上なら長い方を回答に、
+                                そうでなければ右側を回答にします（CSV・JSON共通）。
+                            </div>
                             <div data-cursor="text">
                                 CSVはヘッダーなしの2列で貼り付けてください:
                             </div>
@@ -1213,7 +1215,12 @@ export default function Page({
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {!isAllowedTypingAnswer(item.answer) && item.answer && (\n                                                        <div className="text-red-500">\n                                                            英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。\n                                                        </div>\n                                                    )}\n                                                    {item.answer.length >
+                                                    {!isAllowedTypingAnswer(item.answer) && item.answer && (
+                                                        <div className="text-red-500">
+                                                            英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
+                                                        </div>
+                                                    )}
+                                                    {item.answer.length >
                                                         32 && (
                                                         <div
                                                             className="text-red-500"
