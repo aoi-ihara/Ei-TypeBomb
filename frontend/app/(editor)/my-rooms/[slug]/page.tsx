@@ -19,7 +19,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
-import { parseImportedWords } from "@/lib/room/importWords";
+import {
+    parseImportedWords,
+    isAllowedTypingAnswer,
+    exportAnswerPairs,
+} from "@/lib/room/importWords";
 import type { LegacyWord, Room, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -101,6 +105,7 @@ export default function Page({
     const [isLinkCopied, setIsLinkCopied] = useState(false);
     const [roomLink, setRoomLink] = useState("");
     const [roomLinkError, setRoomLinkError] = useState("");
+    const [roomSaveError, setRoomSaveError] = useState("");
     const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
@@ -115,6 +120,7 @@ export default function Page({
     const [confirmPassword, setConfirmPassword] = useState("");
 
     const [isExported, setIsExported] = useState(false);
+    const [exportError, setExportError] = useState("");
 
     const [showGenerationInput, setShowGenerationInput] = useState(false);
     const [generationPrompt, setGenerationPrompt] = useState("");
@@ -291,21 +297,17 @@ export default function Page({
     }, [slug]);
 
     const handleExportWords = async () => {
-        const jsonData = JSON.stringify(
-            (items ?? []).map((item) => {
-                return {
-                    jp: item.prompt,
-                    en: item.answer,
-                };
-            }),
-            null,
-            4,
-        );
-        await navigator.clipboard.writeText(jsonData);
-        setIsExported(true);
-        setTimeout(() => {
-            setIsExported(false);
-        }, 3000);
+        setExportError("");
+        try {
+            const jsonData = exportAnswerPairs(items ?? []);
+            await navigator.clipboard.writeText(jsonData);
+            setIsExported(true);
+            setTimeout(() => {
+                setIsExported(false);
+            }, 3000);
+        } catch (error) {
+            setExportError(error instanceof Error ? error.message : "JSONのエクスポートに失敗しました。");
+        }
     };
 
     const handleCopyRoomLink = async () => {
@@ -339,14 +341,17 @@ export default function Page({
                 prompt: word.jp,
                 answer: word.en,
             }));
-        } catch {
+        } catch (error) {
             setImportError(
-                "JSONまたはCSVの形式が正しくありません。CSVは各行に空欄のない2列で入力してください。",
+                error instanceof Error
+                    ? error.message
+                    : "JSONまたはCSVの形式が正しくありません。",
             );
             return;
         }
 
         const newItems = [...importedItems, ...items];
+        setRoomSaveError("");
         setItems(newItems);
 
         setImportData("");
@@ -394,8 +399,13 @@ export default function Page({
         const snapshot = { ...roomDataRef.current };
         const attempt = saveQueueRef.current.then(async () => {
             const {
-                roomId, roomTitle, roomExplanation, maxPlayers,
-                gameDuration, items, roomLink,
+                roomId,
+                roomTitle,
+                roomExplanation,
+                maxPlayers,
+                gameDuration,
+                items,
+                roomLink,
             } = snapshot;
             if (!roomId || !items) return false;
 
@@ -423,18 +433,24 @@ export default function Page({
                 };
                 const error = await updateRoomFromId(updatedRoom);
                 if (error) {
-                    setRoomLinkError(error);
+                    setRoomSaveError(error);
                     return false;
                 }
+                setRoomSaveError("");
                 setRoomLinkError("");
                 return true;
             } catch (error) {
                 console.error("Failed to save room:", error);
-                setRoomLinkError("ルームを保存できませんでした。もう一度お試しください。");
+                setRoomSaveError(
+                    "ルームを保存できませんでした。もう一度お試しください。",
+                );
                 return false;
             }
         });
-        saveQueueRef.current = attempt.then(() => {}, () => {});
+        saveQueueRef.current = attempt.then(
+            () => {},
+            () => {},
+        );
         return attempt;
     };
 
@@ -454,7 +470,9 @@ export default function Page({
         maxSaveTimerRef.current = null;
         const saved = await saveRoomData();
         if (!saved) {
-            setPlayError("変更を保存できませんでした。入力内容を確認して再試行してください。");
+            setPlayError(
+                "変更を保存できませんでした。入力内容を確認して再試行してください。",
+            );
             setIsStartingPlay(false);
             return;
         }
@@ -832,6 +850,7 @@ export default function Page({
                 >
                     {!isExported && "エクスポート"}
                 </Button>
+                {exportError && <div className="text-red-500" role="alert">{exportError}</div>}
 
                 <MorphDialog
                     button={
@@ -929,32 +948,21 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                JSONファイルは以下の形式で貼り付けてください:
+                                JSONは、問題文をキー、回答を値にした1つのオブジェクトで貼り付けてください:
                             </div>
                             <div data-cursor="text">
                                 {" "}
                                 <pre className="text-sm">
-                                    {`[
-    {
-        "jp": "りんご",
-        "en": "apple"
-    },
-    {
-        "jp": "ねこ",
-        "en": "cat"
-    }
-]`}
+                                    {`{\n    "ねこ": "cat",\n    "日本の憲法の名前は？": "にほんこくけんぽう"\n}`}
                                 </pre>
-                            </div>
-                            <div className="opacity-50" data-cursor="text">
-                                それぞれの単語には、&quot;jp&quot;をつけた日本語訳と、
-                                &quot;en&quot;をつけた英語訳が必要です。
                             </div>
                             <div data-cursor="text">
                                 CSVはヘッダーなしの2列で貼り付けてください:
                             </div>
                             <pre className="text-sm" data-cursor="text">
-                                {"りんご,apple\nねこ,cat"}
+                                {
+                                    "りんご,apple\n日本の憲法の名前は？,にほんこくけんぽう"
+                                }
                             </pre>
                         </div>
                         <Button
@@ -1114,8 +1122,7 @@ export default function Page({
                         childrenClassName="flex p-4 flex-col gap-4 items-center"
                     >
                         <div data-cursor="text" className="p-2">
-                            単語は2列のCSV、または&quot;jp&quot;（日本語）と
-                            &quot;en&quot;（英語）を含むJSONで貼り付けてください。
+                            単語は2列のCSV、または問題と回答のペアを並べたJSONで貼り付けてください。
                             <Button
                                 onClick={() => setShowImportDialog(true)}
                                 variant="text"
@@ -1156,6 +1163,15 @@ export default function Page({
                             </div>
                         )}
                     </Collapsible>
+                    {roomSaveError && (
+                        <div
+                            className="text-red-500 mb-4"
+                            role="alert"
+                            data-cursor="text"
+                        >
+                            {roomSaveError}
+                        </div>
+                    )}
                     <div ref={itemListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
@@ -1173,7 +1189,7 @@ export default function Page({
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="日本語訳"
+                                                        label="問題文"
                                                         value={item.prompt}
                                                         onChange={(e) => {
                                                             const newItems =
@@ -1215,7 +1231,7 @@ export default function Page({
                                                 </div>
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="英単語"
+                                                        label="回答"
                                                         font="mono"
                                                         value={item.answer}
                                                         onChange={(e) => {
@@ -1235,17 +1251,18 @@ export default function Page({
                                                                               }
                                                                             : currentItem,
                                                                 );
+                                                            setRoomSaveError(
+                                                                "",
+                                                            );
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {!/^[a-zA-Z0-9.,?!\- ]+$/.test(
+                                                    {!isAllowedTypingAnswer(
                                                         item.answer,
                                                     ) &&
                                                         item.answer && (
                                                             <div className="text-red-500">
-                                                                半角英数字、スペース、記号（.
-                                                                , ! ?
-                                                                -）のみ使用できます。
+                                                                英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
                                                             </div>
                                                         )}
                                                     {item.answer.length >
@@ -1293,7 +1310,11 @@ export default function Page({
                             </SortableContext>
                         </DndContext>
 
-                        {playError && <div role="alert" className="text-red-500">{playError}</div>}
+                        {playError && (
+                            <div role="alert" className="text-red-500">
+                                {playError}
+                            </div>
+                        )}
                         <MorphDialog
                             button={
                                 <Button

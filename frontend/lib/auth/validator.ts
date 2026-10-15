@@ -1,3 +1,4 @@
+import { isAllowedTypingAnswer } from "@/lib/room/importWords";
 import type { Item } from "@/type";
 
 export const validateEmail = (email?: string) => {
@@ -57,15 +58,15 @@ export const validateItems = (items?: Item[]) => {
 
         if (item.type === "typed_recall") {
             if (item.prompt.length > MAX_TEXT_LENGTH) {
-                return "日本語訳は32文字以内で入力してください。";
+                return "問題文は32文字以内で入力してください。";
             }
 
             if (item.answer.length > MAX_TEXT_LENGTH) {
-                return "英単語は32文字以内で入力してください。";
+                return "回答は32文字以内で入力してください。";
             }
 
-            if (!/^[a-zA-Z0-9.,?!\- ]+$/.test(item.answer)) {
-                return "英単語には半角英数字、スペース、記号（. , ? ! -）のみ使用できます。";
+            if (!isAllowedTypingAnswer(item.answer)) {
+                return "回答には英数字、ひらがな、スペース、ハイフン、句読点（,.!?、。！？）のみ使用できます。";
             }
         }
     }
