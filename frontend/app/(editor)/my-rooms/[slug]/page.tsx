@@ -19,7 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, use, useRef, useLayoutEffect } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
-import { parseImportedWords, filterTypingAnswer, isAllowedTypingAnswer, exportAnswerPairs } from "@/lib/room/importWords";
+import { parseImportedWords, isAllowedTypingAnswer, exportAnswerPairs } from "@/lib/room/importWords";
 import type { LegacyWord, Room, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -101,6 +101,7 @@ export default function Page({
     const [isLinkCopied, setIsLinkCopied] = useState(false);
     const [roomLink, setRoomLink] = useState("");
     const [roomLinkError, setRoomLinkError] = useState("");
+    const [roomSaveError, setRoomSaveError] = useState("");
     const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
@@ -336,6 +337,7 @@ export default function Page({
         }
 
         const newItems = [...importedItems, ...items];
+        setRoomSaveError("");
         setItems(newItems);
 
         setImportData("");
@@ -412,14 +414,15 @@ export default function Page({
                 };
                 const error = await updateRoomFromId(updatedRoom);
                 if (error) {
-                    setRoomLinkError(error);
+                    setRoomSaveError(error);
                     return false;
                 }
+                setRoomSaveError("");
                 setRoomLinkError("");
                 return true;
             } catch (error) {
                 console.error("Failed to save room:", error);
-                setRoomLinkError("ルームを保存できませんでした。もう一度お試しください。");
+                setRoomSaveError("ルームを保存できませんでした。もう一度お試しください。");
                 return false;
             }
         });
@@ -1135,6 +1138,11 @@ export default function Page({
                             </div>
                         )}
                     </Collapsible>
+                    {roomSaveError && (
+                        <div className="text-red-500 mb-4" role="alert" data-cursor="text">
+                            {roomSaveError}
+                        </div>
+                    )}
                     <div ref={itemListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
@@ -1208,10 +1216,11 @@ export default function Page({
                                                                         index
                                                                             ? {
                                                                                   ...currentItem,
-                                                                                  answer: filterTypingAnswer(e.target.value),
+                                                                                  answer: e.target.value,
                                                                               }
                                                                             : currentItem,
                                                                 );
+                                                            setRoomSaveError("");
                                                             setItems(newItems);
                                                         }}
                                                     />
