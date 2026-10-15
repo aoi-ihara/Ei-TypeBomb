@@ -185,3 +185,117 @@ export function kanaCompositionLayout(answer, startIndex, composing, hintLength 
         occupies: composing.length >= 2 && choice ? choice[1].length : 1,
     };
 }
+
+/**
+ * Editable typing uses the typed romanization, not the expected answer,
+ * to convert kana. Incorrect but valid kana remain visible until every answer
+ * position has been attempted (and can be corrected with cursor navigation).
+ * Strict advanceKanaInput is retained for the standalone prototype.
+ *
+ * @param {string} answer
+ * @param {number} cursor
+ * @param {string} composing
+ * @param {string} rawKey
+ * @returns {{accepted: boolean, emitted: string, composing: string}}
+ */
+export function advanceEditableKanaAt(answer, cursor, composing, rawKey) {
+    const reject = { accepted: false, emitted: "", composing };
+    if (rawKey.length !== 1 || cursor < 0 || cursor >= answer.length) return reject;
+    const key = rawKey.toLowerCase();
+    const char = answer[cursor];
+
+    if (!isHiragana(char)) {
+        return { accepted: true, emitted: rawKey, composing: "" };
+    }
+    if (!/^[a-z']$/.test(key)) return reject;
+
+    const nextKana = answer.slice(cursor + 1);
+    // The carried n from ん + な/に/ぬ/ね/の can be reused as-is (danna)
+    // or an extra n can be explicitly entered (dannna).
+    if (composing === "n" && key === "n" && answer[cursor - 1] === "ん" &&
+        entries.some(([roman, kana]) =>
+            roman.startsWith("n") && kana !== "ん" && nextKana !== "" &&
+            answer.slice(cursor).startsWith(kana))) {
+        return { accepted: true, emitted: "", composing: "n" };
+    }
+
+    if (composing === "n" && key === "'") {
+        return { accepted: true, emitted: "ん", composing: "" };
+    }
+
+    // Consume n before a consonant as ん and retry that consonant at
+    // the next kana, mirroring native romanization conventions.
+    if (composing === "n" && key !== "n" && !/[aiueoy]/.test(key)) {
+        const next = advanceEditableKanaAt(answer, cursor + 1, "", rawKey);
+        if (next.accepted) {
+            return { accepted: true, emitted: "ん" + next.emitted, composing: next.composing };
+        }
+    }
+
+    // Double consonants produce っ and carry the second consonant into
+    // the next syllable (gakkou); don't trigger a premature failure.
+    if (composing === key && /^[bcdfghjklmpqrstvwxyz]$/.test(key) && key !== "n") {
+        return { accepted: true, emitted: "っ", composing: key };
+    }
+
+    const roman = composing + key;
+    const exact = ROMAJI[roman];
+    if (exact) {
+        const carryN = roman === "nn" &&
+            entries.some(([candidate, kana]) =>
+                candidate.startsWith("n") && kana !== "ん" &&
+                nextKana.startsWith(kana));
+        return { accepted: true, emitted: exact, composing: carryN ? "n" : "" };
+    }
+
+    // Keep even an invalid roman prefix (such as "sq") in the active boxes.
+    // The user can Backspace to repair it; it is not an early wrong answer.
+    return { accepted: true, emitted: "", composing: roman };
+}
+
+/**
+ * Apply a roman key to a selected answer cell. Does not compare the emitted
+ * kana to the answer until the entire item has been entered.
+ *
+ * @param {string} answer
+ * @param {string[]} cells
+ * @param {number} cursor
+ * @param {string} composing
+ * @param {string} key
+ */
+export function editKanaCell(answer, cells, cursor, composing, key) {
+    const result = advanceEditableKanaAt(answer, cursor, composing, key);
+    const next = [...cells];
+    if (!result.accepted) {
+        return {
+            accepted: false, cells: next, cursor, composing, advance: 0,
+            complete: false, correct: false,
+        };
+    }
+    const emitted = Array.from(result.emitted);
+    // A multi-kana reading (e.g. ちゃ) spans adjacent answer cells.
+    // If it overflows the end, keep it as one *wrong* cell instead of
+    // accidentally trimming it to the correct answer.
+    const advance = Math.min(emitted.length, answer.length - cursor);
+    if (advance && emitted.length > advance) {
+        next[cursor] = result.emitted;
+    } else {
+        emitted.forEach((letter, index) => {
+            next[cursor + index] = letter;
+        });
+    }
+    const complete = advance > 0 && next.every((char) => char !== "");
+    return {
+        accepted: true,
+        cells: next,
+        cursor: advance ? Math.min(answer.length - 1, cursor + advance) : cursor,
+        composing: result.composing,
+        advance,
+        complete,
+        correct: complete && next.join("") === answer,
+    };
+}
+
+/** Cursor movement is always independent of correct-answer progress. */
+export const nextKanaCursor = (cursor, direction, length) =>
+    Math.max(0, Math.min(length - 1, cursor + direction));
