@@ -133,26 +133,28 @@ export default function KanaTypingPrototypePage() {
                     {letters.map((char, index) => {
                         const filled = index < Array.from(committed).length;
                         const active = index === Array.from(committed).length && !complete;
-                        const slots = active ? splitSlots : 1;
                         const visible = filled ? Array.from(committed)[index] : "";
+                        // Replace the entire kana box with independent English-sized
+                        // boxes while composing; do not subdivide a w-12 container.
+                        if (active && composing && isKana(char)) {
+                            return Array.from({ length: splitSlots }, (_, slot) => (
+                                <div
+                                    key={`${index}-roman-${slot}`}
+                                    className="relative z-20 h-16 w-8 cursor-text rounded-sm p-1 font-mono text-3xl font-bold transition-all duration-150 ease-etb bg-(--color-border)"
+                                >
+                                    <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                        {composing[slot] ?? ""}
+                                    </div>
+                                </div>
+                            ));
+                        }
                         return (
                             <div
                                 key={index}
-                                className={`relative z-20 flex h-16 cursor-text items-center justify-center rounded-sm p-1 text-3xl font-bold transition-all duration-150 ease-etb ${isKana(char) ? "w-12" : "w-8 font-mono"} ${active ? "bg-(--color-border)" : ""}`}
+                                className={`relative z-20 h-16 cursor-text rounded-sm p-1 text-3xl font-bold transition-all duration-150 ease-etb ${isKana(char) ? "w-12" : "w-8 font-mono"} ${active ? "bg-(--color-border)" : ""}`}
                             >
-                                <div className="flex h-full w-full items-center justify-center overflow-hidden border-b border-(--color-border)">
-                                    {active && composing ? (
-                                        <div className="flex h-full w-full">
-                                            {Array.from({ length: slots }, (_, i) => (
-                                                <div
-                                                    key={i}
-                                                    className={`flex min-w-0 flex-1 items-center justify-center text-base ${i > 0 ? "border-l border-(--color-border)" : ""}`}
-                                                >
-                                                    {composing[i] ?? ""}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : visible}
+                                <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                    {visible}
                                 </div>
                             </div>
                         );
@@ -194,7 +196,7 @@ export default function KanaTypingPrototypePage() {
                 </button>
             </section>
             <p className="text-xs opacity-60">
-                英語は w-8 + font-mono、ひらがなは w-12 + 通常フォント。子音入力で2分割、ty / sh などの連続入力で3分割し、確定したら元のマスへ戻ります。
+                英語は w-8 + font-mono、ひらがなは w-12 + 通常フォント。子音入力を開始するとひらがな1マスが独立した w-8 の2マスに置き換わり、ty / sh などで3マスになり、確定後に w-12 のひらがな表示へ戻ります。
                 「ちゃ」のような組み合わせは確定後に2マスへ表示されます。
                 この試作では小さい「っ」やIME直接入力などの例外は未対応です。
             </p>
