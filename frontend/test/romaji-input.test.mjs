@@ -4,6 +4,7 @@ import {
     advanceKanaInput, decodeKanaProgress, encodeKanaProgress,
     hasHiragana, kanaCompositionLayout, romanSlotCount,
     advanceEditableKanaAt, editKanaCell, nextKanaCursor,
+    shouldClearForTimedHint,
 } from "../lib/romaji-input.mjs";
 
 function type(answer, keys) {
@@ -203,4 +204,61 @@ test("editing a kana + English mixed answer remains position-aware", () => {
     assert.equal(wrong.correct, false);
     const corrected = editKanaCell("さ-a", wrong.cells, 2, "", "a");
     assert.equal(corrected.correct, true);
+});
+
+test("fa and fi convert as combined kana, including optional fe and fo", () => {
+    const examples = [
+        ["ふぁ", "fa"],
+        ["ふぃ", "fi"],
+        ["ふぇ", "fe"],
+        ["ふぉ", "fo"],
+    ];
+    for (const [kana, roman] of examples) {
+        assert.deepEqual(type(kana, roman), { committed: kana, composing: "" });
+
+        const first = editKanaCell(kana, Array.from(kana, () => ""), 0, "", "f");
+        assert.equal(first.advance, 0);
+        assert.equal(first.composing, "f");
+        assert.equal(first.complete, false);
+
+        const second = editKanaCell(kana, first.cells, 0, "f", roman[1]);
+        assert.deepEqual(second.cells, Array.from(kana));
+        assert.equal(second.advance, 2);
+        assert.equal(second.correct, true);
+
+        const unhinted = kanaCompositionLayout(kana, 0, "f", 0);
+        assert.deepEqual(unhinted, { slots: 2, hintRoman: "", occupies: 1 });
+        const hinted = kanaCompositionLayout(kana, 0, "f", 2);
+        assert.equal(hinted.hintRoman, roman);
+    }
+});
+
+test("timed hints never erase editable kana or its unhinted cells", () => {
+    const cases = [
+        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 0 },
+        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 1 },
+        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 3 },
+        { answer: "ふぁ", cells: ["ふ", ""], hintLength: 2 },
+    ];
+    for (const { answer, cells, hintLength } of cases) {
+        assert.equal(shouldClearForTimedHint(answer, cells, hintLength), false);
+    }
+    // Existing English behaviour must be preserved.
+    assert.equal(shouldClearForTimedHint("cat", ["c", "x", ""], 1), false);
+    assert.equal(shouldClearForTimedHint("cat", ["c", "x", ""], 2), true);
+});
+
+test("input in a blank unhinted kana slot remains editable through completion", () => {
+    const answer = "ふぁく";
+    const started = editKanaCell(answer, ["", "", ""], 0, "", "f");
+    assert.equal(started.advance, 0);
+    assert.equal(started.complete, false);
+    assert.equal(shouldClearForTimedHint(answer, started.cells, 0), false);
+    const composed = editKanaCell(answer, started.cells, 0, started.composing, "a");
+    assert.deepEqual(composed.cells, ["ふ", "ぁ", ""]);
+    assert.equal(composed.complete, false);
+    assert.equal(shouldClearForTimedHint(answer, composed.cells, 0), false);
+    const finished = editKanaCell(answer, composed.cells, 2, "k", "u");
+    assert.deepEqual(finished.cells, ["ふ", "ぁ", "く"]);
+    assert.equal(finished.correct, true);
 });
