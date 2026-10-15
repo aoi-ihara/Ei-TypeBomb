@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 // The prototype deliberately does not change the game's answer validation.
 // Each entry maps a roman-key sequence to one or more visible kana cells.
@@ -43,6 +43,7 @@ const EXAMPLES = [
     { prompt: "お茶の「ちゃ」", answer: "ちゃ" },
     { prompt: "今日の読み方", answer: "きょう" },
     { prompt: "こんにちは", answer: "こんにちは" },
+    { prompt: "りんごの英語", answer: "apple" },
 ] as const;
 
 const isKana = (char: string) => /^[ぁ-ゖ]$/.test(char);
@@ -57,16 +58,6 @@ export default function KanaTypingPrototypePage() {
     const letters = Array.from(answer);
     const complete = committed === answer && !composing;
 
-    const candidates = useMemo(
-        () =>
-            Object.entries(ROMAJI).filter(
-                ([roman, kana]) =>
-                    roman.startsWith(composing) &&
-                    answer.startsWith(kana, committed.length),
-            ),
-        [answer, committed, composing],
-    );
-
     const reset = (nextExample = exampleIndex) => {
         setExampleIndex(nextExample);
         setCommitted("");
@@ -79,6 +70,13 @@ export default function KanaTypingPrototypePage() {
         if (complete) return;
         const key = raw.toLowerCase();
         if (!/^[a-z]$/.test(key)) return;
+        if (!isKana(Array.from(answer)[Array.from(committed).length] ?? "")) {
+            if (key === answer[committed.length]) {
+                setCommitted((previous) => previous + key);
+                setInvalid(false);
+            } else setInvalid(true);
+            return;
+        }
         const next = composing + key;
         const nextCandidates = Object.entries(ROMAJI).filter(
             ([roman, kana]) =>
@@ -101,7 +99,6 @@ export default function KanaTypingPrototypePage() {
 
     // Keep the existing box style: w-8 and monospace for English,
     // w-12 and the regular app font for hiragana.
-    const remaining = letters.slice(Array.from(committed).length);
     const splitSlots = composing ? Math.max(2, composing.length + 1) : 1;
 
     return (
@@ -166,7 +163,8 @@ export default function KanaTypingPrototypePage() {
                         type="text"
                         value=""
                         onChange={(event) => {
-                            for (const char of event.target.value) handleCharacter(char);
+                            // The prototype handles single-key input; avoid stale React state on paste.
+                            handleCharacter(event.target.value.slice(-1));
                         }}
                         onKeyDown={(event) => {
                             if (event.key === "Backspace") {
@@ -196,7 +194,7 @@ export default function KanaTypingPrototypePage() {
                 </button>
             </section>
             <p className="text-xs opacity-60">
-                入力前はひらがな1文字につき w-12。子音入力で2分割、ty / sh などの連続入力で3分割し、確定したら元のマスへ戻ります。
+                英語は w-8 + font-mono、ひらがなは w-12 + 通常フォント。子音入力で2分割、ty / sh などの連続入力で3分割し、確定したら元のマスへ戻ります。
                 「ちゃ」のような組み合わせは確定後に2マスへ表示されます。
                 この試作では小さい「っ」やIME直接入力などの例外は未対応です。
             </p>
