@@ -360,9 +360,13 @@ function TypingAttempt({
         setAnswerRevealed(true);
         onHintChange?.(english.length);
 
-        const hasIncorrectInput = input.some(
-            (char, index) => char !== "" && char !== english[index],
-        );
+        // A correctly committed kana prefix stays on screen when hints are
+        // revealed, even if the user is still composing its roman letters.
+        const hasIncorrectInput = isKanaAnswer
+            ? !english.startsWith(input.join(""))
+            : input.some(
+                  (char, index) => char !== "" && char !== english[index],
+              );
         if (hasIncorrectInput) {
             resetInput();
         }
@@ -688,6 +692,14 @@ function TypingAttempt({
                                             return;
                                         }
                                         lastKeyWasSpaceRef.current = true;
+                                        // In kana mode, the first Space of the
+                                        // double-Space hint shortcut must not be
+                                        // passed to the roman parser as an error.
+                                        // A real space in the answer still works.
+                                        if (isKanaAnswer && english[currentSelection] !== " ") {
+                                            setCharInput("");
+                                            return;
+                                        }
                                     } else {
                                         lastKeyWasSpaceRef.current = false;
                                     }
