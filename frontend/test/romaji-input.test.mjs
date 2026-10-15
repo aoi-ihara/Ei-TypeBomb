@@ -6,6 +6,7 @@ import {
     advanceEditableKanaAt, editKanaCell, nextKanaCursor,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
+    normalizeHyphenInput, displayTypingCharacter,
 } from "../lib/romaji-input.mjs";
 
 function type(answer, keys) {
@@ -58,6 +59,62 @@ test("mixes kana, English, spaces and hyphens without changing English keys", ()
     assert.equal(hasHiragana("apple"), false);
     assert.equal(hasHiragana("さ-a"), true);
 });
+test("ASCII hyphen types Japanese long vowels without rewriting the answer", () => {
+    assert.deepEqual(type("ちーたー", "ti-ta-"), { committed: "ちーたー", composing: "" });
+    assert.deepEqual(type("らーめん", "ra-menn"), { committed: "らーめん", composing: "" });
+    assert.deepEqual(type("あーーい", "a--i"), { committed: "あーーい", composing: "" });
+    // A kana answer can contain a literal ASCII hyphen immediately beside ー.
+    assert.deepEqual(type("さ-ー", "sa--"), { committed: "さ-ー", composing: "" });
+    assert.equal(normalizeHyphenInput("ー", "-"), "ー");
+    assert.equal(normalizeHyphenInput("－", "-"), "－");
+    assert.equal(normalizeHyphenInput("-", "-"), "-");
+});
+
+test("editable kana typing commits long vowels via the physical hyphen key", () => {
+    function typeEditable(answer, keys) {
+        let cells = Array.from(answer, () => "");
+        let cursor = 0;
+        let composing = "";
+        let last;
+        for (const key of keys) {
+            last = editKanaCell(answer, cells, cursor, composing, key);
+            assert.equal(last.accepted, true, `Rejected ${key} in ${keys} at ${cursor}`);
+            cells = last.cells;
+            cursor = last.cursor;
+            composing = last.composing;
+        }
+        return { cells, last, composing };
+    }
+    const cheetah = typeEditable("ちーたー", "ti-ta-");
+    assert.deepEqual(cheetah.cells, ["ち", "ー", "た", "ー"]);
+    assert.equal(cheetah.last.complete, true);
+    assert.equal(cheetah.last.correct, true);
+    assert.equal(cheetah.composing, "");
+    const mixed = typeEditable("さ-ー", "sa--");
+    assert.deepEqual(mixed.cells, ["さ", "-", "ー"]);
+    assert.equal(mixed.last.correct, true);
+});
+
+test("English ASCII hyphens remain literal, while fullwidth answer hyphens accept -", () => {
+    assert.deepEqual(type("well-known", "well-known"), {
+        committed: "well-known", composing: "",
+    });
+    assert.deepEqual(type("co－operate", "co-operate"), {
+        committed: "co－operate", composing: "",
+    });
+    assert.deepEqual(type("さ－a", "sa-a"), {
+        committed: "さ－a", composing: "",
+    });
+    const ascii = editKanaCell("well-known", ["", "", "", "", ""], 4, "", "-");
+    assert.equal(ascii.cells[4], "-");
+    const fullwidth = editKanaCell("co－operate", ["", "", ""], 2, "", "-");
+    assert.equal(fullwidth.cells[2], "－");
+    assert.equal(displayTypingCharacter("ー"), "-");
+    assert.equal(displayTypingCharacter("－"), "-");
+    assert.equal(displayTypingCharacter("-"), "-");
+    assert.equal(displayTypingCharacter("ち"), "ち");
+});
+
 test("invalid input never alters committed kana or composition", () => {
     const progress = { committed: "", composing: "t" };
     const result = advanceKanaInput("ちゃ", progress, "z");
