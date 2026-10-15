@@ -300,3 +300,18 @@ export function editKanaCell(answer, cells, cursor, composing, key) {
 /** Cursor movement is always independent of correct-answer progress. */
 export const nextKanaCursor = (cursor, direction, length) =>
     Math.max(0, Math.min(length - 1, cursor + direction));
+
+/**
+ * English retains its legacy behaviour when a timed hint uncovers an incorrect
+ * cell. Kana input must stay editable: a hint is visual guidance, not an
+ * implicit incorrect-answer submission.
+ *
+ * @param {string} answer
+ * @param {string[]} cells
+ * @param {number} hintLength
+ */
+export const shouldClearForTimedHint = (answer, cells, hintLength) =>
+    !hasHiragana(answer) &&
+    cells.some((char, index) =>
+        index < hintLength && char !== "" && char !== answer[index],
+    );
