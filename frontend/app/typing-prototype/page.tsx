@@ -108,8 +108,7 @@ export default function KanaTypingPrototypePage() {
         }
     };
 
-    // Keep the existing box style: w-8 and monospace for English,
-    // w-12 and the regular app font for hiragana.
+    // English stays w-8 monospace; idle kana uses w-10 in the app font.
     const splitSlots = composing ? Math.max(2, composing.length + 1) : 1;
 
     return (
@@ -145,28 +144,43 @@ export default function KanaTypingPrototypePage() {
                         const filled = index < Array.from(committed).length;
                         const active = index === Array.from(committed).length && !complete;
                         const visible = filled ? Array.from(committed)[index] : "";
-                        // Replace the entire kana box with independent English-sized
-                        // boxes while composing; do not subdivide a w-12 container.
-                        if (active && composing && isKana(char)) {
-                            return Array.from({ length: splitSlots }, (_, slot) => (
-                                <div
-                                    key={`${index}-roman-${slot}`}
-                                    className="relative z-20 h-16 w-8 cursor-text rounded-sm p-1 font-mono text-3xl font-bold transition-all duration-150 ease-etb bg-(--color-border)"
-                                >
-                                    <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                        {composing[slot] ?? ""}
-                                    </div>
-                                </div>
-                            ));
-                        }
+                        const composingKana = active && Boolean(composing) && isKana(char);
+                        const boxCount = composingKana ? splitSlots : 1;
+                        const width = composingKana
+                            ? boxCount * 32
+                            : isKana(char) ? 40 : 32;
+
+                        // Keep one stable wrapper per answer character so its width
+                        // animates from w-10 -> 2 x w-8 -> 3 x w-8 and back.
+                        // Each roman letter remains a genuine w-8 box.
                         return (
                             <div
                                 key={index}
-                                className={`relative z-20 h-16 cursor-text rounded-sm p-1 text-3xl font-bold transition-all duration-150 ease-etb ${isKana(char) ? "w-12" : "w-8 font-mono"} ${active ? "bg-(--color-border)" : ""}`}
+                                className="relative z-20 h-16 shrink-0 cursor-text overflow-hidden transition-[width] duration-200 ease-etb motion-reduce:transition-none"
+                                style={{ width }}
                             >
-                                <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                    {visible}
-                                </div>
+                                {composingKana ? (
+                                    <div className="flex h-16 w-max">
+                                        {Array.from({ length: boxCount }, (_, slot) => (
+                                            <div
+                                                key={slot}
+                                                className={`h-16 w-8 shrink-0 rounded-sm p-1 font-mono text-3xl font-bold transition-colors duration-150 ease-etb ${slot === composing.length ? "bg-(--color-border)" : ""}`}
+                                            >
+                                                <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                                    {composing[slot] ?? ""}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div
+                                        className={`h-16 rounded-sm p-1 text-3xl font-bold transition-colors duration-150 ease-etb ${isKana(char) ? "w-10" : "w-8 font-mono"} ${active ? "bg-(--color-border)" : ""}`}
+                                    >
+                                        <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                            {visible}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
@@ -207,7 +221,7 @@ export default function KanaTypingPrototypePage() {
                 </button>
             </section>
             <p className="text-xs opacity-60">
-                英語は w-8 + font-mono、ひらがなは w-12 + 通常フォント。子音入力を開始するとひらがな1マスが独立した w-8 の2マスに置き換わり、ty / sh などで3マスになり、確定後に w-12 のひらがな表示へ戻ります。
+                英語は w-8 + font-mono、ひらがなは w-10 + 通常フォント。子音入力時は幅がアニメーションしながら w-8 の2マス、ty / sh などで3マスへ広がります。ハイライトは次に入力するローマ字の1マスだけに移動し、確定後は w-10 のひらがな表示へ戻ります。
                 「ちゃ」のような組み合わせは確定後に2マスへ表示されます。
                 この試作では小さい「っ」やIME直接入力などの例外は未対応です。
             </p>
