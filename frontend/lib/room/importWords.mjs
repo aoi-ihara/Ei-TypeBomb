@@ -95,10 +95,20 @@ function parseCsv(source) {
 }
 
 function parseJson(parsed) {
-    // Preferred format: [{"りんご":"apple"},{"さくら":"sakura"}]
-    // Explicit question/answer objects and legacy jp/en objects stay readable.
+    // Preferred compact format: { "ねこ": "cat", "桜": "さくら" }.
+    // Here keys are explicitly questions and values are explicitly answers;
+    // never reapply the CSV length heuristic or exports could swap roles.
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const entries = Object.entries(parsed);
+        if (!entries.length) throw new Error("JSONには問題と回答を1件以上入力してください。");
+        return entries.map(([question, answer], i) =>
+            validatePair(question, answer, i + 1, true),
+        );
+    }
+
+    // Read historical array formats for backwards compatibility.
     if (!Array.isArray(parsed) || parsed.length === 0) {
-        throw new Error("JSONは問題と回答のオブジェクトの配列にしてください。");
+        throw new Error("JSONは問題文と回答のオブジェクトにしてください。");
     }
     return parsed.map((entry, i) => {
         if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
@@ -135,7 +145,16 @@ export function parseImportedPairs(source) {
 }
 
 export function exportAnswerPairs(items) {
-    // A role-labelled export must remain lossless on re-import even if the
-    // prompt is twice as long as the answer.
-    return JSON.stringify(items.map(item => ({ question: item.prompt, answer: item.answer })), null, 4);
+    const pairs = {};
+    for (const item of items) {
+        // A JSON object cannot represent two distinct answers for one key.
+        // Fail rather than silently discard data.
+        if (Object.hasOwn(pairs, item.prompt)) {
+            throw new Error(`問題文「${item.prompt}」が重複しています。JSONでは同じ問題文を2件書き出せません。`);
+        }
+        Object.defineProperty(pairs, item.prompt, {
+            value: item.answer, enumerable: true, configurable: true, writable: true,
+        });
+    }
+    return JSON.stringify(pairs, null, 4);
 }
