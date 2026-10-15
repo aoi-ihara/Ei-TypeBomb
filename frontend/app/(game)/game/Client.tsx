@@ -1,7 +1,7 @@
 "use client";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { io } from "@/lib/room/socket";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
@@ -14,6 +14,17 @@ import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
 import { legacyWireWordsToItems } from "@/lib/item";
+import { loadPlaygroundMemory, syncPlaygroundMemory } from "@/lib/playground/memory-client";
+import type { RecallObservation } from "@/lib/playground/memory";
+import {
+    createOnlineMemorySession,
+    cacheOnlinePendingMemory,
+    loadOnlinePendingMemory,
+    loadOnlineGuestMemory,
+    nextOnlineRecommendation,
+    recordOnlineRecall,
+    type OnlineMemorySession,
+} from "@/lib/online/memory-session";
 
 type Props = {
     initialBackgroundMusic: boolean;
@@ -45,6 +56,9 @@ export default function Clinet({
     const [bombStatus, setBombStatus] = useState<number | null>(0);
 
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
+    const onlineMemoryRef = useRef<OnlineMemorySession | null>(null);
+    const memoryFlushRef = useRef<Promise<void> | null>(null);
+    const [onlineMemoryReady, setOnlineMemoryReady] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const blipAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -76,6 +90,117 @@ export default function Clinet({
             opacity: 0,
         })),
     );
+
+    // Upserts are serialized so a slow network response cannot overwrite a
+    // newer answer. Failed writes remain queued for the next retry.
+    const flushOnlineMemory = useCallback(async () => {
+        if (memoryFlushRef.current) return memoryFlushRef.current;
+        const session = onlineMemoryRef.current;
+        if (!session?.userId || session.pending.size === 0) return;
+        const operation = (async () => {
+            while (session.pending.size > 0) {
+                const snapshot = [...session.pending.values()];
+                try {
+                    const error = await syncPlaygroundMemory(snapshot);
+                    if (error) throw error;
+                    for (const saved of snapshot) {
+                        if (session.pending.get(saved.itemId) === saved)
+                            session.pending.delete(saved.itemId);
+                    }
+                    cacheOnlinePendingMemory(session);
+                } catch (error) {
+                    console.error("Online memory sync failed", error);
+                    cacheOnlinePendingMemory(session);
+                    break;
+                }
+            }
+        })();
+        memoryFlushRef.current = operation;
+        try {
+            await operation;
+        } finally {
+            memoryFlushRef.current = null;
+        }
+    }, []);
+
+    // A room uses the very same memory rows (or guest localStorage key) as
+    // Playground, but starts its own transient per-player scheduling session.
+    const memoryRoomId = room?.id;
+    useEffect(() => {
+        if (!room || !memoryRoomId) return;
+        let cancelled = false;
+        const itemIds = (room.items ?? []).map(item => item.id);
+        const load = async () => {
+            const result = await loadPlaygroundMemory(memoryRoomId);
+            if (cancelled) return;
+            if (result.error) {
+                console.error("Online memory load failed", result.error);
+                return; // Keep the game's random fallback rather than overwriting data.
+            }
+            const memory = result.userId
+                ? result.memoryByItem
+                : loadOnlineGuestMemory(memoryRoomId, itemIds);
+            const session = createOnlineMemorySession(
+                memoryRoomId, itemIds, result.userId, memory,
+            );
+            if (result.userId) {
+                // Playground and online play share the same unsent-write queue.
+                for (const pending of loadOnlinePendingMemory(
+                    memoryRoomId, result.userId, itemIds,
+                )) {
+                    const remote = session.memory[pending.itemId];
+                    if (!remote ||
+                        (Date.parse(pending.updatedAt ?? "") || 0) >=
+                            (Date.parse(remote.updatedAt ?? "") || 0)) {
+                        session.memory[pending.itemId] = pending;
+                        session.pending.set(pending.itemId, pending);
+                    }
+                }
+            }
+            onlineMemoryRef.current = session;
+            setOnlineMemoryReady(n => n + 1);
+            void flushOnlineMemory();
+        };
+        void load();
+        return () => {
+            cancelled = true;
+            if (onlineMemoryRef.current?.roomId === memoryRoomId)
+                onlineMemoryRef.current = null;
+        };
+        // The item catalog is fixed within a room. Broadcast revisions must not
+        // reset scheduler progress or restart the asynchronous memory load.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [memoryRoomId]);
+
+    useEffect(() => {
+        const session = onlineMemoryRef.current;
+        if (!session || session.roomId !== room?.id || !userId ||
+            !users.some(player => player.id === userId)) return;
+        const itemId = nextOnlineRecommendation(session);
+        if (itemId) socketRef.current?.emit("item:recommend", { itemId });
+    }, [room, userId, users, onlineMemoryReady]);
+
+    useEffect(() => {
+        const retry = () => {
+            const session = onlineMemoryRef.current;
+            if (session) cacheOnlinePendingMemory(session);
+            void flushOnlineMemory();
+        };
+        const interval = setInterval(retry, 5_000);
+        const visibility = () => {
+            if (document.visibilityState === "hidden") retry();
+        };
+        window.addEventListener("online", retry);
+        window.addEventListener("pagehide", retry);
+        document.addEventListener("visibilitychange", visibility);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener("online", retry);
+            window.removeEventListener("pagehide", retry);
+            document.removeEventListener("visibilitychange", visibility);
+            retry();
+        };
+    }, [flushOnlineMemory]);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -623,6 +748,22 @@ export default function Clinet({
             enableRemoteTypingSync={false}
             bombRef={bombRef}
             explosionLayer={explosionLayer}
+            onRecallComplete={(observation: RecallObservation) => {
+                if (!focusedItem || !focusedBomb || !userId ||
+                    users[focusedBomb.holder]?.id !== userId ||
+                    !observation.success) return;
+                const session = onlineMemoryRef.current;
+                if (!session || session.roomId !== room?.id) return;
+                const updated = recordOnlineRecall(session, focusedItem.id, observation);
+                if (!updated) return;
+                cacheOnlinePendingMemory(session);
+                const nextItemId = nextOnlineRecommendation(session);
+                // This is emitted before word:success, so the socket server
+                // already has our next recommendation when the bomb returns.
+                if (nextItemId)
+                    socketRef.current?.emit("item:recommend", { itemId: nextItemId });
+                void flushOnlineMemory();
+            }}
             onSuccess={() => {
                 console.log("Success! Emitting to server...");
                 posthog.capture("word_succeeded");
