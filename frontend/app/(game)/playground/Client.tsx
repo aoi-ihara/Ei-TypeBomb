@@ -43,6 +43,81 @@ type Props = {
 
 const LOCAL_USER_ID = "playground-player";
 const GUEST_MEMORY_USER_ID = "playground-guest";
+const guestMemoryKey = (roomId: string) => `playground-memory:guest:${roomId}`;
+
+const loadGuestMemory = (
+    roomId: string,
+    itemIds: Set<string>,
+): Record<string, ItemMemoryState> => {
+    try {
+        const parsed: unknown = JSON.parse(localStorage.getItem(guestMemoryKey(roomId)) ?? "{}");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        return Object.fromEntries(
+            Object.entries(parsed).filter(([id, value]) => {
+                if (!itemIds.has(id) || !value || typeof value !== "object") return false;
+                const m = value as Partial<ItemMemoryState>;
+                return m.itemId === id &&
+                    m.roomId === roomId &&
+                    m.userId === GUEST_MEMORY_USER_ID &&
+                    Number.isFinite(m.stability) &&
+                    Number.isFinite(m.difficulty) &&
+                    Number.isFinite(m.reviewCount) &&
+                    (m.lastReviewedAt == null || !Number.isNaN(Date.parse(m.lastReviewedAt))) &&
+                    (m.lastPresentedAt == null || !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
+                    (m.updatedAt == null || !Number.isNaN(Date.parse(m.updatedAt)));
+            }),
+        ) as Record<string, ItemMemoryState>;
+    } catch {
+        // Ignore corrupted or blocked storage.
+        return {};
+    }
+};
+
+// Preserve newer updates from other tabs instead of overwriting the whole room.
+const mergeGuestMemory = (
+    current: Record<string, ItemMemoryState>,
+    incoming: Record<string, ItemMemoryState>,
+): Record<string, ItemMemoryState> => {
+    const merged = { ...current };
+    for (const [id, memory] of Object.entries(incoming)) {
+        const previous = merged[id];
+        if (!previous || (Date.parse(memory.updatedAt ?? "") || 0) >= (Date.parse(previous.updatedAt ?? "") || 0)) {
+            merged[id] = memory;
+        }
+    }
+    return merged;
+};
+
+const saveGuestMemory = (
+    roomId: string,
+    memory: Record<string, ItemMemoryState>,
+): Record<string, ItemMemoryState> => {
+    const merged = mergeGuestMemory(
+        loadGuestMemory(roomId, new Set([
+            ...Object.keys(memory),
+            ...Object.keys(readGuestMemoryKeys(roomId)),
+        ])),
+        memory,
+    );
+    try {
+        localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(merged));
+    } catch {
+        // Storage may be unavailable or full; practice remains playable.
+    }
+    return merged;
+};
+
+// Read only keys here; loadGuestMemory validates the actual values.
+const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
+    try {
+        const value: unknown = JSON.parse(localStorage.getItem(guestMemoryKey(roomId)) ?? "{}");
+        return value && typeof value === "object" && !Array.isArray(value)
+            ? value as Record<string, unknown>
+            : {};
+    } catch {
+        return {};
+    }
+};
 const BOT_USERS: User[] = [{ id: "playground-bot-1", displayName: "練習相手" }];
 
 const DEFAULT_TYPING_DELAY_MS = 220;
@@ -184,6 +259,9 @@ export default function Client({
             }
 
             if (!loaded.userId) {
+                const saved = loadGuestMemory(room.id, new Set(items.map((item) => item.id)));
+                memoryByItemRef.current = saved;
+                setMemoryByItem(saved);
                 setGuestMode(true);
                 setMemoryReady(true);
                 return;
@@ -241,9 +319,11 @@ export default function Client({
         };
         if (authenticatedUserIdRef.current) {
             pendingMemoryRef.current.set(item.id, exposed);
+        } else {
+            memoryByItemRef.current = saveGuestMemory(room.id, memoryByItemRef.current);
         }
         setMemoryByItem(memoryByItemRef.current);
-    }, []);
+    }, [room.id]);
 
     const setTrackedItem = useCallback(
         (item: Item | null) => {
@@ -415,24 +495,32 @@ export default function Client({
             };
             const evaluation = evaluateRecall(evidence);
             if (scheduler) recordUserAnswer(scheduler, evaluation);
+            const freshestMemory = authenticatedUserIdRef.current
+                ? memoryByItemRef.current
+                : mergeGuestMemory(
+                    memoryByItemRef.current,
+                    loadGuestMemory(room.id, new Set(items.map((entry) => entry.id))),
+                );
             const nextMemory = applyRecallObservation({
-                memory: memoryByItemRef.current[item.id],
+                memory: freshestMemory[item.id],
                 observation: evidence,
                 userId,
                 roomId: room.id,
                 itemId: item.id,
             });
 
-            const nextMemoryByItem = {
-                ...memoryByItemRef.current,
+            let nextMemoryByItem = {
+                ...freshestMemory,
                 [item.id]: nextMemory,
             };
 
-            memoryByItemRef.current = nextMemoryByItem;
-            setMemoryByItem(nextMemoryByItem);
             if (authenticatedUserIdRef.current) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
+            } else {
+                nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
+            memoryByItemRef.current = nextMemoryByItem;
+            setMemoryByItem(nextMemoryByItem);
             userReviewCountRef.current += 1;
 
             posthog.capture("playground_item_recalled", {
@@ -473,7 +561,7 @@ export default function Client({
                 difficulty_after: nextMemory.difficulty,
             });
         },
-        [room.id],
+        [room.id, items],
     );
 
     const cachePendingMemory = useCallback(() => {
@@ -897,7 +985,7 @@ export default function Client({
                 <>
                     {guestMode && (
                         <p role="status" className="text-sm text-center opacity-70">
-                            ゲストプレイ中：学習データは保存されません。
+                            ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
                         </p>
                     )}
                     {saveError && (
