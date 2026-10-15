@@ -96,6 +96,18 @@ export function advanceKanaInput(answer, progress, rawKey) {
         }
     }
 
+    // After nn completes ん, the second n is also carried into な/に/ぬ/ね/の.
+    // An explicitly typed third n (dannna) is also valid: consume it without
+    // counting an error or resetting the already correct input.
+    if (
+        composing === "n" && key === "n" && committed.endsWith("ん") &&
+        entries.some(([roman, kana]) =>
+            roman.startsWith("n") && kana !== "ん" && rest.startsWith(kana),
+        )
+    ) {
+        return { accepted: true, committed, composing: "n" };
+    }
+
     const tentative = composing + key;
     const candidates = entries.filter(
         ([roman, kana]) => roman.startsWith(tentative) && rest.startsWith(kana),
@@ -136,3 +148,37 @@ export function decodeKanaProgress(answer, wire) {
 /** @param {string} composing */
 export const romanSlotCount = (composing) =>
     composing ? Math.max(2, Math.min(4, composing.length + 1)) : 1;
+
+/**
+ * Returns the visible roman key cells and any kana covered by a combination.
+ * A fully hinted kana group can reveal its roman spelling (e.g. tya)
+ * before the user has typed the second consonant.
+ *
+ * @param {string} answer
+ * @param {number} startIndex - UTF-16 index of the next uncommitted kana.
+ * @param {string} composing
+ * @param {number} hintLength
+ */
+export function kanaCompositionLayout(answer, startIndex, composing, hintLength = 0) {
+    if (!composing || !isHiragana(answer.slice(startIndex)[0] ?? "")) {
+        return { slots: 1, hintRoman: "", occupies: 1 };
+    }
+    const remaining = answer.slice(startIndex);
+    const matching = entries.filter(
+        ([roman, kana]) => roman.startsWith(composing) && remaining.startsWith(kana),
+    );
+    // Existing ROMAJI ordering chooses the default spelling, while the
+    // user's typed prefix always selects their variant (tya vs cha).
+    const choice = matching[0];
+    const entireGroupHinted = !!choice &&
+        hintLength >= startIndex + choice[1].length;
+    const hintRoman = entireGroupHinted ? choice[0] : "";
+
+    return {
+        slots: Math.max(romanSlotCount(composing), hintRoman.length),
+        hintRoman,
+        // The second key disambiguates a combined syllable. Hide the following
+        // kana box only then, not after an initial single consonant.
+        occupies: composing.length >= 2 && choice ? choice[1].length : 1,
+    };
+}
