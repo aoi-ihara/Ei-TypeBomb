@@ -23,6 +23,7 @@ export default function TypingSyncOverlay({
     serverUrl: string;
 }) {
     const [currentInput, setCurrentInput] = useState("");
+    const [hintLength, setHintLength] = useState(0);
     const [room, setRoom] = useState<RoomSnapshot | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
@@ -46,11 +47,18 @@ export default function TypingSyncOverlay({
             setRoom(nextRoom);
             if (!nextRoom.isStart || nextRoom.wordIndex === undefined) {
                 setCurrentInput("");
+                setHintLength(0);
             }
         });
 
-        socket.on("typing:input", ({ input }: { input: string }) => {
+        socket.on("typing:input", ({ input, hintLength: remoteHintLength }: {
+            input: string;
+            hintLength?: number;
+        }) => {
             setCurrentInput(input);
+            if (typeof remoteHintLength === "number") {
+                setHintLength(remoteHintLength);
+            }
         });
 
         return () => {
@@ -87,6 +95,7 @@ export default function TypingSyncOverlay({
                             answer={currentItem.answer}
                             confirmed={kanaProgress.committed}
                             composing={kanaProgress.composing}
+                            hintLength={hintLength}
                             activeIndex={-1}
                             readonly
                         />
