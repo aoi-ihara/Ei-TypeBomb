@@ -164,11 +164,14 @@ export function kanaCompositionLayout(answer, startIndex, composing, hintLength 
         return { slots: 1, hintRoman: "", occupies: 1 };
     }
     const remaining = answer.slice(startIndex);
-    const matching = entries.filter(
-        ([roman, kana]) => roman.startsWith(composing) && remaining.startsWith(kana),
-    );
-    // Existing ROMAJI ordering chooses the default spelling, while the
-    // user's typed prefix always selects their variant (tya vs cha).
+    const matching = entries
+        .filter(([roman, kana]) =>
+            roman.startsWith(composing) && remaining.startsWith(kana),
+        )
+        // A hinted ちゃ must choose the combined reading "tya" over "ti"
+        // (which matches only the first character ち).
+        .sort((a, b) => b[1].length - a[1].length);
+    // Original ROMAJI order breaks ties; the typed prefix picks tya / cha.
     const choice = matching[0];
     const entireGroupHinted = !!choice &&
         hintLength >= startIndex + choice[1].length;
