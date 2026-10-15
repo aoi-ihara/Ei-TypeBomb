@@ -615,7 +615,7 @@ export default function Page({
                         />
                     </div>
                 </div>
-                <div className="w-26 flex shrink-0">
+                <div className="w-36 flex shrink-0">
                     <Picker
                         name="Game duration"
                         labelPrefix="時間"
