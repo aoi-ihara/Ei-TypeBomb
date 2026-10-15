@@ -921,17 +921,18 @@ export default function Page({
                     >
                         <div className="w-full px-2 flex flex-col items-start gap-4">
                             <div data-cursor="text">
-                                JSONは問題と回答のペアを次の形式で貼り付けてください:
+                                JSONは問題と回答のペアを次の形式で貼り付けてください。エクスポートは回答を固定する形式です:
                             </div>
                             <div data-cursor="text">
                                 {" "}
                                 <pre className="text-sm">
-                                    {`[\n    { "りんご": "apple" },\n    { "桜の読み方": "さくら" }\n]`}
+                                    {`[\n    { "question": "りんご", "answer": "apple" },\n    { "question": "桜の読み方", "answer": "さくら" }\n]`}
                                 </pre>
                             </div>
                             <div className="opacity-50" data-cursor="text">
                                 英数字とひらがなの文字数が一方で2倍以上なら長い方を回答に、
-                                そうでなければ右側を回答にします（CSV・JSON共通）。
+                                そうでなければ右側を回答にします（CSVと1組形式のJSON）。
+                                question / answer と書かれたJSONは指定した回答側を維持します。
                             </div>
                             <div data-cursor="text">
                                 CSVはヘッダーなしの2列で貼り付けてください:
