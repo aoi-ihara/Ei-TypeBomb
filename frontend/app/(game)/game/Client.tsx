@@ -129,7 +129,7 @@ export default function Clinet({
     useEffect(() => {
         if (!room || !memoryRoomId) return;
         let cancelled = false;
-        const itemIds = room.items.map(item => item.id);
+        const itemIds = (room.items ?? []).map(item => item.id);
         const load = async () => {
             const result = await loadPlaygroundMemory(memoryRoomId);
             if (cancelled) return;
@@ -175,10 +175,10 @@ export default function Clinet({
     useEffect(() => {
         const session = onlineMemoryRef.current;
         if (!session || session.roomId !== room?.id || !userId ||
-            !room?.users.some(player => player.id === userId)) return;
+            !users.some(player => player.id === userId)) return;
         const itemId = nextOnlineRecommendation(session);
         if (itemId) socketRef.current?.emit("item:recommend", { itemId });
-    }, [room, userId, onlineMemoryReady]);
+    }, [room, userId, users, onlineMemoryReady]);
 
     useEffect(() => {
         const retry = () => {
