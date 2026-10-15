@@ -58,7 +58,7 @@ test("JSON array of question-answer maps uses the same orientation", () => {
 test("JSON export roundtrips pair records", () => {
     const imported = [{ prompt: "りんご", answer: "apple" }, { prompt: "桜の読み方", answer: "さくら" }];
     const exportText = exportAnswerPairs(imported);
-    assert.deepEqual(JSON.parse(exportText), [{ question: "りんご", answer: "apple" }, { question: "桜の読み方", answer: "さくら" }]);
+    assert.deepEqual(JSON.parse(exportText), { "りんご": "apple", "桜の読み方": "さくら" });
     assert.deepEqual(parseImportedPairs(exportText), [{ jp: "りんご", en: "apple" }, { jp: "桜の読み方", en: "さくら" }]);
 });
 
@@ -104,4 +104,39 @@ test("reject unsupported kana but permit all kana emitted by romanizer", async (
         assert.equal(isAllowedTypingAnswer(kana), false, kana);
         assert.throws(() => parseImportedPairs(JSON.stringify([{ question: "test", answer: kana }])), /回答/);
     }
+});
+
+test("single JSON object is an explicit question-to-answer mapping", () => {
+    assert.deepEqual(
+        parseImportedPairs('{"ねこ":"cat","日本の憲法の名前は？":"にほんこくけんぽう"}'),
+        [
+            { jp: "ねこ", en: "cat" },
+            { jp: "日本の憲法の名前は？", en: "にほんこくけんぽう" },
+        ],
+    );
+    assert.deepEqual(
+        parseImportedPairs('{"what is one":"yes"}'),
+        [{ jp: "what is one", en: "yes" }],
+    );
+    assert.throws(
+        () => parseImportedPairs('{"日本の憲法の名前は？":"日本国憲法"}'),
+        /回答/,
+    );
+});
+
+test("duplicate prompts cannot be silently lost during JSON object export", () => {
+    assert.throws(
+        () => exportAnswerPairs([
+            { prompt: "ねこ", answer: "cat" },
+            { prompt: "ねこ", answer: "kitten" },
+        ]),
+        /重複/,
+    );
+    assert.deepEqual(parseImportedPairs(exportAnswerPairs([
+        { prompt: "what is one", answer: "yes" },
+        { prompt: "ねこ", answer: "cat" },
+    ])), [
+        { jp: "what is one", en: "yes" },
+        { jp: "ねこ", en: "cat" },
+    ]);
 });
