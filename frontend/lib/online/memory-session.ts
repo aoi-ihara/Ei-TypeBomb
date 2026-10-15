@@ -22,6 +22,39 @@ export type OnlineMemorySession = {
 // Guest online play intentionally shares the exact same per-room storage as Playground.
 const guestKey = (roomId: string) => `playground-memory:guest:${roomId}`;
 const guestUserId = "playground-guest";
+const pendingKey = (userId: string, roomId: string) =>
+    `playground-pending:${userId}:${roomId}`;
+
+// Recover unsent rows from either learning mode after navigation or reload.
+export const loadOnlinePendingMemory = (
+    roomId: string, userId: string, itemIds: string[],
+): ItemMemoryState[] => {
+    try {
+        const data: unknown = JSON.parse(localStorage.getItem(pendingKey(userId, roomId)) ?? "[]");
+        if (!Array.isArray(data)) return [];
+        const allowed = new Set(itemIds);
+        return data.filter((value): value is ItemMemoryState =>
+            !!value && typeof value === "object" &&
+            value.userId === userId && value.roomId === roomId &&
+            allowed.has(value.itemId) &&
+            Number.isFinite(value.stability) && Number.isFinite(value.difficulty) &&
+            Number.isInteger(value.reviewCount));
+    } catch {
+        return [];
+    }
+};
+
+export const cacheOnlinePendingMemory = (session: OnlineMemorySession) => {
+    if (!session.userId) return;
+    try {
+        localStorage.setItem(
+            pendingKey(session.userId, session.roomId),
+            JSON.stringify([...session.pending.values()]),
+        );
+    } catch {
+        // Supabase sync can still work when local storage is unavailable.
+    }
+};
 
 export const loadOnlineGuestMemory = (
     roomId: string,
