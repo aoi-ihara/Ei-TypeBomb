@@ -235,7 +235,10 @@ export function advanceEditableKanaAt(answer, cursor, composing, rawKey) {
 
     // Double consonants produce っ and carry the second consonant into
     // the next syllable (gakkou); don't trigger a premature failure.
-    if (composing === key && /^[bcdfghjklmpqrstvwxyz]$/.test(key) && key !== "n") {
+    if (composing === key && /^[bcdfghjklmpqrstvwxyz]$/.test(key) &&
+        key !== "n" && char === "っ" &&
+        entries.some(([roman, kana]) =>
+            roman.startsWith(key) && nextKana.startsWith(kana))) {
         return { accepted: true, emitted: "っ", composing: key };
     }
 
@@ -249,8 +252,12 @@ export function advanceEditableKanaAt(answer, cursor, composing, rawKey) {
         return { accepted: true, emitted: exact, composing: carryN ? "n" : "" };
     }
 
-    // Keep even an invalid roman prefix (such as "sq") in the active boxes.
-    // The user can Backspace to repair it; it is not an early wrong answer.
+    // A roman prefix is valid only when it can complete a known syllable.
+    // Mismatching *kana* is allowed until the final box, but a sequence such
+    // as "zz" or "sq" is impossible romaji and fails immediately.
+    if (!entries.some(([candidate]) => candidate.startsWith(roman))) {
+        return reject;
+    }
     return { accepted: true, emitted: "", composing: roman };
 }
 
