@@ -7,6 +7,7 @@ export const ROMAJI = Object.freeze({
     ta: "た", ti: "ち", chi: "ち", tu: "つ", tsu: "つ", te: "て", to: "と",
     na: "な", ni: "に", nu: "ぬ", ne: "ね", no: "の",
     ha: "は", hi: "ひ", hu: "ふ", fu: "ふ", he: "へ", ho: "ほ",
+    fa: "ふぁ", fi: "ふぃ", fe: "ふぇ", fo: "ふぉ",
     ma: "ま", mi: "み", mu: "む", me: "め", mo: "も",
     ya: "や", yu: "ゆ", yo: "よ",
     ra: "ら", ri: "り", ru: "る", re: "れ", ro: "ろ",
