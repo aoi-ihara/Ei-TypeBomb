@@ -214,7 +214,7 @@ export function advanceEditableKanaAt(answer, cursor, composing, rawKey) {
     // or an extra n can be explicitly entered (dannna).
     if (composing === "n" && key === "n" && answer[cursor - 1] === "ん" &&
         entries.some(([roman, kana]) =>
-            roman.startsWith("n") && kana !== "ん" && nextKana !== "" &&
+            roman.startsWith("n") && kana !== "ん" &&
             answer.slice(cursor).startsWith(kana))) {
         return { accepted: true, emitted: "", composing: "n" };
     }
