@@ -42,7 +42,7 @@ test("ん uses the second n as start of the following n-row kana", () => {
     assert.deepEqual(type("こんにちは", "konnichiha"), { committed: "こんにちは", composing: "" });
     assert.deepEqual(type("かんな", "kanna"), { committed: "かんな", composing: "" });
     assert.deepEqual(type("かんじ", "kanji"), { committed: "かんじ", composing: "" });
-    assert.deepEqual(type("かんあ", "kann'a"), { committed: "かんあ", composing: "" });
+    assert.deepEqual(type("かんあ", "kan'a"), { committed: "かんあ", composing: "" });
 });
 test("っ supports doubled consonants and small-tsu notation", () => {
     assert.deepEqual(type("がっこう", "gakkou"), { committed: "がっこう", composing: "" });
