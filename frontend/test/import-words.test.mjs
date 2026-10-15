@@ -194,7 +194,7 @@ test("malformed input still fails even though invalid answer chars are accepted"
 test("whole CSV chooses a single column even when individual rows favor the other", () => {
     // First row alone would pick the right column (5 vs 3 is < 2x).
     // Across the CSV, the left column dominates: 15 vs 5.
-    const leftWins = parseImportedPairs("apple,りんご\\nabcdefghij,xx");
+    const leftWins = parseImportedPairs("apple,りんご\nabcdefghij,xx");
     assert.deepEqual(leftWins, [
         { jp: "りんご", en: "apple" },
         { jp: "xx", en: "abcdefghij" },
@@ -202,7 +202,7 @@ test("whole CSV chooses a single column even when individual rows favor the othe
 
     // The first row alone would choose the left column, but the whole CSV
     // chooses right. 5 + 1 vs 2 + 10.
-    const rightWins = parseImportedPairs("apple,かな\\na,abcdefghij");
+    const rightWins = parseImportedPairs("apple,かな\na,abcdefghij");
     assert.deepEqual(rightWins, [
         { jp: "apple", en: "かな" },
         { jp: "a", en: "abcdefghij" },
@@ -210,11 +210,11 @@ test("whole CSV chooses a single column even when individual rows favor the othe
 });
 
 test("aggregate CSV threshold requires a strict longer side with >= 2x count", () => {
-    assert.deepEqual(parseImportedPairs("aaaa,xx\\nbb,x"), [
+    assert.deepEqual(parseImportedPairs("aaaa,xx\nbb,x"), [
         { jp: "xx", en: "aaaa" },
         { jp: "x", en: "bb" },
     ]); // left 6 vs right 3, exact boundary
-    assert.deepEqual(parseImportedPairs("aaaa,xx\\nb,x"), [
+    assert.deepEqual(parseImportedPairs("aaaa,xx\nb,x"), [
         { jp: "aaaa", en: "xx" },
         { jp: "b", en: "x" },
     ]); // left 5 vs right 3, below 2x
