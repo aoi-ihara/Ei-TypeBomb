@@ -156,7 +156,9 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             room.gameId = event.gameId;
             room.isStart = true;
             room.losers = [];
-            const count = bombsForPlayers(room.users.length);
+            const count = room.bombCount == null
+                ? bombsForPlayers(room.users.length)
+                : Math.min(room.users.length, Math.max(1, Math.floor(room.bombCount)));
             const initial = index(room.users.length);
             room.bombs = Array.from({ length: count }, (_, id) => ({
                 id: String(id),

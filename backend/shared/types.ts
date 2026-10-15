@@ -15,6 +15,7 @@ export type Room = {
     explanation?: string;
     items: Item[];
     maxPlayers?: number;
+    bombCount?: number | null;
     gameDuration: number;
     password?: string | null;
     createdAt?: string;
