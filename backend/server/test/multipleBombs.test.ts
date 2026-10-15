@@ -75,6 +75,23 @@ test("hint updates from a non-focused holder do not replace shared input", () =>
         && effect.packet.event === "typing:input"));
 });
 
+test("configured bomb count respects attendee count and auto fallback", () => {
+    for (const [players, selected, expected] of [
+        [2, 8, 2], [5, 3, 3], [8, 8, 8], [9, null, 3],
+    ] as const) {
+        const state: GameState = {
+            room: {
+                id: "room", maxPlayers: 16, bombCount: selected, gameDuration: 20,
+                items: [{ id: "word", type: "typed_recall", prompt: "猫", answer: "cat" }],
+                users: Array.from({ length: players }, (_, n) => ({ id: String(n) })),
+                isStart: false, bombHolder: 0, bombStatus: 0,
+            }, revision: 0,
+        };
+        const result = apply(state, { type: "game:start", playerId: "0", gameId: "game", gameDuration: 20 });
+        assert.equal(result.state.room.bombs?.length, expected);
+    }
+});
+
 test("initial bomb count is fixed for each player bracket", () => {
     for (const [players, expected] of [[2, 1], [4, 1], [5, 2], [8, 2], [9, 3], [16, 4]]) {
         assert.equal(bombsForPlayers(players), expected);
