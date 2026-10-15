@@ -5,6 +5,8 @@ import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
 import type { Item, LegacyWord } from "@/type";
 import { legacyWireWordsToItems } from "@/lib/item";
+import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
+import { decodeKanaProgress, hasHiragana } from "@/lib/romaji-input.mjs";
 
 type RoomSnapshot = {
     users: { id: string; displayName?: string }[];
@@ -79,16 +81,25 @@ export default function TypingSyncOverlay({
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 md:left-1/2 md:w-1/2 md:translate-x-0">
             <div className="w-fit max-w-full rounded-lg border border-(--color-border) bg-(--color-background-secondary) p-1 shadow-sm">
                 <div className="flex flex-wrap gap-y-3">
-                    {[...currentItem.answer].map((char, index) => (
-                        <div
-                            key={`${char}-${index}`}
-                            className={`${char === " " ? "w-4" : "w-8"} h-16 p-1 font-mono text-3xl font-bold`}
-                        >
-                            <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                {currentInput[index] ?? ""}
+                    {hasHiragana(currentItem.answer) ? (
+                        <KanaTypingBoxes
+                            answer={currentItem.answer}
+                            {...decodeKanaProgress(currentItem.answer, currentInput)}
+                            activeIndex={-1}
+                            readonly
+                        />
+                    ) : (
+                        [...currentItem.answer].map((char, index) => (
+                            <div
+                                key={`${char}-${index}`}
+                                className={`${char === " " ? "w-4" : "w-8"} h-16 p-1 font-mono text-3xl font-bold`}
+                            >
+                                <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                    {currentInput[index] ?? ""}
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
             </div>
         </div>
