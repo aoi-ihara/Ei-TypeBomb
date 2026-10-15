@@ -41,9 +41,9 @@ function validatePair(left, right, rowNumber, rolesExplicit = false) {
     const item = rolesExplicit
         ? { jp: left.trim(), en: right.trim() }
         : orientImportPair(left.trim(), right.trim());
-    if (!isAllowedTypingAnswer(item.en)) {
-        throw new Error(`行${rowNumber}: 回答には英数字・ひらがな・スペース・ハイフン・指定の句読点のみ使用できます。`);
-    }
+    // Import is intentionally permissive: an answer may be unplayable until
+    // its author edits it. The room editor shows a per-item validation error.
+    // Reject only malformed pairs, never an answer's character set here.
     return item;
 }
 
@@ -88,10 +88,29 @@ function parseCsv(source) {
     if (quoted) throw new Error("CSVの引用符が閉じられていません。");
     finishRow();
     if (!rows.length) throw new Error("CSVに問題がありません。");
-    return rows.map((columns, i) => {
+    // Validate the entire CSV before deciding the column roles.
+    // Each CSV uses one consistent orientation, based on the aggregated
+    // ASCII alphanumeric + hiragana counts of both complete columns.
+    const pairs = rows.map((columns, i) => {
         if (columns.length !== 2) throw new Error(`行${i + 1}: CSVは2列にしてください。`);
-        return validatePair(columns[0], columns[1], i + 1);
+        const [left, right] = columns;
+        if (!left.trim() || !right.trim()) {
+            throw new Error(`行${i + 1}: 問題と回答はどちらも文字列で入力してください。`);
+        }
+        return [left.trim(), right.trim()];
     });
+    const leftTotal = pairs.reduce((sum, [left]) => sum + countTypingCharacters(left), 0);
+    const rightTotal = pairs.reduce((sum, [, right]) => sum + countTypingCharacters(right), 0);
+    const answerIsLeft = leftTotal > rightTotal && leftTotal >= 2 * rightTotal;
+
+    return pairs.map(([left, right], i) =>
+        validatePair(
+            answerIsLeft ? right : left,
+            answerIsLeft ? left : right,
+            i + 1,
+            true,
+        ),
+    );
 }
 
 function parseJson(parsed) {

@@ -26,7 +26,7 @@ test(">= 2x chooses the longer side, otherwise chooses the right", () => {
     assert.deepEqual(orientImportPair("a", "b"), { jp: "a", en: "b" });
 });
 
-test("CSV detection is per row with quoted commas and unicode", () => {
+test("CSV chooses one answer column for all rows, with quoted commas and unicode", () => {
     assert.deepEqual(parseImportedPairs("apple,りんご\n桜,さくら\nあ,ab"), [
         { jp: "apple", en: "りんご" },
         { jp: "桜", en: "さくら" },
@@ -71,8 +71,8 @@ test("restrict answer to ASCII alphanumeric, hiragana, hyphen, spaces and specif
 });
 
 test("invalid answer, malformed JSON and invalid CSV raise readable errors", () => {
-    assert.throws(() => parseImportedPairs("漢字,漢語"), /回答/);
-    assert.throws(() => parseImportedPairs('[{"問題":"漢字"}]'), /回答/);
+    assert.deepEqual(parseImportedPairs("漢字,漢語"), [{ jp: "漢字", en: "漢語" }]);
+    assert.deepEqual(parseImportedPairs('[{"問題":"漢字"}]'), [{ jp: "問題", en: "漢字" }]);
     assert.throws(() => parseImportedPairs('[{"a":"b"'), /構文/);
     assert.throws(() => parseImportedPairs("one,two,three"), /2列/);
     assert.throws(() => parseImportedPairs('[{"問題":"a","追加":"b"}]'), /1組/);
@@ -102,7 +102,7 @@ test("reject unsupported kana but permit all kana emitted by romanizer", async (
     }
     for (const kana of ["ゎ", "ゐ", "ゑ", "ゔ", "ゕ", "ゖ"]) {
         assert.equal(isAllowedTypingAnswer(kana), false, kana);
-        assert.throws(() => parseImportedPairs(JSON.stringify([{ question: "test", answer: kana }])), /回答/);
+        assert.deepEqual(parseImportedPairs(JSON.stringify([{ question: "test", answer: kana }])), [{ jp: "test", en: kana }]);
     }
 });
 
@@ -118,9 +118,9 @@ test("single JSON object is an explicit question-to-answer mapping", () => {
         parseImportedPairs('{"what is one":"yes"}'),
         [{ jp: "what is one", en: "yes" }],
     );
-    assert.throws(
-        () => parseImportedPairs('{"日本の憲法の名前は？":"日本国憲法"}'),
-        /回答/,
+    assert.deepEqual(
+        parseImportedPairs('{"日本の憲法の名前は？":"日本国憲法"}'),
+        [{ jp: "日本の憲法の名前は？", en: "日本国憲法" }],
     );
 });
 
@@ -139,4 +139,83 @@ test("duplicate prompts cannot be silently lost during JSON object export", () =
         { jp: "what is one", en: "yes" },
         { jp: "ねこ", en: "cat" },
     ]);
+});
+
+test("user's thirty CSV quiz rows all import; invalid answers are flagged only after import", () => {
+    const csv = [
+        "日本の首都は？,とうきょう",
+        "日本で一番高い山は？,ふじさん",
+        "日本の通貨は？,えん",
+        "アメリカの首都は？,わしんとん",
+        "フランスの首都は？,ぱり",
+        "1+1は？,2",
+        "2+3は？,5",
+        "5×5は？,25",
+        "10÷2は？,5",
+        "100の半分は？,50",
+        "りんごを英語で？,apple",
+        "ねこを英語で？,cat",
+        "いぬを英語で？,dog",
+        "みずを英語で？,water",
+        "ほんを英語で？,book",
+        "太陽を英語で？,sun",
+        "月を英語で？,moon",
+        "赤を英語で？,red",
+        "青を英語で？,blue",
+        "白を英語で？,white",
+        "1年は何ヶ月？,12",
+        "1週間は何日？,7",
+        "1日は何時間？,24",
+        "1時間は何分？,60",
+        "1分は何秒？,60",
+        "春の次の季節は？,なつ",
+        "夏の次の季節は？,あき",
+        "秋の次の季節は？,ふゆ",
+        "冬の次の季節は？,はる",
+        "地球の衛星は？,つき",
+    ].join("\n");
+    const imported = parseImportedPairs(csv);
+    assert.equal(imported.length, 30);
+    // Across all 30 rows, left has 84 counted chars and right has 83.
+    // Therefore the right column is the answer for *every* row.
+    assert.deepEqual(imported[5], { jp: "1+1は？", en: "2" });
+    assert.equal(isAllowedTypingAnswer(imported[5].en), true);
+    assert.deepEqual(imported[0], { jp: "日本の首都は？", en: "とうきょう" });
+    assert.deepEqual(imported[29], { jp: "地球の衛星は？", en: "つき" });
+});
+
+test("malformed input still fails even though invalid answer chars are accepted", () => {
+    assert.throws(() => parseImportedPairs("a,b,c"), /2列/);
+    assert.throws(() => parseImportedPairs("a,"), /問題と回答/);
+    assert.throws(() => parseImportedPairs('[{"question":"x","answer":123}]'), /問題と回答/);
+    assert.throws(() => parseImportedPairs("{missing"), /構文/);
+});
+
+test("whole CSV chooses a single column even when individual rows favor the other", () => {
+    // First row alone would pick the right column (5 vs 3 is < 2x).
+    // Across the CSV, the left column dominates: 15 vs 5.
+    const leftWins = parseImportedPairs("apple,りんご\nabcdefghij,xx");
+    assert.deepEqual(leftWins, [
+        { jp: "りんご", en: "apple" },
+        { jp: "xx", en: "abcdefghij" },
+    ]);
+
+    // The first row alone would choose the left column, but the whole CSV
+    // chooses right. 5 + 1 vs 2 + 10.
+    const rightWins = parseImportedPairs("apple,かな\na,abcdefghij");
+    assert.deepEqual(rightWins, [
+        { jp: "apple", en: "かな" },
+        { jp: "a", en: "abcdefghij" },
+    ]);
+});
+
+test("aggregate CSV threshold requires a strict longer side with >= 2x count", () => {
+    assert.deepEqual(parseImportedPairs("aaaa,xx\nbb,x"), [
+        { jp: "xx", en: "aaaa" },
+        { jp: "x", en: "bb" },
+    ]); // left 6 vs right 3, exact boundary
+    assert.deepEqual(parseImportedPairs("aaaa,xx\nb,x"), [
+        { jp: "aaaa", en: "xx" },
+        { jp: "b", en: "x" },
+    ]); // left 5 vs right 3, below 2x
 });
