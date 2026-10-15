@@ -59,7 +59,7 @@ test("guest online memory is visible to Playground and survives reload", () => {
     const saved = online.loadOnlineGuestMemory("room", ids);
     assert.equal(saved[itemId].reviewCount, 1);
     assert.equal(JSON.parse(stored.get("playground-memory:guest:room"))[itemId].itemId, itemId);
-    assert.deepEqual(Object.keys(online.loadOnlineGuestMemory("different", ids)), []);
+    assert.equal(Object.keys(online.loadOnlineGuestMemory("different", ids)).length, 0);
 });
 test("server fallback is recorded against the actual word, never the suggestion", () => {
     const session = online.createOnlineMemorySession("room", ids, "user", {});
