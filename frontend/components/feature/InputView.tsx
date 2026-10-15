@@ -1,7 +1,6 @@
 import {
     correctPrefixLength,
     getInitialCueLength,
-    hintCoversError,
 } from "@/lib/playground/recall-input";
 import { useEffect, useRef, useState } from "react";
 import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
@@ -10,6 +9,7 @@ import {
     editKanaCell,
     hasHiragana,
     nextKanaCursor,
+    shouldClearForTimedHint,
 } from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
@@ -224,8 +224,11 @@ function TypingAttempt({
                 // across a nonmatching cell. Previously this branch cleared
                 // the entire answer before a user had finished correcting it.
                 if (
-                    !isKanaAnswer &&
-                    hintCoversError(inputStateRef.current, english, nextLength)
+                    shouldClearForTimedHint(
+                        english,
+                        inputStateRef.current,
+                        nextLength,
+                    )
                 ) {
                     attemptCountRef.current += 1;
                     inputStateRef.current = Array(english.length).fill("");
