@@ -5,6 +5,7 @@ export type ClientPayloads = {
     "room:leave": undefined;
     "game:start": undefined;
     "word:success": undefined;
+    "item:recommend": { itemId: string };
     "hint:update": { length: number };
     currentInput: string | { input: string; failed: true };
     "health:ping": string;
