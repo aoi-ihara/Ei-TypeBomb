@@ -41,9 +41,9 @@ function validatePair(left, right, rowNumber, rolesExplicit = false) {
     const item = rolesExplicit
         ? { jp: left.trim(), en: right.trim() }
         : orientImportPair(left.trim(), right.trim());
-    if (!isAllowedTypingAnswer(item.en)) {
-        throw new Error(`行${rowNumber}: 回答には英数字・ひらがな・スペース・ハイフン・指定の句読点のみ使用できます。`);
-    }
+    // Import is intentionally permissive: an answer may be unplayable until
+    // its author edits it. The room editor shows a per-item validation error.
+    // Reject only malformed pairs, never an answer's character set here.
     return item;
 }
 
