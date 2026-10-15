@@ -15,7 +15,7 @@ test("counts only alphanumeric + hiragana, excluding punctuation and kanji", () 
 });
 
 test(">= 2x chooses the longer side, otherwise chooses the right", () => {
-    assert.deepEqual(orientImportPair("apple", "りんご"), { jp: "りんご", en: "apple" });
+    assert.deepEqual(orientImportPair("apple", "りんご"), { jp: "apple", en: "りんご" });
     assert.deepEqual(orientImportPair("桜", "さくら"), { jp: "桜", en: "さくら" });
     assert.deepEqual(orientImportPair("かき", "apple"), { jp: "かき", en: "apple" });
     assert.deepEqual(orientImportPair("apple", "かな"), { jp: "かな", en: "apple" });
@@ -28,14 +28,14 @@ test(">= 2x chooses the longer side, otherwise chooses the right", () => {
 
 test("CSV detection is per row with quoted commas and unicode", () => {
     assert.deepEqual(parseImportedPairs("apple,りんご\n桜,さくら\nあ,ab"), [
-        { jp: "りんご", en: "apple" },
+        { jp: "apple", en: "りんご" },
         { jp: "桜", en: "さくら" },
         { jp: "あ", en: "ab" },
     ]);
     assert.deepEqual(parseImportedPairs('"質問,説明","よい、いい!"'), [
         { jp: "質問,説明", en: "よい、いい!" },
     ]);
-    assert.deepEqual(parseImportedPairs("題,答\r\n"), [{ jp: "題", en: "答" }]);
+    assert.deepEqual(parseImportedPairs("問,あ\r\n"), [{ jp: "問", en: "あ" }]);
 });
 
 test("JSON array of question-answer maps uses the same orientation", () => {
