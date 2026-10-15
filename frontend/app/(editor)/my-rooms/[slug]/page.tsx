@@ -605,24 +605,20 @@ export default function Page({
                         )}
                     </div>
                     <div className="flex flex-col gap-4">
-                        <Input
-                            onChange={(e) => setMaxPlayers(e.target.value)}
-                            label="最大プレイヤー数"
-                            type="number"
-                            min={2}
-                            max={16}
-                            value={maxPlayers}
+                        <Picker
+                            name="最大プレイヤー数"
+                            labelPrefix="上限"
+                            selection={Math.max(0, Number(maxPlayers) - 2)}
+                            items={Array.from({ length: 15 }, (_, index) => `${index + 2}人`)}
+                            itemIcons={Array(15).fill(null)}
+                            onSelected={(index) => setMaxPlayers(String(index + 2))}
                         />
-                        {validateMaxPlayers(Number(maxPlayers)) && (
-                            <div className="text-red-500" data-cursor="text">
-                                {validateMaxPlayers(Number(maxPlayers))}
-                            </div>
-                        )}
                     </div>
                 </div>
-                <div className="w-26 flex shrink-0">
+                <div className="w-36 flex shrink-0">
                     <Picker
                         name="Game duration"
+                        labelPrefix="時間"
                         selection={(gameDuration ?? 0) / 10 - 1}
                         items={["1分", "2分", "3分"]}
                         itemIcons={[null, null, null]}
