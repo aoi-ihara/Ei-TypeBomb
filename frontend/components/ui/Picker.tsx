@@ -7,6 +7,7 @@ import Morph from "./Morph";
 
 export type PickerProps = {
     name: string;
+    labelPrefix?: string;
     items: string[];
     selection: number;
     onSelected: (index: number) => void;
@@ -15,6 +16,7 @@ export type PickerProps = {
 
 export default function Picker({
     name,
+    labelPrefix,
     items,
     selection,
     onSelected,
@@ -142,6 +144,7 @@ export default function Picker({
     }, [open]);
 
     const label = items[selection] ?? name;
+    const triggerLabel = labelPrefix ? `${labelPrefix}: ${label}` : label;
     const showIcon = !itemIcons.every((item) => item === null || item === "");
 
     return (
@@ -160,7 +163,7 @@ export default function Picker({
                     padding="large"
                     className="w-full"
                 >
-                    <span>{label}</span>
+                    <span>{triggerLabel}</span>
                 </Button>
             </div>
             <button
@@ -199,7 +202,7 @@ export default function Picker({
                                 aria-expanded={open}
                                 aria-controls={menuId}
                             >
-                                <span>{label}</span>
+                                <span>{triggerLabel}</span>
                             </Button>
                         </div>
                     }
