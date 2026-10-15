@@ -1,9 +1,16 @@
 import {
     correctPrefixLength,
     getInitialCueLength,
-    hintCoversError,
 } from "@/lib/playground/recall-input";
 import { useEffect, useRef, useState } from "react";
+import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
+import {
+    decodeKanaProgress,
+    editKanaCell,
+    hasHiragana,
+    nextKanaCursor,
+    shouldClearForTimedHint,
+} from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
 import type {
@@ -75,6 +82,9 @@ function TypingAttempt({
     const [input, setInput] = useState<string[]>(
         english ? Array(english.length).fill("") : [],
     );
+    const [kanaComposing, setKanaComposing] = useState("");
+    const kanaCommitSpansRef = useRef<number[]>([]);
+    const isKanaAnswer = Boolean(english && hasHiragana(english));
     const inputStateRef = useRef(input);
     const revealedHintLengthRef = useRef(initialCueLength);
     const onChangeInputRef = useRef(onChangeInput);
@@ -210,12 +220,21 @@ function TypingAttempt({
                 lastHintAtRef.current = firedAt;
                 hintIndex += 1;
 
+                // Kana text remains editable even when a timed hint expands
+                // across a nonmatching cell. Previously this branch cleared
+                // the entire answer before a user had finished correcting it.
                 if (
-                    hintCoversError(inputStateRef.current, english, nextLength)
+                    shouldClearForTimedHint(
+                        english,
+                        inputStateRef.current,
+                        nextLength,
+                    )
                 ) {
                     attemptCountRef.current += 1;
                     inputStateRef.current = Array(english.length).fill("");
                     setInput(inputStateRef.current);
+                    setKanaComposing("");
+                    kanaCommitSpansRef.current = [];
                     setCurrentSelection(0);
                     setCharInput("");
                     setIsFailAnimating(true);
@@ -307,10 +326,12 @@ function TypingAttempt({
 
     const resetInput = () => {
         if (!english) return;
-        if (input.some((character) => character !== "")) {
+        if (kanaComposing || input.some((character) => character !== "")) {
             attemptCountRef.current += 1;
         }
         setInput(Array(english.length).fill(""));
+        setKanaComposing("");
+        kanaCommitSpansRef.current = [];
         setCurrentSelection(0);
         setCharInput("");
         triggerFailAnimation();
@@ -346,9 +367,13 @@ function TypingAttempt({
         setAnswerRevealed(true);
         onHintChange?.(english.length);
 
-        const hasIncorrectInput = input.some(
-            (char, index) => char !== "" && char !== english[index],
-        );
+        // A correctly committed kana prefix stays on screen when hints are
+        // revealed, even if the user is still composing its roman letters.
+        const hasIncorrectInput = isKanaAnswer
+            ? !english.startsWith(input.join(""))
+            : input.some(
+                  (char, index) => char !== "" && char !== english[index],
+              );
         if (hasIncorrectInput) {
             resetInput();
         }
@@ -393,32 +418,40 @@ function TypingAttempt({
 
     if (!english) return null;
 
-    const moveToNext = (next: string[]) => {
+    const moveToNext = (next: string[], advance = 1, pendingRoman = "") => {
         if (completedRef.current) return;
-        // Record the incorrect character when entered, before Backspace/reset can erase it.
-        if (next[currentSelection] !== english[currentSelection])
-            incorrectInputCountRef.current += 1;
-        const nextIndex = currentSelection + 1;
+        // Kana combinations such as ちゃ may confirm two cells at once.
+        for (let offset = 0; offset < advance; offset++) {
+            if (next[currentSelection + offset] !== english[currentSelection + offset])
+                incorrectInputCountRef.current += 1;
+        }
+        const nextIndex = currentSelection + advance;
         const nextCorrectPrefixLength = correctPrefixLength(next, english);
         if (nextCorrectPrefixLength > maxCorrectPrefixRef.current) {
             maxCorrectPrefixRef.current = nextCorrectPrefixLength;
             lastCorrectProgressAtRef.current = performance.now();
         }
-        const typedInsideHint =
-            currentSelection < hintLength &&
-            next[currentSelection] !== english[currentSelection];
+        const typedInsideHint = Array.from({ length: advance }, (_, offset) => currentSelection + offset)
+            .some((index) => index < hintLength && next[index] !== english[index]);
 
-        if (typedInsideHint && (!manualHints || answerRevealed)) {
+        // Romanized kana answers are editable at any position, including
+        // positions that have subsequently received an automatic hint.
+        // Keep the pre-existing strict English hint behaviour unchanged.
+        if (!isKanaAnswer && typedInsideHint && (!manualHints || answerRevealed)) {
             resetInput();
             return;
         }
 
-        if (
-            nextIndex < english.length &&
-            !(manualHints && next.join("") === english)
-        ) {
-            setCurrentSelection(nextIndex);
-            onChangeInput(next.join(""));
+        // Kana cells may be edited out of order. A wrong answer is only
+        // evaluated after all cells are filled, not at the first mistake
+        // or merely because the cursor reached the last position.
+        const needsMoreInput = isKanaAnswer
+            ? next.some((character) => character === "")
+            : nextIndex < english.length &&
+              !(manualHints && next.join("") === english);
+        if (needsMoreInput) {
+            setCurrentSelection(Math.min(english.length - 1, nextIndex));
+            onChangeInput(next.join("") + pendingRoman);
         } else {
             const result = next.join("");
             if (result === english) {
@@ -474,6 +507,8 @@ function TypingAttempt({
                 onSuccess();
                 const next = Array(english.length).fill("");
                 setInput(next);
+                setKanaComposing("");
+                kanaCommitSpansRef.current = [];
                 setCurrentSelection(0);
                 console.log("bombStatus", bombStatus);
                 setTimedHintCount(0);
@@ -490,6 +525,13 @@ function TypingAttempt({
                     });
                 }
             } else {
+                if (isKanaAnswer) {
+                    // Every cell is filled and the final kana is incorrect:
+                    // this is a completed failed attempt, so clear *all*
+                    // boxes and begin at the first one.
+                    resetInput();
+                    return;
+                }
                 console.log("Wrong answer. Query:", result);
                 if (manualHints) {
                     attemptCountRef.current += 1;
@@ -512,6 +554,26 @@ function TypingAttempt({
             : currentInput
         : input.join("");
     const displayChars = isReadonly ? [...displayInput] : input;
+    const remoteKanaProgress = isKanaAnswer && isReadonly
+        ? decodeKanaProgress(english, displayInput)
+        : null;
+    const confirmedKana = remoteKanaProgress?.committed ?? input.join("");
+    const composingKana = remoteKanaProgress?.composing ?? kanaComposing;
+
+    const selectKanaIndex = (index: number) => {
+        if (isReadonly || index < 0 || index >= english.length) return;
+        if (index !== currentSelection) {
+            setCurrentSelection(index);
+            // The roman prefix belongs to its original cell. Changing the
+            // selected cell cancels only that unfinished prefix, not any
+            // previously confirmed answer cells.
+            if (kanaComposing) {
+                setKanaComposing("");
+                onChangeInput(input.join(""));
+            }
+        }
+        inputRef.current?.focus();
+    };
 
     return (
         <div className="flex flex-col gap-4">
@@ -535,6 +597,34 @@ function TypingAttempt({
                         if (!isReadonly) inputRef.current?.focus();
                     }}
                     onKeyDown={(e) => {
+                        if (isKanaAnswer) {
+                            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                                e.preventDefault();
+                                const direction = e.key === "ArrowLeft" ? -1 : 1;
+                                selectKanaIndex(
+                                    nextKanaCursor(currentSelection, direction, english.length),
+                                );
+                                return;
+                            }
+                            if (e.key === "Backspace") {
+                                e.preventDefault();
+                                if (kanaComposing) {
+                                    const pending = kanaComposing.slice(0, -1);
+                                    setKanaComposing(pending);
+                                    onChangeInput(input.join("") + pending);
+                                } else {
+                                    const target = input[currentSelection] !== ""
+                                        ? currentSelection
+                                        : Math.max(0, currentSelection - 1);
+                                    const next = [...input];
+                                    next[target] = "";
+                                    setInput(next);
+                                    setCurrentSelection(target);
+                                    onChangeInput(next.join(""));
+                                }
+                                return;
+                            }
+                        }
                         if (e.key === "ArrowLeft") {
                             e.preventDefault();
                             setCurrentSelection(
@@ -569,7 +659,18 @@ function TypingAttempt({
                         }
                     }}
                 >
-                    {[...english].map((char, index) => {
+                    {isKanaAnswer ? (
+                        <KanaTypingBoxes
+                            answer={english}
+                            confirmed={confirmedKana}
+                            cells={isReadonly ? undefined : input}
+                            composing={composingKana}
+                            activeIndex={currentSelection}
+                            hintLength={hintLength}
+                            readonly={isReadonly}
+                            onSelect={selectKanaIndex}
+                        />
+                    ) : [...english].map((char, index) => {
                         const isSelected =
                             !isReadonly && index === currentSelection;
                         if (char === " ")
@@ -631,12 +732,48 @@ function TypingAttempt({
                                             return;
                                         }
                                         lastKeyWasSpaceRef.current = true;
+                                        // In kana mode, the first Space of the
+                                        // double-Space hint shortcut must not be
+                                        // passed to the roman parser as an error.
+                                        // A real space in the answer still works.
+                                        if (isKanaAnswer && english[currentSelection] !== " ") {
+                                            setCharInput("");
+                                            return;
+                                        }
                                     } else {
                                         lastKeyWasSpaceRef.current = false;
                                     }
                                 }
                                 if (firstKeyAtRef.current === null) {
                                     firstKeyAtRef.current = performance.now();
+                                }
+                                if (isKanaAnswer) {
+                                    const edit = editKanaCell(
+                                        english,
+                                        input,
+                                        currentSelection,
+                                        kanaComposing,
+                                        char,
+                                    );
+                                    if (!edit.accepted) {
+                                        // An impossible roman sequence (e.g. zz)
+                                        // fails immediately, even with no hints.
+                                        resetInput();
+                                        return;
+                                    }
+                                    if (edit.accepted) {
+                                        setKanaComposing(edit.composing);
+                                        if (edit.advance > 0) {
+                                            setInput(edit.cells);
+                                            moveToNext(edit.cells, edit.advance, edit.composing);
+                                        } else {
+                                            // Invalid or incomplete roman prefixes stay visible
+                                            // for Backspace correction; no premature failure.
+                                            onChangeInput(edit.cells.join("") + edit.composing);
+                                        }
+                                    }
+                                    setCharInput("");
+                                    return;
                                 }
                                 const targetChar = english[currentSelection];
                                 if (targetChar === " ") {
@@ -666,7 +803,7 @@ function TypingAttempt({
                                 }, 300);
                             }}
                             className="absolute inset-0 w-full h-full opacity-[0.01] z-10"
-                            aria-label="英語の回答"
+                            aria-label={isKanaAnswer ? "日本語の回答" : "英語の回答"}
                             autoComplete="off"
                             autoCapitalize="off"
                             autoCorrect="off"

@@ -4,13 +4,14 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
-        "build": "next build",
+        "build": "npm run test:kana && next build",
         "start": "next start",
         "lint": "eslint",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "postinstall": "node scripts/fix-word-drag.js",
-        "test:playground": "node --test test/playground.test.cjs"
+        "test:playground": "node --test test/playground.test.cjs",
+        "test:kana": "node --test test/romaji-input.test.mjs"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
