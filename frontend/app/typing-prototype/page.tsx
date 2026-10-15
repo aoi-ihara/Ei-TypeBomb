@@ -90,8 +90,19 @@ export default function KanaTypingPrototypePage() {
         setInvalid(false);
         const exact = nextCandidates.find(([roman]) => roman === next);
         if (exact) {
-            setCommitted((previous) => previous + exact[1]);
-            setComposing("");
+            const nextCommitted = committed + exact[1];
+            // In "konnichiha", the second n completes ん and also
+            // starts に. Keep that n only if it can begin the next kana.
+            const carryN =
+                next === "nn" &&
+                Object.entries(ROMAJI).some(
+                    ([roman, kana]) =>
+                        roman.startsWith("n") &&
+                        kana !== "ん" &&
+                        answer.startsWith(kana, nextCommitted.length),
+                );
+            setCommitted(nextCommitted);
+            setComposing(carryN ? "n" : "");
         } else {
             setComposing(next);
         }
