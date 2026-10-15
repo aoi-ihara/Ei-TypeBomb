@@ -322,3 +322,14 @@ export const shouldClearForTimedHint = (answer, cells, hintLength) =>
     cells.some((char, index) =>
         index < hintLength && char !== "" && char !== answer[index],
     );
+
+/**
+ * Space placeholders are not answer-validation targets for other keys.
+ * Ignore those keys without changing text or counting an incorrect attempt.
+ * @param {string} answer
+ * @param {number} cursor
+ * @param {string} key
+ */
+export function shouldIgnoreNonSpaceAtSpace(answer, cursor, key) {
+    return answer[cursor] === " " && key !== " ";
+}

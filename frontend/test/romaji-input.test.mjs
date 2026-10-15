@@ -4,6 +4,7 @@ import {
     advanceKanaInput, decodeKanaProgress, encodeKanaProgress,
     hasHiragana, kanaCompositionLayout, romanSlotCount,
     advanceEditableKanaAt, editKanaCell, nextKanaCursor,
+    shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
 } from "../lib/romaji-input.mjs";
 
@@ -296,4 +297,21 @@ test("valid complete sequences preserve input until the last kana even without h
         assert.deepEqual(result.cells, expected);
         cells = result.cells;
     }
+});
+
+test("space-only cells ignore any non-space key without counting a miss", () => {
+    for (const answer of ["ice cream", "あ い", "a さ"]) {
+        const slot = answer.indexOf(" ");
+        for (const key of ["a", "k", "z", ".", "1", "あ"]) {
+            assert.equal(shouldIgnoreNonSpaceAtSpace(answer, slot, key), true);
+        }
+        assert.equal(shouldIgnoreNonSpaceAtSpace(answer, slot, " "), false);
+        assert.equal(shouldIgnoreNonSpaceAtSpace(answer, 0, "a"), false);
+    }
+    const before = ["あ", "", ""];
+    // The input handler exits before calling the parser on an ignored key.
+    assert.deepEqual(before, ["あ", "", ""]);
+    const accepted = editKanaCell("あ い", before, 1, "", " ");
+    assert.equal(accepted.accepted, true);
+    assert.deepEqual(accepted.cells, ["あ", " ", ""]);
 });

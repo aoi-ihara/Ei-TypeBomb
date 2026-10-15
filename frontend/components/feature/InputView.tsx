@@ -9,6 +9,7 @@ import {
     editKanaCell,
     hasHiragana,
     nextKanaCursor,
+    shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
 } from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
@@ -724,6 +725,12 @@ function TypingAttempt({
                                 const value = e.target.value;
                                 if (!value) return;
                                 const char = value.slice(-1);
+                                if (shouldIgnoreNonSpaceAtSpace(english, currentSelection, char)) {
+                                    // The narrow w-4 space cell accepts only a space.
+                                    // Wrong keys do not reset, shake, or advance.
+                                    setCharInput("");
+                                    return;
+                                }
                                 if (manualHints) {
                                     if (char === " ") {
                                         if (lastKeyWasSpaceRef.current) {
