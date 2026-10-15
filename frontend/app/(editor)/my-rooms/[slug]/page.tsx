@@ -210,7 +210,7 @@ export default function Page({
             roomPassword,
             maxPlayers,
             gameDuration,
-        bombCount,
+            bombCount,
             items,
             roomId,
             roomLink,
@@ -409,7 +409,7 @@ export default function Page({
                 roomExplanation,
                 maxPlayers,
                 gameDuration,
-        bombCount,
+            bombCount,
                 items,
                 roomLink,
             } = snapshot;
