@@ -42,6 +42,7 @@ export const getRoomFromId = async (id: string, jwtToken: string) => {
                 user_id,
                 explanation,
                 max_players,
+                bomb_count,
                 game_duration,
                 password,
                 created_at,
