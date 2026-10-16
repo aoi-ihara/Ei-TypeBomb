@@ -601,7 +601,7 @@ export default function Page({
                         setBombCount((current) =>
                             current === null
                                 ? null
-                                : Math.min(current, nextMax),
+                                : Math.min(current, nextMax, 4),
                         );
                     }}
                 />
@@ -612,11 +612,11 @@ export default function Page({
                     items={[
                         "自動",
                         ...Array.from(
-                            { length: Number(maxPlayers) },
+                            { length: Math.min(Number(maxPlayers), 4) },
                             (_, index) => `${index + 1}個`,
                         ),
                     ]}
-                    itemIcons={Array(Number(maxPlayers) + 1).fill(null)}
+                    itemIcons={Array(Math.min(Number(maxPlayers), 4) + 1).fill(null)}
                     onSelected={(index) =>
                         setBombCount(index === 0 ? null : index)
                     }

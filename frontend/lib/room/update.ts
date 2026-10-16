@@ -47,12 +47,12 @@ export const updateRoomFromId = async (room: Room) => {
             room.bombCount !== null &&
             (!Number.isInteger(room.bombCount) ||
                 room.bombCount < 1 ||
-                room.bombCount > 16 ||
+                room.bombCount > 4 ||
                 (room.maxPlayers !== undefined &&
                     room.bombCount > room.maxPlayers))
         ) {
             validationErrors.push(
-                "爆弾数は1〜最大プレイヤー数の範囲で選択してください。",
+                "爆弾数は1〜4個、かつ最大プレイヤー数以下で選択してください。",
             );
         } else updateData.bomb_count = room.bombCount;
     }
