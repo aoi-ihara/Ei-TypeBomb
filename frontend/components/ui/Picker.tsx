@@ -23,6 +23,7 @@ export default function Picker({
     itemIcons,
 }: PickerProps) {
     const [open, setOpen] = useState(false);
+    const [raised, setRaised] = useState(false);
     const menuId = useId();
     const sizeRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
@@ -149,7 +150,7 @@ export default function Picker({
 
     return (
         <div
-            className={`relative inline-block shrink-0 w-full align-middle ${open ? "z-50" : "z-0"}`}
+            className={`relative inline-block shrink-0 w-full align-middle ${raised ? "z-50" : "z-0"}`}
             data-picker
         >
             <div
@@ -190,12 +191,18 @@ export default function Picker({
             >
                 <Morph
                     state={open}
+                    onSettled={() => {
+                        if (!open) setRaised(false);
+                    }}
                     first={
                         <div ref={triggerRef} className="w-full">
                             <Button
                                 iconName="chevronsUpDown"
                                 className="w-full"
-                                onClick={() => setOpen(true)}
+                                onClick={() => {
+                                    setRaised(true);
+                                    setOpen(true);
+                                }}
                                 aria-haspopup="menu"
                                 padding="large"
                                 alignment="left"

@@ -7,12 +7,13 @@ export type MorphProps = {
     first: ReactNode;
     last: ReactNode;
     state: boolean;
+    onSettled?: () => void;
 };
 
 type Size = { width: number; height: number };
 type Frame = Size & { mix: number };
 
-export default function Morph({ first, last, state }: MorphProps) {
+export default function Morph({ first, last, state, onSettled }: MorphProps) {
     const morphBlurFlag = useFeatureFlagEnabled("morphBlur");
     const blurEnabled = morphBlurFlag === true;
     const rootRef = useRef<HTMLDivElement>(null);
@@ -20,6 +21,8 @@ export default function Morph({ first, last, state }: MorphProps) {
     const lastRef = useRef<HTMLDivElement>(null);
     const updateRef = useRef<(() => void) | null>(null);
     const stateRef = useRef(state);
+    const onSettledRef = useRef(onSettled);
+    onSettledRef.current = onSettled;
 
     useLayoutEffect(() => {
         const root = rootRef.current!;
@@ -121,6 +124,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                 paint(target);
                 setPointerEvents(false);
                 notifyCursor();
+                onSettledRef.current?.();
                 return;
             }
             const start = current;
@@ -133,6 +137,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                 paint(target, true);
                 setPointerEvents(false);
                 notifyCursor();
+                onSettledRef.current?.();
                 return;
             }
             clock = new Animation(
@@ -175,6 +180,7 @@ export default function Morph({ first, last, state }: MorphProps) {
                     stop();
                     setPointerEvents(false);
                     notifyCursor();
+                    onSettledRef.current?.();
                 } else frameId = requestAnimationFrame(tick);
             };
             frameId = requestAnimationFrame(tick);
