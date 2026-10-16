@@ -13,14 +13,19 @@ function getMorphCursorTarget(x: number, y: number) {
             `[data-morph-layer="${root.dataset.morph}"]`,
         );
         if (!layer) continue;
-        // Use the actual rendered bounds. The picker dock can move while the
-        // Morph layers are scaling, so reconstructing unscaled coordinates
-        // places the cursor away from the visible menu.
+        // Hit-test against the visible, transformed layer. Use its actual
+        // center (including the picker's viewport correction), not the Morph
+        // root center, when removing the animated scale for cursor geometry.
         const bounds = layer.getBoundingClientRect();
-        if (!bounds.width || !bounds.height) continue;
+        const css = getComputedStyle(layer);
+        const width = parseFloat(css.width);
+        const height = parseFloat(css.height);
+        if (!bounds.width || !bounds.height || !width || !height) continue;
         if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom)
             continue;
 
+        const scaleX = bounds.width / width;
+        const scaleY = bounds.height / height;
         const candidates = layer.querySelectorAll<HTMLElement>("[data-cursor]");
         for (const element of Array.from(candidates).reverse()) {
             const rect = element.getBoundingClientRect();
@@ -30,10 +35,23 @@ function getMorphCursorTarget(x: number, y: number) {
                 y >= rect.top &&
                 y <= rect.bottom
             ) {
-                return { element, rect };
+                // Keep the on-screen position, but give the cursor the
+                // element's unscaled size so it doesn't collapse with Morph.
+                const natural = new DOMRect(
+                    rect.left + rect.width / 2 - rect.width / scaleX / 2,
+                    rect.top + rect.height / 2 - rect.height / scaleY / 2,
+                    rect.width / scaleX,
+                    rect.height / scaleY,
+                );
+                return { element, rect: natural };
             }
         }
-        return { element: layer, rect: bounds };
+        return { element: layer, rect: new DOMRect(
+            bounds.left + bounds.width / 2 - width / 2,
+            bounds.top + bounds.height / 2 - height / 2,
+            width,
+            height,
+        ) };
     }
     return null;
 }
