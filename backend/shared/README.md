@@ -1,8 +1,8 @@
 # Shared backend core
 
 `backend/shared/` contains runtime-independent TypeScript for the current
-Node server and the planned Cloudflare Worker adapter. There is no Worker
-runtime implementation in this change.
+Node server and the Cloudflare Worker adapter. The runtime-specific code lives in
+`backend/cloudflare/`.
 
 ## Shared code
 
@@ -32,16 +32,15 @@ room ownership, authentication, event routing, logging and analytics.
 `lib/gameAdapter.ts` owns the Node timer. `lib/get.ts` reads room data.
 Socket and probe rate-limit adapters supply the clock and selected budgets.
 
-**Future Worker**: a Worker / Durable Object adapter must implement Native
-WebSocket handling, its own database client, authentication/secret loading,
-DO Storage and Alarm scheduling. It can reuse these shared modules without
-bringing in `node:perf_hooks`, Socket.IO, Express, PostgreSQL or process
-globals.
+**Cloudflare Worker**: `backend/cloudflare/src/RoomDO.ts` uses native
+WebSockets, PostgREST, ES256 JWT verification, Durable Object storage and
+Alarm scheduling. It imports the shared core without bringing in
+`node:perf_hooks`, Socket.IO, Express, PostgreSQL or process globals.
 
 The game state stores absolute epoch-millisecond deadlines; transfers
 between runtimes must preserve `gameId`, revisions and deadlines. Stable
 player identity, ownership fencing, event deduplication and actual cross-server
-failover are **not implemented** by this refactor.
+failover are **not implemented**.
 
 ## Verification
 
@@ -51,5 +50,6 @@ failover are **not implemented** by this refactor.
 - `npm run build --prefix backend/server`: compiles Node plus shared sources
 - `backend/shared/tsconfig.json`: dependency-free shared editor configuration
 
-When building a Worker later, keep `shared/` adjacent to its runtime directory
-and bundle the shared imports into the Worker build.
+The Cloudflare build bundles shared imports directly from `backend/shared/`.
+Run `npm install` and then `npm run typecheck && npm test` from
+`backend/cloudflare/` to check the Cloudflare adapter.
