@@ -76,18 +76,33 @@ export default function Home({
                     <Menu
                         name="ユーザーアクション"
                         button={
-                            <button type="button" aria-label="ユーザーメニューを開く" className="h-8 w-8 flex items-center justify-center rounded-lg font-semibold active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb">
-                                <Icon name="circleUserRound" />
-                            </button>
+                            <div
+                                className="rounded-lg"
+                                data-cursor="button"
+                                data-cursor-shape="1"
+                            >
+                                <button
+                                    aria-label="ユーザーメニューを開く"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg font-semibold active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb"
+                                >
+                                    <Icon name="circleUserRound" />
+                                </button>
+                            </div>
                         }
                         items={[
-                            { label: "ルーム一覧", onClick: () => router.push("/my-rooms") },
-                            { label: "サインアウト", onClick: () => {
-                                posthog.capture("signed_out");
-                                posthog.reset();
-                                signOut();
-                                setUserId(null);
-                            } },
+                            {
+                                label: "ルーム一覧",
+                                onClick: () => router.push("/my-rooms"),
+                            },
+                            {
+                                label: "サインアウト",
+                                onClick: () => {
+                                    posthog.capture("signed_out");
+                                    posthog.reset();
+                                    signOut();
+                                    setUserId(null);
+                                },
+                            },
                         ]}
                     />
                 ) : (
