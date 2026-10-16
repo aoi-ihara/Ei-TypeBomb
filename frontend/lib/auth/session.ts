@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/db/server";
-import { isOAuthEnabled } from "@/lib/auth/oauth-config";
+import { isOAuthEnabled, oauthCookieNames } from "@/lib/auth/oauth-config";
+import { cookies } from "next/headers";
 import { getOAuthAccessToken } from "@/lib/auth/oauth-session";
 import { serverError } from "@/lib/server-console";
 
@@ -53,4 +54,61 @@ export const getUserDetails = async () => {
             user.user_metadata?.name ??
             null,
     };
+};
+
+/**
+ * Memory persistence needs three outcomes, not just a nullable user ID.
+ * A temporary Auth outage must never silently turn a signed-in player into
+ * a guest and switch their learning history to local-only storage.
+ */
+export const getMemoryAuthStatus = async (): Promise<
+    { userId: string | null; error: { message: string } | null }
+> => {
+    try {
+        const supabase = await createClient();
+        if (isOAuthEnabled()) {
+            const store = await cookies();
+            const names = oauthCookieNames();
+            const hasCredentials = Boolean(
+                store.get(names.access)?.value || store.get(names.refresh)?.value,
+            );
+            if (!hasCredentials) return { userId: null, error: null };
+
+            const token = await getOAuthAccessToken();
+            if (!token) {
+                return {
+                    userId: null,
+                    error: { message: "OAuth session could not be verified" },
+                };
+            }
+            const { data, error } = await supabase.auth.getUser(token);
+            if (error || !data.user) {
+                return {
+                    userId: null,
+                    error: { message: error?.message ?? "Could not verify authenticated user" },
+                };
+            }
+            return { userId: data.user.id, error: null };
+        }
+
+        const { data: session, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+            return { userId: null, error: { message: sessionError.message } };
+        }
+        if (!session.session) return { userId: null, error: null };
+
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user) {
+            return {
+                userId: null,
+                error: { message: error?.message ?? "Could not verify authenticated user" },
+            };
+        }
+        return { userId: data.user.id, error: null };
+    } catch {
+        return {
+            userId: null,
+            error: { message: "Authentication is temporarily unavailable" },
+        };
+    }
 };

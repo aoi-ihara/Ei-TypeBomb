@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/db/server";
-import { getUser } from "@/lib/auth/session";
+import { getMemoryAuthStatus } from "@/lib/auth/session";
 import type { ItemMemoryState } from "@/lib/playground/memory";
 import { toMemoryState } from "@/lib/playground/memory";
 
@@ -9,7 +9,14 @@ const MEMORY_COLUMNS =
     "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
 
 export const loadPlaygroundMemory = async (roomId: string) => {
-    const userId = await getUser();
+    const { userId, error: authError } = await getMemoryAuthStatus();
+    if (authError) {
+        return {
+            userId: null,
+            memoryByItem: {} as Record<string, ItemMemoryState>,
+            error: authError,
+        };
+    }
     if (!userId) {
         return {
             userId: null,
@@ -57,7 +64,8 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
     if (memory.length === 0) return null;
     if (memory.length > 500) return { message: "Too many memory updates" };
 
-    const userId = await getUser();
+    const { userId, error: authError } = await getMemoryAuthStatus();
+    if (authError) return authError;
     if (!userId) return { message: "Authentication required" };
 
     if (
