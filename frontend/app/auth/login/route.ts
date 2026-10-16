@@ -25,6 +25,17 @@ export async function GET(request: NextRequest) {
         return new NextResponse("OAuth configuration is incomplete", { status: 503 });
     }
 
+    // OAuth state is stored on the callback host, never on a legacy subdomain.
+    const callbackOrigin = new URL(config.redirectUri).origin;
+    if (request.nextUrl.origin !== callbackOrigin) {
+        const canonical = new URL("/auth/login", callbackOrigin);
+        canonical.searchParams.set(
+            "next",
+            safeReturnPath(request.nextUrl.searchParams.get("next")),
+        );
+        return NextResponse.redirect(canonical, 302);
+    }
+
     const state = base64url(randomBytes(32));
     const verifier = base64url(randomBytes(48));
     const challenge = base64url(createHash("sha256").update(verifier).digest());
