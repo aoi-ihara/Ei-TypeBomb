@@ -401,7 +401,6 @@ export default function Page({
         }
     };
 
-    // Serialize writes so an older autosave cannot overwrite the Play-time flush.
     const saveRoomData = (): Promise<boolean> => {
         const snapshot = { ...roomDataRef.current };
         const attempt = saveQueueRef.current.then(async () => {
@@ -464,27 +463,6 @@ export default function Page({
     };
 
     const handlePlay = async () => {
-        if (isStartingPlay || !roomId) return;
-        setPlayError("");
-        const linkError = validateLink(roomLink) || roomLinkError;
-        if (linkError) {
-            setPlayError(linkError);
-            return;
-        }
-        setIsStartingPlay(true);
-        // Cancel scheduled saves; the queued write and latest snapshot are flushed below.
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        if (maxSaveTimerRef.current) clearTimeout(maxSaveTimerRef.current);
-        saveTimerRef.current = null;
-        maxSaveTimerRef.current = null;
-        const saved = await saveRoomData();
-        if (!saved) {
-            setPlayError(
-                "変更を保存できませんでした。入力内容を確認して再試行してください。",
-            );
-            setIsStartingPlay(false);
-            return;
-        }
         setShowPlayWarning(false);
         router.push(`/join/${encodeURIComponent(roomLink)}`);
     };
@@ -1341,12 +1319,6 @@ export default function Page({
                                 ))}
                             </SortableContext>
                         </DndContext>
-
-                        {playError && (
-                            <div role="alert" className="text-red-500">
-                                {playError}
-                            </div>
-                        )}
                         <MorphDialog
                             button={
                                 <Button
@@ -1356,7 +1328,7 @@ export default function Page({
                                         else setShowPlayWarning(true);
                                     }}
                                     iconName="play"
-                                    disabled={isStartingPlay}
+                                    loading={isStartingPlay}
                                     className="w-full"
                                     variant="primary"
                                 >
