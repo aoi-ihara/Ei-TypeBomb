@@ -55,8 +55,8 @@ export async function proxy(request: NextRequest) {
         return response;
     } catch {
         const response = NextResponse.next();
-        response.cookies.delete(names.access);
-        response.cookies.delete(names.refresh);
+        response.cookies.set(names.access, "", { ...oauthCookieOptions, maxAge: 0 });
+        response.cookies.set(names.refresh, "", { ...oauthCookieOptions, maxAge: 0 });
         return response;
     }
 }

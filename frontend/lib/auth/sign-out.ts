@@ -13,11 +13,11 @@ export const signOut = async () => {
     if (isOAuthEnabled()) {
         const store = await cookies();
         const names = oauthCookieNames();
-        store.delete(names.access);
-        store.delete(names.refresh);
-        store.delete(names.state);
-        store.delete(names.verifier);
-        store.delete(names.returnTo);
+        store.set(names.access, "", { ...oauthCookieOptions, maxAge: 0 });
+        store.set(names.refresh, "", { ...oauthCookieOptions, maxAge: 0 });
+        store.set(names.state, "", { ...oauthCookieOptions, maxAge: 0 });
+        store.set(names.verifier, "", { ...oauthCookieOptions, maxAge: 0 });
+        store.set(names.returnTo, "", { ...oauthCookieOptions, maxAge: 0 });
         // Only the ETB session ends. The RC Hub SSO session remains intact.
         redirect("/");
     }

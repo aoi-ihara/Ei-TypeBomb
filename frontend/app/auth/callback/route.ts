@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         destination.searchParams.set("auth_error", reason);
         const response = NextResponse.redirect(destination, 303);
         for (const name of [names.state, names.verifier, names.returnTo]) {
-            response.cookies.delete(name);
+            response.cookies.set(name, "", { ...oauthCookieOptions, maxAge: 0 });
         }
         response.headers.set("Cache-Control", "no-store");
         return response;
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
         const response = NextResponse.redirect(new URL(returnTo, trustedOrigin), 303);
         for (const name of [names.state, names.verifier, names.returnTo]) {
-            response.cookies.delete(name);
+            response.cookies.set(name, "", { ...oauthCookieOptions, maxAge: 0 });
         }
         response.cookies.set(names.access, tokens.access_token, {
             ...oauthCookieOptions,
