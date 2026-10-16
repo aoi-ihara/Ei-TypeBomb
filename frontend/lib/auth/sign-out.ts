@@ -4,6 +4,7 @@ import { createClient } from "@/lib/db/server";
 import {
     isOAuthEnabled,
     oauthCookieNames,
+    oauthCookieOptions,
 } from "@/lib/auth/oauth-config";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
