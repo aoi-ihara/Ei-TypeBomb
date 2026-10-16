@@ -1,0 +1,12 @@
+{
+    "$schema": "./node_modules/wrangler/config-schema.json",
+    "name": "ei-typebomb-worker",
+    "main": "src/index.ts",
+    "compatibility_date": "2026-10-16",
+    "durable_objects": {
+        "bindings": [{ "name": "ROOMS", "class_name": "RoomDO" }]
+    },
+    "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["RoomDO"] }
+    ]
+}

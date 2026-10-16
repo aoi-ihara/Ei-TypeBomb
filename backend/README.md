@@ -3,9 +3,8 @@
 ```text
 backend/
 ├── server/       # Current Node.js / Socket.IO runtime
-└── shared/       # Runtime-independent game, protocol and backend utilities
-
-# cloudflare/       # Planned Worker adapter (not implemented in this PR)
+├── shared/       # Runtime-independent game, protocol and backend utilities
+└── cloudflare/   # Native WebSocket Worker + Durable Object runtime
 ```
 
 The Node server imports TypeScript directly from the adjacent `shared/`
@@ -34,12 +33,13 @@ the server's production dependencies/configuration. Start from the server
 working directory with `node dist/index.js`. The build includes the
 imported shared code inside `dist/`.
 
-## Planned Cloudflare runtime
+## Cloudflare runtime
 
-A future `backend/cloudflare/` Worker / Durable Object adapter can import
-`backend/shared/` alongside the Node server. It must still implement its
-own WebSocket transport, authentication key provisioning, storage, alarms,
-and limiter lifetime/scope. The shared modules do not provide failover or
-cross-server synchronization.
+`backend/cloudflare/` implements native WebSocket handling, verified JWT room
+authorization, RLS-scoped Supabase room loading, Durable Object state storage,
+and alarm scheduling. It uses the same `backend/shared/` game core as Node.
+
+This is a standalone backend: no active-match migration, persistent client
+identities, or cross-server synchronization yet. See [Cloudflare](cloudflare/README.md).
 
 See [Node](server/README.md) and [shared](shared/README.md).
