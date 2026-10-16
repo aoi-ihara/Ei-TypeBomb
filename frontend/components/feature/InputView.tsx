@@ -441,7 +441,13 @@ function TypingAttempt({
         // Romanized kana answers are editable at any position, including
         // positions that have subsequently received an automatic hint.
         // Keep the pre-existing strict English hint behaviour unchanged.
-        if (typedInsideHint && (!manualHints || answerRevealed) && (!isKanaAnswer || answerRevealed)) {
+        // Once the full answer is revealed, any incorrect committed
+        // character should immediately clear the input (as in Playground),
+        // even when it is outside the previously hinted prefix.
+        const incorrectAfterReveal = answerRevealed &&
+            Array.from({ length: advance }, (_, offset) => currentSelection + offset)
+                .some((index) => next[index] !== english[index]);
+        if (incorrectAfterReveal || (typedInsideHint && !manualHints && !isKanaAnswer)) {
             resetInput();
             return;
         }
