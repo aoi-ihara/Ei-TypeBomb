@@ -149,7 +149,7 @@ export default function Picker({
 
     return (
         <div
-            className="relative inline-block shrink-0 w-full align-middle"
+            className={`relative inline-block shrink-0 w-full align-middle ${open ? "z-50" : "z-0"}`}
             data-picker
         >
             <div
