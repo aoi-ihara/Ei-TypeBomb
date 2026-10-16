@@ -46,6 +46,21 @@ export const isHiragana = (char) => /^[ぁ-ゖ]$/u.test(char);
 /** @param {string} answer */
 export const hasHiragana = (answer) => Array.from(answer).some(isHiragana);
 
+// Both the Japanese long-vowel mark (ー) and the fullwidth hyphen-minus (－)
+// are typed with the ordinary ASCII '-' key. Preserve the stored answer:
+// room data, completion checks and spectator sync continue to use its glyph.
+const asciiHyphenTargets = new Set(["ー", "－"]);
+
+/** @param {string | undefined} expected @param {string} key */
+export const normalizeHyphenInput = (expected, key) =>
+    key === "-" && typeof expected === "string" && asciiHyphenTargets.has(expected)
+        ? expected : key;
+
+/** Input cells show the physical key, not the stored fullwidth glyph. */
+/** @param {string} character */
+export const displayTypingCharacter = (character) =>
+    asciiHyphenTargets.has(character) ? "-" : character;
+
 /** @typedef {{committed: string, composing: string}} KanaProgress */
 
 /**
@@ -64,7 +79,7 @@ export function advanceKanaInput(answer, progress, rawKey) {
 
     // ASCII, spaces and hyphens retain their literal answer representation.
     if (!isHiragana(target)) {
-        if (!composing && key === target?.toLowerCase()) {
+        if (!composing && normalizeHyphenInput(target, key) === target?.toLowerCase()) {
             return { accepted: true, committed: committed + target, composing: "" };
         }
         // The pending n is complete before a non-kana separator.
@@ -206,7 +221,11 @@ export function advanceEditableKanaAt(answer, cursor, composing, rawKey) {
     const char = answer[cursor];
 
     if (!isHiragana(char)) {
-        return { accepted: true, emitted: rawKey, composing: "" };
+        return {
+            accepted: true,
+            emitted: normalizeHyphenInput(char, rawKey),
+            composing: "",
+        };
     }
     if (!/^[a-z']$/.test(key)) return reject;
 
