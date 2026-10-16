@@ -5,8 +5,7 @@
 export const isOAuthEnabled = () =>
     process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED === "true";
 
-export const OAUTH_ISSUER =
-    "https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1";
+export const OAUTH_ISSUER = "https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1";
 export const OAUTH_AUTHORIZE_URL = OAUTH_ISSUER + "/oauth/authorize";
 export const OAUTH_TOKEN_URL = OAUTH_ISSUER + "/oauth/token";
 export const OAUTH_JWKS_URL = OAUTH_ISSUER + "/.well-known/jwks.json";
@@ -24,15 +23,23 @@ export function getOAuthConfig() {
         url.search ||
         url.hash ||
         (url.protocol !== "https:" &&
-            !(process.env.NODE_ENV !== "production" &&
+            !(
+                process.env.NODE_ENV !== "production" &&
                 url.protocol === "http:" &&
-                url.hostname === "localhost"))
+                url.hostname === "localhost"
+            ))
     ) {
-        throw new Error("ETB_OAUTH_REDIRECT_URI must be a trusted /auth/callback URL");
+        throw new Error(
+            "ETB_OAUTH_REDIRECT_URI must be a trusted /auth/callback URL",
+        );
     }
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL !==
-        "https://gkiniypvnwqhmgviwxws.supabase.co") {
-        throw new Error("ETB must use the same rcAccount Supabase project for OAuth and data");
+    if (
+        process.env.NEXT_PUBLIC_SUPABASE_URL !==
+        "https://gkiniypvnwqhmgviwxws.supabase.co"
+    ) {
+        throw new Error(
+            "ETB must use the same rcAccount Supabase project for OAuth and data",
+        );
     }
     return { clientId, clientSecret, redirectUri };
 }
@@ -62,6 +69,7 @@ export function safeReturnPath(value: string | null): string {
         value.startsWith("//") ||
         value.includes("\\") ||
         /[\u0000-\u001f\u007f]/.test(value)
-    ) return "/";
+    )
+        return "/";
     return value;
 }

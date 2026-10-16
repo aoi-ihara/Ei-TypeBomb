@@ -69,7 +69,7 @@ const icons: Record<string, LucideIcon> = {
     upload: Upload,
     eye: Eye,
     x: X,
-    rotateCw: RotateCcw,
+    rotateCcw: RotateCcw,
     link: Link,
     play: Play,
     lock: Lock,

@@ -4,7 +4,10 @@ import {
     oauthCookieNames,
     oauthCookieOptions,
 } from "@/lib/auth/oauth-config";
-import { exchangeOAuthToken, verifyOAuthAccessToken } from "@/lib/auth/oauth-tokens";
+import {
+    exchangeOAuthToken,
+    verifyOAuthAccessToken,
+} from "@/lib/auth/oauth-tokens";
 
 /**
  * Refresh the app-specific OAuth session before Server Components / Actions
@@ -22,7 +25,8 @@ export async function proxy(request: NextRequest) {
     if (access) {
         try {
             const claims = await verifyOAuthAccessToken(access);
-            shouldRefresh = !claims.exp || claims.exp <= Math.floor(Date.now() / 1000) + 60;
+            shouldRefresh =
+                !claims.exp || claims.exp <= Math.floor(Date.now() / 1000) + 60;
         } catch {
             shouldRefresh = true;
         }
@@ -41,7 +45,9 @@ export async function proxy(request: NextRequest) {
 
         const requestHeaders = new Headers(request.headers);
         requestHeaders.set("cookie", request.cookies.toString());
-        const response = NextResponse.next({ request: { headers: requestHeaders } });
+        const response = NextResponse.next({
+            request: { headers: requestHeaders },
+        });
         response.cookies.set(names.access, tokens.access_token, {
             ...oauthCookieOptions,
             maxAge: Math.max(1, Math.floor(tokens.expires_in)),
@@ -55,12 +61,20 @@ export async function proxy(request: NextRequest) {
         return response;
     } catch {
         const response = NextResponse.next();
-        response.cookies.set(names.access, "", { ...oauthCookieOptions, maxAge: 0 });
-        response.cookies.set(names.refresh, "", { ...oauthCookieOptions, maxAge: 0 });
+        response.cookies.set(names.access, "", {
+            ...oauthCookieOptions,
+            maxAge: 0,
+        });
+        response.cookies.set(names.refresh, "", {
+            ...oauthCookieOptions,
+            maxAge: 0,
+        });
         return response;
     }
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/login|auth/callback).*)"],
+    matcher: [
+        "/((?!_next/static|_next/image|favicon.ico|auth/sign-in|auth/callback).*)",
+    ],
 };
