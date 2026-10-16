@@ -12,7 +12,7 @@ export default function Client({ message }: { message: string }) {
                 {message}
             </p>
             <Button
-                onClick={() => router.push("/")}
+                onClick={() => router.push("/auth/sign-in")}
                 className="w-full"
                 iconName="rotateCcw"
             >
