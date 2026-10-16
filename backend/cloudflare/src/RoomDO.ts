@@ -60,7 +60,7 @@ export class RoomDO extends DurableObject<Env> {
         }
         const pair = new WebSocketPair();
         const [client, server] = Object.values(pair);
-        const session: Session = { id: crypto.randomUUID(), roomId: null };
+        const session: Session = { id: crypto.randomUUID(), roomId: null, targetRoomId: roomId };
         this.ctx.acceptWebSocket(server);
         server.serializeAttachment(session);
         this.send(server, "connect", { id: session.id });
@@ -163,12 +163,10 @@ export class RoomDO extends DurableObject<Env> {
         if (event === "auth:response") {
             const response = validateAuthPayload(data);
             const authenticatedRoomId = await verifyRoomToken(response.jwtToken, this.env);
-            const routedRoomId = new URL("https://example.invalid/ws/" + authenticatedRoomId).pathname.split("/")[2];
-            // A client must never authorize a different room in the same DO.
-            // The DO name is not exposed, so compare against the room being hosted.
+            // A valid token must authorize exactly the URL-selected room.
             const previousRoomId = this.game?.room.id;
-            const expected = (ws.deserializeAttachment() as Session & { targetRoomId?: string }).targetRoomId;
-            if (expected !== authenticatedRoomId || (previousRoomId && previousRoomId !== routedRoomId)) {
+            if (session.targetRoomId !== authenticatedRoomId ||
+                (previousRoomId && previousRoomId !== authenticatedRoomId)) {
                 throw new ClientError("認証されたルームが接続先と一致しません。");
             }
             if (!this.game) {
