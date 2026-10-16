@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { importJWK, jwtVerify, type JWK } from "jose";
+import { getAuthenticatedRoomId } from "../../../shared/roomJwt";
 
 const KEY_ID = process.env.JWT_KEY_ID;
 const PUBLIC_KEY_JSON = process.env.JWT_PUBLIC_KEY;
@@ -22,26 +23,7 @@ export const verifyToken = async (jwtToken: string): Promise<string | null> => {
             },
         );
 
-        if (protectedHeader.kid !== KEY_ID) {
-            throw new Error("Unexpected JWT key ID");
-        }
-
-        if (payload.role !== "authenticated") {
-            throw new Error("Invalid JWT role");
-        }
-
-        const roomId = payload.id;
-
-        if (
-            typeof roomId !== "string" ||
-            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-                roomId,
-            )
-        ) {
-            throw new Error("Invalid room ID");
-        }
-
-        return roomId;
+        return getAuthenticatedRoomId(payload, protectedHeader.kid, KEY_ID);
     } catch {
         console.error("JWT verification failed");
         return null;
