@@ -10,7 +10,8 @@ export default function OAuthLoginPage() {
     }, []);
 
     return (
-        <Shell title="サインイン" loading>
+        <Shell title="サインイン">
+            <p className="text-sm">RC Hubへ移動しています…</p>
             <a className="text-sm underline" href="/auth/start">
                 RC Hubでサインイン
             </a>
