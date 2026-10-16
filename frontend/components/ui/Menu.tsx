@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { cloneElement, type MouseEventHandler, type ReactElement } from "react";
-import { Icon } from "./Icon";
+import { cloneElement, type MouseEventHandler, type ReactElement, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Icon, type IconName } from "./Icon";
 import Morph from "./Morph";
 
-export type MenuItem = { label: string; onClick: () => void; icon?: string; disabled?: boolean };
+export type MenuItem = { label: string; onClick: () => void; icon?: IconName; disabled?: boolean };
 type TriggerProps = { onClick?: MouseEventHandler<HTMLButtonElement>; "aria-haspopup"?: "menu"; "aria-expanded"?: boolean; "aria-controls"?: string };
 export type MenuProps = { name: string; button: ReactElement<TriggerProps>; items: MenuItem[] };
 
