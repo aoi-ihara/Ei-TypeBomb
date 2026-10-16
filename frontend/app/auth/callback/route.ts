@@ -38,8 +38,8 @@ export async function GET(request: NextRequest) {
     }
 
     const fail = (reason: string) => {
-        const destination = new URL("/", trustedOrigin);
-        destination.searchParams.set("auth_error", reason);
+        const destination = new URL("/auth/error", trustedOrigin);
+        destination.searchParams.set("reason", reason);
         const response = NextResponse.redirect(destination, 303);
         for (const name of [names.state, names.verifier, names.returnTo]) {
             response.cookies.set(name, "", { ...oauthCookieOptions, maxAge: 0 });
