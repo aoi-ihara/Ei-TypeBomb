@@ -99,7 +99,7 @@ function CustomCursor() {
     );
 
     const handleMouseMove = useCallback(
-        (x: number, y: number) => {
+        (x: number, y: number, followMorph = false) => {
             mouse.current.x = x;
             mouse.current.y = y;
 
@@ -197,10 +197,13 @@ function CustomCursor() {
                 };
             }
 
-            cursorX.set(target.current.x - target.current.width / 2);
-            cursorY.set(target.current.y - target.current.height / 2);
-            cursorW.set(target.current.width);
-            cursorH.set(target.current.height);
+            // The regular cursor uses springs for hover transitions. While the
+            // menu itself is animating, springs would lag behind its DOM rect.
+            const setPosition = followMorph && buttonEl ? "jump" : "set";
+            cursorX[setPosition](target.current.x - target.current.width / 2);
+            cursorY[setPosition](target.current.y - target.current.height / 2);
+            cursorW[setPosition](target.current.width);
+            cursorH[setPosition](target.current.height);
             cursorOpacity.set(target.current.opacity);
 
             const minimumWeight = Math.min(
@@ -256,7 +259,7 @@ function CustomCursor() {
             refresh();
             if (frameId) return;
             const tick = () => {
-                refresh();
+                handleMouseMove(mouse.current.x, mouse.current.y, true);
                 frameId = isMorphCursorMoving()
                     ? requestAnimationFrame(tick)
                     : 0;
