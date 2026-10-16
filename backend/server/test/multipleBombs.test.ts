@@ -77,7 +77,7 @@ test("hint updates from a non-focused holder do not replace shared input", () =>
 
 test("configured bomb count respects attendee count and auto fallback", () => {
     for (const [players, selected, expected] of [
-        [2, 8, 2], [5, 3, 3], [8, 8, 8], [9, null, 3],
+        [2, 8, 2], [5, 3, 3], [8, 8, 4], [16, 4, 4], [9, null, 3],
     ] as const) {
         const state: GameState = {
             room: {
