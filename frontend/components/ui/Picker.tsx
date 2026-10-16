@@ -68,9 +68,15 @@ export default function Picker({
                 Math.max(centerY, top + menuHeight / 2),
                 top + height - menuHeight / 2,
             );
+            // Tell the cursor where the menu will END UP, not where the
+            // dock currently is during its CSS transition. The cursor's
+            // existing springs animate to this destination independently.
+            dock.dataset.morphCursorX = String(open ? x : centerX);
+            dock.dataset.morphCursorY = String(open ? y : centerY);
             dock.style.transform = open
                 ? `translate(${x - centerX}px, ${y - centerY}px)`
                 : "translate(0px, 0px)";
+            window.dispatchEvent(new Event("morphcursorchange"));
         };
         syncLayout();
         const observer = new ResizeObserver(syncLayout);
