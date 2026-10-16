@@ -35,7 +35,7 @@ place until the feature flag is explicitly enabled.
 
 ## How it works
 
-- GET `/auth/login` creates PKCE S256 verifier, state, and an allowlisted
+- `/auth/login` performs a full navigation to `/auth/start`; GET `/auth/start` creates PKCE S256 verifier, state, and an allowlisted
   relative return path; stores them as 10-minute host-only HttpOnly cookies,
   and redirects to Supabase Auth's `/oauth/authorize` endpoint.
 - RC Hub prompts login and consent (it remains the **identity provider**).
