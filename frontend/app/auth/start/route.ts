@@ -15,20 +15,23 @@ const base64url = (value: Buffer) => value.toString("base64url");
 
 export async function GET(request: NextRequest) {
     if (!isOAuthEnabled()) {
-        return new NextResponse("OAuth is not enabled for this deployment", { status: 503 });
+        return new NextResponse("OAuth is not enabled for this deployment", {
+            status: 503,
+        });
     }
 
     let config: ReturnType<typeof getOAuthConfig>;
     try {
         config = getOAuthConfig();
     } catch {
-        return new NextResponse("OAuth configuration is incomplete", { status: 503 });
+        return new NextResponse("OAuth configuration is incomplete", {
+            status: 503,
+        });
     }
 
-    // OAuth state is stored on the callback host, never on a legacy subdomain.
     const callbackOrigin = new URL(config.redirectUri).origin;
     if (request.nextUrl.origin !== callbackOrigin) {
-        const canonical = new URL("/auth/login", callbackOrigin);
+        const canonical = new URL("/auth/sign-in", callbackOrigin);
         canonical.searchParams.set(
             "next",
             safeReturnPath(request.nextUrl.searchParams.get("next")),

@@ -19,12 +19,15 @@ function matchesState(received: string | null, expected: string | undefined) {
 }
 
 export async function GET(request: NextRequest) {
-    if (!isOAuthEnabled()) return new NextResponse("OAuth is disabled", { status: 503 });
+    if (!isOAuthEnabled())
+        return new NextResponse("OAuth is disabled", { status: 503 });
 
     const names = oauthCookieNames();
     const expectedState = request.cookies.get(names.state)?.value;
     const verifier = request.cookies.get(names.verifier)?.value;
-    const returnTo = safeReturnPath(request.cookies.get(names.returnTo)?.value ?? null);
+    const returnTo = safeReturnPath(
+        request.cookies.get(names.returnTo)?.value ?? null,
+    );
     const receivedState = request.nextUrl.searchParams.get("state");
     const code = request.nextUrl.searchParams.get("code");
     const providerError = request.nextUrl.searchParams.get("error");
@@ -34,7 +37,9 @@ export async function GET(request: NextRequest) {
     try {
         trustedOrigin = new URL(getOAuthConfig().redirectUri);
     } catch {
-        return new NextResponse("OAuth configuration is incomplete", { status: 503 });
+        return new NextResponse("OAuth configuration is incomplete", {
+            status: 503,
+        });
     }
 
     const fail = (reason: string) => {
@@ -42,7 +47,10 @@ export async function GET(request: NextRequest) {
         destination.searchParams.set("reason", reason);
         const response = NextResponse.redirect(destination, 303);
         for (const name of [names.state, names.verifier, names.returnTo]) {
-            response.cookies.set(name, "", { ...oauthCookieOptions, maxAge: 0 });
+            response.cookies.set(name, "", {
+                ...oauthCookieOptions,
+                maxAge: 0,
+            });
         }
         response.headers.set("Cache-Control", "no-store");
         return response;
@@ -63,9 +71,15 @@ export async function GET(request: NextRequest) {
         });
         if (!tokens.refresh_token) return fail("invalid_response");
 
-        const response = NextResponse.redirect(new URL(returnTo, trustedOrigin), 303);
+        const response = NextResponse.redirect(
+            new URL(returnTo, trustedOrigin),
+            303,
+        );
         for (const name of [names.state, names.verifier, names.returnTo]) {
-            response.cookies.set(name, "", { ...oauthCookieOptions, maxAge: 0 });
+            response.cookies.set(name, "", {
+                ...oauthCookieOptions,
+                maxAge: 0,
+            });
         }
         response.cookies.set(names.access, tokens.access_token, {
             ...oauthCookieOptions,

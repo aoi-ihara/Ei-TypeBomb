@@ -116,7 +116,7 @@ posthog.capture("burrito_considered", {
 posthog.captureException(error);
 ```
 
-### Server-side tracking (app/api/auth/login/route.ts)
+### Server-side tracking (app/api/auth/sign-in/route.ts)
 
 ```typescript
 const posthog = getPostHogClient();
@@ -218,7 +218,7 @@ export default nextConfig;
 
 ---
 
-## src/app/api/auth/login/route.ts
+## src/app/api/auth/sign-in/route.ts
 
 ```ts
 import { NextResponse } from "next/server";
@@ -632,7 +632,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password: string,
     ): Promise<boolean> => {
         try {
-            const response = await fetch("/api/auth/login", {
+            const response = await fetch("/api/auth/sign-in", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username, password }),

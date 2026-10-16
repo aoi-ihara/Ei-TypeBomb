@@ -8,25 +8,26 @@ place until the feature flag is explicitly enabled.
 
 1. Merge and deploy RC Hub OAuth consent PR at `/oauth/consent`.
 2. In Supabase project `gkiniypvnwqhmgviwxws`:
-   - Authentication → URL Configuration: Site URL `https://hub.vgnz93hs.com`.
-   - Authentication → OAuth Server: enable, Authorization Path `/oauth/consent`.
-   - Authentication → OAuth Apps: register a **Confidential** client with
-     redirect URI `https://ei-typebomb.com/auth/callback`, using
-     `client_secret_basic` (the default).
-   - Use an **asymmetric signing key** (ES256 / RS256), required for OIDC.
+    - Authentication → URL Configuration: Site URL `https://hub.vgnz93hs.com`.
+    - Authentication → OAuth Server: enable, Authorization Path `/oauth/consent`.
+    - Authentication → OAuth Apps: register a **Confidential** client with
+      redirect URI `https://ei-typebomb.com/auth/callback`, using
+      `client_secret_basic` (the default).
+    - Use an **asymmetric signing key** (ES256 / RS256), required for OIDC.
 3. Set the following ETB **frontend server** environment variables:
 
-   ```dotenv
-   NEXT_PUBLIC_ETB_OAUTH_ENABLED=true
-   RC_HUB_OAUTH_CLIENT_ID=<OAuth app client ID>
-   RC_HUB_OAUTH_CLIENT_SECRET=<OAuth app client secret>
-   ETB_OAUTH_REDIRECT_URI=https://ei-typebomb.com/auth/callback
-   NEXT_PUBLIC_SUPABASE_URL=https://gkiniypvnwqhmgviwxws.supabase.co
-   ```
+    ```dotenv
+    NEXT_PUBLIC_ETB_OAUTH_ENABLED=true
+    RC_HUB_OAUTH_CLIENT_ID=<OAuth app client ID>
+    RC_HUB_OAUTH_CLIENT_SECRET=<OAuth app client secret>
+    ETB_OAUTH_REDIRECT_URI=https://ei-typebomb.com/auth/callback
+    NEXT_PUBLIC_SUPABASE_URL=https://gkiniypvnwqhmgviwxws.supabase.co
+    ```
 
-   Never set the OAuth client secret as `NEXT_PUBLIC_*`. Reuse the existing
-   `NEXT_PUBLIC_SUPABASE_ANON_KEY`; it must be from the **same rcAccount
-   Supabase project** used for OAuth. Keep all admin keys server-only.
+    Never set the OAuth client secret as `NEXT_PUBLIC_*`. Reuse the existing
+    `NEXT_PUBLIC_SUPABASE_ANON_KEY`; it must be from the **same rcAccount
+    Supabase project** used for OAuth. Keep all admin keys server-only.
+
 4. Configure `ei-typebomb.com` for the same ETB Next.js deployment and verify
    HTTPS before enabling the flag. The exact callback URL must match the
    OAuth App registration.
@@ -35,7 +36,7 @@ place until the feature flag is explicitly enabled.
 
 ## How it works
 
-- `/auth/login` performs a full navigation to `/auth/start`; GET `/auth/start` creates PKCE S256 verifier, state, and an allowlisted
+- `/auth/sign-in` performs a full navigation to `/auth/start`; GET `/auth/start` creates PKCE S256 verifier, state, and an allowlisted
   relative return path; stores them as 10-minute host-only HttpOnly cookies,
   and redirects to Supabase Auth's `/oauth/authorize` endpoint.
 - RC Hub prompts login and consent (it remains the **identity provider**).
@@ -61,7 +62,7 @@ place until the feature flag is explicitly enabled.
 - Tamper with `state` or replay callback code; ensure authentication fails.
 - Attempt an invalid `next=//evil.example` value; ensure only same-origin
   redirects occur.
-- Confirm `HttpOnly; Secure; SameSite=Lax; Path=/` and *no Domain* on ETB
+- Confirm `HttpOnly; Secure; SameSite=Lax; Path=/` and _no Domain_ on ETB
   auth cookies in production; `__Host-` prefix protects domain scoping.
 - After a token expires, confirm refresh and rotation without losing the
   logged-in state. Test concurrent requests at the expiry boundary.

@@ -43,7 +43,9 @@ export async function exchangeOAuthToken(
     });
 
     if (!response.ok) {
-        throw new Error("Supabase OAuth token exchange failed (" + response.status + ")");
+        throw new Error(
+            "Supabase OAuth token exchange failed (" + response.status + ")",
+        );
     }
     const tokens: unknown = await response.json();
     if (
@@ -57,8 +59,7 @@ export async function exchangeOAuthToken(
         typeof tokens.expires_in !== "number" ||
         !Number.isFinite(tokens.expires_in) ||
         tokens.expires_in <= 0 ||
-        ("refresh_token" in tokens &&
-            typeof tokens.refresh_token !== "string")
+        ("refresh_token" in tokens && typeof tokens.refresh_token !== "string")
     ) {
         throw new Error("Invalid Supabase OAuth token response");
     }
