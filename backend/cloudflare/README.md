@@ -61,6 +61,36 @@ Routes:
 - `GET /ws/health`: WebSocket health session; `health:ping` / `health:pong`.
 - `GET /ws/:roomId`: native WebSocket game session.
 
+
+## Cloudflare Worker Previews
+
+Cloudflare Workers Builds uses `npx wrangler preview` for preview branches.
+Preview deployments require a `previews` block in `wrangler.jsonc`; settings
+in production are **not automatically inherited**.
+
+The configuration includes a separate `ROOMS` binding in the `previews`
+block. Cloudflare creates a separate Durable Object namespace and storage
+for each Preview while keeping the `RoomDO` class migration at the top level.
+
+The preview variables are **public configuration values** used by the Worker,
+including the JWT **public** verification key and the Supabase publishable
+key. Do not add a JWT private signing key, Supabase service-role key, or other
+secret to `previews.vars` or to version control. If the JWT signing key
+rotates, update the Preview public JWK and its key ID at the same time.
+
+```sh
+cd backend/cloudflare
+npx wrangler preview
+```
+
+**Important:** The Preview's Durable Object storage is isolated, but the
+preview Supabase endpoint is currently the shared rcAccount production project.
+A Preview can still read or write data through the application's normal
+Supabase permissions. Avoid destructive test data and restrict public Preview
+URLs (for example with Cloudflare Access) before using real accounts.
+The CORS allowlist accepts both the legacy subdomain and `ei-typebomb.com`.
+Production bindings and dashboard-managed production secrets are unchanged.
+
 ## Limitations
 
 - This is an **independent** gameplay backend. No active-game migration,
