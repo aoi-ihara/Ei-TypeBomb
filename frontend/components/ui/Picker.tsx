@@ -7,6 +7,7 @@ import Morph from "./Morph";
 
 export type PickerProps = {
     name: string;
+    labelPrefix?: string;
     items: string[];
     selection: number;
     onSelected: (index: number) => void;
@@ -15,12 +16,14 @@ export type PickerProps = {
 
 export default function Picker({
     name,
+    labelPrefix,
     items,
     selection,
     onSelected,
     itemIcons,
 }: PickerProps) {
     const [open, setOpen] = useState(false);
+    const [raised, setRaised] = useState(false);
     const menuId = useId();
     const sizeRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
@@ -65,9 +68,15 @@ export default function Picker({
                 Math.max(centerY, top + menuHeight / 2),
                 top + height - menuHeight / 2,
             );
+            // Tell the cursor where the menu will END UP, not where the
+            // dock currently is during its CSS transition. The cursor's
+            // existing springs animate to this destination independently.
+            dock.dataset.morphCursorX = String(open ? x : centerX);
+            dock.dataset.morphCursorY = String(open ? y : centerY);
             dock.style.transform = open
                 ? `translate(${x - centerX}px, ${y - centerY}px)`
                 : "translate(0px, 0px)";
+            window.dispatchEvent(new Event("morphcursorchange"));
         };
         syncLayout();
         const observer = new ResizeObserver(syncLayout);
@@ -142,11 +151,12 @@ export default function Picker({
     }, [open]);
 
     const label = items[selection] ?? name;
+    const triggerLabel = labelPrefix ? `${labelPrefix}: ${label}` : label;
     const showIcon = !itemIcons.every((item) => item === null || item === "");
 
     return (
         <div
-            className="relative inline-block shrink-0 w-full align-middle"
+            className={`relative inline-block shrink-0 w-full align-middle ${raised ? "z-50" : "z-0"}`}
             data-picker
         >
             <div
@@ -160,7 +170,7 @@ export default function Picker({
                     padding="large"
                     className="w-full"
                 >
-                    <span>{label}</span>
+                    <span>{triggerLabel}</span>
                 </Button>
             </div>
             <button
@@ -187,19 +197,25 @@ export default function Picker({
             >
                 <Morph
                     state={open}
+                    onSettled={() => {
+                        if (!open) setRaised(false);
+                    }}
                     first={
                         <div ref={triggerRef} className="w-full">
                             <Button
                                 iconName="chevronsUpDown"
                                 className="w-full"
-                                onClick={() => setOpen(true)}
+                                onClick={() => {
+                                    setRaised(true);
+                                    setOpen(true);
+                                }}
                                 aria-haspopup="menu"
                                 padding="large"
                                 alignment="left"
                                 aria-expanded={open}
                                 aria-controls={menuId}
                             >
-                                <span>{label}</span>
+                                <span>{triggerLabel}</span>
                             </Button>
                         </div>
                     }

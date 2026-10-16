@@ -6,7 +6,15 @@ export type TypedRecallItem = {
 };
 export type Item = TypedRecallItem;
 export type User = { id: string; displayName?: string; pulse?: string };
-export type BombState = { id: string; holder: number; status: number; wordIndex?: number; at: number; turn: number; hintLength?: number };
+export type BombState = {
+    id: string;
+    holder: number;
+    status: number;
+    wordIndex?: number;
+    at: number;
+    turn: number;
+    hintLength?: number;
+};
 export type GameLoser = { id: string; displayName?: string };
 export type Room = {
     id: string;
@@ -15,6 +23,7 @@ export type Room = {
     explanation?: string;
     items: Item[];
     maxPlayers?: number;
+    bombCount?: number | null;
     gameDuration: number;
     password?: string | null;
     createdAt?: string;

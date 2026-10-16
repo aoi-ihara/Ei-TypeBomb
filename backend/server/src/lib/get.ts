@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { roomFromRow, type RoomRow } from "../../../shared/room";
+import {
+    ROOM_SELECT_COLUMNS,
+    roomFromRow,
+    type RoomRow,
+} from "../../../shared/room";
 import { logEvent, logError } from "./console";
 
 export const getRoomFromId = async (id: string, jwtToken: string) => {
@@ -35,20 +39,7 @@ export const getRoomFromId = async (id: string, jwtToken: string) => {
 
         const { data, error, status } = await supabase
             .from("ei_typebomb_rooms")
-            .select(
-                `
-                id,
-                title,
-                user_id,
-                explanation,
-                max_players,
-                game_duration,
-                password,
-                created_at,
-                updated_at,
-                items
-            `,
-            )
+            .select(ROOM_SELECT_COLUMNS)
             .eq("id", id)
             .maybeSingle();
 

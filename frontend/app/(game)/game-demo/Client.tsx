@@ -55,14 +55,12 @@ const MOCK_ITEM_CONTENT = [
     ["美しい", "beautiful"],
 ] as const;
 
-const MOCK_ITEMS: Item[] = MOCK_ITEM_CONTENT.map(
-    ([prompt, answer], index) => ({
-        id: `demo-${index}`,
-        type: "typed_recall",
-        prompt,
-        answer,
-    }),
-);
+const MOCK_ITEMS: Item[] = MOCK_ITEM_CONTENT.map(([prompt, answer], index) => ({
+    id: `demo-${index}`,
+    type: "typed_recall",
+    prompt,
+    answer,
+}));
 
 const LOCAL_USER_ID = "player-1";
 
@@ -225,8 +223,7 @@ export default function Client({
         // for computer players. They clear the attempt before retrying.
         const shouldMiss = Math.random() < 0.35;
         const wrongTarget = shouldMiss
-            ? target.slice(0, -1) +
-              (target.endsWith("x") ? "z" : "x")
+            ? target.slice(0, -1) + (target.endsWith("x") ? "z" : "x")
             : target;
         let attempt = shouldMiss ? wrongTarget : target;
         let charIndex = 0;
@@ -332,9 +329,7 @@ export default function Client({
                 setResult(null);
                 startGame();
             }}
-            onCreateRoom={() =>
-                router.push(getSignInUrl())
-            }
+            onCreateRoom={() => router.push(getSignInUrl())}
             resultExtraActions={
                 <Button
                     iconName="link"

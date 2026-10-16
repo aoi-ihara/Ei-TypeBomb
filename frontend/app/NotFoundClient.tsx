@@ -33,9 +33,7 @@ export default function NotFoundClient() {
                 />
             </div>
 
-            <div data-cursor="text">
-                お探しのページは見つかりませんでした。
-            </div>
+            <div data-cursor="text">お探しのページは見つかりませんでした。</div>
 
             <Button
                 className="w-full"

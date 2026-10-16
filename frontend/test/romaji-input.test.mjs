@@ -1,18 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-    advanceKanaInput, decodeKanaProgress, encodeKanaProgress,
-    hasHiragana, kanaCompositionLayout, romanSlotCount,
-    advanceEditableKanaAt, editKanaCell, nextKanaCursor,
+    advanceKanaInput,
+    decodeKanaProgress,
+    encodeKanaProgress,
+    hasHiragana,
+    kanaCompositionLayout,
+    romanSlotCount,
+    advanceEditableKanaAt,
+    editKanaCell,
+    nextKanaCursor,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
+    normalizeHyphenInput,
+    displayTypingCharacter,
 } from "../lib/romaji-input.mjs";
 
 function type(answer, keys) {
     let progress = { committed: "", composing: "" };
     for (const key of keys) {
         const result = advanceKanaInput(answer, progress, key);
-        assert.equal(result.accepted, true, `Rejected "${key}" in "${keys}" for "${answer}" at ${JSON.stringify(progress)}`);
+        assert.equal(
+            result.accepted,
+            true,
+            `Rejected "${key}" in "${keys}" for "${answer}" at ${JSON.stringify(progress)}`,
+        );
         progress = { committed: result.committed, composing: result.composing };
     }
     return progress;
@@ -24,7 +36,10 @@ test("common syllables, two-/three-letter romanization", () => {
     assert.deepEqual(type("し", "si"), { committed: "し", composing: "" });
     assert.deepEqual(type("ちゃ", "tya"), { committed: "ちゃ", composing: "" });
     assert.deepEqual(type("ちゃ", "cha"), { committed: "ちゃ", composing: "" });
-    assert.deepEqual(type("きょう", "kyou"), { committed: "きょう", composing: "" });
+    assert.deepEqual(type("きょう", "kyou"), {
+        committed: "きょう",
+        composing: "",
+    });
 });
 test("progressive roman boxes keep the current letter active", () => {
     let state = { committed: "", composing: "" };
@@ -42,27 +57,132 @@ test("progressive roman boxes keep the current letter active", () => {
     assert.equal(romanSlotCount(result.composing), 1);
 });
 test("ん uses the second n as start of the following n-row kana", () => {
-    assert.deepEqual(type("こんにちは", "konnichiha"), { committed: "こんにちは", composing: "" });
-    assert.deepEqual(type("かんな", "kanna"), { committed: "かんな", composing: "" });
-    assert.deepEqual(type("かんじ", "kanji"), { committed: "かんじ", composing: "" });
-    assert.deepEqual(type("かんあ", "kan'a"), { committed: "かんあ", composing: "" });
+    assert.deepEqual(type("こんにちは", "konnichiha"), {
+        committed: "こんにちは",
+        composing: "",
+    });
+    assert.deepEqual(type("かんな", "kanna"), {
+        committed: "かんな",
+        composing: "",
+    });
+    assert.deepEqual(type("かんじ", "kanji"), {
+        committed: "かんじ",
+        composing: "",
+    });
+    assert.deepEqual(type("かんあ", "kan'a"), {
+        committed: "かんあ",
+        composing: "",
+    });
 });
 test("っ supports doubled consonants and small-tsu notation", () => {
-    assert.deepEqual(type("がっこう", "gakkou"), { committed: "がっこう", composing: "" });
-    assert.deepEqual(type("がっこう", "gaxtukou"), { committed: "がっこう", composing: "" });
+    assert.deepEqual(type("がっこう", "gakkou"), {
+        committed: "がっこう",
+        composing: "",
+    });
+    assert.deepEqual(type("がっこう", "gaxtukou"), {
+        committed: "がっこう",
+        composing: "",
+    });
 });
 test("mixes kana, English, spaces and hyphens without changing English keys", () => {
-    assert.deepEqual(type("さ-a", "sa-a"), { committed: "さ-a", composing: "" });
-    assert.deepEqual(type("さ a", "sa a"), { committed: "さ a", composing: "" });
-    assert.deepEqual(type("apple", "apple"), { committed: "apple", composing: "" });
+    assert.deepEqual(type("さ-a", "sa-a"), {
+        committed: "さ-a",
+        composing: "",
+    });
+    assert.deepEqual(type("さ a", "sa a"), {
+        committed: "さ a",
+        composing: "",
+    });
+    assert.deepEqual(type("apple", "apple"), {
+        committed: "apple",
+        composing: "",
+    });
     assert.equal(hasHiragana("apple"), false);
     assert.equal(hasHiragana("さ-a"), true);
 });
+test("ASCII hyphen types Japanese long vowels without rewriting the answer", () => {
+    assert.deepEqual(type("ちーたー", "ti-ta-"), {
+        committed: "ちーたー",
+        composing: "",
+    });
+    assert.deepEqual(type("らーめん", "ra-menn"), {
+        committed: "らーめん",
+        composing: "",
+    });
+    assert.deepEqual(type("あーーい", "a--i"), {
+        committed: "あーーい",
+        composing: "",
+    });
+    // A kana answer can contain a literal ASCII hyphen immediately beside ー.
+    assert.deepEqual(type("さ-ー", "sa--"), {
+        committed: "さ-ー",
+        composing: "",
+    });
+    assert.equal(normalizeHyphenInput("ー", "-"), "ー");
+    assert.equal(normalizeHyphenInput("－", "-"), "－");
+    assert.equal(normalizeHyphenInput("-", "-"), "-");
+});
+
+test("editable kana typing commits long vowels via the physical hyphen key", () => {
+    function typeEditable(answer, keys) {
+        let cells = Array.from(answer, () => "");
+        let cursor = 0;
+        let composing = "";
+        let last;
+        for (const key of keys) {
+            last = editKanaCell(answer, cells, cursor, composing, key);
+            assert.equal(
+                last.accepted,
+                true,
+                `Rejected ${key} in ${keys} at ${cursor}`,
+            );
+            cells = last.cells;
+            cursor = last.cursor;
+            composing = last.composing;
+        }
+        return { cells, last, composing };
+    }
+    const cheetah = typeEditable("ちーたー", "ti-ta-");
+    assert.deepEqual(cheetah.cells, ["ち", "ー", "た", "ー"]);
+    assert.equal(cheetah.last.complete, true);
+    assert.equal(cheetah.last.correct, true);
+    assert.equal(cheetah.composing, "");
+    const mixed = typeEditable("さ-ー", "sa--");
+    assert.deepEqual(mixed.cells, ["さ", "-", "ー"]);
+    assert.equal(mixed.last.correct, true);
+});
+
+test("English ASCII hyphens remain literal, while fullwidth answer hyphens accept -", () => {
+    assert.deepEqual(type("well-known", "well-known"), {
+        committed: "well-known",
+        composing: "",
+    });
+    assert.deepEqual(type("co－operate", "co-operate"), {
+        committed: "co－operate",
+        composing: "",
+    });
+    assert.deepEqual(type("さ－a", "sa-a"), {
+        committed: "さ－a",
+        composing: "",
+    });
+    const ascii = editKanaCell("well-known", ["", "", "", "", ""], 4, "", "-");
+    assert.equal(ascii.cells[4], "-");
+    const fullwidth = editKanaCell("co－operate", ["", "", ""], 2, "", "-");
+    assert.equal(fullwidth.cells[2], "－");
+    assert.equal(displayTypingCharacter("ー"), "-");
+    assert.equal(displayTypingCharacter("－"), "-");
+    assert.equal(displayTypingCharacter("-"), "-");
+    assert.equal(displayTypingCharacter("ち"), "ち");
+});
+
 test("invalid input never alters committed kana or composition", () => {
     const progress = { committed: "", composing: "t" };
     const result = advanceKanaInput("ちゃ", progress, "z");
     assert.equal(result.accepted, false);
-    assert.deepEqual({ committed: result.committed, composing: result.composing }, progress);
+    assert.deepEqual(
+        { committed: result.committed, composing: result.composing },
+        progress,
+    );
 });
 test("wire representation round-trips mid-composition and completed syllables", () => {
     for (const progress of [
@@ -72,54 +192,79 @@ test("wire representation round-trips mid-composition and completed syllables", 
         { committed: "こん", composing: "n" },
         { committed: "ちゃ", composing: "" },
     ]) {
-        const answer = progress.committed.startsWith("こ") ? "こんにちは" : "ちゃ";
-        assert.deepEqual(decodeKanaProgress(answer, encodeKanaProgress(progress)), progress);
+        const answer = progress.committed.startsWith("こ")
+            ? "こんにちは"
+            : "ちゃ";
+        assert.deepEqual(
+            decodeKanaProgress(answer, encodeKanaProgress(progress)),
+            progress,
+        );
     }
 });
 
 test("ん followed by n-row kana accepts shared or explicit extra n", () => {
-    assert.deepEqual(type("だんな", "danna"), { committed: "だんな", composing: "" });
-    assert.deepEqual(type("だんな", "dannna"), { committed: "だんな", composing: "" });
-    assert.deepEqual(type("こんにちは", "konnnichiha"), { committed: "こんにちは", composing: "" });
-    assert.deepEqual(type("かんな", "kan'na"), { committed: "かんな", composing: "" });
+    assert.deepEqual(type("だんな", "danna"), {
+        committed: "だんな",
+        composing: "",
+    });
+    assert.deepEqual(type("だんな", "dannna"), {
+        committed: "だんな",
+        composing: "",
+    });
+    assert.deepEqual(type("こんにちは", "konnnichiha"), {
+        committed: "こんにちは",
+        composing: "",
+    });
+    assert.deepEqual(type("かんな", "kan'na"), {
+        committed: "かんな",
+        composing: "",
+    });
 });
 
 test("roman boxes expand immediately when the whole syllable is hinted", () => {
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "t", 2),
-        { slots: 3, hintRoman: "tya", occupies: 1 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "ty", 2),
-        { slots: 3, hintRoman: "tya", occupies: 2 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "t", 0),
-        { slots: 2, hintRoman: "", occupies: 1 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "ty", 0),
-        { slots: 3, hintRoman: "", occupies: 2 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "ch", 2),
-        { slots: 3, hintRoman: "cha", occupies: 2 },
-    );
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "t", 2), {
+        slots: 3,
+        hintRoman: "tya",
+        occupies: 1,
+    });
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "ty", 2), {
+        slots: 3,
+        hintRoman: "tya",
+        occupies: 2,
+    });
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "t", 0), {
+        slots: 2,
+        hintRoman: "",
+        occupies: 1,
+    });
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "ty", 0), {
+        slots: 3,
+        hintRoman: "",
+        occupies: 2,
+    });
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "ch", 2), {
+        slots: 3,
+        hintRoman: "cha",
+        occupies: 2,
+    });
 });
 
 test("incomplete kana hints do not reveal unseen small kana", () => {
-    assert.deepEqual(
-        kanaCompositionLayout("ちゃ", 0, "t", 1),
-        { slots: 2, hintRoman: "", occupies: 1 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("きょう", 0, "ky", 2),
-        { slots: 3, hintRoman: "kyo", occupies: 2 },
-    );
-    assert.deepEqual(
-        kanaCompositionLayout("きょう", 2, "u", 3),
-        { slots: 2, hintRoman: "u", occupies: 1 },
-    );
+    assert.deepEqual(kanaCompositionLayout("ちゃ", 0, "t", 1), {
+        slots: 2,
+        hintRoman: "",
+        occupies: 1,
+    });
+    assert.deepEqual(kanaCompositionLayout("きょう", 0, "ky", 2), {
+        slots: 3,
+        hintRoman: "kyo",
+        occupies: 2,
+    });
+    assert.deepEqual(kanaCompositionLayout("きょう", 2, "u", 3), {
+        slots: 2,
+        hintRoman: "u",
+        occupies: 1,
+    });
 });
 
 test("incorrect kana stays until the whole answer is attempted", () => {
@@ -163,7 +308,11 @@ test("skipping ahead never treats the last box as the end of a word", () => {
 });
 
 test("impossible romaji fails immediately; a valid but wrong kana does not", () => {
-    for (const [prefix, key] of [["s", "q"], ["z", "z"], ["t", "z"]]) {
+    for (const [prefix, key] of [
+        ["s", "q"],
+        ["z", "z"],
+        ["t", "z"],
+    ]) {
         const failure = editKanaCell("てすと", ["", "", ""], 0, prefix, key);
         assert.equal(failure.accepted, false);
         assert.deepEqual(failure.cells, ["", "", ""]);
@@ -175,22 +324,26 @@ test("impossible romaji fails immediately; a valid but wrong kana does not", () 
 });
 
 test("editable typing supports kana combinations and n-row carry", () => {
-    assert.deepEqual(
-        advanceEditableKanaAt("ちゃ", 0, "ty", "a"),
-        { accepted: true, emitted: "ちゃ", composing: "" },
-    );
-    assert.deepEqual(
-        advanceEditableKanaAt("だんな", 1, "n", "n"),
-        { accepted: true, emitted: "ん", composing: "n" },
-    );
-    assert.deepEqual(
-        advanceEditableKanaAt("だんな", 2, "n", "a"),
-        { accepted: true, emitted: "な", composing: "" },
-    );
-    assert.deepEqual(
-        advanceEditableKanaAt("だんな", 2, "n", "n"),
-        { accepted: true, emitted: "", composing: "n" },
-    );
+    assert.deepEqual(advanceEditableKanaAt("ちゃ", 0, "ty", "a"), {
+        accepted: true,
+        emitted: "ちゃ",
+        composing: "",
+    });
+    assert.deepEqual(advanceEditableKanaAt("だんな", 1, "n", "n"), {
+        accepted: true,
+        emitted: "ん",
+        composing: "n",
+    });
+    assert.deepEqual(advanceEditableKanaAt("だんな", 2, "n", "a"), {
+        accepted: true,
+        emitted: "な",
+        composing: "",
+    });
+    assert.deepEqual(advanceEditableKanaAt("だんな", 2, "n", "n"), {
+        accepted: true,
+        emitted: "",
+        composing: "n",
+    });
     const first = editKanaCell("ちゃ", ["", ""], 0, "ty", "a");
     assert.deepEqual(first.cells, ["ち", "ゃ"]);
     assert.equal(first.correct, true);
@@ -217,7 +370,13 @@ test("fa and fi convert as combined kana, including optional fe and fo", () => {
     for (const [kana, roman] of examples) {
         assert.deepEqual(type(kana, roman), { committed: kana, composing: "" });
 
-        const first = editKanaCell(kana, Array.from(kana, () => ""), 0, "", "f");
+        const first = editKanaCell(
+            kana,
+            Array.from(kana, () => ""),
+            0,
+            "",
+            "f",
+        );
         assert.equal(first.advance, 0);
         assert.equal(first.composing, "f");
         assert.equal(first.complete, false);
@@ -255,7 +414,13 @@ test("input in a blank unhinted kana slot remains editable through completion", 
     assert.equal(started.advance, 0);
     assert.equal(started.complete, false);
     assert.equal(shouldClearForTimedHint(answer, started.cells, 0), false);
-    const composed = editKanaCell(answer, started.cells, 0, started.composing, "a");
+    const composed = editKanaCell(
+        answer,
+        started.cells,
+        0,
+        started.composing,
+        "a",
+    );
     assert.deepEqual(composed.cells, ["ふ", "ぁ", ""]);
     assert.equal(composed.complete, false);
     assert.equal(shouldClearForTimedHint(answer, composed.cells, 0), false);
@@ -282,7 +447,10 @@ test("てすと -> たちつ: first two wrong kana are held; third ends the fail
         cells = next.cells;
     }
     // The UI resets to an empty array and index 0 on the final incorrect kana.
-    assert.deepEqual(Array.from(answer, () => ""), ["", "", ""]);
+    assert.deepEqual(
+        Array.from(answer, () => ""),
+        ["", "", ""],
+    );
 });
 
 test("valid complete sequences preserve input until the last kana even without hints", () => {
@@ -292,7 +460,13 @@ test("valid complete sequences preserve input until the last kana even without h
         [1, "ch", "i", ["た", "ち", ""]],
         [2, "ts", "u", ["た", "ち", "つ"]],
     ]) {
-        const result = editKanaCell("てすと", cells, position, consonant, vowel);
+        const result = editKanaCell(
+            "てすと",
+            cells,
+            position,
+            consonant,
+            vowel,
+        );
         assert.equal(result.accepted, true);
         assert.deepEqual(result.cells, expected);
         cells = result.cells;

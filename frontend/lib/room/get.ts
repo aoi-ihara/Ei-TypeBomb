@@ -50,7 +50,7 @@ export const getRoomFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, password, created_at, updated_at, items, link, game_duration",
+                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -76,6 +76,7 @@ export const getRoomFromId = async (id: string) => {
         userId: data.user_id,
         explanation: data.explanation,
         maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
         gameDuration: data.game_duration ?? 20,
         password: data.password,
         createdAt: data.created_at,
@@ -93,7 +94,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, password, created_at, updated_at, items, link, game_duration",
+            "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration",
         )
         .eq("user_id", userId);
 
@@ -108,6 +109,7 @@ export const getMyRooms = async () => {
         userId: room.user_id,
         explanation: room.explanation,
         maxPlayers: room.max_players,
+        bombCount: room.bomb_count ?? null,
         gameDuration: room.game_duration ?? 20,
         password: room.password,
         createdAt: room.created_at,

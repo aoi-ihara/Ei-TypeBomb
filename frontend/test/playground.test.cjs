@@ -688,6 +688,10 @@ test("actual input callbacks retain a wrong character through Backspace correcti
         completedRef: ref(false),
         answerRevealed: false,
         manualHints: true,
+        isKanaAnswer: false,
+        kanaComposing: "",
+        setKanaComposing: noop,
+        kanaCommitSpansRef: ref([]),
         assistedPositions: [],
         hintEventsRef: ref([]),
         hintLength: 0,
@@ -853,14 +857,8 @@ test("full hint clears existing incorrect input and resets on later wrong typing
         path.join(root, "components/feature/InputView.tsx"),
         "utf8",
     );
-    assert.match(
-        source,
-        /const hasIncorrectInput = input\.some\(/,
-    );
-    assert.match(
-        source,
-        /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/,
-    );
+    assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
+    assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
     assert.match(
         source,
         /typedInsideHint &&\s*\(!manualHints \|\| answerRevealed\)/,
@@ -876,8 +874,11 @@ test("actual manual hint callback reveals the full answer and records one answer
         manualHints: true,
         english: "receive",
         answerRevealed: false,
+        isKanaAnswer: false,
         completedRef: { current: false },
         input: typed,
+        onHintChange: () => {},
+        resetInput: () => {},
         hintEventsRef: events,
         performance: { now: () => 7000 },
         recallStartedAtRef: { current: 0 },
@@ -895,8 +896,6 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].correctBefore, 5);
     assert.equal(events.current[0].source, "manual");
 });
-
-
 
 test("actual playground progress callback pauses pressure on first hint", () => {
     const saved = { current: null };
@@ -927,6 +926,10 @@ test("correcting an interior letter completes a retained learning answer", () =>
         english: "apple",
         currentSelection: 2,
         manualHints: true,
+        isKanaAnswer: false,
+        setKanaComposing: noop,
+        kanaCommitSpansRef: ref([]),
+        setCharInput: noop,
         hintLength: 1,
         hintCount: 1,
         assistedPositions: [2],

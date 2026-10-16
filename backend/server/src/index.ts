@@ -23,6 +23,7 @@ import {
     requireRoomItems,
     validateAuthPayload,
     isRequestId,
+    parseClientEvent,
 } from "../../shared/validation";
 import { canStart } from "../../shared/game";
 import {
@@ -34,6 +35,8 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 
 const games = new Map<string, NodeGameAdapter>();
+// Socket-scoped IDs are never shared between players or persisted on the server.
+const recommendedItems = new Map<string, string>();
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
@@ -103,7 +106,11 @@ const createRoomIfNeeded = async (
                         rooms[index] = result.state.room;
                         // Typing focus/input is deliberately lightweight: don't
                         // scan every room or emit server-state logs per keystroke.
-                        if (event.type !== "currentInput" && event.type !== "hint:update") refreshServerState();
+                        if (
+                            event.type !== "currentInput" &&
+                            event.type !== "hint:update"
+                        )
+                            refreshServerState();
                     }
                     for (const effect of result.effects) {
                         if (effect.type === "broadcast") {
@@ -152,6 +159,14 @@ const createRoomIfNeeded = async (
                         roomId,
                         ...metadata,
                     }),
+                (playerId, currentRoom) => {
+                    const itemId = recommendedItems.get(playerId);
+                    if (!itemId) return undefined;
+                    const index = currentRoom.items.findIndex(
+                        (item) => item.id === itemId,
+                    );
+                    return index >= 0 ? index : undefined;
+                },
             ),
         );
         refreshServerState();
@@ -275,11 +290,30 @@ io.on("connection", (socket) => {
         getGame()?.apply({ type: "currentInput", playerId: user.id, input });
     });
     socket.on("hint:update", (payload: unknown) => {
-        if (!payload || typeof payload !== "object" || !("length" in payload)) return;
-        const length = payload.length;
-        if (typeof length !== "number" || !Number.isInteger(length) || length < 0 || length > 32)
+        const parsed = parseClientEvent("hint:update", payload);
+        if (!parsed || parsed.event !== "hint:update") return;
+        getGame()?.apply({
+            type: "hint:update",
+            playerId: user.id,
+            length: parsed.data.length,
+        });
+    });
+    socket.on("item:recommend", (payload: unknown) => {
+        const game = getGame();
+        const parsed = parseClientEvent("item:recommend", payload);
+        if (!game || !roomId || !parsed || parsed.event !== "item:recommend")
             return;
-        getGame()?.apply({ type: "hint:update", playerId: user.id, length });
+        // Only an authenticated room participant may influence their own
+        // next question; unknown item IDs are ignored.
+        if (!game.state.room.users.some((player) => player.id === user.id))
+            return;
+        if (
+            !game.state.room.items.some(
+                (item) => item.id === parsed.data.itemId,
+            )
+        )
+            return;
+        recommendedItems.set(user.id, parsed.data.itemId);
     });
     socket.on("word:success", () => {
         getGame()?.apply({ type: "word:success", playerId: user.id });
@@ -303,6 +337,7 @@ io.on("connection", (socket) => {
         playerId: string,
         reason: "disconnect" | "room_leave",
     ) => {
+        recommendedItems.delete(playerId);
         if (!roomId) return;
         const game = getGame();
         if (!game) return;

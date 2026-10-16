@@ -40,7 +40,7 @@ export const getPlaygroundRoom = async (): Promise<Room | null> => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, created_at, updated_at, items, link, game_duration",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration",
         )
         .eq("id", roomId)
         .maybeSingle();
@@ -60,6 +60,7 @@ export const getPlaygroundRoom = async (): Promise<Room | null> => {
         userId: data.user_id,
         explanation: data.explanation,
         maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
         gameDuration: data.game_duration ?? 20,
         createdAt: data.created_at,
         updatedAt: data.updated_at,

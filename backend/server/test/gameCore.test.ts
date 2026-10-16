@@ -111,6 +111,31 @@ for (const [runtime, rules] of [
             );
         }
     });
+    test(`${runtime}: assigns personalized words to the actual holder`, () => {
+        const state = active();
+        const recommendations: Record<string, number> = { a: 1, b: 2 };
+        const chooseItemIndex: GameContext["chooseItemIndex"] =
+            (playerId) => recommendations[playerId];
+        // A passes to B, and B receives B's recommendation, not A's.
+        const passed = apply(state, { type: "word:success", playerId: "a" }, { chooseItemIndex }).state;
+        assert.equal(passed.room.bombs?.[0]?.wordIndex, 2);
+        const returned = apply(passed, { type: "word:success", playerId: "b" }, { chooseItemIndex }).state;
+        assert.equal(returned.room.bombs?.[0]?.wordIndex, 1);
+        // A malicious or stale suggestion can never escape the room item range.
+        const invalid = apply(passed, { type: "word:success", playerId: "b" }, {
+            chooseItemIndex: () => 1000,
+            random: () => 0,
+        }).state;
+        assert.equal(invalid.room.bombs?.[0]?.wordIndex, 0);
+    });
+    test(`${runtime}: initial questions use the starting holder's recommendation`, () => {
+        const game = apply(joined(), start).state;
+        const started = apply(game, { type: "deadline" }, {
+            now: game.wordAt!,
+            chooseItemIndex: (playerId) => playerId === "a" ? 2 : 1,
+        }).state;
+        assert.equal(started.room.bombs?.[0]?.wordIndex, 2);
+    });
     test(`${runtime}: non-holder successes and input are ignored`, () => {
         const state = active();
         for (const event of [

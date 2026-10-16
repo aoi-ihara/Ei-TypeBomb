@@ -51,21 +51,30 @@ const loadGuestMemory = (
     itemIds: Set<string>,
 ): Record<string, ItemMemoryState> => {
     try {
-        const parsed: unknown = JSON.parse(localStorage.getItem(guestMemoryKey(roomId)) ?? "{}");
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        const parsed: unknown = JSON.parse(
+            localStorage.getItem(guestMemoryKey(roomId)) ?? "{}",
+        );
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+            return {};
         return Object.fromEntries(
             Object.entries(parsed).filter(([id, value]) => {
-                if (!itemIds.has(id) || !value || typeof value !== "object") return false;
+                if (!itemIds.has(id) || !value || typeof value !== "object")
+                    return false;
                 const m = value as Partial<ItemMemoryState>;
-                return m.itemId === id &&
+                return (
+                    m.itemId === id &&
                     m.roomId === roomId &&
                     m.userId === GUEST_MEMORY_USER_ID &&
                     Number.isFinite(m.stability) &&
                     Number.isFinite(m.difficulty) &&
                     Number.isFinite(m.reviewCount) &&
-                    (m.lastReviewedAt == null || !Number.isNaN(Date.parse(m.lastReviewedAt))) &&
-                    (m.lastPresentedAt == null || !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
-                    (m.updatedAt == null || !Number.isNaN(Date.parse(m.updatedAt)));
+                    (m.lastReviewedAt == null ||
+                        !Number.isNaN(Date.parse(m.lastReviewedAt))) &&
+                    (m.lastPresentedAt == null ||
+                        !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
+                    (m.updatedAt == null ||
+                        !Number.isNaN(Date.parse(m.updatedAt)))
+                );
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
@@ -82,7 +91,11 @@ const mergeGuestMemory = (
     const merged = { ...current };
     for (const [id, memory] of Object.entries(incoming)) {
         const previous = merged[id];
-        if (!previous || (Date.parse(memory.updatedAt ?? "") || 0) >= (Date.parse(previous.updatedAt ?? "") || 0)) {
+        if (
+            !previous ||
+            (Date.parse(memory.updatedAt ?? "") || 0) >=
+                (Date.parse(previous.updatedAt ?? "") || 0)
+        ) {
             merged[id] = memory;
         }
     }
@@ -94,10 +107,13 @@ const saveGuestMemory = (
     memory: Record<string, ItemMemoryState>,
 ): Record<string, ItemMemoryState> => {
     const merged = mergeGuestMemory(
-        loadGuestMemory(roomId, new Set([
-            ...Object.keys(memory),
-            ...Object.keys(readGuestMemoryKeys(roomId)),
-        ])),
+        loadGuestMemory(
+            roomId,
+            new Set([
+                ...Object.keys(memory),
+                ...Object.keys(readGuestMemoryKeys(roomId)),
+            ]),
+        ),
         memory,
     );
     try {
@@ -111,9 +127,11 @@ const saveGuestMemory = (
 // Read only keys here; loadGuestMemory validates the actual values.
 const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
     try {
-        const value: unknown = JSON.parse(localStorage.getItem(guestMemoryKey(roomId)) ?? "{}");
+        const value: unknown = JSON.parse(
+            localStorage.getItem(guestMemoryKey(roomId)) ?? "{}",
+        );
         return value && typeof value === "object" && !Array.isArray(value)
-            ? value as Record<string, unknown>
+            ? (value as Record<string, unknown>)
             : {};
     } catch {
         return {};
@@ -260,7 +278,10 @@ export default function Client({
             }
 
             if (!loaded.userId) {
-                const saved = loadGuestMemory(room.id, new Set(items.map((item) => item.id)));
+                const saved = loadGuestMemory(
+                    room.id,
+                    new Set(items.map((item) => item.id)),
+                );
                 memoryByItemRef.current = saved;
                 setMemoryByItem(saved);
                 setGuestMode(true);
@@ -310,21 +331,27 @@ export default function Client({
         };
     }, [room.id, items]);
 
-    const saveBotExposure = useCallback((item: Item) => {
-        const memory = memoryByItemRef.current[item.id];
-        if (!memory) return;
-        const exposed = recordAnswerExposure(memory);
-        memoryByItemRef.current = {
-            ...memoryByItemRef.current,
-            [item.id]: exposed,
-        };
-        if (authenticatedUserIdRef.current) {
-            pendingMemoryRef.current.set(item.id, exposed);
-        } else {
-            memoryByItemRef.current = saveGuestMemory(room.id, memoryByItemRef.current);
-        }
-        setMemoryByItem(memoryByItemRef.current);
-    }, [room.id]);
+    const saveBotExposure = useCallback(
+        (item: Item) => {
+            const memory = memoryByItemRef.current[item.id];
+            if (!memory) return;
+            const exposed = recordAnswerExposure(memory);
+            memoryByItemRef.current = {
+                ...memoryByItemRef.current,
+                [item.id]: exposed,
+            };
+            if (authenticatedUserIdRef.current) {
+                pendingMemoryRef.current.set(item.id, exposed);
+            } else {
+                memoryByItemRef.current = saveGuestMemory(
+                    room.id,
+                    memoryByItemRef.current,
+                );
+            }
+            setMemoryByItem(memoryByItemRef.current);
+        },
+        [room.id],
+    );
 
     const setTrackedItem = useCallback(
         (item: Item | null) => {
@@ -499,9 +526,12 @@ export default function Client({
             const freshestMemory = authenticatedUserIdRef.current
                 ? memoryByItemRef.current
                 : mergeGuestMemory(
-                    memoryByItemRef.current,
-                    loadGuestMemory(room.id, new Set(items.map((entry) => entry.id))),
-                );
+                      memoryByItemRef.current,
+                      loadGuestMemory(
+                          room.id,
+                          new Set(items.map((entry) => entry.id)),
+                      ),
+                  );
             const nextMemory = applyRecallObservation({
                 memory: freshestMemory[item.id],
                 observation: evidence,
@@ -988,7 +1018,10 @@ export default function Client({
             resultExtraActions={
                 <>
                     {guestMode && (
-                        <p role="status" className="text-sm text-center opacity-70">
+                        <p
+                            role="status"
+                            className="text-sm text-center opacity-70"
+                        >
                             ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
                         </p>
                     )}

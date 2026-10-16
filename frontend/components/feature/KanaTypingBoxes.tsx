@@ -3,6 +3,7 @@
 import {
     isHiragana,
     kanaCompositionLayout,
+    displayTypingCharacter,
 } from "@/lib/romaji-input.mjs";
 
 type Props = {
@@ -100,11 +101,11 @@ export default function KanaTypingBoxes({
                             >
                                 {index < hintLength && (
                                     <div className="pointer-events-none absolute inset-1 flex items-center justify-center border-b border-(--color-border) opacity-25">
-                                        {char}
+                                        {displayTypingCharacter(char)}
                                     </div>
                                 )}
                                 <div className="relative flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                    {cells?.[index] ?? filled[index] ?? ""}
+                                    {displayTypingCharacter(cells?.[index] ?? filled[index] ?? "")}
                                 </div>
                             </button>
                         )}

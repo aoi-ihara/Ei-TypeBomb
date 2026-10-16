@@ -5,10 +5,13 @@ import {
 import { useEffect, useRef, useState } from "react";
 import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
 import {
+    advanceKanaInput,
     decodeKanaProgress,
     editKanaCell,
     hasHiragana,
     nextKanaCursor,
+    normalizeHyphenInput,
+    displayTypingCharacter,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
 } from "@/lib/romaji-input.mjs";
@@ -438,7 +441,7 @@ function TypingAttempt({
         // Romanized kana answers are editable at any position, including
         // positions that have subsequently received an automatic hint.
         // Keep the pre-existing strict English hint behaviour unchanged.
-        if (!isKanaAnswer && typedInsideHint && (!manualHints || answerRevealed)) {
+        if (typedInsideHint && (!manualHints || answerRevealed) && (!isKanaAnswer || answerRevealed)) {
             resetInput();
             return;
         }
@@ -708,11 +711,11 @@ function TypingAttempt({
                                     ? answerRevealed
                                     : index < hintLength) && (
                                     <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
-                                        {char}
+                                        {displayTypingCharacter(char)}
                                     </div>
                                 )}
                                 <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                    {displayChars?.[index] ?? ""}
+                                    {displayTypingCharacter(displayChars?.[index] ?? "")}
                                 </div>
                             </button>
                         );
@@ -768,6 +771,17 @@ function TypingAttempt({
                                         resetInput();
                                         return;
                                     }
+                                    if (answerRevealed && !advanceKanaInput(
+                                        english.slice(currentSelection),
+                                        { committed: "", composing: kanaComposing },
+                                        char,
+                                    ).accepted) {
+                                        // During a full hint, reject the first
+                                        // incorrect roman key without waiting.
+                                        resetInput();
+                                        setCharInput("");
+                                        return;
+                                    }
                                     if (edit.accepted) {
                                         setKanaComposing(edit.composing);
                                         if (edit.advance > 0) {
@@ -795,7 +809,7 @@ function TypingAttempt({
                                 }
                                 if (char !== " ") {
                                     const next = [...input];
-                                    next[currentSelection] = char;
+                                    next[currentSelection] = normalizeHyphenInput(targetChar, char);
                                     setInput(next);
                                     moveToNext(next);
                                 }

@@ -29,6 +29,10 @@ export class NodeGameAdapter {
             message: string,
             metadata: Record<string, unknown>,
         ) => void = () => {},
+        private readonly chooseItemIndex?: (
+            playerId: string,
+            room: GameState["room"],
+        ) => number | undefined,
     ) {
         this.schedule();
     }
@@ -41,6 +45,7 @@ export class NodeGameAdapter {
                 now: appliedAt,
                 random: this.random,
                 rules: NODE_GAME_RULES,
+                chooseItemIndex: this.chooseItemIndex,
             });
         } catch (error) {
             if (event.type === "deadline") {
@@ -50,7 +55,8 @@ export class NodeGameAdapter {
                     bombAt: previous.bombAt,
                     wordAt: previous.wordAt,
                     revision: previous.revision,
-                    error: error instanceof Error ? error.message : String(error),
+                    error:
+                        error instanceof Error ? error.message : String(error),
                 });
             }
             throw error;
