@@ -1,5 +1,20 @@
 import type { Room } from "./types";
 
+/** Column projection reused by each room loader to prevent schema drift. */
+export const ROOM_SELECT_COLUMNS = `
+    id,
+    title,
+    user_id,
+    explanation,
+    max_players,
+    bomb_count,
+    game_duration,
+    password,
+    created_at,
+    updated_at,
+    items
+`;
+
 /** Database columns shared by the Node and Cloudflare room loaders. */
 export type RoomRow = {
     id: string;
