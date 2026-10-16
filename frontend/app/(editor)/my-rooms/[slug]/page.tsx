@@ -598,12 +598,14 @@ export default function Page({
                 一般
             </div>
 
-            <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-start">
-                <Input
-                    onChange={(e) => setRoomExplanation(e.target.value)}
-                    label="説明"
-                    value={roomExplanation}
-                />
+            <div className="grid w-full grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-start">
+                <div className="min-w-0 min-[360px]:col-span-2 lg:col-span-1">
+                    <Input
+                        onChange={(e) => setRoomExplanation(e.target.value)}
+                        label="説明"
+                        value={roomExplanation}
+                    />
+                </div>
                 <Picker
                     name="最大プレイヤー数"
                     labelPrefix="上限"
@@ -633,7 +635,7 @@ export default function Page({
                     onSelected={(index) => setGameDuration(index * 10 + 10)}
                 />
                 {validateExplanation(roomExplanation) && (
-                    <div className="text-red-500 sm:col-span-2 lg:col-span-4" data-cursor="text">
+                    <div className="text-red-500 min-[360px]:col-span-2 lg:col-span-4" data-cursor="text">
                         {validateExplanation(roomExplanation)}
                     </div>
                 )}
