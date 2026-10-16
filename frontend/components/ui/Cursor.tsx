@@ -4,54 +4,53 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 
+// During a morph, pointer events are disabled on both layers. Hit-test their
+// *rendered* rectangles instead of reversing the scale: the picker dock can be
+// translating at the same time, so unscaled coordinates drift away from it.
+const morphSelector =
+    '[data-picker] [data-morph], [data-morph-dialog] [data-morph]';
+
 function getMorphCursorTarget(x: number, y: number) {
     const roots = document.querySelectorAll<HTMLElement>(
         '[data-picker] [data-morph-animating="true"], [data-morph-dialog] [data-morph-animating="true"]',
     );
+    const contains = (rect: DOMRect) =>
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom;
+
     for (const root of Array.from(roots).reverse()) {
         const layer = root.querySelector<HTMLElement>(
             `[data-morph-layer="${root.dataset.morph}"]`,
         );
         if (!layer) continue;
         const bounds = layer.getBoundingClientRect();
-        const css = getComputedStyle(layer);
-        const width = parseFloat(css.width);
-        const height = parseFloat(css.height);
-        if (!bounds.width || !bounds.height || !width || !height) continue;
-        const center = root.getBoundingClientRect();
-        const destination = root.closest<HTMLElement>("[data-morph-cursor-x]");
-        const centerX = destination
-            ? Number(destination.dataset.morphCursorX)
-            : center.left + center.width / 2;
-        const centerY = destination
-            ? Number(destination.dataset.morphCursorY)
-            : center.top + center.height / 2;
-        const left = centerX - width / 2;
-        const top = centerY - height / 2;
-        if (x < left || x > left + width || y < top || y > top + height)
-            continue;
+        if (!bounds.width || !bounds.height || !contains(bounds)) continue;
 
         const candidates = layer.querySelectorAll<HTMLElement>("[data-cursor]");
         for (const element of Array.from(candidates).reverse()) {
             const rect = element.getBoundingClientRect();
-            const natural = new DOMRect(
-                left + ((rect.left - bounds.left) * width) / bounds.width,
-                top + ((rect.top - bounds.top) * height) / bounds.height,
-                (rect.width * width) / bounds.width,
-                (rect.height * height) / bounds.height,
-            );
-            if (
-                x >= natural.left &&
-                x <= natural.right &&
-                y >= natural.top &&
-                y <= natural.bottom
-            ) {
-                return { element, rect: natural };
-            }
+            if (contains(rect)) return { element, rect };
         }
-        return { element: layer, rect: new DOMRect(left, top, width, height) };
+        return { element: layer, rect: bounds };
     }
     return null;
+}
+
+// Morph updates its own geometry frame by frame, while the picker dock can
+// also move via a CSS transition. Refresh the cursor until both have settled,
+// even when the mouse itself is stationary.
+function isMorphCursorMoving() {
+    return Array.from(
+        document.querySelectorAll<HTMLElement>(morphSelector),
+    ).some(
+        (root) =>
+            root.dataset.morphAnimating === "true" ||
+            root.parentElement
+                ?.getAnimations()
+                .some((animation) => animation.playState === "running"),
+    );
 }
 
 function CustomCursor() {
@@ -252,7 +251,32 @@ function CustomCursor() {
         window.addEventListener("mousedown", onMouseDown);
         window.addEventListener("mouseup", onMouseUp);
 
-        window.addEventListener("morphcursorchange", refresh);
+        let frameId = 0;
+        const followAnimation = () => {
+            refresh();
+            if (frameId) return;
+            const tick = () => {
+                refresh();
+                frameId = isMorphCursorMoving()
+                    ? requestAnimationFrame(tick)
+                    : 0;
+            };
+            frameId = requestAnimationFrame(tick);
+        };
+        const onTransitionRun = (event: TransitionEvent) => {
+            const element = event.target;
+            if (
+                event.propertyName === "transform" &&
+                element instanceof HTMLElement &&
+                element.closest("[data-picker], [data-morph-dialog]") &&
+                element.querySelector("[data-morph]")
+            ) {
+                followAnimation();
+            }
+        };
+
+        window.addEventListener("morphcursorchange", followAnimation);
+        window.addEventListener("transitionrun", onTransitionRun, true);
         window.addEventListener("resize", refresh);
         window.addEventListener("scroll", refresh, true);
         window.addEventListener("animationend", refresh, true);
@@ -264,7 +288,9 @@ function CustomCursor() {
             window.removeEventListener("mousedown", onMouseDown);
             window.removeEventListener("mouseup", onMouseUp);
 
-            window.removeEventListener("morphcursorchange", refresh);
+            cancelAnimationFrame(frameId);
+            window.removeEventListener("morphcursorchange", followAnimation);
+            window.removeEventListener("transitionrun", onTransitionRun, true);
             window.removeEventListener("resize", refresh);
             window.removeEventListener("scroll", refresh, true);
             window.removeEventListener("animationend", refresh, true);
