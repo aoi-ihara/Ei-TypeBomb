@@ -11,7 +11,6 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 import MorphDialog from "@/components/ui/MorphDialog";
-import Morph from "@/components/ui/Morph";
 import Toggle from "@/components/ui/Toggle";
 
 type Props = {
@@ -72,7 +71,7 @@ export default function Home({
         <div className="flex flex-col h-dvh w-dvw">
             {showPopUp && (
                 <div
-                    className="fixed inset-0 z-40"
+                    className="absolute top-0 left-0 w-full h-full"
                     onClick={() => setShowPopUp(false)}
                 />
             )}
@@ -80,53 +79,63 @@ export default function Home({
                 className={`w-full flex justify-end p-2 ${redesignedSignInButton && "border-b border-(--color-border)"}`}
             >
                 {userId ? (
-                    <div className="relative z-50" data-cursor="button" data-cursor-shape="1">
-                        <Morph
-                            state={showPopUp}
-                            first={
-                                <button
-                                    type="button"
-                                    aria-label="ユーザーメニューを開く"
-                                    aria-haspopup="menu"
-                                    aria-expanded={showPopUp}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg font-semibold cursor-pointer active:scale-95 transition-transform duration-(--duration-etb) ease-etb"
-                                    onClick={() => setShowPopUp(true)}
-                                >
-                                    <Icon name="circleUserRound" />
-                                </button>
-                            }
-                            last={
+                    <>
+                        <div
+                            className="relative rounded-lg"
+                            data-cursor="button"
+                            data-cursor-shape="1"
+                        >
+                            <button
+                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb"
+                                onClick={() => setShowPopUp(!showPopUp)}
+                            >
+                                <Icon name="circleUserRound" />
+                            </button>
+
+                            <div
+                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-(--duration-etb) ease-etb`}
+                            >
                                 <div
-                                    role="menu"
-                                    aria-label="ユーザーアクション"
-                                    className="flex w-48 flex-col rounded-lg bg-(--color-background-secondary) p-1 shadow-lg"
+                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-(--duration-etb) ease-etb`}
                                 >
-                                    <button
-                                        type="button"
-                                        role="menuitem"
-                                        className="flex h-8 w-full items-center rounded-lg px-2 text-left font-semibold cursor-pointer active:scale-95 transition-transform duration-(--duration-etb) ease-etb"
-                                        onClick={() => router.push("/my-rooms")}
+                                    <div
+                                        className="rounded-sm w-full"
+                                        data-cursor={showPopUp && "button"}
+                                        data-cursor-shape="1"
                                     >
-                                        ルーム一覧
-                                    </button>
-                                    <button
-                                        type="button"
-                                        role="menuitem"
-                                        className="flex h-8 w-full items-center rounded-lg px-2 text-left font-semibold cursor-pointer active:scale-95 transition-transform duration-(--duration-etb) ease-etb"
-                                        onClick={() => {
-                                            setShowPopUp(false);
-                                            posthog.capture("signed_out");
-                                            posthog.reset();
-                                            signOut();
-                                            setUserId(null);
-                                        }}
+                                        <button
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
+                                            onClick={() =>
+                                                router.push("/my-rooms")
+                                            }
+                                        >
+                                            ルーム一覧
+                                        </button>
+                                    </div>
+                                    <div
+                                        className="rounded-sm"
+                                        data-cursor={showPopUp && "button"}
+                                        data-cursor-shape="1"
                                     >
-                                        サインアウト
-                                    </button>
+                                        <button
+                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
+                                            onClick={() => {
+                                                posthog.capture("signed_out");
+                                                posthog.reset();
+                                                signOut();
+                                                setUserId(null);
+                                            }}
+                                        >
+                                            サインアウト
+                                        </button>
+                                    </div>
                                 </div>
-                            }
-                        />
-                    </div>
+                                <div
+                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-(--duration-etb) ease-etb bg-(--color-background-secondary)`}
+                                />
+                            </div>
+                        </div>
+                    </>
                 ) : (
                     <div
                         className="rounded-lg"
