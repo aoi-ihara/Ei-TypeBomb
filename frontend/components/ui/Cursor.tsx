@@ -13,43 +13,27 @@ function getMorphCursorTarget(x: number, y: number) {
             `[data-morph-layer="${root.dataset.morph}"]`,
         );
         if (!layer) continue;
+        // Use the actual rendered bounds. The picker dock can move while the
+        // Morph layers are scaling, so reconstructing unscaled coordinates
+        // places the cursor away from the visible menu.
         const bounds = layer.getBoundingClientRect();
-        const css = getComputedStyle(layer);
-        const width = parseFloat(css.width);
-        const height = parseFloat(css.height);
-        if (!bounds.width || !bounds.height || !width || !height) continue;
-        const center = root.getBoundingClientRect();
-        const destination = root.closest<HTMLElement>("[data-morph-cursor-x]");
-        const centerX = destination
-            ? Number(destination.dataset.morphCursorX)
-            : center.left + center.width / 2;
-        const centerY = destination
-            ? Number(destination.dataset.morphCursorY)
-            : center.top + center.height / 2;
-        const left = centerX - width / 2;
-        const top = centerY - height / 2;
-        if (x < left || x > left + width || y < top || y > top + height)
+        if (!bounds.width || !bounds.height) continue;
+        if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom)
             continue;
 
         const candidates = layer.querySelectorAll<HTMLElement>("[data-cursor]");
         for (const element of Array.from(candidates).reverse()) {
             const rect = element.getBoundingClientRect();
-            const natural = new DOMRect(
-                left + ((rect.left - bounds.left) * width) / bounds.width,
-                top + ((rect.top - bounds.top) * height) / bounds.height,
-                (rect.width * width) / bounds.width,
-                (rect.height * height) / bounds.height,
-            );
             if (
-                x >= natural.left &&
-                x <= natural.right &&
-                y >= natural.top &&
-                y <= natural.bottom
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top &&
+                y <= rect.bottom
             ) {
-                return { element, rect: natural };
+                return { element, rect };
             }
         }
-        return { element: layer, rect: new DOMRect(left, top, width, height) };
+        return { element: layer, rect: bounds };
     }
     return null;
 }
