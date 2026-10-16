@@ -1,0 +1,21 @@
+{
+    "name": "ei-typebomb-cloudflare",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "typecheck": "tsc --noEmit",
+        "test": "tsx --test test/*.test.ts"
+    },
+    "dependencies": {
+        "jose": "^6.2.12"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251001.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
+        "wrangler": "^4.45.0"
+    }
+}
