@@ -14,7 +14,7 @@ runtime implementation in this change.
 - `rateLimits.ts`: protocol event budgets
 - `keyedRateLimit.ts`: runtime-neutral per-key token bucket and bounded storage
 - `addressRateLimit.ts`: per-address limiter policy (1,000 keys, 60s stale TTL)
-- `roomJwt.ts`: validated room identity claims *after* JWT signature verification
+- `roomJwt.ts`: validated room identity claims _after_ JWT signature verification
 
 The shared limiter takes a clock supplied by its caller. The runtime chooses
 whether keys represent sockets, clients, remote IPs or Durable Object sessions

@@ -53,14 +53,22 @@ export function parseClientEvent(
         case "ping":
             return { event, data: undefined };
         case "hint:update":
-            return data && typeof data === "object" && "length" in data &&
-                typeof data.length === "number" && Number.isInteger(data.length) &&
-                data.length >= 0 && data.length <= MAX_CURRENT_INPUT_LENGTH
-                ? { event, data: { length: data.length } } : null;
+            return data &&
+                typeof data === "object" &&
+                "length" in data &&
+                typeof data.length === "number" &&
+                Number.isInteger(data.length) &&
+                data.length >= 0 &&
+                data.length <= MAX_CURRENT_INPUT_LENGTH
+                ? { event, data: { length: data.length } }
+                : null;
         case "item:recommend":
-            return data && typeof data === "object" && "itemId" in data &&
+            return data &&
+                typeof data === "object" &&
+                "itemId" in data &&
                 typeof data.itemId === "string"
-                ? { event, data: { itemId: data.itemId } } : null;
+                ? { event, data: { itemId: data.itemId } }
+                : null;
         case "currentInput":
             return typeof data === "string" ? { event, data } : null;
         case "health:ping":

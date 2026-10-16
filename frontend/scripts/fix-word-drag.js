@@ -38,7 +38,11 @@ if (!patched.includes("const restrictWordDrag:")) {
     }
 }
 
-if (!patched.includes("const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);")) {
+if (
+    !patched.includes(
+        "const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);",
+    )
+) {
     const saveTimerTarget = `    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);`;
     const saveTimerReplacement = `    const saveTimerRef = useRef<NodeJS.Timeout | null>(null);\n    const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);`;
 
@@ -47,7 +51,9 @@ if (!patched.includes("const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(nul
     const autoSaveEffectReplacement = `    useEffect(() => {\n        if (!isLoadedRef.current || !roomId || items === null) return;\n\n        if (saveTimerRef.current) {\n            clearTimeout(saveTimerRef.current);\n        }\n\n        saveTimerRef.current = setTimeout(() => {\n            if (maxSaveTimerRef.current) {\n                clearTimeout(maxSaveTimerRef.current);\n                maxSaveTimerRef.current = null;\n            }\n            saveRoomData();\n        }, 1000);\n\n        if (!maxSaveTimerRef.current) {\n            maxSaveTimerRef.current = setTimeout(() => {\n                if (saveTimerRef.current) {\n                    clearTimeout(saveTimerRef.current);\n                    saveTimerRef.current = null;\n                }\n                maxSaveTimerRef.current = null;\n                saveRoomData();\n            }, 8000);\n        }\n    }, [roomTitle, roomExplanation, maxPlayers, items, roomId, roomLink]);\n\n    useEffect(() => {\n        return () => {\n            if (saveTimerRef.current) {\n                clearTimeout(saveTimerRef.current);\n            }\n            if (maxSaveTimerRef.current) {\n                clearTimeout(maxSaveTimerRef.current);\n            }\n        };\n    }, []);`;
 
     if (!patched.includes(saveTimerTarget)) {
-        throw new Error(`Expected save timer declaration was not found: ${saveTimerTarget}`);
+        throw new Error(
+            `Expected save timer declaration was not found: ${saveTimerTarget}`,
+        );
     }
     if (!patched.includes(autoSaveEffectTarget)) {
         throw new Error("Expected auto-save effect was not found");

@@ -1,37 +1,37 @@
 name: Game core tests
 
 on:
-  pull_request:
-    paths:
-      - 'backend/server/**'
-      - 'backend/shared/**'
-      - '.github/workflows/game-core-tests.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'backend/server/**'
-      - 'backend/shared/**'
-      - '.github/workflows/game-core-tests.yml'
+    pull_request:
+        paths:
+            - "backend/server/**"
+            - "backend/shared/**"
+            - ".github/workflows/game-core-tests.yml"
+    push:
+        branches: [main]
+        paths:
+            - "backend/server/**"
+            - "backend/shared/**"
+            - ".github/workflows/game-core-tests.yml"
 
 jobs:
-  node-game:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: backend/server/package-lock.json
-      - name: Install
-        run: npm ci
-        working-directory: backend/server
-      - name: Tests
-        run: npm test
-        working-directory: backend/server
-      - name: Typecheck
-        run: npm run typecheck
-        working-directory: backend/server
-      - name: Build
-        run: npm run build
-        working-directory: backend/server
+    node-game:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: npm
+                  cache-dependency-path: backend/server/package-lock.json
+            - name: Install
+              run: npm ci
+              working-directory: backend/server
+            - name: Tests
+              run: npm test
+              working-directory: backend/server
+            - name: Typecheck
+              run: npm run typecheck
+              working-directory: backend/server
+            - name: Build
+              run: npm run build
+              working-directory: backend/server

@@ -8,8 +8,9 @@ import {
 // Longest kana match first: "ちゃ" must be typed as a single roman syllable
 // (tya), rather than "ち" + "ゃ" (ti + xya). The ROMAJI insertion
 // order breaks ties to choose the same default spelling as the player UI.
-const romanSyllables = Object.entries(ROMAJI)
-    .sort((a, b) => b[1].length - a[1].length);
+const romanSyllables = Object.entries(ROMAJI).sort(
+    (a, b) => b[1].length - a[1].length,
+);
 
 /**
  * Generate individual simulated keypresses for a correct answer.
@@ -48,9 +49,7 @@ export function getBotRomanKeys(answer) {
  */
 export function getBotTypingFrames(answer) {
     if (!hasHiragana(answer)) {
-        return Array.from(answer, (_, index) =>
-            answer.slice(0, index + 1),
-        );
+        return Array.from(answer, (_, index) => answer.slice(0, index + 1));
     }
 
     let progress = { committed: "", composing: "" };

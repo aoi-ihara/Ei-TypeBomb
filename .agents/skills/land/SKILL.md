@@ -1,12 +1,12 @@
 ---
 name: land
 description: >-
-  Prepare and publish requested Ei-TypeBomb changes as a pull request only.
-  Invoke only when the user explicitly chooses Land Changes or asks to publish
-  a PR. Never merge as part of this workflow.
+    Prepare and publish requested Ei-TypeBomb changes as a pull request only.
+    Invoke only when the user explicitly chooses Land Changes or asks to publish
+    a PR. Never merge as part of this workflow.
 disable-model-invocation: true
 metadata:
-  delta-action: land
+    delta-action: land
 ---
 
 # Land Ei-TypeBomb changes

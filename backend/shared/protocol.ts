@@ -20,9 +20,19 @@ export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
     "room:broadcast": WireRoom;
-    "typing:input": { input: string; failed?: boolean; playerId?: string; focusPlayerId?: string; hintLength?: number };
+    "typing:input": {
+        input: string;
+        failed?: boolean;
+        playerId?: string;
+        focusPlayerId?: string;
+        hintLength?: number;
+    };
     "hint:updated": { playerId: string; bombId: string; length: number };
-    "game:end": { holderUserId: string; holderDisplayName?: string; losers?: GameLoser[] };
+    "game:end": {
+        holderUserId: string;
+        holderDisplayName?: string;
+        losers?: GameLoser[];
+    };
     "game:quited": undefined;
     "health:pong": string;
     "health:database-result": {

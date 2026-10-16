@@ -12,13 +12,13 @@ Three AI scanners are now live in your PostHog project, watching incoming record
 
 ### 1. Game entry failures (broken-experiences)
 
-| Field | Value |
-|---|---|
-| Scanner ID | `01a05c44-766b-7aa6-91ad-901c766adbb4` |
-| Type | Monitor (broken experiences) |
-| Scope | Sessions that visited both `/display-name` and `/game` — the full entry funnel |
-| Sampling rate | 0.5 |
-| Est. monthly spend | **355 credits / month** |
+| Field              | Value                                                                          |
+| ------------------ | ------------------------------------------------------------------------------ |
+| Scanner ID         | `01a05c44-766b-7aa6-91ad-901c766adbb4`                                         |
+| Type               | Monitor (broken experiences)                                                   |
+| Scope              | Sessions that visited both `/display-name` and `/game` — the full entry funnel |
+| Sampling rate      | 0.5                                                                            |
+| Est. monthly spend | **355 credits / month**                                                        |
 
 **Watches for:** invite link rejected as "Room not found" after a valid link is pasted; the Continue button on the display-name screen stuck loading; the game board showing "Connecting to server…" indefinitely; the typing input not accepting keystrokes on a player's turn; the Start Game button appearing disabled when two or more players have already joined.
 
@@ -26,13 +26,13 @@ Three AI scanners are now live in your PostHog project, watching incoming record
 
 ### 2. TypeBomb rage clicks (user frustration)
 
-| Field | Value |
-|---|---|
-| Scanner ID | `01a05c43-cb6b-7b73-9e2f-45eb131e7cad` |
-| Type | Monitor (rage clicks / frustration) |
-| Scope | Sessions containing a `$rageclick` event |
-| Sampling rate | 1.0 |
-| Est. monthly spend | **255 credits / month** |
+| Field              | Value                                    |
+| ------------------ | ---------------------------------------- |
+| Scanner ID         | `01a05c43-cb6b-7b73-9e2f-45eb131e7cad`   |
+| Type               | Monitor (rage clicks / frustration)      |
+| Scope              | Sessions containing a `$rageclick` event |
+| Sampling rate      | 1.0                                      |
+| Est. monthly spend | **255 credits / month**                  |
 
 **Watches for:** hammering Start Game with only one player present; clicking Continue with an invalid invite link; retrying a wrong room password; tapping Join on a full room; clicking Play Again before the result overlay dismisses.
 
@@ -40,12 +40,12 @@ Three AI scanners are now live in your PostHog project, watching incoming record
 
 ### 3. TypeBomb session summaries
 
-| Field | Value |
-|---|---|
-| Scanner ID | `01a05c44-16fe-7895-8fe9-1300f3a071ec` |
-| Type | Summarizer |
-| Scope | All recordings (unscoped) |
-| Sampling rate | 0.1 |
+| Field              | Value                                            |
+| ------------------ | ------------------------------------------------ |
+| Scanner ID         | `01a05c44-16fe-7895-8fe9-1300f3a071ec`           |
+| Type               | Summarizer                                       |
+| Scope              | All recordings (unscoped)                        |
+| Sampling rate      | 0.1                                              |
 | Est. monthly spend | **150 credits / month** (~30 observations/month) |
 
 **Produces:** plain-language summaries of individual sessions using your product's vocabulary — rooms, bomb, words, turns, invite links, display names, winning/losing, spectating, and playing again.
@@ -54,12 +54,12 @@ Three AI scanners are now live in your PostHog project, watching incoming record
 
 ## Credit Budget
 
-| Scanner | Credits/month |
-|---|---|
-| Game entry failures | 355 |
-| TypeBomb rage clicks | 255 |
-| TypeBomb session summaries | 150 |
-| **Total** | **760 of 2,500 (~30%)** |
+| Scanner                    | Credits/month           |
+| -------------------------- | ----------------------- |
+| Game entry failures        | 355                     |
+| TypeBomb rage clicks       | 255                     |
+| TypeBomb session summaries | 150                     |
+| **Total**                  | **760 of 2,500 (~30%)** |
 
 ---
 

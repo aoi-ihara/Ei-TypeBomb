@@ -106,7 +106,11 @@ const createRoomIfNeeded = async (
                         rooms[index] = result.state.room;
                         // Typing focus/input is deliberately lightweight: don't
                         // scan every room or emit server-state logs per keystroke.
-                        if (event.type !== "currentInput" && event.type !== "hint:update") refreshServerState();
+                        if (
+                            event.type !== "currentInput" &&
+                            event.type !== "hint:update"
+                        )
+                            refreshServerState();
                     }
                     for (const effect of result.effects) {
                         if (effect.type === "broadcast") {
@@ -158,7 +162,9 @@ const createRoomIfNeeded = async (
                 (playerId, currentRoom) => {
                     const itemId = recommendedItems.get(playerId);
                     if (!itemId) return undefined;
-                    const index = currentRoom.items.findIndex(item => item.id === itemId);
+                    const index = currentRoom.items.findIndex(
+                        (item) => item.id === itemId,
+                    );
                     return index >= 0 ? index : undefined;
                 },
             ),
@@ -286,16 +292,27 @@ io.on("connection", (socket) => {
     socket.on("hint:update", (payload: unknown) => {
         const parsed = parseClientEvent("hint:update", payload);
         if (!parsed || parsed.event !== "hint:update") return;
-        getGame()?.apply({ type: "hint:update", playerId: user.id, length: parsed.data.length });
+        getGame()?.apply({
+            type: "hint:update",
+            playerId: user.id,
+            length: parsed.data.length,
+        });
     });
     socket.on("item:recommend", (payload: unknown) => {
         const game = getGame();
         const parsed = parseClientEvent("item:recommend", payload);
-        if (!game || !roomId || !parsed || parsed.event !== "item:recommend") return;
+        if (!game || !roomId || !parsed || parsed.event !== "item:recommend")
+            return;
         // Only an authenticated room participant may influence their own
         // next question; unknown item IDs are ignored.
-        if (!game.state.room.users.some(player => player.id === user.id)) return;
-        if (!game.state.room.items.some(item => item.id === parsed.data.itemId)) return;
+        if (!game.state.room.users.some((player) => player.id === user.id))
+            return;
+        if (
+            !game.state.room.items.some(
+                (item) => item.id === parsed.data.itemId,
+            )
+        )
+            return;
         recommendedItems.set(user.id, parsed.data.itemId);
     });
     socket.on("word:success", () => {

@@ -61,10 +61,7 @@ function ServerStatus({
     );
 }
 
-function useServerHealth(
-    url: string | undefined,
-    serverRole: ServerRole,
-) {
+function useServerHealth(url: string | undefined, serverRole: ServerRole) {
     const [health, setHealth] = useState<boolean | undefined>(undefined);
     const [connectionLatency, setConnectionLatency] = useState<number | null>(
         null,
@@ -169,10 +166,7 @@ function useServerHealth(
     );
 
     useEffect(() => {
-        const initialCheck = window.setTimeout(
-            () => checkServer("initial"),
-            0,
-        );
+        const initialCheck = window.setTimeout(() => checkServer("initial"), 0);
         const interval = window.setInterval(
             () => checkServer("interval"),
             HEALTH_REFRESH_INTERVAL_MS,

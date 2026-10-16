@@ -9,21 +9,29 @@ const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 const stored = new Map();
 const localStorage = {
-    getItem: key => stored.get(key) ?? null,
+    getItem: (key) => stored.get(key) ?? null,
     setItem: (key, value) => stored.set(key, value),
 };
 function evaluate(file, globals = {}) {
     const scope = { exports: {}, localStorage, ...globals };
     const source = fs.readFileSync(path.join(root, file), "utf8");
-    vm.runInNewContext(ts.transpileModule(source, {
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-    }).outputText, scope);
+    vm.runInNewContext(
+        ts.transpileModule(source, {
+            compilerOptions: {
+                module: ts.ModuleKind.CommonJS,
+                target: ts.ScriptTarget.ES2020,
+            },
+        }).outputText,
+        scope,
+    );
     return scope.exports;
 }
 const memory = evaluate("lib/playground/memory.ts");
-const scheduler = evaluate("lib/playground/scheduler.ts", { require: () => memory });
+const scheduler = evaluate("lib/playground/scheduler.ts", {
+    require: () => memory,
+});
 const online = evaluate("lib/online/memory-session.ts", {
-    require: id => id.includes("scheduler") ? scheduler : memory,
+    require: (id) => (id.includes("scheduler") ? scheduler : memory),
 });
 const ids = ["one", "two", "three"];
 const recall = {
@@ -58,13 +66,19 @@ test("guest online memory is visible to Playground and survives reload", () => {
     online.recordOnlineRecall(session, itemId, recall);
     const saved = online.loadOnlineGuestMemory("room", ids);
     assert.equal(saved[itemId].reviewCount, 1);
-    assert.equal(JSON.parse(stored.get("playground-memory:guest:room"))[itemId].itemId, itemId);
-    assert.equal(Object.keys(online.loadOnlineGuestMemory("different", ids)).length, 0);
+    assert.equal(
+        JSON.parse(stored.get("playground-memory:guest:room"))[itemId].itemId,
+        itemId,
+    );
+    assert.equal(
+        Object.keys(online.loadOnlineGuestMemory("different", ids)).length,
+        0,
+    );
 });
 test("server fallback is recorded against the actual word, never the suggestion", () => {
     const session = online.createOnlineMemorySession("room", ids, "user", {});
     const recommendation = online.nextOnlineRecommendation(session);
-    const actual = ids.find(id => id !== recommendation);
+    const actual = ids.find((id) => id !== recommendation);
     const updated = online.recordOnlineRecall(session, actual, recall);
     assert.equal(updated.itemId, actual);
     assert.equal(session.scheduler.userAnswered[recommendation] ?? 0, 0);

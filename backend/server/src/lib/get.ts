@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { ROOM_SELECT_COLUMNS, roomFromRow, type RoomRow } from "../../../shared/room";
+import {
+    ROOM_SELECT_COLUMNS,
+    roomFromRow,
+    type RoomRow,
+} from "../../../shared/room";
 import { logEvent, logError } from "./console";
 
 export const getRoomFromId = async (id: string, jwtToken: string) => {

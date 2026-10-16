@@ -29,7 +29,8 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         return {
             userId: null,
             memoryByItem: {} as Record<string, ItemMemoryState>,
-            error: userError ?? new Error("Could not verify authenticated user"),
+            error:
+                userError ?? new Error("Could not verify authenticated user"),
         };
     }
 

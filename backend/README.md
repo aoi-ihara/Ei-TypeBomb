@@ -15,13 +15,13 @@ directory. Shared code depends on neither Node.js nor Cloudflare APIs.
 
 Run from the repository root:
 
-| Task | Command |
-| --- | --- |
-| Install | `npm ci --prefix backend/server` |
-| Development | `npm run dev --prefix backend/server` |
-| Tests | `npm test --prefix backend/server` |
-| Typecheck | `npm run typecheck --prefix backend/server` |
-| Build | `npm run build --prefix backend/server` |
+| Task        | Command                                     |
+| ----------- | ------------------------------------------- |
+| Install     | `npm ci --prefix backend/server`            |
+| Development | `npm run dev --prefix backend/server`       |
+| Tests       | `npm test --prefix backend/server`          |
+| Typecheck   | `npm run typecheck --prefix backend/server` |
+| Build       | `npm run build --prefix backend/server`     |
 
 The shared source has its own editor configuration at
 `backend/shared/tsconfig.json` and requires no separate install.
