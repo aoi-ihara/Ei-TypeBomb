@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, useSpring, useTransform } from "framer-motion";
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 
 function getMorphCursorTarget(x: number, y: number) {
@@ -54,6 +54,45 @@ function getMorphCursorTarget(x: number, y: number) {
     return null;
 }
 
+// Reuse the exact CSS easing curve rather than maintaining a second spring curve.
+function getEtbTransition() {
+    const css = getComputedStyle(document.documentElement);
+    const duration = (parseFloat(css.getPropertyValue("--duration-etb")) || 400) / 1000;
+    const definition = css.getPropertyValue("--ease-etb").trim();
+    const stops = definition.startsWith("linear(")
+        ? definition.slice(7, -1).split(",").map((entry) => {
+              const [value, position] = entry.trim().split(/\s+/);
+              return { value: Number(value), position: position ? parseFloat(position) / 100 : NaN };
+          })
+        : [];
+    if (stops.length < 2 || stops.some((stop) => !Number.isFinite(stop.value))) {
+        return { duration, ease: (t: number) => 1 - Math.pow(1 - t, 3) };
+    }
+    stops[0].position = 0;
+    stops[stops.length - 1].position = 1;
+    // Distribute missing CSS linear() stop positions.
+    for (let i = 1; i < stops.length - 1; i++) {
+        if (Number.isFinite(stops[i].position)) continue;
+        let end = i + 1;
+        while (end < stops.length - 1 && !Number.isFinite(stops[end].position)) end++;
+        const start = i - 1;
+        for (let j = i; j < end; j++) {
+            stops[j].position = stops[start].position +
+                ((stops[end].position - stops[start].position) * (j - start)) / (end - start);
+        }
+        i = end - 1;
+    }
+    return {
+        duration,
+        ease: (t: number) => {
+            const index = stops.findIndex((stop) => stop.position >= t);
+            if (index <= 0) return index === 0 ? stops[0].value : stops[stops.length - 1].value;
+            const a = stops[index - 1], b = stops[index];
+            return a.value + (b.value - a.value) * ((t - a.position) / (b.position - a.position || 1));
+        },
+    };
+}
+
 function CustomCursor() {
     const rootRef = useRef<HTMLDivElement>(null);
 
@@ -75,23 +114,17 @@ function CustomCursor() {
     const [isMouseDown, setIsMouseDown] = useState(false);
     const isMouseDownRef = useRef(false);
 
-    const springConfig = {
-        stiffness: 1000,
-        damping: 50,
-        mass: 1,
-    };
-
-    const cursorX = useSpring(0, springConfig);
-    const cursorY = useSpring(0, springConfig);
-
-    const cursorW = useSpring(25, springConfig);
-    const cursorH = useSpring(25, springConfig);
-
-    const cursorWeight = useSpring(3, springConfig);
-
-    const cursorOpacity = useSpring(0, springConfig);
-
-    const cursorBorderRadius = useSpring(12.5, springConfig);
+    const cursorX = useMotionValue(0);
+    const cursorY = useMotionValue(0);
+    const cursorW = useMotionValue(25);
+    const cursorH = useMotionValue(25);
+    const cursorWeight = useMotionValue(3);
+    const cursorOpacity = useMotionValue(0);
+    const cursorBorderRadius = useMotionValue(12.5);
+    const animations = useRef<Partial<Record<string, ReturnType<typeof animate>>>>({});
+    const destinations = useRef<Record<string, number>>({});
+    const previousButtonTarget = useRef(false);
+    const etbTransition = useRef<ReturnType<typeof getEtbTransition> | null>(null);
 
     const boxShadow = useTransform(
         cursorWeight,
@@ -198,22 +231,32 @@ function CustomCursor() {
                 };
             }
 
-            cursorX.set(target.current.x - target.current.width / 2);
-            cursorY.set(target.current.y - target.current.height / 2);
-            cursorW.set(target.current.width);
-            cursorH.set(target.current.height);
-            cursorOpacity.set(target.current.opacity);
+            const isButtonTarget = !!buttonEl && Number(buttonEl.dataset.cursorShape ?? 0) !== 2;
+            const justLeftButton = previousButtonTarget.current && !isButtonTarget;
+            previousButtonTarget.current = isButtonTarget;
+            const transition = etbTransition.current ?? (etbTransition.current = getEtbTransition());
+            const minimumWeight = Math.min(target.current.width, target.current.height);
 
-            const minimumWeight = Math.min(
-                target.current.width,
-                target.current.height,
-            );
+            const update = (key: string, value: typeof cursorX, next: number, position = false) => {
+                if (destinations.current[key] === next) return;
+                destinations.current[key] = next;
+                animations.current[key]?.stop();
+                // Follow the pointer with the original responsive spring; use
+                // the UI curve when snapping onto/leaving an interactive shape.
+                animations.current[key] = animate(value, next,
+                    position && !isButtonTarget && !justLeftButton
+                        ? { type: "spring", stiffness: 1000, damping: 50, mass: 1 }
+                        : { type: "tween", ...transition },
+                );
+            };
 
-            cursorWeight.set(Math.min(target.current.weight, minimumWeight));
-
-            cursorBorderRadius.set(
-                Math.min(target.current.borderRadius, minimumWeight),
-            );
+            update("x", cursorX, target.current.x - target.current.width / 2, true);
+            update("y", cursorY, target.current.y - target.current.height / 2, true);
+            update("width", cursorW, target.current.width);
+            update("height", cursorH, target.current.height);
+            update("opacity", cursorOpacity, target.current.opacity);
+            update("weight", cursorWeight, Math.min(target.current.weight, minimumWeight));
+            update("radius", cursorBorderRadius, Math.min(target.current.borderRadius, minimumWeight));
         },
         [
             cursorX,
@@ -292,6 +335,10 @@ function CustomCursor() {
             observer.disconnect();
         };
     }, [handleMouseMove]);
+
+    useEffect(() => () => {
+        Object.values(animations.current).forEach((animation) => animation?.stop());
+    }, []);
 
     useEffect(() => {
         document.documentElement.classList.add("custom-cursor-active");
