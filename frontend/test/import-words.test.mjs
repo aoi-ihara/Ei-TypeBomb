@@ -15,14 +15,32 @@ test("counts only alphanumeric + hiragana, excluding punctuation and kanji", () 
 });
 
 test(">= 2x chooses the longer side, otherwise chooses the right", () => {
-    assert.deepEqual(orientImportPair("apple", "りんご"), { jp: "apple", en: "りんご" });
-    assert.deepEqual(orientImportPair("桜", "さくら"), { jp: "桜", en: "さくら" });
-    assert.deepEqual(orientImportPair("かき", "apple"), { jp: "かき", en: "apple" });
-    assert.deepEqual(orientImportPair("apple", "かな"), { jp: "かな", en: "apple" });
-    assert.deepEqual(orientImportPair("abc", "かな"), { jp: "abc", en: "かな" });
+    assert.deepEqual(orientImportPair("apple", "りんご"), {
+        jp: "apple",
+        en: "りんご",
+    });
+    assert.deepEqual(orientImportPair("桜", "さくら"), {
+        jp: "桜",
+        en: "さくら",
+    });
+    assert.deepEqual(orientImportPair("かき", "apple"), {
+        jp: "かき",
+        en: "apple",
+    });
+    assert.deepEqual(orientImportPair("apple", "かな"), {
+        jp: "かな",
+        en: "apple",
+    });
+    assert.deepEqual(orientImportPair("abc", "かな"), {
+        jp: "abc",
+        en: "かな",
+    });
     assert.deepEqual(orientImportPair("a", "bb"), { jp: "a", en: "bb" });
     assert.deepEqual(orientImportPair("bb", "a"), { jp: "a", en: "bb" });
-    assert.deepEqual(orientImportPair("漢字", "apple"), { jp: "漢字", en: "apple" });
+    assert.deepEqual(orientImportPair("漢字", "apple"), {
+        jp: "漢字",
+        en: "apple",
+    });
     assert.deepEqual(orientImportPair("a", "b"), { jp: "a", en: "b" });
 });
 
@@ -40,44 +58,75 @@ test("CSV chooses one answer column for all rows, with quoted commas and unicode
 
 test("JSON array of question-answer maps uses the same orientation", () => {
     assert.deepEqual(
-        parseImportedPairs('[{"りんご":"apple"},{"apple":"ねこ"},{"桜の読み方":"さくら"}]'),
+        parseImportedPairs(
+            '[{"りんご":"apple"},{"apple":"ねこ"},{"桜の読み方":"さくら"}]',
+        ),
         [
             { jp: "りんご", en: "apple" },
             { jp: "ねこ", en: "apple" },
             { jp: "桜の読み方", en: "さくら" },
         ],
     );
-    assert.deepEqual(parseImportedPairs('[{"question":"りんご","answer":"apple"}]'), [
-        { jp: "りんご", en: "apple" },
-    ]);
+    assert.deepEqual(
+        parseImportedPairs('[{"question":"りんご","answer":"apple"}]'),
+        [{ jp: "りんご", en: "apple" }],
+    );
     assert.deepEqual(parseImportedPairs('[{"jp":"りんご","en":"apple"}]'), [
         { jp: "りんご", en: "apple" },
     ]);
 });
 
 test("JSON export roundtrips pair records", () => {
-    const imported = [{ prompt: "りんご", answer: "apple" }, { prompt: "桜の読み方", answer: "さくら" }];
+    const imported = [
+        { prompt: "りんご", answer: "apple" },
+        { prompt: "桜の読み方", answer: "さくら" },
+    ];
     const exportText = exportAnswerPairs(imported);
-    assert.deepEqual(JSON.parse(exportText), { "りんご": "apple", "桜の読み方": "さくら" });
-    assert.deepEqual(parseImportedPairs(exportText), [{ jp: "りんご", en: "apple" }, { jp: "桜の読み方", en: "さくら" }]);
+    assert.deepEqual(JSON.parse(exportText), {
+        りんご: "apple",
+        桜の読み方: "さくら",
+    });
+    assert.deepEqual(parseImportedPairs(exportText), [
+        { jp: "りんご", en: "apple" },
+        { jp: "桜の読み方", en: "さくら" },
+    ]);
 });
 
 test("restrict answer to ASCII alphanumeric, hiragana, hyphen, spaces and specified punctuation", () => {
     assert.equal(isAllowedTypingAnswer("A9- ひらがなー,.!?、。！？"), true);
-    for (const invalid of ["漢字", "カタカナ", "é", "😀", "テスト", "ABC＿123", ""]) {
+    for (const invalid of [
+        "漢字",
+        "カタカナ",
+        "é",
+        "😀",
+        "テスト",
+        "ABC＿123",
+        "",
+    ]) {
         assert.equal(isAllowedTypingAnswer(invalid), false, invalid);
     }
-    assert.equal(filterTypingAnswer("漢字カタカナabc-さくらー?!。"), "abc-さくらー?!。");
+    assert.equal(
+        filterTypingAnswer("漢字カタカナabc-さくらー?!。"),
+        "abc-さくらー?!。",
+    );
 });
 
 test("CSV and JSON preserve prolonged sound marks", () => {
-    assert.deepEqual(parseImportedPairs("食べ物は？,らーめん"), [{ jp: "食べ物は？", en: "らーめん" }]);
-    assert.deepEqual(parseImportedPairs('{"食べ物は？":"らーめん"}'), [{ jp: "食べ物は？", en: "らーめん" }]);
+    assert.deepEqual(parseImportedPairs("食べ物は？,らーめん"), [
+        { jp: "食べ物は？", en: "らーめん" },
+    ]);
+    assert.deepEqual(parseImportedPairs('{"食べ物は？":"らーめん"}'), [
+        { jp: "食べ物は？", en: "らーめん" },
+    ]);
 });
 
 test("invalid answer, malformed JSON and invalid CSV raise readable errors", () => {
-    assert.deepEqual(parseImportedPairs("漢字,漢語"), [{ jp: "漢字", en: "漢語" }]);
-    assert.deepEqual(parseImportedPairs('[{"問題":"漢字"}]'), [{ jp: "問題", en: "漢字" }]);
+    assert.deepEqual(parseImportedPairs("漢字,漢語"), [
+        { jp: "漢字", en: "漢語" },
+    ]);
+    assert.deepEqual(parseImportedPairs('[{"問題":"漢字"}]'), [
+        { jp: "問題", en: "漢字" },
+    ]);
     assert.throws(() => parseImportedPairs('[{"a":"b"'), /構文/);
     assert.throws(() => parseImportedPairs("one,two,three"), /2列/);
     assert.throws(() => parseImportedPairs('[{"問題":"a","追加":"b"}]'), /1組/);
@@ -89,7 +138,10 @@ test("role-labelled export roundtrips even when prompt is more than 2x answer", 
         { prompt: "長い漢字の説明を含む問題", answer: "あ" },
     ];
     const exported = exportAnswerPairs(original);
-    assert.deepEqual(parseImportedPairs(exported), original.map(item => ({ jp: item.prompt, en: item.answer })));
+    assert.deepEqual(
+        parseImportedPairs(exported),
+        original.map((item) => ({ jp: item.prompt, en: item.answer })),
+    );
     // Unlabelled one-pair JSON remains subject to the user-requested heuristic.
     assert.deepEqual(parseImportedPairs('[{"what is one":"yes"}]'), [
         { jp: "yes", en: "what is one" },
@@ -102,27 +154,35 @@ test("role-labelled export roundtrips even when prompt is more than 2x answer", 
 
 test("reject unsupported kana but permit all kana emitted by romanizer", async () => {
     const { ROMAJI } = await import("../lib/romaji-input.mjs");
-    for (const kana of new Set(Object.values(ROMAJI).flatMap(value => Array.from(value)))) {
+    for (const kana of new Set(
+        Object.values(ROMAJI).flatMap((value) => Array.from(value)),
+    )) {
         assert.equal(isAllowedTypingAnswer(kana), true, kana);
     }
     for (const kana of ["ゎ", "ゐ", "ゑ", "ゔ", "ゕ", "ゖ"]) {
         assert.equal(isAllowedTypingAnswer(kana), false, kana);
-        assert.deepEqual(parseImportedPairs(JSON.stringify([{ question: "test", answer: kana }])), [{ jp: "test", en: kana }]);
+        assert.deepEqual(
+            parseImportedPairs(
+                JSON.stringify([{ question: "test", answer: kana }]),
+            ),
+            [{ jp: "test", en: kana }],
+        );
     }
 });
 
 test("single JSON object is an explicit question-to-answer mapping", () => {
     assert.deepEqual(
-        parseImportedPairs('{"ねこ":"cat","日本の憲法の名前は？":"にほんこくけんぽう"}'),
+        parseImportedPairs(
+            '{"ねこ":"cat","日本の憲法の名前は？":"にほんこくけんぽう"}',
+        ),
         [
             { jp: "ねこ", en: "cat" },
             { jp: "日本の憲法の名前は？", en: "にほんこくけんぽう" },
         ],
     );
-    assert.deepEqual(
-        parseImportedPairs('{"what is one":"yes"}'),
-        [{ jp: "what is one", en: "yes" }],
-    );
+    assert.deepEqual(parseImportedPairs('{"what is one":"yes"}'), [
+        { jp: "what is one", en: "yes" },
+    ]);
     assert.deepEqual(
         parseImportedPairs('{"日本の憲法の名前は？":"日本国憲法"}'),
         [{ jp: "日本の憲法の名前は？", en: "日本国憲法" }],
@@ -131,19 +191,25 @@ test("single JSON object is an explicit question-to-answer mapping", () => {
 
 test("duplicate prompts cannot be silently lost during JSON object export", () => {
     assert.throws(
-        () => exportAnswerPairs([
-            { prompt: "ねこ", answer: "cat" },
-            { prompt: "ねこ", answer: "kitten" },
-        ]),
+        () =>
+            exportAnswerPairs([
+                { prompt: "ねこ", answer: "cat" },
+                { prompt: "ねこ", answer: "kitten" },
+            ]),
         /重複/,
     );
-    assert.deepEqual(parseImportedPairs(exportAnswerPairs([
-        { prompt: "what is one", answer: "yes" },
-        { prompt: "ねこ", answer: "cat" },
-    ])), [
-        { jp: "what is one", en: "yes" },
-        { jp: "ねこ", en: "cat" },
-    ]);
+    assert.deepEqual(
+        parseImportedPairs(
+            exportAnswerPairs([
+                { prompt: "what is one", answer: "yes" },
+                { prompt: "ねこ", answer: "cat" },
+            ]),
+        ),
+        [
+            { jp: "what is one", en: "yes" },
+            { jp: "ねこ", en: "cat" },
+        ],
+    );
 });
 
 test("user's thirty CSV quiz rows all import; invalid answers are flagged only after import", () => {
@@ -192,7 +258,10 @@ test("user's thirty CSV quiz rows all import; invalid answers are flagged only a
 test("malformed input still fails even though invalid answer chars are accepted", () => {
     assert.throws(() => parseImportedPairs("a,b,c"), /2列/);
     assert.throws(() => parseImportedPairs("a,"), /問題と回答/);
-    assert.throws(() => parseImportedPairs('[{"question":"x","answer":123}]'), /問題と回答/);
+    assert.throws(
+        () => parseImportedPairs('[{"question":"x","answer":123}]'),
+        /問題と回答/,
+    );
     assert.throws(() => parseImportedPairs("{missing"), /構文/);
 });
 

@@ -28,7 +28,8 @@ export function createKeyedRateLimit(
             ? Math.min(
                   limit.capacity,
                   previous.tokens +
-                      (Math.max(0, time - previous.updatedAt) * limit.perSecond) /
+                      (Math.max(0, time - previous.updatedAt) *
+                          limit.perSecond) /
                           1000,
               )
             : limit.capacity;
@@ -38,10 +39,14 @@ export function createKeyedRateLimit(
             updatedAt: time,
         });
 
-        if (options.maxBuckets !== undefined && buckets.size > options.maxBuckets) {
+        if (
+            options.maxBuckets !== undefined &&
+            buckets.size > options.maxBuckets
+        ) {
             const staleAfterMs = options.staleAfterMs ?? Infinity;
             for (const [entryKey, bucket] of buckets) {
-                if (time - bucket.updatedAt > staleAfterMs) buckets.delete(entryKey);
+                if (time - bucket.updatedAt > staleAfterMs)
+                    buckets.delete(entryKey);
             }
             // Evict oldest inserted entries when clients churn faster than TTL.
             while (buckets.size > options.maxBuckets) {

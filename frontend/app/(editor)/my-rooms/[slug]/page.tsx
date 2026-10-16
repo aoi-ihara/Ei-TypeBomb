@@ -31,9 +31,7 @@ import { notFound, useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
-    validateGameDuration,
     validateLink,
-    validateMaxPlayers,
     validateTitle,
 } from "@/lib/auth/validator";
 import posthog from "posthog-js";
@@ -311,7 +309,11 @@ export default function Page({
                 setIsExported(false);
             }, 3000);
         } catch (error) {
-            setExportError(error instanceof Error ? error.message : "JSONのエクスポートに失敗しました。");
+            setExportError(
+                error instanceof Error
+                    ? error.message
+                    : "JSONのエクスポートに失敗しました。",
+            );
         }
     };
 
@@ -399,7 +401,6 @@ export default function Page({
         }
     };
 
-    // Serialize writes so an older autosave cannot overwrite the Play-time flush.
     const saveRoomData = (): Promise<boolean> => {
         const snapshot = { ...roomDataRef.current };
         const attempt = saveQueueRef.current.then(async () => {
@@ -462,27 +463,6 @@ export default function Page({
     };
 
     const handlePlay = async () => {
-        if (isStartingPlay || !roomId) return;
-        setPlayError("");
-        const linkError = validateLink(roomLink) || roomLinkError;
-        if (linkError) {
-            setPlayError(linkError);
-            return;
-        }
-        setIsStartingPlay(true);
-        // Cancel scheduled saves; the queued write and latest snapshot are flushed below.
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        if (maxSaveTimerRef.current) clearTimeout(maxSaveTimerRef.current);
-        saveTimerRef.current = null;
-        maxSaveTimerRef.current = null;
-        const saved = await saveRoomData();
-        if (!saved) {
-            setPlayError(
-                "変更を保存できませんでした。入力内容を確認して再試行してください。",
-            );
-            setIsStartingPlay(false);
-            return;
-        }
         setShowPlayWarning(false);
         router.push(`/join/${encodeURIComponent(roomLink)}`);
     };
@@ -610,21 +590,36 @@ export default function Page({
                     name="最大プレイヤー数"
                     labelPrefix="上限"
                     selection={Math.max(0, Number(maxPlayers) - 2)}
-                    items={Array.from({ length: 15 }, (_, index) => `${index + 2}人`)}
+                    items={Array.from(
+                        { length: 15 },
+                        (_, index) => `${index + 2}人`,
+                    )}
                     itemIcons={Array(15).fill(null)}
                     onSelected={(index) => {
                         const nextMax = index + 2;
                         setMaxPlayers(String(nextMax));
-                        setBombCount((current) => current === null ? null : Math.min(current, nextMax));
+                        setBombCount((current) =>
+                            current === null
+                                ? null
+                                : Math.min(current, nextMax),
+                        );
                     }}
                 />
                 <Picker
                     name="爆弾数"
                     labelPrefix="爆弾"
                     selection={bombCount ?? 0}
-                    items={["自動", ...Array.from({ length: Number(maxPlayers) }, (_, index) => `${index + 1}個`)]}
+                    items={[
+                        "自動",
+                        ...Array.from(
+                            { length: Number(maxPlayers) },
+                            (_, index) => `${index + 1}個`,
+                        ),
+                    ]}
                     itemIcons={Array(Number(maxPlayers) + 1).fill(null)}
-                    onSelected={(index) => setBombCount(index === 0 ? null : index)}
+                    onSelected={(index) =>
+                        setBombCount(index === 0 ? null : index)
+                    }
                 />
                 <Picker
                     name="ゲーム時間"
@@ -635,7 +630,10 @@ export default function Page({
                     onSelected={(index) => setGameDuration(index * 10 + 10)}
                 />
                 {validateExplanation(roomExplanation) && (
-                    <div className="text-red-500 min-[360px]:col-span-2 lg:col-span-4" data-cursor="text">
+                    <div
+                        className="text-red-500 min-[360px]:col-span-2 lg:col-span-4"
+                        data-cursor="text"
+                    >
                         {validateExplanation(roomExplanation)}
                     </div>
                 )}
@@ -858,7 +856,11 @@ export default function Page({
                 >
                     {!isExported && "エクスポート"}
                 </Button>
-                {exportError && <div className="text-red-500" role="alert">{exportError}</div>}
+                {exportError && (
+                    <div className="text-red-500" role="alert">
+                        {exportError}
+                    </div>
+                )}
 
                 <MorphDialog
                     button={
@@ -1317,12 +1319,6 @@ export default function Page({
                                 ))}
                             </SortableContext>
                         </DndContext>
-
-                        {playError && (
-                            <div role="alert" className="text-red-500">
-                                {playError}
-                            </div>
-                        )}
                         <MorphDialog
                             button={
                                 <Button
@@ -1332,7 +1328,7 @@ export default function Page({
                                         else setShowPlayWarning(true);
                                     }}
                                     iconName="play"
-                                    disabled={isStartingPlay}
+                                    loading={isStartingPlay}
                                     className="w-full"
                                     variant="primary"
                                 >

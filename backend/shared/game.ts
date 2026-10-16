@@ -5,8 +5,17 @@ import { MAX_CURRENT_INPUT_LENGTH, requireRoomItems } from "./validation";
 
 export type GameEvent =
     | { type: "room:join"; player: User }
-    | { type: "room:leave"; playerId: string; reason: "disconnect" | "room_leave" }
-    | { type: "game:start"; playerId: string; gameId: string; gameDuration: number }
+    | {
+          type: "room:leave";
+          playerId: string;
+          reason: "disconnect" | "room_leave";
+      }
+    | {
+          type: "game:start";
+          playerId: string;
+          gameId: string;
+          gameDuration: number;
+      }
     | { type: "word:success"; playerId: string }
     | { type: "hint:update"; playerId: string; length: number }
     | { type: "player:rename"; playerId: string; displayName: string }
@@ -24,10 +33,19 @@ export type GameContext = {
     rules: GameRules;
     // Optional per-holder recommendation. The core validates its range and
     // falls back to the original random selection for unavailable clients.
-    chooseItemIndex?: (playerId: string, room: GameState["room"]) => number | undefined;
+    chooseItemIndex?: (
+        playerId: string,
+        room: GameState["room"],
+    ) => number | undefined;
 };
 export type Activity = {
-    event: "player_joined" | "player_left" | "game_started" | "game_cancelled" | "game_finished" | "word_passed";
+    event:
+        | "player_joined"
+        | "player_left"
+        | "game_started"
+        | "game_cancelled"
+        | "game_finished"
+        | "word_passed";
     playerCount: number;
     reason?: "disconnect" | "room_leave";
 };
@@ -40,51 +58,85 @@ export type GameResult = { state: GameState; effects: GameEffect[] };
 export const bombsForPlayers = (players: number): number =>
     Math.max(1, Math.ceil(players / 4));
 
-export function canStart(state: GameState, playerId: string, rules: GameRules): boolean {
+export function canStart(
+    state: GameState,
+    playerId: string,
+    rules: GameRules,
+): boolean {
     const room = state.room;
-    return !room.isStart && room.users.length >= 2 &&
-        (rules.allowSpectatorStart || room.users.some(user => user.id === playerId));
+    return (
+        !room.isStart &&
+        room.users.length >= 2 &&
+        (rules.allowSpectatorStart ||
+            room.users.some((user) => user.id === playerId))
+    );
 }
 
 export function nextGameDeadline(state: GameState): number | undefined {
-    const deadlines = [state.wordAt, ...(state.room.bombs?.map(bomb => bomb.at) ?? 
-        (state.bombAt === undefined ? [] : [state.bombAt]))]
-        .filter((at): at is number => at !== undefined);
+    const deadlines = [
+        state.wordAt,
+        ...(state.room.bombs?.map((bomb) => bomb.at) ??
+            (state.bombAt === undefined ? [] : [state.bombAt])),
+    ].filter((at): at is number => at !== undefined);
     return deadlines.length ? Math.min(...deadlines) : undefined;
 }
 
-export function applyGameEvent(state: GameState, event: GameEvent, context: GameContext): GameResult {
+export function applyGameEvent(
+    state: GameState,
+    event: GameEvent,
+    context: GameContext,
+): GameResult {
     const effects: GameEffect[] = [];
     const next: GameState = {
         ...state,
         revision: state.revision ?? 0,
         room: {
             ...state.room,
-            users: state.room.users.map(user => ({ ...user })),
-            bombs: state.room.bombs?.map(bomb => ({ ...bomb })),
-            losers: state.room.losers?.map(loser => ({ ...loser })),
+            users: state.room.users.map((user) => ({ ...user })),
+            bombs: state.room.bombs?.map((bomb) => ({ ...bomb })),
+            losers: state.room.losers?.map((loser) => ({ ...loser })),
         },
     };
     const room = next.room;
-    const broadcast = (packet: ServerGameEvent) => effects.push({ type: "broadcast", packet });
+    const broadcast = (packet: ServerGameEvent) =>
+        effects.push({ type: "broadcast", packet });
     const activity = (event: Activity["event"], reason?: Activity["reason"]) =>
-        effects.push({ type: "activity", activity: { event, playerCount: room.users.length, reason } });
+        effects.push({
+            type: "activity",
+            activity: { event, playerCount: room.users.length, reason },
+        });
     // The focus is authoritative, so every viewer sees the same remote textbox.
     const publishFocus = (failed = false) =>
         broadcast({
             event: "typing:input",
             data: {
                 input: room.typingFocusInput ?? "",
-                hintLength: room.bombs?.find(bomb => room.users[bomb.holder]?.id === room.typingFocusPlayerId)?.hintLength ?? 0,
-                ...(room.typingFocusPlayerId ? { playerId: room.typingFocusPlayerId, focusPlayerId: room.typingFocusPlayerId } : {}),
+                hintLength:
+                    room.bombs?.find(
+                        (bomb) =>
+                            room.users[bomb.holder]?.id ===
+                            room.typingFocusPlayerId,
+                    )?.hintLength ?? 0,
+                ...(room.typingFocusPlayerId
+                    ? {
+                          playerId: room.typingFocusPlayerId,
+                          focusPlayerId: room.typingFocusPlayerId,
+                      }
+                    : {}),
                 ...(failed ? { failed: true } : {}),
             },
         });
     const chooseFocus = () => {
-        const holders = [...new Set((room.bombs ?? [])
-            .map(bomb => room.users[bomb.holder]?.id)
-            .filter((id): id is string => !!id))];
-        room.typingFocusPlayerId = holders.length ? holders[index(holders.length)] : undefined;
+        const holders = [
+            ...new Set(
+                (room.bombs ?? [])
+                    .map((bomb) => room.users[bomb.holder]?.id)
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+        room.typingFocusPlayerId = holders.length
+            ? holders[index(holders.length)]
+            : undefined;
         room.typingFocusInput = "";
         publishFocus();
     };
@@ -93,22 +145,33 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
         room.typingFocusInput = "";
         publishFocus();
     };
-    const snapshot = () => broadcast({ event: "room:broadcast", data: roomSnapshot(room, next.revision) });
+    const snapshot = () =>
+        broadcast({
+            event: "room:broadcast",
+            data: roomSnapshot(room, next.revision),
+        });
     const ignored = (): GameResult => ({ state, effects: [] });
-    const random = () => Math.max(0, Math.min(1 - Number.EPSILON, context.random()));
+    const random = () =>
+        Math.max(0, Math.min(1 - Number.EPSILON, context.random()));
     const index = (length: number) => Math.floor(random() * length);
     const itemForHolder = (holder: number) => {
         const playerId = room.users[holder]?.id;
         const preferred = playerId
             ? context.chooseItemIndex?.(playerId, room)
             : undefined;
-        return typeof preferred === "number" && Number.isInteger(preferred) &&
-            preferred >= 0 && preferred < room.items.length
-            ? preferred : index(room.items.length);
+        return typeof preferred === "number" &&
+            Number.isInteger(preferred) &&
+            preferred >= 0 &&
+            preferred < room.items.length
+            ? preferred
+            : index(room.items.length);
     };
     const bombAt = () => {
         const duration = room.gameDuration;
-        const base = Number.isInteger(duration) && duration >= 1 && duration <= 2147473 ? duration : 20;
+        const base =
+            Number.isInteger(duration) && duration >= 1 && duration <= 2147473
+                ? duration
+                : 20;
         return context.now + (base + random() * 10) * 1000;
     };
     const syncLegacy = () => {
@@ -117,23 +180,32 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
         room.bombStatus = first?.status ?? 0;
         room.wordIndex = first?.wordIndex;
         next.bombAt = room.bombs?.length
-            ? Math.min(...room.bombs.map(bomb => bomb.at)) : undefined;
+            ? Math.min(...room.bombs.map((bomb) => bomb.at))
+            : undefined;
     };
     const reset = () => {
         Object.assign(room, {
-            isStart: false, gameId: undefined, bombStatus: 0, bombHolder: 0,
-            wordIndex: undefined, bombs: undefined, losers: undefined,
-            typingFocusPlayerId: undefined, typingFocusInput: undefined,
+            isStart: false,
+            gameId: undefined,
+            bombStatus: 0,
+            bombHolder: 0,
+            wordIndex: undefined,
+            bombs: undefined,
+            losers: undefined,
+            typingFocusPlayerId: undefined,
+            typingFocusInput: undefined,
         });
         next.wordAt = next.bombAt = undefined;
         if (context.rules.clearInputOnStop) clearInput();
     };
     const activeBomb = (playerId: string) =>
         room.isStart
-            ? room.bombs?.find(bomb => room.users[bomb.holder]?.id === playerId)
+            ? room.bombs?.find(
+                  (bomb) => room.users[bomb.holder]?.id === playerId,
+              )
             : undefined;
     const nextLivingHolder = (holder: number): number => {
-        const out = new Set((room.losers ?? []).map(loser => loser.id));
+        const out = new Set((room.losers ?? []).map((loser) => loser.id));
         for (let offset = 1; offset <= room.users.length; offset++) {
             const candidate = (holder + offset) % room.users.length;
             if (!out.has(room.users[candidate].id)) return candidate;
@@ -143,42 +215,60 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
 
     switch (event.type) {
         case "room:join":
-            if (room.isStart || !room.maxPlayers || room.users.length >= room.maxPlayers)
+            if (
+                room.isStart ||
+                !room.maxPlayers ||
+                room.users.length >= room.maxPlayers
+            )
                 return ignored();
-            if (!room.users.some(user => user.id === event.player.id)) {
+            if (!room.users.some((user) => user.id === event.player.id)) {
                 room.users.push({ ...event.player });
                 activity("player_joined");
             }
             break;
         case "room:leave":
-            if (!room.users.some(user => user.id === event.playerId)) return ignored();
+            if (!room.users.some((user) => user.id === event.playerId))
+                return ignored();
             // Keep eliminated players as immutable seats (50% opacity) so
             // holder indices and the final loser list remain stable.
             // Their connection leaving must not interrupt surviving bombs.
-            if (room.isStart && room.losers?.some(loser => loser.id === event.playerId))
+            if (
+                room.isStart &&
+                room.losers?.some((loser) => loser.id === event.playerId)
+            )
                 return ignored();
             if (room.isStart) {
                 activity("game_cancelled", event.reason);
                 reset();
                 room.users = [];
                 broadcast({ event: "game:quited", data: undefined });
-            } else room.users = room.users.filter(user => user.id !== event.playerId);
+            } else
+                room.users = room.users.filter(
+                    (user) => user.id !== event.playerId,
+                );
             activity("player_left", event.reason);
             break;
         case "game:start":
-            if (!canStart(state, event.playerId, context.rules)) return ignored();
+            if (!canStart(state, event.playerId, context.rules))
+                return ignored();
             requireRoomItems(room);
             room.gameDuration = event.gameDuration;
             room.gameId = event.gameId;
             room.isStart = true;
             room.losers = [];
-            const count = room.bombCount == null
-                ? bombsForPlayers(room.users.length)
-                : Math.min(room.users.length, Math.max(1, Math.floor(room.bombCount)));
+            const count =
+                room.bombCount == null
+                    ? bombsForPlayers(room.users.length)
+                    : Math.min(
+                          room.users.length,
+                          Math.max(1, Math.floor(room.bombCount)),
+                      );
             const initial = index(room.users.length);
             room.bombs = Array.from({ length: count }, (_, id) => ({
                 id: String(id),
-                holder: (initial + Math.floor(id * room.users.length / count)) % room.users.length,
+                holder:
+                    (initial + Math.floor((id * room.users.length) / count)) %
+                    room.users.length,
                 status: 0,
                 wordIndex: undefined,
                 at: bombAt(),
@@ -191,7 +281,10 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
             break;
         case "word:success": {
             const bomb = activeBomb(event.playerId);
-            if (!bomb || (!context.rules.allowCountdownPass && next.wordAt !== undefined))
+            if (
+                !bomb ||
+                (!context.rules.allowCountdownPass && next.wordAt !== undefined)
+            )
                 return ignored();
             bomb.holder = nextLivingHolder(bomb.holder);
             bomb.wordIndex = itemForHolder(bomb.holder);
@@ -204,33 +297,61 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
         }
         case "hint:update": {
             const bomb = activeBomb(event.playerId);
-            if (!bomb || next.wordAt !== undefined || bomb.wordIndex === undefined) return ignored();
+            if (
+                !bomb ||
+                next.wordAt !== undefined ||
+                bomb.wordIndex === undefined
+            )
+                return ignored();
             const answerLength = room.items[bomb.wordIndex]?.answer.length ?? 0;
-            if (!Number.isInteger(event.length) || event.length < 0 || event.length > answerLength)
+            if (
+                !Number.isInteger(event.length) ||
+                event.length < 0 ||
+                event.length > answerLength
+            )
                 return ignored();
             if (bomb.hintLength === event.length) return ignored();
             bomb.hintLength = event.length;
-            broadcast({ event: "hint:updated", data: { playerId: event.playerId, bombId: bomb.id, length: event.length } });
+            broadcast({
+                event: "hint:updated",
+                data: {
+                    playerId: event.playerId,
+                    bombId: bomb.id,
+                    length: event.length,
+                },
+            });
             // The current viewer receives the hint without disrupting the typed input.
             if (room.typingFocusPlayerId === event.playerId) publishFocus();
             return { state: next, effects };
         }
         case "player:rename": {
-            const player = room.users.find(user => user.id === event.playerId);
-            if (!player || player.displayName === event.displayName) return ignored();
+            const player = room.users.find(
+                (user) => user.id === event.playerId,
+            );
+            if (!player || player.displayName === event.displayName)
+                return ignored();
             player.displayName = event.displayName;
             break;
         }
         case "currentInput": {
             if (!activeBomb(event.playerId)) return ignored();
             const raw = event.input;
-            const input = typeof raw === "string" ? raw :
-                raw && typeof raw === "object" && "input" in raw && typeof raw.input === "string"
-                    ? raw.input : null;
+            const input =
+                typeof raw === "string"
+                    ? raw
+                    : raw &&
+                        typeof raw === "object" &&
+                        "input" in raw &&
+                        typeof raw.input === "string"
+                      ? raw.input
+                      : null;
             if (input === null) return ignored();
             const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
-            const failed = typeof raw === "object" && raw !== null &&
-                "failed" in raw && raw.failed === true;
+            const failed =
+                typeof raw === "object" &&
+                raw !== null &&
+                "failed" in raw &&
+                raw.failed === true;
 
             // A new typist may claim the shared view only when its current
             // textbox is blank. Empty packets from other players never steal it.
@@ -263,10 +384,18 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 due = true;
                 if (bomb.status === 4) {
                     const loser = room.users[bomb.holder];
-                    if (loser && !room.losers?.some(item => item.id === loser.id)) {
-                        room.losers?.push({ id: loser.id, displayName: loser.displayName });
+                    if (
+                        loser &&
+                        !room.losers?.some((item) => item.id === loser.id)
+                    ) {
+                        room.losers?.push({
+                            id: loser.id,
+                            displayName: loser.displayName,
+                        });
                     }
-                    room.bombs = room.bombs?.filter(item => item.id !== bomb.id);
+                    room.bombs = room.bombs?.filter(
+                        (item) => item.id !== bomb.id,
+                    );
                     for (const other of room.bombs ?? []) {
                         if (other.holder === bomb.holder) {
                             other.holder = nextLivingHolder(other.holder);
@@ -298,14 +427,22 @@ export function applyGameEvent(state: GameState, event: GameEvent, context: Game
                 room.users = [];
             } else {
                 syncLegacy();
-                if (!room.bombs?.some(bomb => room.users[bomb.holder]?.id === room.typingFocusPlayerId))
+                if (
+                    !room.bombs?.some(
+                        (bomb) =>
+                            room.users[bomb.holder]?.id ===
+                            room.typingFocusPlayerId,
+                    )
+                )
                     chooseFocus();
             }
             break;
         }
     }
-    if (JSON.stringify({ ...next, revision: undefined }) !==
-        JSON.stringify({ ...state, revision: undefined }))
+    if (
+        JSON.stringify({ ...next, revision: undefined }) !==
+        JSON.stringify({ ...state, revision: undefined })
+    )
         next.revision = (state.revision ?? 0) + 1;
     snapshot();
     return { state: next, effects };

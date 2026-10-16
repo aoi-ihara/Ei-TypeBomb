@@ -15,16 +15,16 @@ Do not expose this connection string to the client or commit it to the repositor
 接続時はバケットが満杯で、受信1件につき1トークンを消費し、経過時間に
 比例して回復します。未使用分は最大バースト件数まで保持します。
 
-| イベント | 最大バースト件数 | 毎秒の回復件数 |
-| --- | ---: | ---: |
-| `currentInput` | 60 | 30 |
-| `word:success` | 10 | 5 |
-| `room:join` | 5 | 2 |
-| `room:leave` | 5 | 2 |
-| `game:start` | 2 | 1 |
-| `auth:response` | 3 | 0.5 |
-| `health:ping` | 2 | 0.2 |
-| `health:database` | 2 | 0.2 |
+| イベント          | 最大バースト件数 | 毎秒の回復件数 |
+| ----------------- | ---------------: | -------------: |
+| `currentInput`    |               60 |             30 |
+| `word:success`    |               10 |              5 |
+| `room:join`       |                5 |              2 |
+| `room:leave`      |                5 |              2 |
+| `game:start`      |                2 |              1 |
+| `auth:response`   |                3 |            0.5 |
+| `health:ping`     |                2 |            0.2 |
+| `health:database` |                2 |            0.2 |
 
 入力には高速なタイピングと通信遅延による短時間の集中送信の余裕を持たせ、
 DBアクセスを伴う認証・ゲーム開始には低めの閾値を設定しています。

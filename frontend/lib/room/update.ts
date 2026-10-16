@@ -43,11 +43,17 @@ export const updateRoomFromId = async (room: Room) => {
     }
 
     if (room.bombCount !== undefined) {
-        if (room.bombCount !== null &&
-            (!Number.isInteger(room.bombCount) || room.bombCount < 1 ||
+        if (
+            room.bombCount !== null &&
+            (!Number.isInteger(room.bombCount) ||
+                room.bombCount < 1 ||
                 room.bombCount > 16 ||
-                (room.maxPlayers !== undefined && room.bombCount > room.maxPlayers))) {
-            validationErrors.push("爆弾数は1〜最大プレイヤー数の範囲で選択してください。");
+                (room.maxPlayers !== undefined &&
+                    room.bombCount > room.maxPlayers))
+        ) {
+            validationErrors.push(
+                "爆弾数は1〜最大プレイヤー数の範囲で選択してください。",
+            );
         } else updateData.bomb_count = room.bombCount;
     }
 
@@ -112,8 +118,7 @@ export const updateRoomFromId = async (room: Room) => {
             ? "このリンクはすでに使用されています。"
             : "ルームを保存できませんでした。もう一度お試しください。";
     }
-    if (!data)
-        return "ルームが見つからないか、アクセス権限がありません。";
+    if (!data) return "ルームが見つからないか、アクセス権限がありません。";
 
     const posthog = getPostHogClient();
     posthog.capture({

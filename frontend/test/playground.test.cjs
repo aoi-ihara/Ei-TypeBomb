@@ -857,14 +857,8 @@ test("full hint clears existing incorrect input and resets on later wrong typing
         path.join(root, "components/feature/InputView.tsx"),
         "utf8",
     );
-    assert.match(
-        source,
-        /const hasIncorrectInput = isKanaAnswer\s*\?/,
-    );
-    assert.match(
-        source,
-        /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/,
-    );
+    assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
+    assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
     assert.match(
         source,
         /typedInsideHint &&\s*\(!manualHints \|\| answerRevealed\)/,
@@ -902,8 +896,6 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].correctBefore, 5);
     assert.equal(events.current[0].source, "manual");
 });
-
-
 
 test("actual playground progress callback pauses pressure on first hint", () => {
     const saved = { current: null };

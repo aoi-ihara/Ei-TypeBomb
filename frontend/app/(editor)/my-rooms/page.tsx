@@ -43,6 +43,15 @@ export default function Profile() {
             loading={!rooms}
             animateAppear={true}
         >
+            <Button
+                loading={creating}
+                onClick={() => addRoom()}
+                className="w-full"
+                iconName="plus"
+            >
+                追加
+            </Button>
+
             {rooms && rooms.length !== 0 && (
                 <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                     {rooms
@@ -92,15 +101,6 @@ export default function Profile() {
                         ))}
                 </div>
             )}
-
-            <Button
-                loading={creating}
-                onClick={() => addRoom()}
-                className="w-full"
-                iconName="plus"
-            >
-                追加
-            </Button>
         </Shell>
     );
 }

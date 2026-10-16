@@ -31,7 +31,10 @@ export default function Page({
 
     const router = useRouter();
 
-    const handleSignIn = async (turnstileToken?: string, mode: PlayMode = selectedMode) => {
+    const handleSignIn = async (
+        turnstileToken?: string,
+        mode: PlayMode = selectedMode,
+    ) => {
         setJoiningMode(mode);
         const result = await signInToRoom(
             {
@@ -42,7 +45,10 @@ export default function Page({
         );
 
         if (result === null) {
-            posthog.capture("room_entered", { room_id: roomId, play_mode: mode });
+            posthog.capture("room_entered", {
+                room_id: roomId,
+                play_mode: mode,
+            });
             router.push(mode === "online" ? "/display-name" : "/playground");
         } else {
             posthog.capture("room_entry_failed", {
@@ -94,7 +100,9 @@ export default function Page({
 
     return (
         <Shell
-            title={showPasswordField ? "パスワードを入力" : "プレイモードを選択"}
+            title={
+                showPasswordField ? "パスワードを入力" : "プレイモードを選択"
+            }
             loading={roomLoading}
         >
             {showPasswordField && (
@@ -122,7 +130,12 @@ export default function Page({
                         className="w-full"
                         variant="primary"
                         iconName={mode === "online" ? "users" : "user"}
-                        disabled={!roomId || roomLoading || joiningMode !== null || (showPasswordField && !roomPassword)}
+                        disabled={
+                            !roomId ||
+                            roomLoading ||
+                            joiningMode !== null ||
+                            (showPasswordField && !roomPassword)
+                        }
                         loading={joiningMode === mode}
                     >
                         {mode === "online" ? "マルチ" : "シングル"}

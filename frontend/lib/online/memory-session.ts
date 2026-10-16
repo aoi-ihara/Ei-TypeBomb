@@ -27,18 +27,27 @@ const pendingKey = (userId: string, roomId: string) =>
 
 // Recover unsent rows from either learning mode after navigation or reload.
 export const loadOnlinePendingMemory = (
-    roomId: string, userId: string, itemIds: string[],
+    roomId: string,
+    userId: string,
+    itemIds: string[],
 ): ItemMemoryState[] => {
     try {
-        const data: unknown = JSON.parse(localStorage.getItem(pendingKey(userId, roomId)) ?? "[]");
+        const data: unknown = JSON.parse(
+            localStorage.getItem(pendingKey(userId, roomId)) ?? "[]",
+        );
         if (!Array.isArray(data)) return [];
         const allowed = new Set(itemIds);
-        return data.filter((value): value is ItemMemoryState =>
-            !!value && typeof value === "object" &&
-            value.userId === userId && value.roomId === roomId &&
-            allowed.has(value.itemId) &&
-            Number.isFinite(value.stability) && Number.isFinite(value.difficulty) &&
-            Number.isInteger(value.reviewCount));
+        return data.filter(
+            (value): value is ItemMemoryState =>
+                !!value &&
+                typeof value === "object" &&
+                value.userId === userId &&
+                value.roomId === roomId &&
+                allowed.has(value.itemId) &&
+                Number.isFinite(value.stability) &&
+                Number.isFinite(value.difficulty) &&
+                Number.isInteger(value.reviewCount),
+        );
     } catch {
         return [];
     }
@@ -61,19 +70,24 @@ export const loadOnlineGuestMemory = (
     itemIds: string[],
 ): Record<string, ItemMemoryState> => {
     try {
-        const data: unknown = JSON.parse(localStorage.getItem(guestKey(roomId)) ?? "{}");
+        const data: unknown = JSON.parse(
+            localStorage.getItem(guestKey(roomId)) ?? "{}",
+        );
         if (!data || typeof data !== "object" || Array.isArray(data)) return {};
         const allowed = new Set(itemIds);
         return Object.fromEntries(
             Object.entries(data).filter(([id, value]) => {
-                if (!allowed.has(id) || !value || typeof value !== "object") return false;
+                if (!allowed.has(id) || !value || typeof value !== "object")
+                    return false;
                 const memory = value as Partial<ItemMemoryState>;
-                return memory.itemId === id &&
+                return (
+                    memory.itemId === id &&
                     memory.roomId === roomId &&
                     memory.userId === guestUserId &&
                     typeof memory.stability === "number" &&
                     typeof memory.difficulty === "number" &&
-                    typeof memory.reviewCount === "number";
+                    typeof memory.reviewCount === "number"
+                );
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
@@ -84,13 +98,18 @@ export const loadOnlineGuestMemory = (
 export const saveOnlineGuestMemory = (session: OnlineMemorySession) => {
     if (session.userId !== null) return;
     try {
-        const existing = loadOnlineGuestMemory(session.roomId, session.scheduler.itemIds);
+        const existing = loadOnlineGuestMemory(
+            session.roomId,
+            session.scheduler.itemIds,
+        );
         const next = { ...existing };
         for (const [id, memory] of Object.entries(session.memory)) {
             const previous = next[id];
-            if (!previous ||
+            if (
+                !previous ||
                 (Date.parse(memory.updatedAt ?? "") || 0) >=
-                    (Date.parse(previous.updatedAt ?? "") || 0)) {
+                    (Date.parse(previous.updatedAt ?? "") || 0)
+            ) {
                 next[id] = memory;
             }
         }
@@ -130,16 +149,22 @@ export const recordOnlineRecall = (
         // Reconcile against the actual displayed item, rather than crediting
         // an unpresented recommendation.
         if (selected) {
-            if (selected.advancesCycle && !scheduler.cycleQueue.includes(selected.itemId))
+            if (
+                selected.advancesCycle &&
+                !scheduler.cycleQueue.includes(selected.itemId)
+            )
                 scheduler.cycleQueue.unshift(selected.itemId);
-            if (selected.retry) scheduler.retries[selected.itemId] = selected.retry;
+            if (selected.retry)
+                scheduler.retries[selected.itemId] = selected.retry;
         } else {
             scheduler.turn++;
         }
         const entry = scheduler.retries[itemId];
         const advancesCycle = scheduler.cycleQueue.includes(itemId);
         if (advancesCycle) {
-            scheduler.cycleQueue = scheduler.cycleQueue.filter(id => id !== itemId);
+            scheduler.cycleQueue = scheduler.cycleQueue.filter(
+                (id) => id !== itemId,
+            );
             if (scheduler.cycleQueue.length === 0) scheduler.completedCycles++;
         }
         delete scheduler.retries[itemId];
@@ -161,12 +186,17 @@ export const recordOnlineRecall = (
     const evidence: RecallObservation = {
         ...observation,
         incorrectInputCount:
-            observation.incorrectInputCount ?? Math.max(0, observation.attemptCount - 1),
+            observation.incorrectInputCount ??
+            Math.max(0, observation.attemptCount - 1),
         initialCueRatio: observation.initialCueRatio ?? 0,
-        finalCueRatio: observation.finalCueRatio ??
-            observation.revealedHintChars / Math.max(1, observation.answerLength),
-        additionalHintCount: observation.additionalHintCount ?? observation.hintCount,
-        answerWasFullyRevealed: observation.answerWasFullyRevealed ??
+        finalCueRatio:
+            observation.finalCueRatio ??
+            observation.revealedHintChars /
+                Math.max(1, observation.answerLength),
+        additionalHintCount:
+            observation.additionalHintCount ?? observation.hintCount,
+        answerWasFullyRevealed:
+            observation.answerWasFullyRevealed ??
             observation.revealedHintChars >= observation.answerLength,
         elapsedSincePresentationMs,
         expectedTypingMs: observation.answerLength * 220,
