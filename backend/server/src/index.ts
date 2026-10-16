@@ -23,6 +23,7 @@ import {
     requireRoomItems,
     validateAuthPayload,
     isRequestId,
+    parseClientEvent,
 } from "../../shared/validation";
 import { canStart } from "../../shared/game";
 import {
@@ -283,21 +284,19 @@ io.on("connection", (socket) => {
         getGame()?.apply({ type: "currentInput", playerId: user.id, input });
     });
     socket.on("hint:update", (payload: unknown) => {
-        if (!payload || typeof payload !== "object" || !("length" in payload)) return;
-        const length = payload.length;
-        if (typeof length !== "number" || !Number.isInteger(length) || length < 0 || length > 32)
-            return;
-        getGame()?.apply({ type: "hint:update", playerId: user.id, length });
+        const parsed = parseClientEvent("hint:update", payload);
+        if (!parsed || parsed.event !== "hint:update") return;
+        getGame()?.apply({ type: "hint:update", playerId: user.id, length: parsed.data.length });
     });
     socket.on("item:recommend", (payload: unknown) => {
         const game = getGame();
-        if (!game || !roomId || !payload || typeof payload !== "object" ||
-            !("itemId" in payload) || typeof payload.itemId !== "string") return;
+        const parsed = parseClientEvent("item:recommend", payload);
+        if (!game || !roomId || !parsed || parsed.event !== "item:recommend") return;
         // Only an authenticated room participant may influence their own
         // next question; unknown item IDs are ignored.
         if (!game.state.room.users.some(player => player.id === user.id)) return;
-        if (!game.state.room.items.some(item => item.id === payload.itemId)) return;
-        recommendedItems.set(user.id, payload.itemId);
+        if (!game.state.room.items.some(item => item.id === parsed.data.itemId)) return;
+        recommendedItems.set(user.id, parsed.data.itemId);
     });
     socket.on("word:success", () => {
         getGame()?.apply({ type: "word:success", playerId: user.id });
