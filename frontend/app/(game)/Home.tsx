@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 import MorphDialog from "@/components/ui/MorphDialog";
+import Menu from "@/components/ui/Menu";
 import Toggle from "@/components/ui/Toggle";
 
 type Props = {
@@ -23,7 +24,6 @@ export default function Home({
     initialBackgroundMusic,
 }: Props) {
     const [showCursor, setShowCursor] = useState(true);
-    const [showPopUp, setShowPopUp] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
     const [showSettings, setShowSettings] = useState(false);
 
@@ -69,73 +69,42 @@ export default function Home({
 
     return (
         <div className="flex flex-col h-dvh w-dvw">
-            {showPopUp && (
-                <div
-                    className="absolute top-0 left-0 w-full h-full"
-                    onClick={() => setShowPopUp(false)}
-                />
-            )}
             <div
                 className={`w-full flex justify-end p-2 ${redesignedSignInButton && "border-b border-(--color-border)"}`}
             >
                 {userId ? (
-                    <>
-                        <div
-                            className="relative rounded-lg"
-                            data-cursor="button"
-                            data-cursor-shape="1"
-                        >
-                            <button
-                                className="h-8 w-8 flex items-center justify-center font-semibold $ active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb"
-                                onClick={() => setShowPopUp(!showPopUp)}
-                            >
-                                <Icon name="circleUserRound" />
-                            </button>
-
+                    <Menu
+                        name="ユーザーアクション"
+                        button={
                             <div
-                                className={`absolute top-10 w-48 p-1 right-0 ${showPopUp ? "" : "opacity-0 pointer-events-none"} transition-all duration-(--duration-etb) ease-etb`}
+                                className="rounded-lg"
+                                data-cursor="button"
+                                data-cursor-shape="1"
                             >
-                                <div
-                                    className={`${!showPopUp && "scale-x-20 translate-x-21 -translate-y-16 scale-y-25"} transition-all duration-(--duration-etb) ease-etb`}
+                                <button
+                                    aria-label="ユーザーメニューを開く"
+                                    className="h-8 w-8 flex items-center justify-center rounded-lg font-semibold active:scale-95 transition-all cursor-pointer duration-(--duration-etb) ease-etb"
                                 >
-                                    <div
-                                        className="rounded-sm w-full"
-                                        data-cursor={showPopUp && "button"}
-                                        data-cursor-shape="1"
-                                    >
-                                        <button
-                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
-                                            onClick={() =>
-                                                router.push("/my-rooms")
-                                            }
-                                        >
-                                            ルーム一覧
-                                        </button>
-                                    </div>
-                                    <div
-                                        className="rounded-sm"
-                                        data-cursor={showPopUp && "button"}
-                                        data-cursor-shape="1"
-                                    >
-                                        <button
-                                            className="flex cursor-pointer w-full h-8 items-center px-2 font-semibold rounded-lg active:scale-95 transition-all duration-(--duration-etb) ease-etb"
-                                            onClick={() => {
-                                                posthog.capture("signed_out");
-                                                posthog.reset();
-                                                signOut();
-                                                setUserId(null);
-                                            }}
-                                        >
-                                            サインアウト
-                                        </button>
-                                    </div>
-                                </div>
-                                <div
-                                    className={`absolute right-0 ${showPopUp ? "w-48 top-0  h-full" : "w-8 -top-10 h-8"} rounded-lg -z-1 transition-all duration-(--duration-etb) ease-etb bg-(--color-background-secondary)`}
-                                />
+                                    <Icon name="circleUserRound" />
+                                </button>
                             </div>
-                        </div>
-                    </>
+                        }
+                        items={[
+                            {
+                                label: "ルーム一覧",
+                                onClick: () => router.push("/my-rooms"),
+                            },
+                            {
+                                label: "サインアウト",
+                                onClick: () => {
+                                    posthog.capture("signed_out");
+                                    posthog.reset();
+                                    signOut();
+                                    setUserId(null);
+                                },
+                            },
+                        ]}
+                    />
                 ) : (
                     <div
                         className="rounded-lg"
