@@ -852,7 +852,7 @@ test("full manual hint reuses the inline overlay and keeps typing enabled", () =
     );
 });
 
-test("full hint clears existing incorrect input and resets on later wrong typing", () => {
+test("Playground full hints and online partial hints clear incorrect English and kana input", () => {
     const source = fs.readFileSync(
         path.join(root, "components/feature/InputView.tsx"),
         "utf8",
@@ -860,9 +860,13 @@ test("full hint clears existing incorrect input and resets on later wrong typing
     assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
     assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
     assert.match(source, /const incorrectAfterReveal = answerRevealed &&/);
+    // Playground's fully revealed hint applies to all answer types.
+    // Online hints enforce immediate failure within the revealed prefix.
+    assert.match(source, /const typedInsideHint = Array\.from\(/);
+    assert.match(source, /onChangeInput\("", true\)/);
     assert.match(
         source,
-        /if \(incorrectAfterReveal \|\| \(typedInsideHint && !manualHints && !isKanaAnswer\)\) \{\s*resetInput\(\);\s*return;/,
+        /if \(incorrectAfterReveal \|\| \(typedInsideHint && !manualHints\)\) \{\s*resetInput\(\);\s*return;/,
     );
 });
 
