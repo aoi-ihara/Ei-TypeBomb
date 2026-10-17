@@ -7,26 +7,24 @@
         "bindings": [
             {
                 "name": "ROOMS",
-                "class_name": "RoomDO"
-            }
-        ]
+                "class_name": "RoomDO",
+            },
+        ],
     },
     "migrations": [
         {
             "tag": "v1",
-            "new_sqlite_classes": [
-                "RoomDO"
-            ]
-        }
+            "new_sqlite_classes": ["RoomDO"],
+        },
     ],
     "previews": {
         "durable_objects": {
             "bindings": [
                 {
                     "name": "ROOMS",
-                    "class_name": "RoomDO"
-                }
-            ]
+                    "class_name": "RoomDO",
+                },
+            ],
         },
         "vars": {
             "ALLOWED_ORIGINS": "https://ei-typebomb.vgnz93hs.com,https://ei-typebomb.com",
@@ -35,7 +33,7 @@
             "NEXT_PUBLIC_POSTHOG_KEY": "phc_p3eZiwnCZXCSeZ4TBmTzFgshSY3cKiNBXUhMj3oxGB6K",
             "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_XzJG_jUUP4VA27tNLT1aKQ_HwXjovse",
             "NEXT_PUBLIC_SUPABASE_URL": "https://gkiniypvnwqhmgviwxws.supabase.co",
-            "POSTHOG_HOST": "https://us.i.posthog.com"
-        }
-    }
+            "POSTHOG_HOST": "https://us.i.posthog.com",
+        },
+    },
 }

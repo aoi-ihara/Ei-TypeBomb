@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://ei-typebomb.vgnz93hs.com"),
+    metadataBase: new URL("https://ei-typebomb.com"),
     title: "Ei-TypeBomb",
     description:
         "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
         title: "Ei-TypeBomb",
         description:
             "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
-        url: "https://ei-typebomb.vgnz93hs.com",
+        url: "https://ei-typebomb.com",
         siteName: "Ei-TypeBomb",
         images: [
             {
