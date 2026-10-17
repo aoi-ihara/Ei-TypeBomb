@@ -6,7 +6,7 @@ export function Footer() {
     return (
         <div className="flex w-fit md:px-4">
             <div data-cursor="text pointer-events-none">
-                © 2026 vgnz93hs. All rights reserved.
+                © 2026 vgnz93hs. Licensed under the MIT License.
             </div>
             <div
                 data-cursor="button"

@@ -70,11 +70,7 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (
-                inRoomEditor &&
-                icon === "trash" &&
-                text !== "ルームを削除"
-            ) {
+            if (inRoomEditor && icon === "trash" && text !== "ルームを削除") {
                 posthog.capture("word_deleted", { room_id: roomId });
                 return;
             }
@@ -166,11 +162,7 @@ export default function PostHogEventTracker() {
                 return;
             }
 
-            if (
-                inRoomEditor &&
-                importPanelOpen &&
-                text === "詳しく見る"
-            ) {
+            if (inRoomEditor && importPanelOpen && text === "詳しく見る") {
                 posthog.capture("words_import_help_opened", {
                     room_id: roomId,
                 });
@@ -242,7 +234,7 @@ export default function PostHogEventTracker() {
 
         const observer = new MutationObserver(() => {
             const gameFinishedButton = document.querySelector(
-                'button [data-icon="rotateCw"]',
+                'button [data-icon="rotateCcw"]',
             );
 
             if (!gameFinishedButton) {

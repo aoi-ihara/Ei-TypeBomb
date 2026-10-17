@@ -237,7 +237,7 @@ export default function ServerHealth() {
             />
 
             <Button
-                iconName="rotateCw"
+                iconName="rotateCcw"
                 onClick={handleRefresh}
                 loading={refreshing}
                 className="w-full"

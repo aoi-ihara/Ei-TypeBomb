@@ -859,9 +859,10 @@ test("full hint clears existing incorrect input and resets on later wrong typing
     );
     assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
     assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
+    assert.match(source, /const incorrectAfterReveal = answerRevealed &&/);
     assert.match(
         source,
-        /typedInsideHint &&\s*\(!manualHints \|\| answerRevealed\)/,
+        /if \(incorrectAfterReveal \|\| \(typedInsideHint && !manualHints && !isKanaAnswer\)\) \{\s*resetInput\(\);\s*return;/,
     );
 });
 

@@ -260,6 +260,7 @@ export function applyGameEvent(
                 room.bombCount == null
                     ? bombsForPlayers(room.users.length)
                     : Math.min(
+                          4,
                           room.users.length,
                           Math.max(1, Math.floor(room.bombCount)),
                       );

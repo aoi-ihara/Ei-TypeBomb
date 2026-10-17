@@ -1,0 +1,15 @@
+import { importJWK, jwtVerify, type JWK } from "jose";
+import { getAuthenticatedRoomId } from "../../../shared/roomJwt";
+import type { Env } from "../types";
+
+export async function verifyRoomToken(token: string, env: Env): Promise<string> {
+    // Verify the JWT cryptographically *before* trusting its room ID.
+    if (!env.JWT_KEY_ID || !env.JWT_PUBLIC_KEY) {
+        throw new Error("Worker JWT configuration is missing");
+    }
+    const key = await importJWK(JSON.parse(env.JWT_PUBLIC_KEY) as JWK, "ES256");
+    const { payload, protectedHeader } = await jwtVerify(token, key, {
+        algorithms: ["ES256"],
+    });
+    return getAuthenticatedRoomId(payload, protectedHeader.kid, env.JWT_KEY_ID);
+}
