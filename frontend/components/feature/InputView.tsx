@@ -447,7 +447,7 @@ function TypingAttempt({
         const incorrectAfterReveal = answerRevealed &&
             Array.from({ length: advance }, (_, offset) => currentSelection + offset)
                 .some((index) => next[index] !== english[index]);
-        if (incorrectAfterReveal || (typedInsideHint && !manualHints && !isKanaAnswer)) {
+        if (incorrectAfterReveal || (typedInsideHint && !manualHints)) {
             resetInput();
             return;
         }
@@ -777,7 +777,7 @@ function TypingAttempt({
                                         resetInput();
                                         return;
                                     }
-                                    if (answerRevealed && !advanceKanaInput(
+                                    if ((answerRevealed || (!manualHints && currentSelection < hintLength)) && !advanceKanaInput(
                                         english.slice(currentSelection),
                                         { committed: "", composing: kanaComposing },
                                         char,
