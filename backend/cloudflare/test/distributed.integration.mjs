@@ -606,23 +606,21 @@ test(
         );
         const readsAfterFreshCreation = databaseReads;
 
-        // Worker goes down after Primary has restarted with a new process
-        // incarnation. Render alone is NOT a majority and must not steal
-        // ownership or advance the old game.
+        // Worker stops. Render alone may take over from the last received
+        // certified checkpoint, without waiting for another live server.
         await mf.dispose();
-        const denied = await fetch(`${urls[2]}/cluster/report`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jwtToken: roomToken,
-                sessionToken: observerSession,
-                roomId,
-                owner: urls[1],
-                revision: w1.room.revision,
-                failure: true,
-            }),
-        });
-        assert.equal(denied.status, 503, "a single voter cannot elect itself");
+        await wait(
+            () => observed?.ownerServerId === urls[2],
+            "client failure report promotes the last survivor",
+            25000,
+        );
+        const render1 = await nodeClient(2, 0),
+            render2 = await nodeClient(2, 1);
+        await wait(() => !render1.room.migrating, "solo Render resume");
+        assert.equal(render1.room.gameId, expected.gameId);
+        assert.equal(render2.room.roomInstanceId, expected.roomInstanceId);
+        assert.deepEqual(render1.room.users, expected.users);
+        assert.equal(render1.room.bombs[0].holder, expected.bombs[0].holder);
         assert.equal(databaseReads, readsAfterFreshCreation);
         assert.deepEqual(
             unexpected,
