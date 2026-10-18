@@ -459,6 +459,15 @@ export class PeerControl implements Control {
         )
             throw new Error("Fenced owner");
         if (op === "confirm") {
+            // A solo owner may have become stale during a partition. Check
+            // peers opportunistically and stop the old runtime once a newer
+            // independently certified epoch becomes visible again.
+            const observed = await this.read(roomId);
+            if (observed &&
+                (observed.ownership.epoch > current.ownership.epoch ||
+                    (observed.ownership.epoch === current.ownership.epoch &&
+                        observed.ownership.owner !== this.config.id)))
+                throw new Error("Fenced by a newer remote owner");
             await this.rpc(this.config.id, "fence", {
                 roomId,
                 epoch: args.epoch,
@@ -657,7 +666,14 @@ export class PeerControl implements Control {
                         : state.contact,
             },
         });
-        return this.propose(replacement, "elect", latest);
+        const elected = await this.propose(replacement, "elect", latest);
+        // The only surviving owner may elect immediately; promptly spread
+        // the new epoch so sleeping/lower replicas can later recover it.
+        await Promise.race([
+            this.broadcast(elected),
+            new Promise<void>((resolve) => setTimeout(resolve, 150)),
+        ]);
+        return elected;
     }
     async dispatch(
         peer: Member,
