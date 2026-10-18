@@ -82,9 +82,16 @@ export function attachLink(
                     type: "hello",
                     certificate: identity.member.certificate,
                     boot: identity.member.boot,
-                    proof: await identity.proof(expected ?? message.id, {
-                        challenge: message.nonce,
-                    }),
+                    // Outbound clients know the TLS-authenticated server URL.
+                    // Inbound servers sign only a server-role proof for their own
+                    // audience, never an arbitrary client's chosen audience.
+                    proof: await identity.proof(
+                        expected ?? identity.member.id,
+                        {
+                            challenge: message.nonce,
+                            direction: expected ? "client" : "server",
+                        },
+                    ),
                 });
             } else if (message.type === "hello") {
                 const member = await Identity.inspect(
@@ -97,10 +104,14 @@ export function attachLink(
                 const proof = await verify(
                     message.proof,
                     member.publicKey,
-                    identity.member.id,
+                    expected ?? identity.member.id,
                     member.id,
                 );
-                if (proof.challenge !== nonce || proof.sub !== member.boot)
+                if (
+                    proof.direction !== (expected ? "server" : "client") ||
+                    proof.challenge !== nonce ||
+                    proof.sub !== member.boot
+                )
                     throw new Error("Replay of peer authentication");
                 if (peer) return;
                 peer = member;

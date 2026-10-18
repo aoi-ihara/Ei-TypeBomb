@@ -385,6 +385,7 @@ export class PeerControl implements Control {
                 roomId,
                 epoch: args.epoch,
                 owner: this.config.id,
+                progress: true,
             });
             return this.result((await this.record(roomId)).committed);
         }
@@ -419,6 +420,9 @@ export class PeerControl implements Control {
                 ...current.ownership,
                 revision: current.ownership.revision + 1,
                 savedAt: Date.now(),
+                pausedAt: value?.resumeUntil
+                    ? (value.pausedAt ?? current.ownership.pausedAt)
+                    : undefined,
                 lifecycle:
                     op === "delete"
                         ? "DELETED"
@@ -546,7 +550,12 @@ export class PeerControl implements Control {
                 owner: this.config.id,
                 epoch,
                 lifecycle: "MIGRATING",
-                pausedAt: state.contact,
+                pausedAt:
+                    latest.ownership.lifecycle === "MIGRATING"
+                        ? (latest.value?.pausedAt ??
+                          latest.ownership.pausedAt ??
+                          state.contact)
+                        : state.contact,
             },
         });
         return this.propose(replacement, "elect", latest);
@@ -675,10 +684,14 @@ export class PeerControl implements Control {
                         record.promised > args.epoch
                     )
                         throw new Error("Fenced owner");
-                    await this.store(roomId, {
-                        ...record,
-                        contact: Date.now(),
-                    });
+                    // A probe only verifies fencing; it must not move the timer
+                    // pause boundary of a halted game. Only its runtime heartbeat
+                    // (or a committed event) proves continued game execution.
+                    if (args.progress === true)
+                        await this.store(roomId, {
+                            ...record,
+                            contact: Date.now(),
+                        });
                 }
                 const next = cp.voters[index + 1];
                 if (next) return this.rpc(next.id, op, args);

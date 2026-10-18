@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { network, freshRoom, credentials } from "./clusterFixture";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
@@ -431,4 +432,28 @@ test("migration reconnect grace expires without any returning client and commits
             .lifecycle,
         "DELETED",
     );
+});
+
+test("starting the migration adapter preserves the original timer pause boundary", async () => {
+    const n = await network(),
+        room = freshRoom();
+    await n.hosts[0].call("open", { roomId: room.id, initial: initial(room) });
+    const stoppedProgressAt = Date.now();
+    await delay(20);
+    await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: 0,
+    });
+    n.alive[0] = false;
+    await delay(20);
+    const election = await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: 0,
+    });
+    assert.ok(election.ownership.pausedAt! <= stoppedProgressAt);
+    await delay(20);
+    const restored = await n.hosts[1].call("open", { roomId: room.id });
+    assert.equal(restored.ownership.pausedAt, election.ownership.pausedAt);
 });
