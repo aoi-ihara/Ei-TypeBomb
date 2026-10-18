@@ -1,5 +1,6 @@
 export interface Env {
     ROOMS: DurableObjectNamespace;
+    CLUSTER_SERVER_TOKEN?: string;
     JWT_KEY_ID: string;
     JWT_PUBLIC_KEY: string;
     NEXT_PUBLIC_SUPABASE_URL: string;

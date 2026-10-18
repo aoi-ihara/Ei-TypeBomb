@@ -46,10 +46,11 @@ RTT プローブは ID を検証してからアドレス枠を消費し、不正
 共通ゲームコアと runtime の境界、ビルド出力、将来の拡張については
 [共通コアのREADME](../shared/README.md) を参照してください。
 
-## Topology configuration (validation only)
+## Distributed topology configuration
 
 Node.js accepts `PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, and optional
 `SERVER_PUBLIC_URL`. The same variables are supported by Cloudflare.
 For a primary, leave `PARENT_SERVER_URL` unset; replicas point to their
-immediate parent. The current implementation validates these values at
-startup; it does **not** yet replicate room state between servers.
+immediate parent. Distributed mode requires `SERVER_PUBLIC_URL`, a dedicated
+`CLUSTER_SERVER_TOKEN` and the control migration. See
+[setup and failover guarantees](../DISTRIBUTED.md) before enabling it.

@@ -1,8 +1,8 @@
 # Shared backend core
 
 `backend/shared/` contains runtime-independent TypeScript for the current
-Node server and the Cloudflare Worker adapter. The runtime-specific code lives in
-`backend/cloudflare/`.
+Node server and the Cloudflare Worker adapter. Runtime-specific code lives in
+`backend/server/` and `backend/cloudflare/`.
 
 ## Shared code
 
@@ -15,6 +15,8 @@ Node server and the Cloudflare Worker adapter. The runtime-specific code lives i
 - `keyedRateLimit.ts`: runtime-neutral per-key token bucket and bounded storage
 - `addressRateLimit.ts`: per-address limiter policy (1,000 keys, 60s stale TTL)
 - `roomJwt.ts`: validated room identity claims _after_ JWT signature verification
+- `jwtPolicy.ts`: ES256 issuer, audience and required expiry policies
+- `distributed/`: durable ownership protocol, ordered replication and paused recovery
 
 The shared limiter takes a clock supplied by its caller. The runtime chooses
 whether keys represent sockets, clients, remote IPs or Durable Object sessions
@@ -37,10 +39,10 @@ WebSockets, PostgREST, ES256 JWT verification, Durable Object storage and
 Alarm scheduling. It imports the shared core without bringing in
 `node:perf_hooks`, Socket.IO, Express, PostgreSQL or process globals.
 
-The game state stores absolute epoch-millisecond deadlines; transfers
-between runtimes must preserve `gameId`, revisions and deadlines. Stable
-player identity, ownership fencing, event deduplication and actual cross-server
-failover are **not implemented**.
+The game state stores absolute epoch-millisecond deadlines. Distributed mode
+preserves game IDs, seats, bomb turns and question indices, shifts deadlines
+across a migration pause, and commits through the fenced PostgreSQL authority.
+See [distributed operation and setup](../DISTRIBUTED.md).
 
 ## Verification
 
@@ -62,12 +64,11 @@ Node and Worker verify it with the existing ES256 public key before using the
 session JWT is kept only in the page's memory; a reload creates a new player.
 
 Network disconnects now get a 20s reconnection grace period before the room
-processes `room:leave`. Deliberate `room:leave` remains immediate. This is
-**same-server reconnection only**, not cross-server failover. Replication,
-ownership epochs/fencing, server discovery and seamless transfer still require
-a subsequent change. Do not route an active room to a different server yet.
+processes `room:leave`. Deliberate `room:leave` remains immediate. Distributed
+mode reuses the same session JWT across Node/Worker transports. A new tab gets
+a different signed identity; a reconnect receives an authoritative snapshot.
 
-## Hierarchy configuration (preparation for phase 2)
+## Hierarchy configuration
 
 The Node and Workers adapters both validate these optional environment variables:
 - `PRIMARY_SERVER_URL`: canonical URL of the preferred primary
@@ -75,6 +76,6 @@ The Node and Workers adapters both validate these optional environment variables
 - `SERVER_PUBLIC_URL`: this node's URL; when set, validates misconfigured self-links
 
 No server URLs or signing secrets are committed here. Omitted variables keep
-existing standalone deployments working. At present these values **validate**
-the deployment role but do not yet enable auto-registration, load balancing or
-replication. That needs authenticated discovery and ownership fencing.
+existing standalone deployments working. A configured hierarchy requires a
+server-specific capability and the control migration; missing configuration fails
+closed. See [setup, tests, costs and limitations](../DISTRIBUTED.md).

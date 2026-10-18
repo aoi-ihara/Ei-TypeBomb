@@ -35,25 +35,99 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 import { parseServerTopology } from "../../shared/topology";
 
-const topology = parseServerTopology(process.env);
+import { clusterConfig, HttpControl } from "../../shared/distributed/control";
+import { DistributedRoom } from "../../shared/distributed/runtime";
+import {
+    Replicator,
+    receiveReplica,
+    newerReplica,
+} from "../../shared/distributed/replication";
+import type { Command, Checkpoint } from "../../shared/distributed/types";
 
-const games = new Map<string, NodeGameAdapter>();
+const topology = parseServerTopology(process.env);
+const cluster = clusterConfig(process.env, "socket.io")
+    ? new HttpControl(process.env, "socket.io")
+    : null;
+const replicator = cluster
+    ? new Replicator(cluster.config!.id, process.env.CLUSTER_SERVER_TOKEN!)
+    : null;
+
+const games = new Map<string, NodeGameAdapter | DistributedRoom>();
 // Game identity is scoped to a signed, tab-specific session, not a transport ID.
 const recommendedItems = new Map<string, string>();
+const replicas = new Map<string, Checkpoint>();
 const liveSessions = new Map<string, string>();
 const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
 const DISCONNECT_GRACE_MS = 20_000;
-const sessionKey = (roomId: string, playerId: string) => `${roomId}:${playerId}`;
+const sessionKey = (roomId: string, playerId: string) =>
+    `${roomId}:${playerId}`;
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 
 const app = express();
 const httpServer = createServer(app);
+app.get("/health", (_req, res) => {
+    res.json({ ok: true });
+});
+app.use("/cluster/route", express.json({ limit: "8kb" }));
+app.post("/cluster/route", async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    try {
+        if (!cluster) {
+            res.status(404).end();
+            return;
+        }
+        const roomId = await verifyToken(req.body?.jwtToken);
+        if (!roomId) {
+            res.status(403).end();
+            return;
+        }
+        await cluster.register();
+        const result = await cluster.call("read", { roomId });
+        res.json({ ownership: result.ownership, servers: result.servers });
+    } catch {
+        res.status(503).end();
+    }
+});
+app.options("/cluster/route", (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    res.setHeader("Access-Control-Allow-Methods", "POST");
+    res.status(204).end();
+});
+app.post(
+    "/internal/replicate",
+    express.raw({ type: "application/json", limit: "512kb" }),
+    async (req, res) => {
+        if (!cluster) {
+            res.status(404).end();
+            return;
+        }
+        const response = await receiveReplica(
+            new Request(`${cluster.config!.id}/internal/replicate`, {
+                method: "POST",
+                headers: { Authorization: req.headers.authorization ?? "" },
+                body: req.body,
+            }),
+            cluster,
+            async (checkpoint) => {
+                const id = checkpoint.ownership.roomId;
+                if (newerReplica(replicas.get(id), checkpoint))
+                    replicas.set(id, checkpoint);
+                if (replicas.size > 256)
+                    replicas.delete(replicas.keys().next().value!);
+                // Cache only; promotion always reloads the authoritative durable checkpoint.
+            },
+        );
+        res.status(response.status).end();
+    },
+);
 const io = new Server<
     EventHandlers<ClientPayloads>,
     EventHandlers<ServerPayloads>
 >(httpServer, {
+    maxHttpBufferSize: 8192,
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
 const acceptDatabaseProbe = createDatabaseProbeRateLimit();
@@ -83,6 +157,48 @@ const createRoomIfNeeded = async (
     if (pendingLoad) return pendingLoad;
 
     const loadPromise = (async () => {
+        if (cluster) {
+            const saved = await cluster.call("read", { roomId });
+            const initial =
+                !saved.ownership || saved.ownership.lifecycle === "DELETED"
+                    ? await getRoomFromId(roomId, jwtToken)
+                    : undefined;
+            if (initial) requireRoomItems(initial);
+            if (
+                (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
+                !initial
+            )
+                return null;
+            const game = new DistributedRoom(
+                roomId,
+                cluster,
+                (result) => {
+                    const index = rooms.findIndex((room) => room.id === roomId);
+                    if (index < 0) rooms.push(result.state.room);
+                    else rooms[index] = result.state.room;
+                    for (const effect of result.effects)
+                        if (
+                            effect.type === "broadcast" &&
+                            effect.packet.event !== "room:broadcast"
+                        ) {
+                            const emit = io
+                                .to(roomId)
+                                .emit.bind(io.to(roomId)) as (
+                                event: string,
+                                data?: unknown,
+                            ) => boolean;
+                            emit(effect.packet.event, effect.packet.data);
+                        }
+                    io.to(roomId).emit("room:broadcast", game.snapshot());
+                },
+                (result, full) => replicator!.send(result, full),
+            );
+            await game.open(initial ?? undefined);
+            games.set(roomId, game);
+            if (!rooms.some((room) => room.id === roomId))
+                rooms.push(game.state.room);
+            return game.state.room;
+        }
         const room = await getRoomFromId(roomId, jwtToken);
         if (!room) return null;
         requireRoomItems(room);
@@ -194,10 +310,15 @@ const sendRoomInfo = (roomId: string | null) => {
     if (!roomId) return;
     const room = rooms.find((item) => item.id === roomId);
     if (!room) return;
-    io.to(roomId).emit(
-        "room:broadcast",
-        roomSnapshot(room, games.get(roomId)?.state.revision ?? 0),
-    );
+    const game = games.get(roomId);
+    if (game instanceof DistributedRoom) {
+        if (!game.halted && !game.deleted)
+            io.to(roomId).emit("room:broadcast", game.snapshot());
+    } else
+        io.to(roomId).emit(
+            "room:broadcast",
+            roomSnapshot(room, game?.state.revision ?? 0),
+        );
 };
 
 io.on("connection", (socket) => {
@@ -238,9 +359,49 @@ io.on("connection", (socket) => {
         socket.emit("error", { message });
     };
 
+    const emitRaw = socket.emit.bind(socket) as (
+        event: string,
+        data?: unknown,
+    ) => boolean;
+    // Every authoritative mutation carries a retry-stable event ID and fencing metadata.
+    socket.on("cluster:ping", () => {
+        const game = getGame();
+        if (
+            game instanceof DistributedRoom &&
+            !game.halted &&
+            game.checkpoint.ownership.leaseUntil > Date.now()
+        )
+            emitRaw("cluster:pong");
+    });
+    socket.on("game:command", async (payload: unknown) => {
+        const game = getGame();
+        if (
+            !(game instanceof DistributedRoom) ||
+            !roomId ||
+            liveSessions.get(sessionKey(roomId, user.id)) !== socket.id
+        )
+            return;
+        try {
+            const command = payload as Command;
+            if (!command || typeof command !== "object" || !command.event)
+                return;
+            if (command.event.type === "room:join") command.event.player = user;
+            const status = await game.command(command, user.id);
+            sendRoomInfo(roomId);
+            emitRaw("command:ack", { id: command.id, status });
+        } catch {
+            if (game.halted) emitRaw("cluster:paused");
+            else
+                emitRaw("command:ack", {
+                    id: (payload as Command)?.id,
+                    status: "rejected",
+                });
+        }
+    });
     socket.on("room:join", () => {
         const game = getGame();
         if (!game || !roomId) return;
+        if (game instanceof DistributedRoom) return;
         const result = game.apply({ type: "room:join", player: user });
         if (result.effects.length) socket.join(roomId);
     });
@@ -248,6 +409,7 @@ io.on("connection", (socket) => {
         if (!roomId) return;
         const key = sessionKey(roomId, user.id);
         if (liveSessions.get(key) !== socket.id) return;
+        if (getGame() instanceof DistributedRoom) return;
         liveSessions.delete(key);
         deleteUser(user.id, "room_leave");
     });
@@ -264,6 +426,14 @@ io.on("connection", (socket) => {
                     );
                 }
 
+                if (cluster) {
+                    if (!response.sessionToken)
+                        throw new ClientError("署名付きセッションが必要です。");
+                    await verifyClientSessionToken(
+                        response.sessionToken,
+                        jwtResult,
+                    );
+                }
                 const room = await createRoomIfNeeded(
                     jwtResult,
                     response.jwtToken,
@@ -274,10 +444,14 @@ io.on("connection", (socket) => {
                     );
                 }
                 requireRoomItems(room);
+                if (!socket.connected) return;
 
                 const displayName = response.displayName;
                 const stableId = response.sessionToken
-                    ? await verifyClientSessionToken(response.sessionToken, jwtResult)
+                    ? await verifyClientSessionToken(
+                          response.sessionToken,
+                          jwtResult,
+                      )
                     : socket.id;
                 const key = sessionKey(jwtResult, stableId);
                 const previousSocketId = liveSessions.get(key);
@@ -291,6 +465,12 @@ io.on("connection", (socket) => {
                 socket.join(roomId);
                 if (previousSocketId && previousSocketId !== socket.id) {
                     io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+                }
+                const game = getGame();
+                if (game instanceof DistributedRoom) {
+                    if (!response.sessionToken)
+                        throw new ClientError("署名付きセッションが必要です。");
+                    await game.connect(stableId);
                 }
                 socket.emit("auth:session", { id: stableId });
                 logEvent("ROOM", `authenticated ${roomId}`, {
@@ -339,15 +519,23 @@ io.on("connection", (socket) => {
             )
         )
             return;
-        recommendedItems.set(user.id, parsed.data.itemId);
+        if (game instanceof DistributedRoom)
+            game.recommend(user.id, parsed.data.itemId);
+        else recommendedItems.set(user.id, parsed.data.itemId);
     });
     socket.on("word:success", () => {
-        getGame()?.apply({ type: "word:success", playerId: user.id });
+        const game = getGame();
+        if (!(game instanceof DistributedRoom))
+            game?.apply({ type: "word:success", playerId: user.id });
     });
     socket.on("game:start", () => {
         const game = getGame();
 
-        if (!game || !canStart(game.state, user.id, NODE_GAME_RULES)) {
+        if (
+            !game ||
+            game instanceof DistributedRoom ||
+            !canStart(game.state, user.id, NODE_GAME_RULES)
+        ) {
             return;
         }
 
@@ -369,8 +557,12 @@ io.on("connection", (socket) => {
         if (!game) return;
         game.apply({ type: "room:leave", playerId, reason });
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
-        if ((!socketRoom || socketRoom.size === 0) &&
-            ![...pendingLeaves.keys()].some((key) => key.startsWith(`${roomId}:`))) {
+        if (
+            (!socketRoom || socketRoom.size === 0) &&
+            ![...pendingLeaves.keys()].some((key) =>
+                key.startsWith(`${roomId}:`),
+            )
+        ) {
             game.dispose();
             games.delete(roomId);
             rooms = rooms.filter((item) => item.id !== roomId);
@@ -394,6 +586,11 @@ io.on("connection", (socket) => {
         const key = sessionKey(roomId, user.id);
         if (liveSessions.get(key) !== socket.id) return;
         liveSessions.delete(key);
+        const distributed = getGame();
+        if (distributed instanceof DistributedRoom) {
+            void distributed.disconnect(user.id).catch(() => {});
+            return;
+        }
         const previous = pendingLeaves.get(key);
         if (previous) clearTimeout(previous);
         const timer = setTimeout(() => {
@@ -404,7 +601,42 @@ io.on("connection", (socket) => {
     });
 });
 
-httpServer.listen(3001, () => {
-    startConsole(3001);
+if (cluster) {
+    awaitClusterStartup();
+    function awaitClusterStartup() {
+        void cluster!
+            .register()
+            .catch((error) =>
+                console.error("Cluster registration failed", error.message),
+            );
+    }
+    setInterval(awaitClusterStartup, 1_000).unref();
+    setInterval(() => {
+        for (const [id, game] of games)
+            if (game instanceof DistributedRoom) {
+                void game
+                    .tick()
+                    .then(() => {
+                        if (game.deleted || game.halted) {
+                            games.delete(id);
+                            rooms = rooms.filter((room) => room.id !== id);
+                            io.to(id).emit("error", {
+                                message:
+                                    "所有権の確認のため接続先を再確認しています。",
+                            });
+                            io.in(id).disconnectSockets(true);
+                        }
+                    })
+                    .catch(() => {
+                        io.in(id).disconnectSockets(true);
+                        games.delete(id);
+                        rooms = rooms.filter((room) => room.id !== id);
+                    });
+            }
+    }, 100).unref();
+}
+const port = Number(process.env.PORT ?? 3001);
+httpServer.listen(port, () => {
+    startConsole(port);
     console.info(`Server topology: ${topology.role}`);
 });

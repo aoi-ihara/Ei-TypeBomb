@@ -1,0 +1,35 @@
+name: Distributed failover
+on:
+  pull_request:
+    paths: ['backend/**', 'frontend/lib/room/**', 'supabase/migrations/**', '.github/workflows/distributed-failover.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**', 'frontend/lib/room/**', 'supabase/migrations/**', '.github/workflows/distributed-failover.yml']
+jobs:
+  postgres-and-transports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: etb_failover_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      ETB_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/etb_failover_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix backend/server
+      - run: npm ci --prefix backend/cloudflare
+      - name: Bootstrap Supabase API roles in the disposable database
+        run: psql "$ETB_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'create role anon; create role authenticated;'
+      - run: npm test --prefix backend/server
+      - name: Real Node process crashes and workerd WebSockets
+        run: npm run test:integration --prefix backend/cloudflare

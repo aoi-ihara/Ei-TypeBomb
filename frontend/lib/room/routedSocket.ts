@@ -1,0 +1,357 @@
+"use client";
+
+// The bootstrap URLs establish trust. Further URLs come only from a successful
+// HTTPS registry response at one of these URLs and are cached for this page.
+type Server = {
+    id: string;
+    depth: number;
+    transport: "socket.io" | "websocket";
+};
+type Ownership = {
+    owner: string;
+    epoch: number;
+    revision: number;
+    instance: string;
+    lifecycle: string;
+    leaseUntil: number;
+};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Listener = (...args: any[]) => void;
+type Transport = {
+    id?: string;
+    connected: boolean;
+    on(event: string, listener: Listener): unknown;
+    emit(event: string, data?: unknown): unknown;
+    disconnect(): unknown;
+};
+type Meta = { roomInstanceId: string; epoch: number; revision: number };
+export class RoutedSocket {
+    id?: string;
+    connected = false;
+    private listeners = new Map<string, Set<Listener>>();
+    private transport?: Transport;
+    private servers: Server[] = [];
+    private stopped = false;
+    private attempt = 0;
+    private retry?: ReturnType<typeof setTimeout>;
+    private heartbeat?: ReturnType<typeof setInterval>;
+    private lastReply = 0;
+    private meta?: Meta;
+    private token?: string;
+    private deliveredResults = new Set<string>();
+    private pending = new Map<
+        string,
+        {
+            originRevision: number;
+            id: string;
+            event: Record<string, unknown>;
+            gameId?: string;
+            turn?: number;
+            bombId?: string;
+        }
+    >();
+    private gameId?: string;
+    private turn?: number;
+    private bombId?: string;
+    private playerId?: string;
+    constructor(
+        private readonly seeds: string[],
+        private readonly open: (url: string) => Transport,
+        private readonly getToken: () => Promise<string | undefined>,
+        private readonly foreground = () =>
+            document.visibilityState !== "hidden",
+    ) {
+        void this.connect();
+    }
+    on(event: string, listener: Listener) {
+        const set = this.listeners.get(event) ?? new Set();
+        set.add(listener);
+        this.listeners.set(event, set);
+        return this;
+    }
+    off(event: string, listener: Listener) {
+        this.listeners.get(event)?.delete(listener);
+        return this;
+    }
+    once(event: string, listener: Listener) {
+        const wrapper: Listener = (...args) => {
+            this.off(event, wrapper);
+            listener(...args);
+        };
+        return this.on(event, wrapper);
+    }
+    private dispatch(event: string, data?: unknown) {
+        for (const listener of this.listeners.get(event) ?? []) listener(data);
+    }
+    emit(event: string, data?: unknown) {
+        if (event === "auth:response") {
+            this.transport?.emit(event, data);
+            return this;
+        }
+        if (
+            ["room:join", "room:leave", "game:start", "word:success"].includes(
+                event,
+            )
+        ) {
+            if (!this.connected || !this.meta || this.pending.size) return this;
+            const command = {
+                originRevision: this.meta.revision,
+                id: crypto.randomUUID(),
+                event: { type: event },
+                gameId: this.gameId,
+                turn: this.turn,
+                bombId: this.bombId,
+            };
+            this.pending.set(command.id, command);
+            this.sendCommand(command);
+            return this;
+        }
+        this.transport?.emit(event, data);
+        return this;
+    }
+    private sendCommand(command: {
+        id: string;
+        event: Record<string, unknown>;
+    }) {
+        if (this.meta)
+            this.transport?.emit("game:command", {
+                ...command,
+                instance: this.meta.roomInstanceId,
+                epoch: this.meta.epoch,
+                revision: this.meta.revision,
+            });
+    }
+    async connect() {
+        this.stopped = false;
+        const attempt = ++this.attempt;
+        try {
+            this.token ??= await this.getToken();
+            if (!this.token) throw new Error("Room authorization missing");
+            const known = [
+                ...new Set([
+                    ...this.seeds,
+                    ...this.servers.map((server) => server.id),
+                ]),
+            ];
+            let route:
+                | { ownership: Ownership | null; servers: Server[] }
+                | undefined;
+            for (const seed of known) {
+                try {
+                    const endpoint = new URL(seed);
+                    endpoint.pathname = "/cluster/route";
+                    const response = await fetch(endpoint, {
+                        method: "POST",
+                        redirect: "manual",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ jwtToken: this.token }),
+                        signal: AbortSignal.timeout(1200),
+                    });
+                    if (!response.ok) continue;
+                    const value = await response.json();
+                    if (
+                        !Array.isArray(value.servers) ||
+                        value.servers.length > 64
+                    )
+                        continue;
+                    const valid = value.servers.every((server: Server) => {
+                        const url = new URL(server.id);
+                        return (
+                            url.origin === server.id &&
+                            (url.protocol === "https:" ||
+                                ["localhost", "127.0.0.1"].includes(
+                                    url.hostname,
+                                ))
+                        );
+                    });
+                    if (valid) {
+                        route = value;
+                        this.servers = value.servers;
+                        break;
+                    }
+                } catch {
+                    /* Try every known node; no dependency on a live parent. */
+                }
+            }
+            if (attempt !== this.attempt || this.stopped) return this;
+            if (!route) throw new Error("Authoritative routing unavailable");
+            const own = route.ownership;
+            const ownerDepth =
+                route.servers.find((server) => server.id === own?.owner)
+                    ?.depth ?? -1;
+            const ordered = [...route.servers].sort(
+                (a, b) => a.depth - b.depth,
+            );
+            const candidates =
+                !own || own.lifecycle === "DELETED"
+                    ? ordered
+                    : own.leaseUntil > Date.now()
+                      ? ordered.filter((server) => server.id === own.owner)
+                      : ordered.filter(
+                            (server) =>
+                                server.id === own.owner ||
+                                server.depth > ownerDepth,
+                        );
+            for (const server of candidates) {
+                if (attempt !== this.attempt || this.stopped) return this;
+                const url =
+                    server.transport === "websocket"
+                        ? `${server.id}/ws`
+                        : server.id;
+                const socket = this.open(url);
+                const ready = await new Promise<boolean>((resolve) => {
+                    const timer = setTimeout(() => resolve(false), 1200);
+                    socket.on("auth:request", () => {
+                        clearTimeout(timer);
+                        resolve(true);
+                    });
+                    socket.on("connect_error", () => {
+                        clearTimeout(timer);
+                        resolve(false);
+                    });
+                });
+                if (!ready || attempt !== this.attempt || this.stopped) {
+                    socket.disconnect();
+                    continue;
+                }
+                this.transport?.disconnect();
+                this.transport = socket;
+                this.id = socket.id;
+                this.connected = true;
+                this.lastReply = performance.now();
+                const active = () =>
+                    this.transport === socket &&
+                    attempt === this.attempt &&
+                    !this.stopped;
+                socket.on("disconnect", () => {
+                    if (active()) this.recover();
+                });
+                socket.on("error", (error) => {
+                    if (active()) {
+                        this.dispatch("error", error);
+                        this.recover();
+                    }
+                });
+                socket.on("auth:session", (value) => {
+                    if (active()) {
+                        this.playerId = value.id;
+                        this.dispatch("auth:session", value);
+                    }
+                });
+                socket.on("command:ack", ({ id, status }) => {
+                    if (!active()) return;
+                    if (status === "accepted" || status === "rejected")
+                        this.pending.delete(id);
+                });
+                socket.on("cluster:pong", () => {
+                    if (active()) this.lastReply = performance.now();
+                });
+                socket.on("cluster:paused", () => {
+                    if (active()) this.recover();
+                });
+                socket.on("room:broadcast", (room) => {
+                    if (!active()) return;
+                    const previous = this.meta;
+                    if (
+                        previous &&
+                        previous.roomInstanceId === room.roomInstanceId &&
+                        (room.epoch < previous.epoch ||
+                            (room.epoch === previous.epoch &&
+                                room.revision < previous.revision))
+                    )
+                        return;
+                    this.lastReply = performance.now();
+                    if (
+                        this.meta &&
+                        this.meta.roomInstanceId !== room.roomInstanceId
+                    )
+                        this.pending.clear();
+                    this.meta = {
+                        roomInstanceId: room.roomInstanceId,
+                        epoch: room.epoch,
+                        revision: room.revision,
+                    };
+                    this.gameId = room.gameId;
+                    const heldBomb = room.bombs?.find(
+                        (bomb: { holder: number }) =>
+                            room.users[bomb.holder]?.id === this.playerId,
+                    );
+                    this.turn = heldBomb?.turn;
+                    this.bombId = heldBomb?.id;
+                    this.dispatch("room:broadcast", room);
+                    if (
+                        room.outcome &&
+                        !this.deliveredResults.has(room.outcome.gameId)
+                    ) {
+                        this.deliveredResults.add(room.outcome.gameId);
+                        this.dispatch("game:end", room.outcome.data);
+                    }
+                });
+                for (const event of [
+                    "typing:input",
+                    "hint:updated",
+                    "game:quited",
+                    "health:pong",
+                    "health:database-result",
+                ])
+                    socket.on(event, (data) => {
+                        if (active()) this.dispatch(event, data);
+                    });
+                socket.on("game:end", (data) => {
+                    if (
+                        !active() ||
+                        !this.gameId ||
+                        this.deliveredResults.has(this.gameId)
+                    )
+                        return;
+                    this.deliveredResults.add(this.gameId);
+                    this.dispatch("game:end", data);
+                });
+                clearInterval(this.heartbeat);
+                this.heartbeat = setInterval(() => {
+                    if (!active() || !this.foreground()) return;
+                    // Background throttling only requests a fresh authority check.
+                    // Ownership changes still require lease expiry and a DB CAS.
+                    if (performance.now() - this.lastReply > 1500)
+                        this.recover();
+                    else {
+                        socket.emit("cluster:ping");
+                        for (const command of this.pending.values())
+                            this.sendCommand(command);
+                    }
+                }, 500);
+                this.dispatch("connect");
+                this.dispatch("auth:request");
+                return this;
+            }
+            throw new Error("No reachable room owner");
+        } catch {
+            if (attempt === this.attempt && !this.stopped) this.recover();
+        }
+        return this;
+    }
+    private recover() {
+        if (this.stopped || this.retry) return;
+        this.attempt++;
+        this.connected = false;
+        clearInterval(this.heartbeat);
+        this.transport?.disconnect();
+        this.transport = undefined;
+        this.dispatch("disconnect");
+        this.retry = setTimeout(() => {
+            this.retry = undefined;
+            void this.connect();
+        }, 500);
+    }
+    disconnect() {
+        this.stopped = true;
+        this.attempt++;
+        this.connected = false;
+        clearTimeout(this.retry);
+        this.retry = undefined;
+        clearInterval(this.heartbeat);
+        this.transport?.disconnect();
+        this.transport = undefined;
+        return this;
+    }
+}

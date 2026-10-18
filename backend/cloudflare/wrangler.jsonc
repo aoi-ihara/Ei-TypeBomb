@@ -18,6 +18,7 @@
             "custom_domain": true,
         },
     ],
+    "triggers": { "crons": ["* * * * *"] },
     "observability": {
         "enabled": true,
         "logs": { "enabled": true },
