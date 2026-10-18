@@ -536,3 +536,43 @@ test("brand-new rooms can start while Render has never registered", async () => 
     });
     assert.equal(confirmed.ownership.instance, cp.ownership.instance);
 });
+
+test("a stale singleton owner stops after a higher epoch becomes visible", async () => {
+    const n = await network();
+    const room = freshRoom();
+    const first = await n.hosts[0].call("open", {
+        roomId: room.id,
+        initial: initial(room),
+    });
+    // Simulate a partition: Primary has no contact with either replica.
+    for (const [a, b] of ["0:1", "1:0", "0:2", "2:0"].map(x => x.split(":"))) {
+        n.blocked.add(`${a}:${b}`);
+    }
+    const worker = await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: first.ownership.revision,
+    });
+    assert.equal(worker.ownership.owner, n.ids[1]);
+    // Until reconnection, an old owner can still advance: availability wins.
+    const stale = await n.hosts[0].call("commit", {
+        roomId: room.id,
+        instance: first.ownership.instance,
+        epoch: first.ownership.epoch,
+        revision: first.ownership.revision,
+        value: {
+            ...first.value!,
+            game: { ...first.value!.game, revision: first.ownership.revision + 1 },
+        },
+    });
+    assert.equal(stale.ownership.owner, n.ids[0]);
+    n.blocked.clear();
+    // Once connected, the stale owner must stop its runtime heartbeat.
+    await assert.rejects(n.hosts[0].call("confirm", {
+        roomId: room.id,
+        instance: first.ownership.instance,
+        epoch: first.ownership.epoch,
+    }), /Fenced/);
+    const latest = await n.hosts[0].call("read", { roomId: room.id });
+    assert.equal(latest.ownership.owner, n.ids[1]);
+});
