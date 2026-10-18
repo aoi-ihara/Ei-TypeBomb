@@ -3,7 +3,7 @@ import { createServer } from "http";
 import { randomUUID } from "crypto";
 import { Server } from "socket.io";
 import type { Room, User } from "./type";
-import { verifyToken } from "./lib/auth";
+import { verifyToken, verifyClientSessionToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { capturePostHogEvent } from "./lib/posthog";
 import { createSocketRateLimit } from "./lib/socketRateLimit";
@@ -35,8 +35,12 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 
 const games = new Map<string, NodeGameAdapter>();
-// Socket-scoped IDs are never shared between players or persisted on the server.
+// Game identity is scoped to a signed, tab-specific session, not a transport ID.
 const recommendedItems = new Map<string, string>();
+const liveSessions = new Map<string, string>();
+const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
+const DISCONNECT_GRACE_MS = 20_000;
+const sessionKey = (roomId: string, playerId: string) => `${roomId}:${playerId}`;
 
 let rooms: Room[] = [];
 const pendingRoomLoads = new Map<string, Promise<Room | null>>();
@@ -237,11 +241,17 @@ io.on("connection", (socket) => {
         const result = game.apply({ type: "room:join", player: user });
         if (result.effects.length) socket.join(roomId);
     });
-    socket.on("room:leave", () => deleteUser(user.id, "room_leave"));
+    socket.on("room:leave", () => {
+        if (!roomId) return;
+        const key = sessionKey(roomId, user.id);
+        if (liveSessions.get(key) !== socket.id) return;
+        liveSessions.delete(key);
+        deleteUser(user.id, "room_leave");
+    });
 
     socket.on(
         "auth:response",
-        async (response: { jwtToken: string; displayName: string }) => {
+        async (response: ClientPayloads["auth:response"]) => {
             try {
                 response = validateAuthPayload(response);
                 const jwtResult = await verifyToken(response.jwtToken);
@@ -263,10 +273,23 @@ io.on("connection", (socket) => {
                 requireRoomItems(room);
 
                 const displayName = response.displayName;
+                const stableId = response.sessionToken
+                    ? await verifyClientSessionToken(response.sessionToken, jwtResult)
+                    : socket.id;
+                const key = sessionKey(jwtResult, stableId);
+                const previousSocketId = liveSessions.get(key);
+                liveSessions.set(key, socket.id);
+                const pending = pendingLeaves.get(key);
+                if (pending) clearTimeout(pending);
+                pendingLeaves.delete(key);
 
                 roomId = jwtResult;
-                user = { ...user, displayName };
+                user = { id: stableId, displayName };
                 socket.join(roomId);
+                if (previousSocketId && previousSocketId !== socket.id) {
+                    io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+                }
+                socket.emit("auth:session", { id: stableId });
                 logEvent("ROOM", `authenticated ${roomId}`, {
                     roomId,
                     socketId: socket.id,
@@ -343,7 +366,8 @@ io.on("connection", (socket) => {
         if (!game) return;
         game.apply({ type: "room:leave", playerId, reason });
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
-        if (!socketRoom || socketRoom.size === 0) {
+        if ((!socketRoom || socketRoom.size === 0) &&
+            ![...pendingLeaves.keys()].some((key) => key.startsWith(`${roomId}:`))) {
             game.dispose();
             games.delete(roomId);
             rooms = rooms.filter((item) => item.id !== roomId);
@@ -363,7 +387,17 @@ io.on("connection", (socket) => {
             displayName: user.displayName,
             roomId,
         });
-        deleteUser(user.id, "disconnect");
+        if (!roomId) return;
+        const key = sessionKey(roomId, user.id);
+        if (liveSessions.get(key) !== socket.id) return;
+        liveSessions.delete(key);
+        const previous = pendingLeaves.get(key);
+        if (previous) clearTimeout(previous);
+        const timer = setTimeout(() => {
+            pendingLeaves.delete(key);
+            if (!liveSessions.has(key)) deleteUser(user.id, "disconnect");
+        }, DISCONNECT_GRACE_MS);
+        pendingLeaves.set(key, timer);
     });
 });
 

@@ -104,3 +104,11 @@ Production bindings and dashboard-managed production secrets are unchanged.
   validated by the client, and the server handles `word:success` events.
 - `npm run typecheck` and `npm test` require dependencies to be installed;
   deployment also requires an authorized Cloudflare account and valid secrets.
+
+## Reconnection
+
+Clients can resume their tab-specific, signed player identity on the **same**
+Durable Object during a 20s disconnect grace period. Pending leaves are
+persisted and scheduled using Durable Object alarms. This does not migrate
+live games from another runtime: cross-server replication and ownership
+fencing are not yet implemented.

@@ -8,7 +8,7 @@ import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import type { GameNoticeProps } from "@/components/feature/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
-import { getAuthToken } from "@/lib/room/auth";
+import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
 import { isTrustedServerUrl, resolveServerUrl } from "@/lib/room/serverUrl";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
@@ -225,6 +225,10 @@ export default function Clinet({
 
         // SOCKET
         const primaryUrl = resolveServerUrl();
+        // One signed player identity per mounted page, shared across reconnects.
+        const sessionTokenPromise = getClientSessionToken().catch(() => null);
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+        let disposed = false;
         const secondaryUrl = process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
         const fallbackUrl = process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
 
@@ -278,17 +282,22 @@ export default function Clinet({
 
         const authenticate = async (candidate: Candidate) => {
             const socket = candidate.socket;
-            setUserId(socket.id ?? null);
-            userIdRef.current = socket.id ?? null;
-
-            const authToken = await getAuthToken();
-            if (!authToken || !selected || socketRef.current !== socket) return;
+            const [authToken, sessionToken] = await Promise.all([
+                getAuthToken(),
+                sessionTokenPromise,
+            ]);
+            if (!selected || socketRef.current !== socket || disposed) return;
+            if (!authToken || !sessionToken) {
+                setServerError("認証情報を取得できませんでした。ルームに入り直してください。");
+                return;
+            }
 
             // Never disclose the authentication token to an untrusted origin.
             if (!isTrustedServerUrl(candidate.url, primaryUrl)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
+                sessionToken,
                 displayName: displayName,
             });
         };
@@ -392,9 +401,26 @@ export default function Clinet({
 
         const attachSocketListeners = (candidate: Candidate) => {
             const { socket } = candidate;
+            const retrySelectedConnection = () => {
+                if (disposed || !selected || socketRef.current !== socket || reconnectTimer) return;
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    if (!disposed && socketRef.current === socket && !socket.connected) {
+                        socket.connect();
+                    }
+                }, 1_000);
+            };
 
+            socket.on("disconnect", () => {
+                if (!selected || socketRef.current !== socket || disposed) return;
+                setServerError("接続が切れました。再接続しています…");
+                retrySelectedConnection();
+            });
             socket.on("connect_error", () => {
-                if (selected) return;
+                if (selected) {
+                    retrySelectedConnection();
+                    return;
+                }
 
                 if (candidate.tier === "primary") {
                     startFailover();
@@ -516,6 +542,12 @@ export default function Clinet({
                 posthog.capture("game_quited");
             });
 
+            socket.on("auth:session", ({ id }: { id: string }) => {
+                if (!selected || socketRef.current !== socket) return;
+                setUserId(id);
+                userIdRef.current = id;
+            });
+
             socket.on("auth:request", () => {
                 candidate.ready = true;
 
@@ -629,6 +661,8 @@ export default function Clinet({
         primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
 
         return () => {
+            disposed = true;
+            if (reconnectTimer) clearTimeout(reconnectTimer);
             clearPrimaryTimer();
             clearSecondaryTimer();
             if (noticeTimer) clearTimeout(noticeTimer);

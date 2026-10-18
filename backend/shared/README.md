@@ -53,3 +53,16 @@ failover are **not implemented**.
 The Cloudflare build bundles shared imports directly from `backend/shared/`.
 Run `npm install` and then `npm run typecheck && npm test` from
 `backend/cloudflare/` to check the Cloudflare adapter.
+
+## Reconnection foundation (phase 1)
+
+Vercel signs a new, room-bound `client_session` JWT for each page instance.
+Node and Worker verify it with the existing ES256 public key before using the
+`sessionId` as the player ID. Transport socket IDs are disposable. A signed
+session JWT is kept only in the page's memory; a reload creates a new player.
+
+Network disconnects now get a 20s reconnection grace period before the room
+processes `room:leave`. Deliberate `room:leave` remains immediate. This is
+**same-server reconnection only**, not cross-server failover. Replication,
+ownership epochs/fencing, server discovery and seamless transfer still require
+a subsequent change. Do not route an active room to a different server yet.

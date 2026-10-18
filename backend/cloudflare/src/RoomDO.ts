@@ -13,7 +13,7 @@ import { ClientError, isRequestId, parseClientEvent, requireRoomItems, validateA
 import type { GameState, Room } from "../../shared/types";
 import type { Env, Session } from "./types";
 import { loadRoom } from "./lib/database";
-import { verifyRoomToken } from "./lib/auth";
+import { verifyRoomToken, verifyClientSessionToken } from "./lib/auth";
 import { encodeWireMessage, parseWireMessage } from "./lib/wire";
 
 const RULES: GameRules = {
@@ -28,6 +28,7 @@ const RULES: GameRules = {
  */
 export class RoomDO extends DurableObject<Env> {
     private game: GameState | null = null;
+    private pendingLeaves: Record<string, number> = {};
     private queue: Promise<void> = Promise.resolve();
     private readonly accept = createKeyedRateLimit(
         (key) => eventRateLimit(key.slice(key.indexOf("|") + 1)),
@@ -39,6 +40,7 @@ export class RoomDO extends DurableObject<Env> {
         super(ctx, env);
         ctx.blockConcurrencyWhile(async () => {
             this.game = (await ctx.storage.get<GameState>("state")) ?? null;
+            this.pendingLeaves = (await ctx.storage.get<Record<string, number>>("pendingLeaves")) ?? {};
         });
         // WorkerSocket sends this exact JSON packet every 25 seconds.
         // Replying automatically avoids waking idle Durable Objects.
@@ -98,13 +100,27 @@ export class RoomDO extends DurableObject<Env> {
 
     async alarm(): Promise<void> {
         await this.enqueue(async () => {
-            // A room with no sockets has no meaningful ongoing match.
-            if (!this.ctx.getWebSockets().length) {
-                await this.ctx.storage.delete("state");
+            const now = Date.now();
+            for (const [playerId, deadline] of Object.entries(this.pendingLeaves)) {
+                if (deadline > now) continue;
+                delete this.pendingLeaves[playerId];
+                if (!this.ctx.getWebSockets().some(ws => {
+                    const active = this.session(ws);
+                    return ws.readyState === WebSocket.OPEN && active?.roomId && active.id === playerId;
+                }) && this.game) {
+                    await this.apply({ type: "room:leave", playerId, reason: "disconnect" });
+                }
+            }
+            await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
+            if (!this.ctx.getWebSockets().some(ws => ws.readyState === WebSocket.OPEN) &&
+                Object.keys(this.pendingLeaves).length === 0) {
                 this.game = null;
+                await this.ctx.storage.delete("state");
+                await this.ctx.storage.deleteAlarm();
                 return;
             }
             if (this.game) await this.apply({ type: "deadline" });
+            await this.scheduleNextAlarm();
         });
     }
 
@@ -176,9 +192,23 @@ export class RoomDO extends DurableObject<Env> {
                 this.game = { room, revision: 0 };
                 await this.ctx.storage.put("state", this.game);
             }
+            const stableId = response.sessionToken
+                ? await verifyClientSessionToken(response.sessionToken, authenticatedRoomId, this.env)
+                : session.id;
+            session.id = stableId;
             session.roomId = authenticatedRoomId;
             session.displayName = response.displayName;
             ws.serializeAttachment(session);
+            for (const other of this.ctx.getWebSockets()) {
+                if (other === ws) continue;
+                const previous = this.session(other);
+                if (previous?.roomId === authenticatedRoomId && previous.id === stableId &&
+                    other.readyState === WebSocket.OPEN) other.close(4000, "Session replaced");
+            }
+            delete this.pendingLeaves[stableId];
+            await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
+            await this.scheduleNextAlarm();
+            this.send(ws, "auth:session", { id: stableId });
             this.sendRoomInfo();
             return;
         }
@@ -243,10 +273,7 @@ export class RoomDO extends DurableObject<Env> {
         // free-tier storage budget. It is broadcast immediately instead.
         if (event.type !== "currentInput") await this.ctx.storage.put("state", this.game);
         const after = nextGameDeadline(this.game);
-        if (before !== after) {
-            if (after === undefined) await this.ctx.storage.deleteAlarm();
-            else await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, after));
-        }
+        if (before !== after) await this.scheduleNextAlarm();
         for (const effect of result.effects) {
             if (effect.type === "broadcast") {
                 this.broadcast(effect.packet.event, effect.packet.data);
@@ -256,19 +283,27 @@ export class RoomDO extends DurableObject<Env> {
         }
     }
 
+    private async scheduleNextAlarm(): Promise<void> {
+        const deadlines = [
+            ...(this.game ? [nextGameDeadline(this.game)] : []),
+            ...Object.values(this.pendingLeaves),
+        ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+        if (!deadlines.length) await this.ctx.storage.deleteAlarm();
+        else await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, Math.min(...deadlines)));
+    }
+
     private async disconnect(ws: WebSocket): Promise<void> {
         const session = this.session(ws);
-        if (session?.roomId) {
-            await this.apply({ type: "room:leave", playerId: session.id, reason: "disconnect" });
-            if (this.game?.room.isStart && this.game.room.users.length) {
-                this.broadcast("typing:input", { input: "" });
-            }
-            this.sendRoomInfo();
-        }
-        if (!this.ctx.getWebSockets().some(other => other !== ws && other.readyState === WebSocket.OPEN)) {
-            this.game = null;
-            await this.ctx.storage.delete("state");
-            await this.ctx.storage.deleteAlarm();
-        }
+        if (!session?.roomId) return;
+        // A new socket may already have authenticated as the same tab.
+        const replacement = this.ctx.getWebSockets().some(other => {
+            if (other === ws || other.readyState !== WebSocket.OPEN) return false;
+            const active = this.session(other);
+            return active?.roomId === session.roomId && active.id === session.id;
+        });
+        if (replacement) return;
+        this.pendingLeaves[session.id] = Date.now() + 20_000;
+        await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
+        await this.scheduleNextAlarm();
     }
 }

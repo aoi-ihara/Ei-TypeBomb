@@ -1,5 +1,6 @@
 import { importJWK, jwtVerify, type JWK } from "jose";
 import { getAuthenticatedRoomId } from "../../../shared/roomJwt";
+import { getVerifiedSessionId } from "../../../shared/sessionJwt";
 import type { Env } from "../types";
 
 export async function verifyRoomToken(token: string, env: Env): Promise<string> {
@@ -12,4 +13,10 @@ export async function verifyRoomToken(token: string, env: Env): Promise<string> 
         algorithms: ["ES256"],
     });
     return getAuthenticatedRoomId(payload, protectedHeader.kid, env.JWT_KEY_ID);
+}
+
+export async function verifyClientSessionToken(token: string, roomId: string, env: Env): Promise<string> {
+    const key = await importJWK(JSON.parse(env.JWT_PUBLIC_KEY) as JWK, "ES256");
+    const { payload, protectedHeader } = await jwtVerify(token, key, { algorithms: ["ES256"] });
+    return getVerifiedSessionId(payload, protectedHeader.kid, env.JWT_KEY_ID, roomId);
 }
