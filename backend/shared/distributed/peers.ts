@@ -204,9 +204,12 @@ export class PeerControl implements Control {
                 seen,
             }));
     }
-    /** Every commit and promotion requires a majority of the same fixed room voters. */
-    private quorum(cp: VotedCheckpoint): number {
-        return Math.floor(cp.voters.length / 2) + 1;
+    /**
+     * Availability-first: the owner may commit without waiting for standby
+     * servers. This deliberately permits divergent histories on a partition.
+     */
+    private quorum(_cp: VotedCheckpoint): number {
+        return 1;
     }
 
     private verifyPath(
@@ -335,7 +338,6 @@ export class PeerControl implements Control {
     }
     async read(roomId: string): Promise<VotedCheckpoint | undefined> {
         const candidates: VotedCheckpoint[] = [];
-        let reachable = 1;
         const local =
             (await this.record(roomId)).committed ?? this.mirrors.get(roomId);
         if (local) candidates.push(local);
@@ -350,7 +352,6 @@ export class PeerControl implements Control {
                 .map(async (id) => {
                     try {
                         const cp = await this.rpc(id, "status", { roomId });
-                        reachable++;
                         if (cp) {
                             await this.validate(cp);
                             candidates.push(cp);
@@ -365,11 +366,8 @@ export class PeerControl implements Control {
                 b.ownership.epoch - a.ownership.epoch ||
                 b.ownership.revision - a.ownership.revision,
         );
-        if (!candidates.length &&
-            reachable < Math.floor(this.identity.member.roster.length / 2) + 1)
-            throw new Error(
-                "Unknown room without an authoritative quorum; no database reload",
-            );
+        if (!candidates.length && this.config.id !== this.config.primary)
+            throw new Error("Replica has no certified checkpoint to restore");
         return candidates[0];
     }
     async call(
@@ -403,8 +401,8 @@ export class PeerControl implements Control {
                 if (!member) break;
                 voters.push(member);
             }
-            if (voters.length < 2)
-                throw new Error("Wait for authenticated backup registration");
+            if (!voters.length)
+                throw new Error("Primary identity is missing");
             let reachableVoters = 1;
             await Promise.all(voters.slice(1).map(async (voter) => {
                 try {
@@ -414,8 +412,8 @@ export class PeerControl implements Control {
                     // Offline voters retain their fixed room slot.
                 }
             }));
-            if (reachableVoters < Math.floor(voters.length / 2) + 1)
-                throw new Error("Voting quorum unavailable for new room");
+            // Offline lower-priority servers cannot block a new game.
+            // Voters are fixed for this room; standby catch-up is best-effort.
             const initial = args.initial as DurableRoom;
             if (
                 !initial ||
@@ -622,7 +620,7 @@ export class PeerControl implements Control {
                 b.status === "fulfilled",
         );
         if (reachable.length < this.quorum(cp))
-            throw new Error("Election quorum unavailable");
+            throw new Error("No surviving voting checkpoint");
         const epoch = Math.max(
             cp.ownership.epoch, ...reachable.map((b) => b.value),
         ) + 1;
