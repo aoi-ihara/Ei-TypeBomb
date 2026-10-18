@@ -255,11 +255,11 @@ test("signed identity rejects outsiders and requires a certified voting prefix",
     });
     assert.equal(created.ownership.owner, n.ids[0]);
     assert.equal(n.hosts[0].members.has(n.ids[2]), false);
-    const other = await network();
-    other.hosts[0].members.delete(other.ids[1]);
-    other.hosts[0].links.delete(other.ids[1]);
+    const secondNetwork = await network();
+    secondNetwork.hosts[0].members.delete(secondNetwork.ids[1]);
+    secondNetwork.hosts[0].links.delete(secondNetwork.ids[1]);
     const unavailableRoom = freshRoom();
-    await assert.rejects(other.hosts[0].call("open", {
+    await assert.rejects(secondNetwork.hosts[0].call("open", {
         roomId: unavailableRoom.id,
         initial: initial(unavailableRoom),
     }));
