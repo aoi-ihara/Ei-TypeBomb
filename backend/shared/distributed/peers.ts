@@ -22,6 +22,7 @@ type Proposal = {
     base?: VotedCheckpoint;
     baseHash?: string;
     delta?: ReturnType<typeof difference>;
+    path?: string[];
 };
 export type PeerStorage = {
     load(room: string): Promise<VoteRecord | undefined>;
@@ -203,10 +204,52 @@ export class PeerControl implements Control {
                 seen,
             }));
     }
-    private cohort(cp: VotedCheckpoint) {
-        const start = cp.voters.findIndex((v) => v.id === cp.ownership.owner);
-        if (start < 0) throw new Error("Owner outside cohort");
-        return cp.voters.slice(start);
+    /** Every commit and promotion requires a majority of the same fixed room voters. */
+    private quorum(cp: VotedCheckpoint): number {
+        return Math.floor(cp.voters.length / 2) + 1;
+    }
+
+    private verifyPath(
+        cp: VotedCheckpoint,
+        path: string[],
+        current: number,
+        origin: number,
+        sender: string,
+    ) {
+        if (!Array.isArray(path)) throw new Error("Missing quorum path");
+        if (current === origin) {
+            if (path.length || sender !== this.config.id)
+                throw new Error("Invalid local quorum path");
+            return;
+        }
+        if (!path.length || path[0] !== cp.voters[origin].id ||
+            path[path.length - 1] !== sender)
+            throw new Error("Invalid quorum predecessor");
+        let previous = origin - 1;
+        for (const id of path) {
+            const position = cp.voters.findIndex((v) => v.id === id);
+            if (position <= previous || position >= current)
+                throw new Error("Invalid quorum path order");
+            previous = position;
+        }
+    }
+    private async forwardQuorum(
+        cp: VotedCheckpoint,
+        op: string,
+        args: Record<string, unknown>,
+        current: number,
+        path: string[],
+    ): Promise<any> {
+        if (path.length >= this.quorum(cp)) return null;
+        let failure: unknown;
+        for (const next of cp.voters.slice(current + 1)) {
+            try {
+                return await this.rpc(next.id, op, { ...args, path });
+            } catch (error) {
+                failure = error;
+            }
+        }
+        throw failure ?? new Error("Voting quorum unavailable");
     }
     private async validate(cp: VotedCheckpoint, decided = true) {
         if (
@@ -239,15 +282,36 @@ export class PeerControl implements Control {
         if (hash !== (await digest(value)))
             throw new Error("Checkpoint digest mismatch");
         if (decided) {
-            const tail = cp.voters[cp.voters.length - 1];
+            const encoded = cp.decision?.split(".")[1];
+            if (!encoded) throw new Error("Missing quorum decision");
+            const claims = JSON.parse(new TextDecoder().decode(
+                Uint8Array.from(
+                    atob(encoded.replace(/-/g, "+").replace(/_/g, "/")),
+                    (char) => char.charCodeAt(0),
+                ),
+            ));
+            const signer = cp.voters.find((v) => v.id === claims.iss);
+            if (!signer) throw new Error("Decision signer is not a voter");
             const proof = await verify(
                 cp.decision!,
-                tail.publicKey,
+                signer.publicKey,
                 "etb-room-decision",
-                tail.id,
+                signer.id,
             );
-            if (proof.hash !== cp.hash || proof.boot !== tail.boot)
-                throw new Error("Invalid tail decision");
+            const path = proof.voters;
+            if (proof.hash !== cp.hash || proof.boot !== signer.boot ||
+                !Array.isArray(path) ||
+                path.length < this.quorum(cp) ||
+                path[0] !== cp.ownership.owner ||
+                path[path.length - 1] !== signer.id)
+                throw new Error("Invalid quorum decision");
+            let previous =
+                cp.voters.findIndex((v) => v.id === cp.ownership.owner) - 1;
+            for (const id of path) {
+                const index = cp.voters.findIndex((v) => v.id === id);
+                if (index <= previous) throw new Error("Invalid decision vote order");
+                previous = index;
+            }
         }
     }
     private async seal(
@@ -271,7 +335,7 @@ export class PeerControl implements Control {
     }
     async read(roomId: string): Promise<VotedCheckpoint | undefined> {
         const candidates: VotedCheckpoint[] = [];
-        let failures = 0;
+        let reachable = 1;
         const local =
             (await this.record(roomId)).committed ?? this.mirrors.get(roomId);
         if (local) candidates.push(local);
@@ -286,12 +350,13 @@ export class PeerControl implements Control {
                 .map(async (id) => {
                     try {
                         const cp = await this.rpc(id, "status", { roomId });
+                        reachable++;
                         if (cp) {
                             await this.validate(cp);
                             candidates.push(cp);
                         }
                     } catch {
-                        failures++;
+                        // Unreachable members cannot attest a missing instance.
                     }
                 }),
         );
@@ -300,9 +365,10 @@ export class PeerControl implements Control {
                 b.ownership.epoch - a.ownership.epoch ||
                 b.ownership.revision - a.ownership.revision,
         );
-        if (!candidates.length && failures)
+        if (!candidates.length &&
+            reachable < Math.floor(this.identity.member.roster.length / 2) + 1)
             throw new Error(
-                "Unknown room while a member is unreachable; no database reload",
+                "Unknown room without an authoritative quorum; no database reload",
             );
         return candidates[0];
     }
@@ -329,22 +395,27 @@ export class PeerControl implements Control {
             }
             if (this.config.id !== this.config.primary)
                 throw new Error("Only primary can create a fresh room");
-            const voters = this.identity.member.roster.map(
-                (id) => this.members.get(id)!,
-            );
-            if (voters.some((v) => !v))
-                throw new Error("Incomplete signed roster");
-            voters.sort((a, b) => a.depth - b.depth);
+            // Use the known authenticated prefix. The fixed voting set never
+            // expands during a match; a sleeping/unregistered Render is optional.
+            const voters: Member[] = [];
+            for (const id of this.identity.member.roster) {
+                const member = this.members.get(id);
+                if (!member) break;
+                voters.push(member);
+            }
             if (voters.length < 2)
                 throw new Error("Wait for authenticated backup registration");
-            // Every registered member must be reached. A forgotten old room can
-            // never be replaced merely because a peer cannot be contacted.
-            for (const voter of voters)
-                if (voter.id !== this.config.id) {
+            let reachableVoters = 1;
+            await Promise.all(voters.slice(1).map(async (voter) => {
+                try {
                     const link = await this.connect(voter.id);
-                    if (link.member.boot !== voter.boot)
-                        throw new Error("Membership changed; retry discovery");
+                    if (link.member.boot === voter.boot) reachableVoters++;
+                } catch {
+                    // Offline voters retain their fixed room slot.
                 }
+            }));
+            if (reachableVoters < Math.floor(voters.length / 2) + 1)
+                throw new Error("Voting quorum unavailable for new room");
             const initial = args.initial as DurableRoom;
             if (
                 !initial ||
@@ -528,12 +599,25 @@ export class PeerControl implements Control {
         const suffix = cp.voters.slice(
             cp.voters.findIndex((v) => v.id === this.config.id),
         );
-        const ballots = await Promise.all(
-            suffix.map((v) =>
-                this.rpc(v.id, "ballot", { roomId: cp.ownership.roomId }),
-            ),
+        // Bring reachable voters up to the latest certified checkpoint
+        // before promising a higher epoch. Mirrors alone are never votes.
+        const ballots = await Promise.allSettled(
+            suffix.map(async (v) => {
+                await this.rpc(v.id, "install", { checkpoint: cp });
+                return this.rpc(v.id, "ballot", {
+                    roomId: cp.ownership.roomId,
+                }) as Promise<number>;
+            }),
         );
-        const epoch = Math.max(cp.ownership.epoch, ...ballots) + 1;
+        const reachable = ballots.filter(
+            (b): b is PromiseFulfilledResult<number> =>
+                b.status === "fulfilled",
+        );
+        if (reachable.length < this.quorum(cp))
+            throw new Error("Election quorum unavailable");
+        const epoch = Math.max(
+            cp.ownership.epoch, ...reachable.map((b) => b.value),
+        ) + 1;
         const state = await this.rpc(this.config.id, "promise", {
             roomId: cp.ownership.roomId,
             candidate: this.config.id,
