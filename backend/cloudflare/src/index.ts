@@ -1,5 +1,7 @@
 import type { Env } from "./types";
-export { RoomDO } from "./RoomDO";
+// Preserve the existing production Durable Object class namespace.
+// Preview deployments continue to use RoomDO directly.
+export { RoomDO, RoomDO as GameRoom } from "./RoomDO";
 
 const ROOM_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
