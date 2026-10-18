@@ -66,3 +66,15 @@ processes `room:leave`. Deliberate `room:leave` remains immediate. This is
 **same-server reconnection only**, not cross-server failover. Replication,
 ownership epochs/fencing, server discovery and seamless transfer still require
 a subsequent change. Do not route an active room to a different server yet.
+
+## Hierarchy configuration (preparation for phase 2)
+
+The Node and Workers adapters both validate these optional environment variables:
+- `PRIMARY_SERVER_URL`: canonical URL of the preferred primary
+- `PARENT_SERVER_URL`: URL of this node's immediate upstream server (blank only on primary)
+- `SERVER_PUBLIC_URL`: this node's URL; when set, validates misconfigured self-links
+
+No server URLs or signing secrets are committed here. Omitted variables keep
+existing standalone deployments working. At present these values **validate**
+the deployment role but do not yet enable auto-registration, load balancing or
+replication. That needs authenticated discovery and ownership fencing.

@@ -112,3 +112,7 @@ Durable Object during a 20s disconnect grace period. Pending leaves are
 persisted and scheduled using Durable Object alarms. This does not migrate
 live games from another runtime: cross-server replication and ownership
 fencing are not yet implemented.
+
+Workers also understands the optional topology variables
+`PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, `SERVER_PUBLIC_URL`
+(validation only; parent registration is not enabled yet).

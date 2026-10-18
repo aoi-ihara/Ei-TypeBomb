@@ -6,6 +6,9 @@ export interface Env {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: string;
     // Optional comma-separated list of browser origins allowed to connect.
     ALLOWED_ORIGINS?: string;
+    PRIMARY_SERVER_URL?: string;
+    PARENT_SERVER_URL?: string;
+    SERVER_PUBLIC_URL?: string;
 }
 
 export type Session = {

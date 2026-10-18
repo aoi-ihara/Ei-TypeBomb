@@ -33,6 +33,9 @@ import {
     type EventHandlers,
 } from "../../shared/protocol";
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
+import { parseServerTopology } from "../../shared/topology";
+
+const topology = parseServerTopology(process.env);
 
 const games = new Map<string, NodeGameAdapter>();
 // Game identity is scoped to a signed, tab-specific session, not a transport ID.
@@ -403,4 +406,5 @@ io.on("connection", (socket) => {
 
 httpServer.listen(3001, () => {
     startConsole(3001);
+    console.info(`Server topology: ${topology.role}`);
 });

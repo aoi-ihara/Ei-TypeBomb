@@ -45,3 +45,11 @@ RTT プローブは ID を検証してからアドレス枠を消費し、不正
 
 共通ゲームコアと runtime の境界、ビルド出力、将来の拡張については
 [共通コアのREADME](../shared/README.md) を参照してください。
+
+## Topology configuration (validation only)
+
+Node.js accepts `PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, and optional
+`SERVER_PUBLIC_URL`. The same variables are supported by Cloudflare.
+For a primary, leave `PARENT_SERVER_URL` unset; replicas point to their
+immediate parent. The current implementation validates these values at
+startup; it does **not** yet replicate room state between servers.
