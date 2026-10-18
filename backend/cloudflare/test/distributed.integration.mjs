@@ -577,41 +577,36 @@ test(
             "creating a new room must load its settings",
         );
         const readsAfterFreshCreation = databaseReads;
-        await mf.dispose();
-        await wait(
-            () => observed?.ownerServerId === urls[2],
-            "client failure report promotes Render",
-            25000,
-        );
-        const r1 = await nodeClient(2, 0),
-            r2 = await nodeClient(2, 1);
-        await wait(() => !r1.room.migrating, "tertiary resume");
-        await wait(
-            () => observed?.epoch === r1.room.epoch,
-            "automatic client worker-to-tertiary failover",
-        );
-        assert.equal(observed.gameId, expected.gameId);
-        assert.equal(r1.room.gameId, expected.gameId);
-        assert.equal(r2.room.roomInstanceId, expected.roomInstanceId);
-        assert.equal(r1.room.bombs[0].holder, expected.bombs[0].holder);
-        assert.equal(r1.room.bombs[0].turn, expected.bombs[0].turn);
-        assert.deepEqual(r1.room.users, expected.users);
-        assert.equal(
-            databaseReads,
-            readsAfterFreshCreation,
-            "failover must never reload settings",
-        );
-        assert.deepEqual(
-            unexpected,
-            [],
-            "no database synchronization, RPC, registration or lease requests",
-        );
         dropNextAck = true;
-        routed.emit("room:leave"); // Observer command is a no-op, but its ACK is durable.
+        routed.emit("room:leave"); // Observer command is a no-op.
         await wait(
             () => routedCommands.length >= 2,
             "lost ACK retries the same event ID",
         );
         assert.equal(new Set(routedCommands).size, 1);
+
+        // Worker goes down after Primary has restarted with a new process
+        // incarnation. Render alone is NOT a majority and must not steal
+        // ownership or advance the old game.
+        await mf.dispose();
+        const denied = await fetch(`${urls[2]}/cluster/report`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                jwtToken: roomToken,
+                sessionToken: observerSession,
+                roomId,
+                owner: urls[1],
+                revision: w1.room.revision,
+                failure: true,
+            }),
+        });
+        assert.equal(denied.status, 503, "a single voter cannot elect itself");
+        assert.equal(databaseReads, readsAfterFreshCreation);
+        assert.deepEqual(
+            unexpected,
+            [],
+            "no database synchronization, RPC, registration or lease requests",
+        );
     },
 );
