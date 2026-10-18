@@ -212,6 +212,9 @@ test("isolated Worker can advance but a restarted voter without state cannot rec
     await reboot.dispatch(n.hosts[0].identity.member, "mirror", {
         checkpoint: { ...cp, servers: undefined },
     });
+    // The original Worker owner is now unavailable, forcing an actual
+    // promotion attempt instead of a successful healthy-owner probe.
+    reboot.links.delete(n.ids[1]);
     await assert.rejects(
         reboot.call("report", {
             roomId: room.id,
