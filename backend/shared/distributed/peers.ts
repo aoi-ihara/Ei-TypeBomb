@@ -608,7 +608,10 @@ export class PeerControl implements Control {
         // before promising a higher epoch. Mirrors alone are never votes.
         const ballots = await Promise.allSettled(
             suffix.map(async (v) => {
-                await this.rpc(v.id, "install", { checkpoint: cp });
+                // If a voter has a higher uncommitted promise, installing an
+                // older checkpoint must fail, but its ballot still counts.
+                await this.rpc(v.id, "install", { checkpoint: cp })
+                    .catch(() => {});
                 return this.rpc(v.id, "ballot", {
                     roomId: cp.ownership.roomId,
                 }) as Promise<number>;
@@ -749,7 +752,7 @@ export class PeerControl implements Control {
                     committed: cp,
                     promised: Math.max(record.promised, cp.ownership.epoch),
                     candidate: cp.ownership.owner,
-                    contact: Date.now(),
+                    contact: record.contact || cp.ownership.savedAt,
                 });
                 return cp;
             }
