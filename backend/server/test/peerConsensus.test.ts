@@ -508,7 +508,8 @@ test("brand-new rooms can start while Render has never registered", async () => 
         roomId: room.id, initial: initial(room),
     });
     assert.deepEqual(cp.ownership.owner, n.ids[0]);
-    assert.deepEqual(cp.voters.map((v: { id: string }) => v.id), n.ids.slice(0, 2));
+    const config = await n.hosts[0].read(room.id);
+    assert.deepEqual(config?.voters.map((v) => v.id), n.ids.slice(0, 2));
     const confirmed = await n.hosts[0].call("confirm", {
         roomId: room.id, instance: cp.ownership.instance,
         epoch: cp.ownership.epoch,
