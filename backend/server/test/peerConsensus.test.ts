@@ -91,12 +91,13 @@ test("majority confirmations: owner fencing, approved transfer and no failback",
     );
     n.alive[0] = false;
     n.alive[1] = false;
-    // One remaining replica is not a quorum, even when it has a snapshot.
-    await assert.rejects(n.hosts[2].call("report", {
+    // The only surviving voter can continue the same game.
+    const standalone = await n.hosts[2].call("report", {
         roomId: room.id,
         owner: n.ids[1],
         revision: w.state.revision,
-    }), /quorum/);
+    });
+    assert.equal(standalone.ownership.owner, n.ids[2]);
     n.alive[0] = true;
     await assert.rejects(
         n.hosts[0].call("open", { roomId: room.id }),
@@ -115,7 +116,7 @@ test("majority confirmations: owner fencing, approved transfer and no failback",
     );
     n.alive[1] = true;
 });
-test("partition and lost ACK: intersecting majorities fence stale owners", async () => {
+test("partition may create divergent histories; each survivor can continue", async () => {
     const n = await network(),
         room = freshRoom();
     const cp = await n.hosts[0].call("open", {
@@ -167,32 +168,31 @@ test("partition and lost ACK: intersecting majorities fence stale owners", async
     const recovered = await n.hosts[2].call("read", { roomId: room.id });
     assert.equal(recovered.ownership.revision, 1);
     n.alive[1] = false;
-    // Render knows the last committed revision, but a solo voter cannot
-    // elect itself or start making new game decisions during a partition.
-    await assert.rejects(n.hosts[2].call("report", {
+    // An isolated Render can recover its last certified checkpoint.
+    const alone = await n.hosts[2].call("report", {
         roomId: room.id,
         owner: n.ids[1],
         revision: 0,
-    }), /quorum/);
+    });
+    assert.equal(alone.ownership.owner, n.ids[2]);
     await assert.rejects(
         n.hosts[2].dispatch(n.hosts[1].identity.member, "stage", {
             proposal: { checkpoint: cp, mode: "commit", proof: "forged" },
         }),
     );
 });
-test("tail unavailability pauses; volatile voter restart cannot vote from a mirror", async () => {
+test("isolated Worker can advance but a restarted voter without state cannot recover", async () => {
     const n = await network(),
         room = freshRoom();
     await n.hosts[0].call("open", { roomId: room.id, initial: initial(room) });
     n.alive[0] = false;
     n.alive[2] = false;
-    await assert.rejects(
-        n.hosts[1].call("report", {
-            roomId: room.id,
-            owner: n.ids[0],
-            revision: 0,
-        }),
-    );
+    const workerSolo = await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: 0,
+    });
+    assert.equal(workerSolo.ownership.owner, n.ids[1]);
     n.alive[2] = true;
     const cp = await n.hosts[1].call("read", { roomId: room.id });
     const restarted = await Identity.create(JSON.stringify(n.bundles[2]));
@@ -256,10 +256,11 @@ test("signed identity rejects outsiders and requires a certified voting prefix",
     secondNetwork.hosts[0].members.delete(secondNetwork.ids[1]);
     secondNetwork.hosts[0].links.delete(secondNetwork.ids[1]);
     const unavailableRoom = freshRoom();
-    await assert.rejects(secondNetwork.hosts[0].call("open", {
+    const soloRoom = await secondNetwork.hosts[0].call("open", {
         roomId: unavailableRoom.id,
         initial: initial(unavailableRoom),
-    }));
+    });
+    assert.equal(soloRoom.ownership.owner, secondNetwork.ids[0]);
 });
 test("deleted room tombstones fence old snapshots, and a fresh instance starts at primary", async () => {
     const n = await network(),
@@ -331,18 +332,18 @@ test("a migrated deletion authorizes a fresh instance at stale upper voters", as
         revision: 0,
     });
     n.alive[1] = false;
-    await assert.rejects(n.hosts[2].call("report", {
+    const rendered = await n.hosts[2].call("report", {
         roomId: room.id,
         owner: n.ids[1],
         revision: 0,
-    }), /quorum/);
-    n.alive[1] = true;
-    await n.hosts[1].call("delete", {
-        roomId: room.id,
-        instance: worker.ownership.instance,
-        epoch: worker.ownership.epoch,
-        revision: worker.ownership.revision,
     });
+    await n.hosts[2].call("delete", {
+        roomId: room.id,
+        instance: rendered.ownership.instance,
+        epoch: rendered.ownership.epoch,
+        revision: rendered.ownership.revision,
+    });
+    n.alive[1] = true;
     n.alive[0] = true;
     const fresh = await n.hosts[0].call("open", {
         roomId: room.id,
