@@ -406,6 +406,16 @@ test(
         );
         routed.on("room:broadcast", (room) => (observed = room));
         await wait(() => observed, "automatic routing to primary");
+        // The Socket.IO transport drops this ACK once; the routed client
+        // must retry the very same command ID, not apply the action twice.
+        dropNextAck = true;
+        routed.emit("room:leave"); // Observer command is a no-op.
+        await wait(
+            () => routedCommands.length >= 2,
+            "lost ACK retries the same event ID",
+        );
+        assert.equal(new Set(routedCommands).size, 1);
+
         const p1 = await nodeClient(0, 0),
             p2 = await nodeClient(0, 1);
         await command(p1, 0, "room:join");
@@ -577,13 +587,6 @@ test(
             "creating a new room must load its settings",
         );
         const readsAfterFreshCreation = databaseReads;
-        dropNextAck = true;
-        routed.emit("room:leave"); // Observer command is a no-op.
-        await wait(
-            () => routedCommands.length >= 2,
-            "lost ACK retries the same event ID",
-        );
-        assert.equal(new Set(routedCommands).size, 1);
 
         // Worker goes down after Primary has restarted with a new process
         // incarnation. Render alone is NOT a majority and must not steal
