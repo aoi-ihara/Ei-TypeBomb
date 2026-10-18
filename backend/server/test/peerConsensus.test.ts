@@ -167,16 +167,13 @@ test("partition and lost ACK: intersecting majorities fence stale owners", async
     const recovered = await n.hosts[2].call("read", { roomId: room.id });
     assert.equal(recovered.ownership.revision, 1);
     n.alive[1] = false;
-    assert.equal(
-        (
-            await n.hosts[2].call("report", {
-                roomId: room.id,
-                owner: n.ids[1],
-                revision: 0,
-            })
-        ).ownership.revision,
-        1,
-    );
+    // Render knows the last committed revision, but a solo voter cannot
+    // elect itself or start making new game decisions during a partition.
+    await assert.rejects(n.hosts[2].call("report", {
+        roomId: room.id,
+        owner: n.ids[1],
+        revision: 0,
+    }), /quorum/);
     await assert.rejects(
         n.hosts[2].dispatch(n.hosts[1].identity.member, "stage", {
             proposal: { checkpoint: cp, mode: "commit", proof: "forged" },
