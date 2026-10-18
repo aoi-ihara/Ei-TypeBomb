@@ -543,9 +543,14 @@ export class PeerControl implements Control {
         void Promise.allSettled(
             [...this.members.values()]
                 .filter((member) => member.depth > self.depth)
-                .map((member) =>
-                    this.rpc(member.id, "mirror", { checkpoint: cp }),
-                ),
+                .map((member) => {
+                    const voter = cp.voters.find((v) => v.id === member.id);
+                    // A caught-up voter is eligible for a later election.
+                    // Non-voting mirrors are best-effort and cannot certify events.
+                    const op = voter && voter.boot === member.boot
+                        ? "install" : "mirror";
+                    return this.rpc(member.id, op, { checkpoint: cp });
+                }),
         );
     }
     async report(
@@ -660,7 +665,8 @@ export class PeerControl implements Control {
         if (
             typeof args.roomId !== "string" &&
             op !== "stage" &&
-            op !== "mirror"
+            op !== "mirror" &&
+            op !== "install"
         )
             throw new Error("Missing room ID");
         if (op === "status")
@@ -712,10 +718,41 @@ export class PeerControl implements Control {
         const roomId =
             op === "stage"
                 ? args.proposal?.checkpoint?.ownership?.roomId
-                : args.roomId;
+                : op === "install"
+                  ? args.checkpoint?.ownership?.roomId
+                  : args.roomId;
         if (typeof roomId !== "string") throw new Error("Invalid room");
         return this.serial(roomId, async () => {
             const record = await this.record(roomId);
+            if (op === "install") {
+                const cp = args.checkpoint as VotedCheckpoint;
+                await this.validate(cp);
+                if (cp.ownership.roomId !== roomId)
+                    throw new Error("Wrong room for certified checkpoint");
+                const self = cp.voters.find((v) => v.id === this.config.id);
+                if (self?.boot !== this.identity.member.boot)
+                    throw new Error("Voter incarnation changed");
+                if (record.promised > cp.ownership.epoch)
+                    throw new Error("Newer epoch already promised");
+                const previous = record.committed;
+                if (previous &&
+                    previous.ownership.instance !== cp.ownership.instance &&
+                    (previous.ownership.lifecycle !== "DELETED" ||
+                        cp.ownership.epoch <= previous.ownership.epoch))
+                    throw new Error("Instance replacement lacks tombstone");
+                if (previous &&
+                    (previous.ownership.epoch > cp.ownership.epoch ||
+                        (previous.ownership.epoch === cp.ownership.epoch &&
+                            previous.ownership.revision >= cp.ownership.revision)))
+                    return previous;
+                await this.store(roomId, {
+                    committed: cp,
+                    promised: Math.max(record.promised, cp.ownership.epoch),
+                    candidate: cp.ownership.owner,
+                    contact: Date.now(),
+                });
+                return cp;
+            }
             if (op === "promise" || op === "fence") {
                 const cp = record.committed;
                 if (!cp) throw new Error("Voter lost state; cannot vote");
@@ -729,13 +766,10 @@ export class PeerControl implements Control {
                         (v) => v.id === this.config.id,
                     ),
                     candidate = cp.voters.findIndex((v) => v.id === owner);
-                if (
-                    candidate < 0 ||
-                    index < candidate ||
-                    peer.id !==
-                        (index === candidate ? owner : cp.voters[index - 1].id)
-                )
+                if (candidate < 0 || index < candidate)
                     throw new Error("Invalid confirmation path");
+                const path = (args.path ?? []) as string[];
+                this.verifyPath(cp, path, index, candidate, peer.id);
                 if (op === "promise") {
                     await this.validate(args.configuration);
                     if (
@@ -777,9 +811,10 @@ export class PeerControl implements Control {
                             contact: Date.now(),
                         });
                 }
-                const next = cp.voters[index + 1];
-                if (next) return this.rpc(next.id, op, args);
-                return {
+                const accepted = [...path, this.config.id];
+                return (await this.forwardQuorum(
+                    cp, op, args, index, accepted,
+                )) ?? {
                     checkpoint: cp,
                     contact: record.contact || cp.ownership.savedAt,
                 };
@@ -787,6 +822,7 @@ export class PeerControl implements Control {
             if (op !== "stage") throw new Error("Unsupported RPC");
             let proposal = args.proposal as Proposal,
                 cp = proposal.checkpoint;
+            const path = proposal.path ?? [];
             if (proposal.delta) {
                 if (
                     record.committed &&
@@ -808,7 +844,7 @@ export class PeerControl implements Control {
                     );
                     if (full?.checkpoint.hash !== cp.hash)
                         throw new Error("Snapshot repair unavailable");
-                    proposal = full;
+                    proposal = { ...full, path };
                     cp = full.checkpoint;
                 }
             }
@@ -828,13 +864,10 @@ export class PeerControl implements Control {
                 throw new Error("Invalid owner proof");
             const index = cp.voters.findIndex((v) => v.id === this.config.id),
                 start = cp.voters.findIndex((v) => v.id === owner.id);
-            if (
-                index < start ||
-                cp.voters[index]?.boot !== this.identity.member.boot ||
-                peer.id !==
-                    (index === start ? owner.id : cp.voters[index - 1].id)
-            )
+            if (index < start ||
+                cp.voters[index]?.boot !== this.identity.member.boot)
                 throw new Error("Wrong replication path/incarnation");
+            this.verifyPath(cp, path, index, start, peer.id);
             const old = record.committed;
             if (
                 record.promised > cp.ownership.epoch ||
@@ -874,7 +907,7 @@ export class PeerControl implements Control {
                 }
                 if (
                     JSON.stringify(cp.voters.map((v) => v.id)) !==
-                        JSON.stringify(this.identity.member.roster) ||
+                        JSON.stringify(this.identity.member.roster.slice(0, cp.voters.length)) ||
                     owner.id !== this.config.primary ||
                     start !== 0 ||
                     !released ||
@@ -916,18 +949,36 @@ export class PeerControl implements Control {
                 candidate: owner.id,
                 pending: staged,
             });
-            const next = cp.voters[index + 1];
-            let decided: VotedCheckpoint;
-            if (next) decided = await this.rpc(next.id, "stage", { proposal });
-            else
+            const accepted = [...path, this.config.id];
+            let decided: VotedCheckpoint | undefined;
+            if (accepted.length >= this.quorum(cp)) {
                 decided = {
                     ...cp,
                     decision: await this.identity.proof(
                         "etb-room-decision",
-                        { hash: cp.hash, boot: this.identity.member.boot },
+                        {
+                            hash: cp.hash,
+                            boot: this.identity.member.boot,
+                            voters: accepted,
+                        },
                         31536000,
                     ),
                 };
+            } else {
+                let lastError: unknown;
+                for (const next of cp.voters.slice(index + 1)) {
+                    try {
+                        decided = await this.rpc(next.id, "stage", {
+                            proposal: { ...proposal, path: accepted },
+                        });
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                    }
+                }
+                if (!decided)
+                    throw lastError ?? new Error("Voting quorum unavailable");
+            }
             await this.validate(decided);
             if (decided.hash !== cp.hash) throw new Error("Wrong ACK");
             await this.store(roomId, {
