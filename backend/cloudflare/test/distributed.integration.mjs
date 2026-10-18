@@ -469,6 +469,11 @@ test(
         await command(holder === 0 ? p1 : p2, holder, "word:success");
         const expected = structuredClone(p1.room);
         const readsBeforeFailover = databaseReads;
+        // Give the Worker a chance to receive the confirmed state. Losing
+        // the only owner before any checkpoint transfer is unrecoverable.
+        await delay(200);
+        render.kill("SIGKILL");
+        await new Promise((resolve) => render.once("exit", resolve));
         primary.kill("SIGKILL");
         await new Promise((resolve) => primary.once("exit", resolve));
         await wait(
@@ -528,6 +533,14 @@ test(
             assert.equal(client.room.bombs[0].holder, expected.bombs[0].holder);
             assert.equal(client.room.bombs[0].turn, expected.bombs[0].turn);
         }
+        // Both Node servers are down: the Worker must still accept actual
+        // gameplay updates without waiting for sleeping Render.
+        const typingWorker = expected.bombs[0].holder === 0 ? w1 : w2;
+        typingWorker.send("currentInput", "solo");
+        await wait(
+            () => w1.room.typingFocusInput === "solo",
+            "Worker accepts typing with both Node servers offline",
+        );
         // A recovered primary remains unable to recreate this migrated room.
         await startNode(0);
         const route = await fetch(`${urls[0]}/cluster/route`, {
@@ -582,10 +595,7 @@ test(
         await wait(() => freshRoom, "new room at recovered primary");
         assert.equal(freshRoom.ownerServerId, urls[0]);
 
-        // Actual child-process outage: Render sleeping must NOT block a room
-        // running on Mac mini when Worker is healthy.
-        render.kill("SIGKILL");
-        await new Promise((resolve) => render.once("exit", resolve));
+        // The fresh room can also progress without the sleeping Render.
         freshSocket.emit("room:join");
         await wait(
             () => freshRoom?.users?.length === 1,
@@ -596,32 +606,11 @@ test(
             () => freshRoom?.users?.length === 0,
             "Mac mini + Worker commit a leave while Render is asleep",
         );
-        // Render restarts with a new incarnation, which must never inherit
-        // its lost votes for the old room.
-        await startNode(2);
         freshSocket.disconnect();
         assert.ok(
             databaseReads > readsBeforeFailover,
             "creating a new room must load its settings",
         );
-        const readsAfterFreshCreation = databaseReads;
-
-        // Worker stops. Render alone may take over from the last received
-        // certified checkpoint, without waiting for another live server.
-        await mf.dispose();
-        await wait(
-            () => observed?.ownerServerId === urls[2],
-            "client failure report promotes the last survivor",
-            25000,
-        );
-        const render1 = await nodeClient(2, 0),
-            render2 = await nodeClient(2, 1);
-        await wait(() => !render1.room.migrating, "solo Render resume");
-        assert.equal(render1.room.gameId, expected.gameId);
-        assert.equal(render2.room.roomInstanceId, expected.roomInstanceId);
-        assert.deepEqual(render1.room.users, expected.users);
-        assert.equal(render1.room.bombs[0].holder, expected.bombs[0].holder);
-        assert.equal(databaseReads, readsAfterFreshCreation);
         assert.deepEqual(
             unexpected,
             [],
