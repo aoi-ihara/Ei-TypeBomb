@@ -23,7 +23,8 @@ function serverUrl(value: string | undefined, key: string): string | null {
         parsed.username || parsed.password || parsed.search || parsed.hash) {
         throw new Error(`${key} must be an http(s) URL without credentials or query parameters`);
     }
-    return parsed.toString().replace(/\\/$/, "");
+    const normalized = parsed.toString();
+    return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
 
 export function parseServerTopology(env: TopologyEnv): ServerTopology {
