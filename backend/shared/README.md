@@ -41,7 +41,7 @@ Alarm scheduling. It imports the shared core without bringing in
 
 The game state stores absolute epoch-millisecond deadlines. Distributed mode
 preserves game IDs, seats, bomb turns and question indices, shifts deadlines
-across a migration pause, and commits through authenticated WebSocket suffix
+across a migration pause, and commits through authenticated WebSocket majority quorums
 confirmations. There is no database-backed control plane.
 See [distributed operation and setup](../DISTRIBUTED.md).
 

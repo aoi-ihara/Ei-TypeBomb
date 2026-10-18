@@ -112,7 +112,7 @@ Production bindings and dashboard-managed production secrets are unchanged.
 Clients can resume their tab-specific, signed player identity on the **same**
 Durable Object during a 20s disconnect grace period. Pending leaves are
 persisted and scheduled using Durable Object alarms. In distributed mode,
-the shared runtime migrates games from Node using the fixed voting suffix;
+the shared runtime migrates games from Node using the fixed-majority voting configuration;
 replicas never advance a game before acquiring its fenced ownership.
 
 Workers also understands the optional topology variables
