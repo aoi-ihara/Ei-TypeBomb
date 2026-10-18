@@ -12,7 +12,7 @@ const initial = (room: ReturnType<typeof freshRoom>) => ({
     sessions: {},
     events: {},
 });
-test("suffix confirmations: live owner, approved transfer, sequential crashes and no failback", async () => {
+test("majority confirmations: owner fencing, approved transfer and no failback", async () => {
     const n = await network(),
         room = freshRoom();
     let now = Date.now();
@@ -91,25 +91,19 @@ test("suffix confirmations: live owner, approved transfer, sequential crashes an
     );
     n.alive[0] = false;
     n.alive[1] = false;
-    const next = await n.hosts[2].call("report", {
+    // One remaining replica is not a quorum, even when it has a snapshot.
+    await assert.rejects(n.hosts[2].call("report", {
         roomId: room.id,
         owner: n.ids[1],
         revision: w.state.revision,
-    });
-    assert.equal(next.ownership.owner, n.ids[2]);
+    }), /quorum/);
     n.alive[0] = true;
     await assert.rejects(
         n.hosts[0].call("open", { roomId: room.id }),
         /current owner/,
     );
     const another = freshRoom();
-    await assert.rejects(
-        n.hosts[0].call("open", {
-            roomId: another.id,
-            initial: initial(another),
-        }),
-    ); // Unreachable required voter => pause.
-    n.alive[1] = true;
+    // Primary + Render can still form a majority while Worker is down.
     assert.equal(
         (
             await n.hosts[0].call("open", {
@@ -119,8 +113,9 @@ test("suffix confirmations: live owner, approved transfer, sequential crashes an
         ).ownership.owner,
         n.ids[0],
     );
+    n.alive[1] = true;
 });
-test("partition and lost ACK: only the shared tail can certify an event", async () => {
+test("partition and lost ACK: intersecting majorities fence stale owners", async () => {
     const n = await network(),
         room = freshRoom();
     const cp = await n.hosts[0].call("open", {
@@ -241,7 +236,7 @@ test("tail unavailability pauses; volatile voter restart cannot vote from a mirr
         /incarnation|memory/,
     );
 });
-test("signed identity refuses untrusted registrants; immutable roster excludes omissions", async () => {
+test("signed identity rejects outsiders and requires a certified voting prefix", async () => {
     const n = await network();
     const other = await credentials([
         "https://evil.test",
@@ -255,9 +250,19 @@ test("signed identity refuses untrusted registrants; immutable roster excludes o
     const room = freshRoom();
     n.hosts[0].members.delete(n.ids[2]);
     n.hosts[0].links.delete(n.ids[2]);
-    await assert.rejects(
-        n.hosts[0].call("open", { roomId: room.id, initial: initial(room) }),
-    );
+    const created = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    assert.equal(created.ownership.owner, n.ids[0]);
+    assert.equal(n.hosts[0].members.has(n.ids[2]), false);
+    const other = await network();
+    other.hosts[0].members.delete(other.ids[1]);
+    other.hosts[0].links.delete(other.ids[1]);
+    const unavailableRoom = freshRoom();
+    await assert.rejects(other.hosts[0].call("open", {
+        roomId: unavailableRoom.id,
+        initial: initial(unavailableRoom),
+    }));
 });
 test("deleted room tombstones fence old snapshots, and a fresh instance starts at primary", async () => {
     const n = await network(),
@@ -273,6 +278,11 @@ test("deleted room tombstones fence old snapshots, and a fresh instance starts a
         revision: cp.ownership.revision,
     });
     assert.equal(deleted.ownership.lifecycle, "DELETED");
+    // Allow the asynchronous standby replication to catch up before
+    // checking that a subsequently received stale mirror is discarded.
+    await n.hosts[2].dispatch(n.hosts[0].identity.member, "install", {
+        checkpoint: { ...deleted, servers: undefined },
+    });
     assert.equal(
         await n.hosts[2].dispatch(n.hosts[0].identity.member, "mirror", {
             checkpoint: { ...cp, servers: undefined },
@@ -324,18 +334,19 @@ test("a migrated deletion authorizes a fresh instance at stale upper voters", as
         revision: 0,
     });
     n.alive[1] = false;
-    const render = await n.hosts[2].call("report", {
+    await assert.rejects(n.hosts[2].call("report", {
         roomId: room.id,
         owner: n.ids[1],
         revision: 0,
-    });
-    await n.hosts[2].call("delete", {
+    }), /quorum/);
+    n.alive[1] = true;
+    await n.hosts[1].call("delete", {
         roomId: room.id,
-        instance: render.ownership.instance,
-        epoch: render.ownership.epoch,
-        revision: render.ownership.revision,
+        instance: worker.ownership.instance,
+        epoch: worker.ownership.epoch,
+        revision: worker.ownership.revision,
     });
-    n.alive[0] = n.alive[1] = true;
+    n.alive[0] = true;
     const fresh = await n.hosts[0].call("open", {
         roomId: room.id,
         initial: initial(room),
@@ -456,4 +467,54 @@ test("starting the migration adapter preserves the original timer pause boundary
     await delay(20);
     const restored = await n.hosts[1].call("open", { roomId: room.id });
     assert.equal(restored.ownership.pausedAt, election.ownership.pausedAt);
+});
+
+test("Render sleeping cannot delay or block Mac mini + Worker commits", async () => {
+    const n = await network();
+    const room = freshRoom();
+    n.alive[2] = false;
+    let cp = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    assert.equal(cp.ownership.owner, n.ids[0]);
+    for (let revision = 1; revision <= 4; revision++) {
+        cp = await n.hosts[0].call("commit", {
+            roomId: room.id,
+            instance: cp.ownership.instance,
+            epoch: cp.ownership.epoch,
+            revision: cp.ownership.revision,
+            value: {
+                ...cp.value!,
+                game: { ...cp.value!.game, revision },
+            },
+        });
+        assert.equal(cp.ownership.revision, revision);
+    }
+    const backup = await n.hosts[1].call("read", { roomId: room.id });
+    assert.equal(backup.ownership.revision, 4);
+    assert.equal(backup.ownership.owner, n.ids[0]);
+    // The upper quorum stays healthy; one client's failure report is refused.
+    assert.equal((await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: 4,
+    })).ownership.owner, n.ids[0]);
+});
+
+test("brand-new rooms can start while Render has never registered", async () => {
+    const n = await network();
+    const room = freshRoom();
+    n.hosts[0].members.delete(n.ids[2]);
+    n.hosts[0].links.delete(n.ids[2]);
+    n.alive[2] = false;
+    const cp = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    assert.deepEqual(cp.ownership.owner, n.ids[0]);
+    assert.deepEqual(cp.voters.map((v: { id: string }) => v.id), n.ids.slice(0, 2));
+    const confirmed = await n.hosts[0].call("confirm", {
+        roomId: room.id, instance: cp.ownership.instance,
+        epoch: cp.ownership.epoch,
+    });
+    assert.equal(confirmed.ownership.instance, cp.ownership.instance);
 });
