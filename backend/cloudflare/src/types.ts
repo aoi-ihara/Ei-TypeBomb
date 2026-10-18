@@ -1,5 +1,10 @@
+import type { RoomDO } from "./RoomDO";
+import type { ClusterDO, ReplicaDO } from "./ClusterDO";
 export interface Env {
-    ROOMS: DurableObjectNamespace;
+    CLUSTER: DurableObjectNamespace<ClusterDO>;
+    REPLICAS: DurableObjectNamespace<ReplicaDO>;
+    CLUSTER_DRAINING?: string;
+    ROOMS: DurableObjectNamespace<RoomDO>;
     CLUSTER_SERVER_TOKEN?: string;
     JWT_KEY_ID: string;
     JWT_PUBLIC_KEY: string;

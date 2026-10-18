@@ -1,10 +1,12 @@
 import { readLimitedBody } from "../../shared/distributed/replication";
 import type { Env } from "./types";
-import { clusterConfig, HttpControl } from "../../shared/distributed/control";
+import { clusterConfig } from "../../shared/distributed/control";
 import { parseServerTopology } from "../../shared/topology";
 // Preserve the existing production Durable Object class namespace.
 // Preview deployments continue to use RoomDO directly.
 export { RoomDO, RoomDO as GameRoom } from "./RoomDO";
+export { ClusterDO, ReplicaDO } from "./ClusterDO";
+import { WorkerControl } from "./lib/cluster";
 
 const ROOM_ID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,7 +14,7 @@ const ROOM_ID =
 export default {
     async scheduled(_event: ScheduledController, env: Env): Promise<void> {
         if (clusterConfig(env, "websocket"))
-            await new HttpControl(env, "websocket").register();
+            await new WorkerControl(env).register();
     },
     async fetch(request: Request, env: Env): Promise<Response> {
         const url = new URL(request.url);
@@ -20,7 +22,14 @@ export default {
         if (url.pathname === "/health") {
             return Response.json({ ok: true, role: topology.role });
         }
-        if (url.pathname === "/cluster/route") {
+        if (url.pathname === "/cluster/ws")
+            return env.CLUSTER.get(env.CLUSTER.idFromName("server")).fetch(
+                request,
+            );
+        if (
+            url.pathname === "/cluster/route" ||
+            url.pathname === "/cluster/report"
+        ) {
             const cors = {
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Headers": "content-type",
@@ -40,53 +49,43 @@ export default {
                 const body = await readLimitedBody(request, 8192);
                 if (body.length > 8192)
                     return new Response(null, { status: 413, headers: cors });
-                const roomId = await verifyRoomToken(
-                    JSON.parse(body).jwtToken,
-                    env,
-                );
-                const control = new HttpControl(env, "websocket");
-                await control.register();
-                const result = await control.call("read", { roomId });
+                const data = JSON.parse(body);
+                const roomId = await verifyRoomToken(data.jwtToken, env);
+                const report = url.pathname.endsWith("report");
+                if (data.roomId && data.roomId !== roomId)
+                    throw new Error("Wrong room");
+                if (report) {
+                    const { verifyClientSessionToken } = await import(
+                        "./lib/auth"
+                    );
+                    await verifyClientSessionToken(
+                        data.sessionToken,
+                        roomId,
+                        env,
+                    );
+                    if (data.failure !== true)
+                        throw new Error("Missing report");
+                }
+                const control = new WorkerControl(env);
+                const result = await control.call(report ? "report" : "read", {
+                    roomId,
+                    owner: data.owner,
+                    revision: data.revision,
+                });
+                if (
+                    report &&
+                    result.ownership?.owner === control.config.id &&
+                    result.ownership.lifecycle === "MIGRATING"
+                )
+                    await env.ROOMS.get(
+                        env.ROOMS.idFromName(roomId),
+                    ).resumeMigration(roomId);
                 return Response.json(
                     { ownership: result.ownership, servers: result.servers },
                     { headers: cors },
                 );
             } catch {
                 return new Response(null, { status: 503, headers: cors });
-            }
-        }
-        if (
-            url.pathname === "/internal/replicate" &&
-            request.method === "POST"
-        ) {
-            if (!clusterConfig(env, "websocket"))
-                return new Response(null, { status: 404 });
-            // Route an opaque notification to the room object. Authentication is
-            // performed against the durable receipt before any state is stored.
-            const authorization = request.headers.get("Authorization");
-            if (
-                !authorization?.startsWith("Bearer ") ||
-                authorization.length > 2048
-            )
-                return new Response(null, { status: 403 });
-            try {
-                const copy = await readLimitedBody(request, 524288);
-                const roomId = JSON.parse(copy).roomId;
-                if (typeof roomId !== "string" || !ROOM_ID.test(roomId))
-                    return new Response(null, { status: 400 });
-                return env.ROOMS.get(
-                    env.ROOMS.idFromName(roomId.toLowerCase()),
-                ).fetch(
-                    new Request(request.url, {
-                        method: "POST",
-                        headers: request.headers,
-                        body: copy,
-                    }),
-                );
-            } catch (error) {
-                return new Response(null, {
-                    status: error instanceof RangeError ? 413 : 400,
-                });
             }
         }
         const match = /^\/ws\/([^/]+)$/.exec(url.pathname);

@@ -1,11 +1,12 @@
 # Ei-TypeBomb Cloudflare Worker
 
-An independent Cloudflare Workers + Durable Objects transport for the existing
-`backend/shared` game engine. The Node.js Socket.IO runtime remains unchanged.
+Cloudflare Workers + Durable Objects adapters for the existing `backend/shared`
+game engine and authenticated peer WebSocket confirmation protocol.
 
 ## Architecture
 
 - `src/index.ts`: routes `GET /ws/:roomId` upgrades to a room-specific Durable Object.
+- `src/ClusterDO.ts`: authenticated peer connections, registry and per-room ReplicaDO vote storage.
 - `src/RoomDO.ts`: native WebSocket packets, verified room sessions, game events,
   durable state, deadline alarms and hibernation-aware connection attachments.
 - `src/lib/auth.ts`: ES256 signature verification and shared room JWT policy.
@@ -13,8 +14,9 @@ An independent Cloudflare Workers + Durable Objects transport for the existing
   JWT with RLS and a publishable key; no service-role key or direct PostgreSQL credentials.
 - `../shared/`: unchanged game rules, validation, snapshots, item selection and rate limits.
 
-Each room gets its own Durable Object (SQLite-backed). The initial room document is
-loaded from Supabase after successful room JWT verification. Only authenticated
+Each room gets its own Durable Object (SQLite-backed). In standalone mode the initial room document is
+loaded from Supabase after successful room JWT verification. Distributed recovery
+never reloads it; only the primary creating a fresh instance may load settings. Only authenticated
 sockets receive room/game broadcasts. The JWT room ID must match the WebSocket
 URL. A session ID is assigned per connection, stored in its serialized WebSocket
 attachment, and restored after hibernation.
@@ -110,7 +112,7 @@ Production bindings and dashboard-managed production secrets are unchanged.
 Clients can resume their tab-specific, signed player identity on the **same**
 Durable Object during a 20s disconnect grace period. Pending leaves are
 persisted and scheduled using Durable Object alarms. In distributed mode,
-the shared runtime migrates games from Node using the PostgreSQL authority;
+the shared runtime migrates games from Node using the fixed voting suffix;
 replicas never advance a game before acquiring its fenced ownership.
 
 Workers also understands the optional topology variables

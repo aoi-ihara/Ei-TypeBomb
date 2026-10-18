@@ -22,14 +22,10 @@ import { loadRoom } from "./lib/database";
 import { verifyRoomToken, verifyClientSessionToken } from "./lib/auth";
 import { encodeWireMessage, parseWireMessage } from "./lib/wire";
 
-import { clusterConfig, HttpControl } from "../../shared/distributed/control";
+import { clusterConfig } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
-import {
-    Replicator,
-    receiveReplica,
-    newerReplica,
-} from "../../shared/distributed/replication";
-import type { Command, Checkpoint } from "../../shared/distributed/types";
+import { WorkerControl } from "./lib/cluster";
+import type { Command } from "../../shared/distributed/types";
 
 const RULES: GameRules = {
     allowSpectatorStart: true,
@@ -44,10 +40,7 @@ const RULES: GameRules = {
 export class RoomDO extends DurableObject<Env> {
     private game: GameState | null = null;
     private distributed?: DistributedRoom;
-    private control?: HttpControl;
-    private replicator?: Replicator;
-    private replica?: Checkpoint;
-    private persistedReplica?: Checkpoint;
+    private control?: WorkerControl;
     private pendingLeaves: Record<string, number> = {};
     private queue: Promise<void> = Promise.resolve();
     private readonly accept = createKeyedRateLimit(
@@ -59,15 +52,12 @@ export class RoomDO extends DurableObject<Env> {
     constructor(ctx: DurableObjectState, env: Env) {
         super(ctx, env);
         if (clusterConfig(env, "websocket")) {
-            this.control = new HttpControl(env, "websocket");
-            this.replicator = new Replicator(this.control.config.id, env.CLUSTER_SERVER_TOKEN!);
+            this.control = new WorkerControl(env);
         }
         ctx.blockConcurrencyWhile(async () => {
             this.game = this.control
                 ? null
                 : ((await ctx.storage.get<GameState>("state")) ?? null);
-            this.replica = await ctx.storage.get<Checkpoint>("replica");
-            this.persistedReplica = this.replica;
             this.pendingLeaves =
                 (await ctx.storage.get<Record<string, number>>(
                     "pendingLeaves",
@@ -84,32 +74,6 @@ export class RoomDO extends DurableObject<Env> {
     }
 
     async fetch(request: Request): Promise<Response> {
-        if (new URL(request.url).pathname === "/internal/replicate") {
-            if (!this.control) return new Response(null, { status: 404 });
-            return this.enqueueResponse(() =>
-                receiveReplica(
-                    request,
-                    this.control!,
-                    async (checkpoint, full) => {
-                        // Input deltas remain in memory; important events and five-second
-                        // snapshots persist. PostgreSQL remains the mandatory durable copy.
-                        if (newerReplica(this.replica, checkpoint))
-                            this.replica = checkpoint;
-                        if (
-                            full &&
-                            newerReplica(this.persistedReplica, checkpoint) &&
-                            this.replica?.ownership.epoch ===
-                                checkpoint.ownership.epoch &&
-                            this.replica?.ownership.revision ===
-                                checkpoint.ownership.revision
-                        ) {
-                            await this.ctx.storage.put("replica", checkpoint);
-                            this.persistedReplica = checkpoint;
-                        }
-                    },
-                ),
-            );
-        }
         const roomId = new URL(request.url).pathname.split("/")[2];
         if (!roomId || (this.game && this.game.room.id !== roomId)) {
             return new Response("Room mismatch", { status: 400 });
@@ -314,6 +278,57 @@ export class RoomDO extends DurableObject<Env> {
         return index < 0 ? undefined : index;
     }
 
+    private async ensureDistributed(
+        roomId: string,
+        jwtToken?: string,
+    ): Promise<void> {
+        if (this.distributed) return;
+        if (!this.control) throw new Error("Cluster disabled");
+        const saved = await this.control.call("read", {
+            roomId: roomId,
+        });
+        if (
+            (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
+            this.control.config.id !== this.control.config.primary
+        )
+            throw new Error("Only primary may load fresh settings");
+        if (
+            (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
+            !jwtToken
+        )
+            throw new Error("Migration cannot load database settings");
+        const initial =
+            !saved.ownership || saved.ownership.lifecycle === "DELETED"
+                ? await loadRoom(roomId, jwtToken!, this.env)
+                : undefined;
+        if (initial) requireRoomItems(initial);
+        if (
+            (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
+            !initial
+        )
+            throw new ClientError("ルーム情報を取得できませんでした。");
+        const game = new DistributedRoom(roomId, this.control, (result) => {
+            this.game = result.state;
+            for (const effect of result.effects)
+                if (
+                    effect.type === "broadcast" &&
+                    effect.packet.event !== "room:broadcast"
+                )
+                    this.broadcast(effect.packet.event, effect.packet.data);
+            this.broadcast("room:broadcast", game.snapshot());
+        });
+        await game.open(initial ?? undefined);
+        this.distributed = game;
+        this.game = game.state;
+    }
+    /** Internal RPC: start the reconnect deadline even if no client returns. */
+    async resumeMigration(roomId: string): Promise<void> {
+        await this.enqueue(async () => {
+            await this.ensureDistributed(roomId);
+            await this.scheduleNextAlarm();
+        });
+    }
+
     private async handle(
         ws: WebSocket,
         session: Session,
@@ -352,51 +367,10 @@ export class RoomDO extends DurableObject<Env> {
                     authenticatedRoomId,
                     this.env,
                 );
-                if (!this.distributed) {
-                    await this.control.register();
-                    const saved = await this.control.call("read", {
-                        roomId: authenticatedRoomId,
-                    });
-                    const initial =
-                        !saved.ownership ||
-                        saved.ownership.lifecycle === "DELETED"
-                            ? await loadRoom(
-                                  authenticatedRoomId,
-                                  response.jwtToken,
-                                  this.env,
-                              )
-                            : undefined;
-                    if (initial) requireRoomItems(initial);
-                    if (
-                        (!saved.ownership ||
-                            saved.ownership.lifecycle === "DELETED") &&
-                        !initial
-                    )
-                        throw new ClientError(
-                            "ルーム情報を取得できませんでした。",
-                        );
-                    const game = new DistributedRoom(
-                        authenticatedRoomId,
-                        this.control,
-                        (result) => {
-                            this.game = result.state;
-                            for (const effect of result.effects)
-                                if (
-                                    effect.type === "broadcast" &&
-                                    effect.packet.event !== "room:broadcast"
-                                )
-                                    this.broadcast(
-                                        effect.packet.event,
-                                        effect.packet.data,
-                                    );
-                            this.broadcast("room:broadcast", game.snapshot());
-                        },
-                        (result, full) => this.replicator!.send(result, full),
-                    );
-                    await game.open(initial ?? undefined);
-                    this.distributed = game;
-                    this.game = game.state;
-                }
+                await this.ensureDistributed(
+                    authenticatedRoomId,
+                    response.jwtToken,
+                );
             }
             if (!this.game) {
                 const room = await loadRoom(
@@ -447,7 +421,8 @@ export class RoomDO extends DurableObject<Env> {
         if (event === "cluster:ping" && this.distributed) {
             if (
                 !this.distributed.halted &&
-                this.distributed.checkpoint.ownership.leaseUntil > Date.now()
+                this.distributed.checkpoint.ownership.owner ===
+                    this.control?.config.id
             )
                 this.send(ws, "cluster:pong");
             return;

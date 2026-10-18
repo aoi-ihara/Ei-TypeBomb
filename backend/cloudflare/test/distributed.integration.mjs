@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,9 +17,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const requireServer = createRequire(
     resolve(root, "backend/server/package.json"),
 );
-const { Pool } = requireServer("pg");
 const { io } = requireServer("socket.io-client");
-const database = process.env.ETB_TEST_DATABASE_URL;
+const { WebSocket } = requireServer("ws");
 const wait = async (predicate, description, timeout = 15000) => {
     const until = Date.now() + timeout;
     while (Date.now() < until) {
@@ -39,38 +38,18 @@ const freePort = async () => {
 
 test(
     "real Socket.IO → workerd WebSocket → Socket.IO preserves a running match",
-    { skip: !database, timeout: 90000 },
+    { timeout: 90000 },
     async (t) => {
-        const pool = new Pool({ connectionString: database });
-        t.after(() => pool.end());
-        await pool.query(
-            "drop function if exists public.etb_cluster(text,text,text,jsonb); drop schema if exists etb_private cascade",
-        );
-        await pool.query(
-            await readFile(
-                resolve(
-                    root,
-                    "supabase/migrations/20261018142210_distributed_room_control.sql",
-                ),
-                "utf8",
-            ),
-        );
         const temp = await mkdtemp(resolve(tmpdir(), "etb-workerd-"));
         t.after(() => rm(temp, { recursive: true, force: true }));
         const ports = await Promise.all([freePort(), freePort(), freePort()]);
         const urls = ports.map((port) => `http://127.0.0.1:${port}`);
-        const tokens = urls.map(() => randomUUID() + randomUUID());
-        for (let i = 0; i < 3; i++)
-            await pool.query(
-                "insert into etb_private.servers(id,token_hash,parent,depth,transport) values($1,sha256(convert_to($2,'UTF8')),$3,$4,$5)",
-                [
-                    urls[i],
-                    tokens[i],
-                    urls[i - 1] ?? null,
-                    i,
-                    i === 1 ? "websocket" : "socket.io",
-                ],
-            );
+        const { credentials } = await import(
+            "../../server/test/clusterFixture.ts"
+        );
+        const tokens = (await credentials(urls)).map((bundle) =>
+            JSON.stringify(bundle),
+        );
         const roomId = randomUUID();
         const row = {
             id: roomId,
@@ -85,36 +64,20 @@ test(
                 },
             ],
         };
-        const receivedBy = new Set();
-        const broker = createServer(async (req, res) => {
-            try {
-                if (req.url.startsWith("/rest/v1/rpc/etb_cluster")) {
-                    let text = "";
-                    for await (const part of req) text += part;
-                    const body = JSON.parse(text);
-                    const value = await pool.query(
-                        "select public.etb_cluster($1,$2,$3,$4) value",
-                        [
-                            body.server_id,
-                            body.server_token,
-                            body.operation,
-                            body.args,
-                        ],
-                    );
-                    if (body.operation === "receive")
-                        receivedBy.add(body.server_id);
-                    res.setHeader("Content-Type", "application/json");
-                    res.end(JSON.stringify(value.rows[0].value));
-                } else if (req.url.startsWith("/rest/v1/ei_typebomb_rooms")) {
-                    res.setHeader("Content-Type", "application/json");
-                    res.end(JSON.stringify([row]));
-                } else {
-                    res.writeHead(404).end();
-                }
-            } catch (error) {
-                res.writeHead(400, { "Content-Type": "application/json" }).end(
-                    JSON.stringify({ message: error.message }),
-                );
+        let databaseReads = 0;
+        const unexpected = [];
+        const broker = createServer((req, res) => {
+            if (req.url.startsWith("/rest/v1/ei_typebomb_rooms")) {
+                databaseReads++;
+                const requested =
+                    new URL(req.url, "http://localhost").searchParams
+                        .get("id")
+                        ?.slice(3) ?? row.id;
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify([{ ...row, id: requested }]));
+            } else {
+                unexpected.push(req.url);
+                res.writeHead(500).end("Database control access is forbidden");
             }
         });
         await new Promise((resolve) => broker.listen(0, "127.0.0.1", resolve));
@@ -211,6 +174,8 @@ test(
                 host: "127.0.0.1",
                 durableObjects: {
                     ROOMS: { className: "GameRoom", useSQLite: true },
+                    CLUSTER: { className: "ClusterDO", useSQLite: true },
+                    REPLICAS: { className: "ReplicaDO", useSQLite: true },
                 },
                 bindings: {
                     ...common,
@@ -225,6 +190,60 @@ test(
         const primary = await startNode(0);
         await startNode(2);
         const clients = [];
+        await wait(async () => {
+            try {
+                const response = await fetch(`${urls[0]}/cluster/route`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ jwtToken: roomToken }),
+                });
+                return (
+                    response.ok && (await response.json()).servers.length === 3
+                );
+            } catch {
+                return false;
+            }
+        }, "authenticated cluster registration");
+        // Neither registration nor room reads are callable before peer auth.
+        for (const url of urls) {
+            const socket = new WebSocket(
+                `${url.replace("http", "ws")}/cluster/ws`,
+            );
+            const replies = [];
+            const closed = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    socket.terminate();
+                    reject(
+                        new Error(
+                            "Unauthenticated cluster socket remained open",
+                        ),
+                    );
+                }, 4000);
+                socket.on("message", (data) =>
+                    replies.push(JSON.parse(data.toString())),
+                );
+                socket.on("close", () => {
+                    clearTimeout(timeout);
+                    resolve();
+                });
+                socket.on("error", reject);
+            });
+            socket.on("open", () =>
+                socket.send(
+                    JSON.stringify({
+                        type: "rpc",
+                        id: "anonymous",
+                        op: "status",
+                        args: { roomId },
+                    }),
+                ),
+            );
+            await closed;
+            assert.equal(
+                replies.some((message) => message.type === "reply"),
+                false,
+            );
+        }
         const nodeClient = async (i, player) => {
             const socket = io(urls[i], {
                 transports: ["websocket"],
@@ -399,15 +418,54 @@ test(
         const holder = players.indexOf(
             p1.room.users[p1.room.bombs[0].holder].id,
         );
+        const typing = holder === 0 ? p1 : p2;
+        typing.send("currentInput", "t");
+        typing.send("currentInput", "te");
+        typing.send("currentInput", "test");
+        await wait(
+            () => p1.room.typingFocusInput === "test",
+            "coalesced delta over peer WebSockets",
+        );
+        const healthy = await fetch(`${urls[1]}/cluster/report`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                jwtToken: roomToken,
+                sessionToken: observerSession,
+                roomId,
+                owner: urls[0],
+                revision: p1.room.revision,
+                failure: true,
+            }),
+        }).then((response) => response.json());
+        assert.equal(
+            healthy.ownership.owner,
+            urls[0],
+            "one report cannot steal a healthy room",
+        );
+        const unauth = await fetch(`${urls[1]}/cluster/report`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                jwtToken: roomToken,
+                sessionToken: "forged",
+                roomId,
+                owner: urls[0],
+                revision: p1.room.revision,
+                failure: true,
+            }),
+        });
+        assert.equal(unauth.ok, false);
         await command(holder === 0 ? p1 : p2, holder, "word:success");
         const expected = structuredClone(p1.room);
-        await wait(
-            () => receivedBy.has(urls[1]) && receivedBy.has(urls[2]),
-            "authenticated direct replication to every lower server",
-        );
+        const readsBeforeFailover = databaseReads;
         primary.kill("SIGKILL");
         await new Promise((resolve) => primary.once("exit", resolve));
-        await delay(3300); // Actual lease expiration, no forced SQL transfer.
+        await wait(
+            () => observed?.ownerServerId === urls[1],
+            "client failure report promotes Worker",
+            25000,
+        );
         const workerClients = [];
         const workerClient = async (player) => {
             const response = await mf.dispatchFetch(`${urls[1]}/ws/${roomId}`, {
@@ -469,8 +527,57 @@ test(
         }).then((response) => response.json());
         assert.equal(route.ownership.owner, urls[1]);
         assert.equal(observed.epoch, w1.room.epoch);
+        assert.equal(databaseReads, readsBeforeFailover);
+        const freshId = randomUUID();
+        const freshRoomJwt = await new SignJWT({
+            id: freshId,
+            role: "authenticated",
+        })
+            .setProtectedHeader({ alg: "ES256", kid })
+            .setIssuer("ei-typebomb")
+            .setAudience("authenticated")
+            .setIssuedAt()
+            .setExpirationTime("1h")
+            .sign(privateKey);
+        const freshSession = await new SignJWT({
+            roomId: freshId,
+            sessionId: randomUUID(),
+            role: "client_session",
+        })
+            .setProtectedHeader({ alg: "ES256", kid })
+            .setIssuer("ei-typebomb")
+            .setAudience("ei-typebomb:client-session")
+            .setIssuedAt()
+            .setExpirationTime("1h")
+            .sign(privateKey);
+        const freshSocket = io(urls[0], {
+            transports: ["websocket"],
+            reconnection: false,
+        });
+        clients.push(freshSocket);
+        let freshRoom;
+        freshSocket.on("auth:request", () =>
+            freshSocket.emit("auth:response", {
+                jwtToken: freshRoomJwt,
+                sessionToken: freshSession,
+                displayName: "New room",
+            }),
+        );
+        freshSocket.on("room:broadcast", (room) => (freshRoom = room));
+        await wait(() => freshRoom, "new room at recovered primary");
+        assert.equal(freshRoom.ownerServerId, urls[0]);
+        freshSocket.disconnect();
+        assert.equal(
+            databaseReads,
+            readsBeforeFailover + 1,
+            "only a new room may read settings",
+        );
         await mf.dispose();
-        await delay(3300);
+        await wait(
+            () => observed?.ownerServerId === urls[2],
+            "client failure report promotes Render",
+            25000,
+        );
         const r1 = await nodeClient(2, 0),
             r2 = await nodeClient(2, 1);
         await wait(() => !r1.room.migrating, "tertiary resume");
@@ -484,6 +591,16 @@ test(
         assert.equal(r1.room.bombs[0].holder, expected.bombs[0].holder);
         assert.equal(r1.room.bombs[0].turn, expected.bombs[0].turn);
         assert.deepEqual(r1.room.users, expected.users);
+        assert.equal(
+            databaseReads,
+            readsBeforeFailover + 1,
+            "failover must never reload settings",
+        );
+        assert.deepEqual(
+            unexpected,
+            [],
+            "no database synchronization, RPC, registration or lease requests",
+        );
         dropNextAck = true;
         routed.emit("room:leave"); // Observer command is a no-op, but its ACK is durable.
         await wait(

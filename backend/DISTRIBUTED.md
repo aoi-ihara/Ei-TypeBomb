@@ -1,63 +1,88 @@
-# 分散ルームとフェイルオーバー
+# WebSocket分散ルーム（PR #367 設計変更）
 
-PR #366 の署名付きタブセッションを使う、任意長の**順序付きチェーン**です。Mac mini / Render は同じ Node エントリーポイントです。Worker は既存の GameRoom namespace を使います。ゲームの選問・爆弾・脱落処理は `shared/game.ts`、所有権と復元は `shared/distributed/` に共通化しています。
+## 保存先と接続
 
-## 整合性と可用性
+ゲーム状態・プレイヤー・トポロジー・所有権・確認状態にPostgreSQL/Supabaseを使いません。DBへのアクセスは担当Primaryが**新しいルームインスタンス**を作成するときの設定・問題取得だけです。移行時はレプリカの確定checkpointを使います。ルームが不明で必要なサーバーに接続できない場合、DBから作り直さず停止します。フロントエンドの既存のルーム編集・認証・オンライン記憶機能は変更しません。
 
-Supabase PostgreSQL を、ゲームサーバーから独立した**必須の耐久レプリカ兼制御基盤**として使います。所有権とゲーム状態は別テーブルです。状態の確定と fencing の検査は同じトランザクションで行います。所有者・instance・epoch・revision・DB時刻による3秒リースを検査し、成功した保存ACKを受けてからゲーム結果を配信します。リースは1秒ごとに更新します。制御基盤へ到達できなければゲームの確定を止め、所有権を再確認して再接続します。クライアントの申告でリースを失効させません。
+Nodeはメモリだけを使い、Mac miniとRenderで同じプログラムを動かします。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
-下位すべてへ直接 `/internal/replicate` を通知します。途中の親の停止に依存しません。typing/hint は100ms単位で最新値をまとめ、変化がなければ送信しません。重要イベントはすぐ保存・通知し、接続がある間は5秒ごとに全snapshotを通知します。下位サーバーのACKが欠落しても、独立した必須レプリカであるPostgreSQLのACKがある場合は確定できます。**下位ゲームサーバーだけのACKをクォーラムにはしません**。この選択により、Workerが直後に停止してもRenderはPostgreSQLから確定状態を取得できます。
-
-直接通知はsnapshot/deltaと基準revisionを含みます。ただし、受信側は通知内容を権威として採用せず、DBが発行した不透明なreceipt、送信者の10秒JWT（issuer・受信者audience・対象ルーム・instance/epoch/revisionを検証）、自分の専用資格情報を使って現在のcheckpointを取得します。この取得が欠落・古いdeltaの修復も兼ねます。したがって現実装は**制御基盤との間では完全なJSON checkpointを転送**します。純粋な差分だけの永続化ではありません。下位のローカルキャッシュから昇格することはありません。
-
-新規ルームは直近10秒以内に登録された最上位で作成します。既存ルームは保存されたownerへ接続し、リース切れの後に下位が原子的に引き継ぎます。上位への移動はDBで拒否します。同一URLのプロセス再起動もepochを更新して旧プロセスをfenceします。複数候補が競合してもDBのroom単位ロックとrevision CASで1台だけが確定できます。サーバーのalive情報と親子情報はDBに保持するため、親停止時も失われません。起動時の登録は親への論理的な登録を共通レジストリ経由で行い、親HTTPへの到達を必須にしません。
-
-移行では最後に確認できた所有者のリース更新時刻からタイマーを停止し、全参加者の再接続か20秒の復帰期限まで待ちます。期限後、未復帰者には既存の通常切断処理を適用します（生存プレイヤー退出なら試合をキャンセル）。席順・問題index・ゲームID・爆弾は再抽選しません。一時的なtransport切断は即時退出にしません。観戦者を含む全接続の復帰猶予が終わり、ゲームが動いていないことを確認して、DELETING→DELETEDのtombstoneを保存します。再作成は別instanceです。
-
-## 手動設定（本番への適用・デプロイは別途必要）
-
-1. `pgcrypto` を `extensions` schemaで利用できることを確認し、`supabase/migrations/20261018142210_distributed_room_control.sql` を管理者のSQL Editor/通常のmigration手順で適用します。`etb_private` はData APIの公開schemaに追加しないでください。
-2. サーバーごとに32バイト以上のランダムトークンを生成し、管理者として以下を**親から順に**登録します。URLはHTTPSのoriginのみ・末尾のスラッシュなし。depthは0から連続、重複不可です。新しい下位を追加するときも同じSQLだけで既存コードの変更は不要です。
-
-```sql
--- 実際のURLと安全に生成したトークンに置換。トークンをGitへ保存しない。
-insert into etb_private.servers(id, token_hash, parent, depth, transport)
-values
- ('https://PRIMARY_HOST', sha256(convert_to('PRIMARY_RANDOM_TOKEN', 'UTF8')), null, 0, 'socket.io'),
- ('https://WORKER_HOST', sha256(convert_to('WORKER_RANDOM_TOKEN', 'UTF8')), 'https://PRIMARY_HOST', 1, 'websocket'),
- ('https://RENDER_HOST', sha256(convert_to('RENDER_RANDOM_TOKEN', 'UTF8')), 'https://WORKER_HOST', 2, 'socket.io');
-```
-
-3. 各ゲームサーバーに以下を設定します。Nodeの `PORT` は省略時3001、Renderではプラットフォーム指定を使えます。
+環境変数は既存の3項目と、サーバー専用の署名付きidentity bundleです。
 
 ```dotenv
 PRIMARY_SERVER_URL=https://PRIMARY_HOST
-PARENT_SERVER_URL=                 # Primaryのみ空。それ以外は直前のサーバーのorigin
+PARENT_SERVER_URL=                 # Primaryだけ空
 SERVER_PUBLIC_URL=https://THIS_HOST
-CLUSTER_SERVER_TOKEN=THIS_SERVER_RANDOM_TOKEN
-NEXT_PUBLIC_SUPABASE_URL=https://PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=EXISTING_PUBLISHABLE_KEY
-JWT_KEY_ID=EXISTING_KEY_ID
-JWT_PUBLIC_KEY=EXISTING_PUBLIC_JWK
+CLUSTER_SERVER_TOKEN=JSON_IDENTITY_BUNDLE
+# 既存のroom/session JWT公開鍵、Supabase publishable設定は新規設定取得用に維持
+# 任意: CLUSTER_DRAINING=true（所有権譲渡を承認する運用モード）
 ```
 
-`CLUSTER_SERVER_TOKEN` はサーバー専用secretです。Workerでは `wrangler secret put CLUSTER_SERVER_TOKEN`、Nodeではプロセスのsecret/environmentに配置します。ゲームサーバーにJWT秘密鍵、Supabase service_role、DB接続文字列は配置しません。RPCの権限は、このサーバーの登録とクラスタ内の許可されたルーム操作に限定されます。無効化は管理者が `enabled=false`、ローテーションは `token_hash` を更新します。
+子は親の `/cluster/ws` にWSS接続して登録し、認証済みトポロジーを伝播します。既知の他サーバーにも直接接続でき、親停止でレジストリを捨てません。台数・Node/Workerの位置はコードに固定していません。登録できるidentityはオフラインCAが署名したURL・親・depth・transportに限定します。
 
-4. Workerの上記varsと既存の `ROOMS` binding、`ALLOWED_ORIGINS` を設定します。既存のDO namespace/classは維持します。1分間隔のscheduled handlerは登録情報を更新します。アクティブルームのリース・タイマーはDO alarmが処理し、バックアップだけのDOではゲームを進めません。preview環境にも同じ設定一式を別途設定してください。
-5. フロントエンドを、既存のbootstrap URLと `NEXT_PUBLIC_DISTRIBUTED_ROOMS=true` で**再ビルド**します。bootstrapは到達先の種であり、台数制限ではありません。以後の候補は認証済みroute APIから取得し、ページ内で保持します。Workerのbootstrap URLは従来どおり `/ws` 付きでも使えます。少なくとも2つのbootstrapを設定すれば、最初のアクセス時からPrimary停止に対応できます。
-6. JWT issuer=`ei-typebomb`、room audience=`authenticated`、session audience=`ei-typebomb:client-session` を署名時・検証時の両方に設定しています。既存のissuer/audienceなしcookieは再入室で再発行してください。タブセッションは移行時に再発行せず同じものを使います。
-7. 各ホストの時計を同期し、各サーバーの `/health` とroom JWTを使った `/cluster/route`、registry、所有者移行をステージングで確認してから有効化してください。HTTPS/WSSが必須です（localhostのテストのみHTTPを許可）。
+## 所有権確認プロトコルと安全性
 
-## テスト
+Raftの多数決ではなく、**固定した順序付き投票者集合のsuffix全員ACK**を使うチェーン複製です。各ルーム作成時に `roomInstanceId` と、証明書で許可された順序付きメンバー/起動ID（incarnation）を固定します。現在のownerから末尾までを必須確認集合とします。
 
-Nodeの既存テストに加え、実際のPostgreSQLで所有権競合・旧epoch・登録拒否・tombstone・追加サーバーを検証します。さらにworkerd/Miniflareと実Socket.IOを起動し、NodeプロセスをSIGKILL→Worker復元→Primary再起動時のowner維持→Worker停止→別Nodeへの復元をテストします。フロントエンドのRoutedSocketも同じ通信に接続し、自動切り替えを検証します。
+- ownerは変更を計算するだけで、まだ確定応答を返しません。
+- 署名付き提案（ルーム・instance・epoch・revision・checkpoint hash）を子へ送り、子は保存してさらに次へ転送します。順番違い、別instance、旧epoch、違う提案hashを拒否します。
+- 末尾も保存し、確定を署名します。その決定が全suffixを逆に通り、各サーバーが保存してACKします。ownerがこのACKを得てから、クライアントへ結果を配信します。
+- ACK消失時、操作は「失敗」と断定できません。末尾で決定済みなら次のownerはその状態を復元します。イベントIDの再送は二重適用しません。末尾で未決定のpending状態は復元元にしません。
+- クライアントの障害報告だけでは移行しません。報告先は既存ownerに問い合わせ、正常にsuffix確認できるownerなら移行を拒否します。draining中またはsuffix確認不能で停止したownerは譲渡を承認できます。
+- ownerが応答しない場合も、候補以降の**全投票者**がより大きなepochを永続/メモリにpromiseしてから移行します。末尾が最後の確定状態を返し、新epochのMIGRATING状態を同じ経路で確定します。単なる接続失敗を所有権には変換しません。
+- 候補は同じか下位の位置に限ります。同じownerの実行アダプター復元も新epochでfenceします。上位へのフェイルバックは許可しません。
+- ownerは約1秒ごとにもsuffixの所有権確認を行います。これは時刻で失効させるリースではありません。タイムアウトは停止/再照会の契機だけで、epochを獲得する証拠にはしません。
+
+**安全性の根拠:** 下位移行前後の必須確認集合は、同じルームの固定末尾を必ず共有します。末尾はルーム単位に直列化し、promiseしたepoch未満を拒否します。新epochのpromise後に旧ownerが新しいイベントを確定することはできません。移行直前に末尾で決定された操作は、ACKが失われても引き継ぐcheckpointに含まれます。既に決定した旧応答が遅着する可能性はありますが、新epochのゲームを二重に進めることはありません。
+
+**障害モデル:** 正しく動く認証済みサーバーのクラッシュ、メッセージ遅延/欠落/重複/逆順、通信分断に対応します。Byzantine動作、秘密鍵漏洩、同じURL/identityで複数のNodeプロセスを同時稼働させる運用、CA管理者が競合する構成を発行する操作は対象外です。各URLは1プロセス（WorkerはDOの単一実行保証）で運用してください。
+
+## 継続できる条件・停止する条件
+
+3台の順序がPrimary / Worker / Renderなら、Primaryの確定には3台、Workerへ移行後はWorkerとRender、Renderへ移行後はRender自身の保存が必要です。したがって **Primaryのクラッシュ→Workerで再開→Workerのクラッシュ→Renderで再開** が可能です。
+
+一方、固定末尾が停止/分断した場合は、上位が何台残っていても確定を停止します。多数決の生存台数では判定しません。最後の1台へ移行した後は追加コピーがないので、そのプロセス消失に耐えられません。
+
+Nodeが再起動するとメモリ投票状態を失い、新しい起動IDになります。古いcheckpointをキャッシュすることはできますが、**失った旧投票者として再参加することはできません**。そのNodeをまだ必須とする既存ルームは停止するか、そのNodeより下位の元の投票者へ安全に移行します。Workerの起動IDと投票状態は自身のDO storageに保存します。DO storage消去や証明書の期限切れでも、推測で再開させません。
+
+末尾と必要なsuffixの状態が残らない場合の自動復旧、ローカルキャッシュだけを投票状態へ昇格する復旧、未知のルームを分断中にDBから再作成する復旧は**無効**です。全コピーを失った進行中ゲームの復元はできません。
+
+## 同期・復元・削除
+
+入力/hintは最新値を100ms単位で集約し、JSON差分を送ります。欠落した基準hashの場合、認証済みWebSocketから完全な提案を再取得します。変化のない入力は送信しません。開始・正解・爆弾移動・脱落・終了・接続状態は即時提案し、必須suffixのACKまで未確定です。接続中のルームは5秒ごとにも完全checkpointを送ります。確定checkpointは下位への直接送信も行うため、親経由だけに依存しません。非投票レプリカが受信しただけではゲームを進めません。
+
+クライアントはforegroundで約1.25秒応答がないと下位へ `/cluster/report` を送ります。room JWTと同じタブのsession JWT、room ID、認識したowner、最後のrevision、failureフラグを検証します。バックグラウンドでは応答監視を抑え、復帰後もサーバー側確認を必須にします。認証中には別の猶予を設けます。
+
+復元は署名された最新確定checkpointから行います。座席、表示名、game ID、爆弾ID/位置/段階/turn、選択済み問題、入力、推薦情報、イベント重複排除を引き継ぎます。移行中はタイマーを止め、参加者全員の再接続または20秒の復帰期限後に再開します。期限後の未復帰者には既存の通常退出処理を適用します。残り時間の再構成には保存時刻と最終確認時刻を使い、既に期限付近なら最小の復帰余裕を設けます。ホスト間の時計同期は必要ですが、時計を所有権の根拠にはしません。
+
+全transport接続の復帰猶予が終了し、試合が動いていないことを確認してDELETEDのtombstoneをsuffix全体で確定します。tombstoneは自動破棄しません。古いsnapshotは状態を上書きできず、再作成では新instanceと大きいepochを使います。ownerも必要な投票者も不在なら削除を推測で確定しません。
+
+## デプロイとメンバー追加・削除
+
+1. identityを安全なディレクトリへ作成します。URLはHTTPS origin、順序・transportは引数で指定します。
+
+```sh
+cd backend/server
+node scripts/cluster-credentials.mjs /PRIVATE/NEW_DIRECTORY \
+  socket.io=https://PRIMARY_HOST websocket=https://WORKER_HOST socket.io=https://RENDER_HOST
+```
+
+`server-N.json` の内容を各サーバーの `CLUSTER_SERVER_TOKEN` secretへ設定します。`offline-authority.json` はオフライン保管し、どのゲームサーバーにも置かないでください。サーバーの署名秘密鍵はそのサーバーidentity専用で、ユーザーJWT署名やSupabase管理権限はありません。従来のランダムなDB capability文字列は新形式に自動変換しません。
+
+旧PostgreSQL版とのローリング混在はできません。旧版の進行中ルームを終了し、全旧サーバーを停止してからクラスタ全員を同じ新版へ切り替えてください。旧版のcheckpointの自動インポートは行いません。
+
+2. 3つのURL環境変数を証明書と一致させます。Nodeは `PORT` を利用できます。Workerには既存ROOMSに加えCLUSTER/REPLICASのDO bindingと `distributed-v2` migrationを設定します。`wrangler.jsonc` に定義済みです。previewにも必要です。Node/Worker間で `/cluster/ws` のWSSを許可し、プロキシのWebSocket idle timeoutを確認してください。
+3. クラスタ全員が登録された後、frontendを `NEXT_PUBLIC_DISTRIBUTED_ROOMS=true` とbootstrap URLで再ビルドします。台数はbootstrapの3変数に制限されず、登録情報から取得します。session JWTは接続先変更で再発行しません。
+4. 追加ノードは有効なCA証明書と親URLで登録でき、既存コード変更なしでバックアップを受信できます。ただし、**既存ルームの投票者集合は自動変更しません**。新規ルームの投票者はCA署名付きrosterを使い、欠落した古い投票者を「存在しない」と誤判定しません。
+5. 新しい投票者構成の有効化や削除・順序変更では、旧構成のルームを先に終了/削除し、同じオフラインCAで新rosterのidentityを発行して全員へ設定します。`--authority /PRIVATE/offline-authority.json` を生成コマンドの先頭に指定すれば同じCAを利用できます。全員のrosterが揃うまでは新規作成を停止します。動的登録と投票者の安全な変更は区別しています。稼働中の投票者の無条件除去や自動joint-consensus再構成は実装していません。
+6. `CLUSTER_DRAINING=true` のownerは照会時に譲渡を承認します。通常は正常ownerへの虚偽報告で移行しません。管理者CAは信頼境界なので、同じルームが生きたまま互いに独立したrosterを発行しないでください。
+
+PostgreSQL制御RPCと専用migrationはリポジトリから削除しました。旧PRのSQLをすでに手動適用した環境では、旧アプリの停止後に管理者が `public.etb_cluster(text,text,text,jsonb)` と `etb_private` schemaを撤去してください。この変更は本番DBへ接続して撤去作業を実行しません。通常のルーム設定テーブルには触れません。
+
+## 検証とコスト
 
 ```sh
 npm ci --prefix backend/server
 npm ci --prefix backend/cloudflare
-# 必ず使い捨てDBを指定。このテストはetb_private schemaを削除・再作成します。
-export ETB_TEST_DATABASE_URL=postgresql://USER:PASS@localhost:5432/etb_failover_test
-# 通常のPostgreSQLのみ: create role anon; create role authenticated;
 npm test --prefix backend/server
 npm run test:integration --prefix backend/cloudflare
 npm run typecheck --prefix backend/server
@@ -67,13 +92,8 @@ npm test --prefix backend/cloudflare
 cd backend/cloudflare && npx wrangler deploy --dry-run
 ```
 
-DB未指定時の通常テストではPostgreSQLを必要とするテストだけskipします。専用GitHub ActionsはPostgreSQLを起動して両方を実行します。本番資格情報・本番DBはテストに使用しません。
+PostgreSQL、DB資格情報、外部サービスへの接続はテストに不要です。実通信テストはNodeをSIGKILLし、クライアントの報告→workerdのゲーム復元→Worker停止→別Nodeの復元を実行します。正常owner拒否、認証拒否、Primary復旧後の新規作成、差分、ACK消失、同じタブIDを検証し、DBアクセスを設定取得だけに制限するカウンターも検査します。単体テストは承認移行、通信分断、固定末尾不在、メモリ消失、旧epoch、重複・逆順、tombstoneを検証します。CIにもDBサービスはありません。
 
-## 制限・運用コスト
+メモリ/メッセージ上限はcheckpoint約512KiB、frame 2MiB（選出時の新旧checkpointを含む）、registry/roster 1,000件、接続当たりpending RPC 128件です。100msは集約間隔で、ネットワーク到達の保証ではありません。大規模構成では暗号検証とACKの遅延を実測してください。
 
-- 設定前は分散モードを有効にしません。トポロジーだけ設定して必要なsecretを欠く場合は起動/処理を拒否します。従来のstandaloneは残ります。
-- クラスタは任意長の直列チェーンです。分岐した木、多地域DBの合意、DB自体の障害継続は対象外です。DBが不明なら停止します。
-- 512KiBのcheckpoint制限、受信サイズ制限、game command/heartbeatの頻度制限があります。大規模catalogや長時間のイベント履歴は制限に達する可能性があります。
-- 100msは入力のバッチ間隔です。ネットワーク/DBの遅延時に100ms以内の到着を保証しません。重要イベントはDB往復の遅延を受けます。
-- Workerのalarm、heartbeat、受信側の検証read、完全checkpointの書き込みが発生します。常時稼働・多数ルームで無料枠内になる保証はありません。実測と課金アラートが必要です。DOへの永続書き込みは重要イベントと5秒snapshotへまとめますが、入力のDB保存・検証readは残るため、長時間運用には転送量の追加最適化が必要です。
-- 本番Mac mini / Cloudflare / Renderへのデプロイと実停止演習は未実施です。自動テストはローカルPostgreSQLとworkerdであり、実クラウド間のRTT・DNS・TLS・プラットフォーム停止は別途確認してください。
+標準WebSocketの接続はClusterDOを稼働状態に保ち、duration課金が発生します（[Cloudflareの説明](https://developers.cloudflare.com/durable-objects/examples/websocket-server/)）。現実装はhibernationで接続/未処理ACKを誤って復元しない方を優先しています。DOストレージは投票promise・確定状態のACK前保存に必要であり、高頻度入力では書き込みも増えます。無料枠内の常時運用は保証しません。本番デプロイと実クラウド間の停止演習は別途必要です。

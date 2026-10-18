@@ -13,7 +13,7 @@ type Ownership = {
     revision: number;
     instance: string;
     lifecycle: string;
-    leaseUntil: number;
+    roomId: string;
 };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (...args: any[]) => void;
@@ -38,6 +38,10 @@ export class RoutedSocket {
     private lastReply = 0;
     private meta?: Meta;
     private token?: string;
+    private sessionToken?: string;
+    private roomId?: string;
+    private currentOwner?: string;
+    private failure?: { owner: string; revision: number };
     private deliveredResults = new Set<string>();
     private pending = new Map<
         string,
@@ -60,6 +64,7 @@ export class RoutedSocket {
         private readonly getToken: () => Promise<string | undefined>,
         private readonly foreground = () =>
             document.visibilityState !== "hidden",
+        private readonly getSession?: () => Promise<string | undefined>,
     ) {
         void this.connect();
     }
@@ -85,6 +90,8 @@ export class RoutedSocket {
     }
     emit(event: string, data?: unknown) {
         if (event === "auth:response") {
+            const auth = data as { sessionToken?: string };
+            this.sessionToken = auth.sessionToken ?? this.sessionToken;
             this.transport?.emit(event, data);
             return this;
         }
@@ -126,6 +133,7 @@ export class RoutedSocket {
         const attempt = ++this.attempt;
         try {
             this.token ??= await this.getToken();
+            this.sessionToken ??= await this.getSession?.();
             if (!this.token) throw new Error("Room authorization missing");
             const known = [
                 ...new Set([
@@ -136,7 +144,44 @@ export class RoutedSocket {
             let route:
                 | { ownership: Ownership | null; servers: Server[] }
                 | undefined;
-            for (const seed of known) {
+            const failure = this.failure;
+            if (failure && this.sessionToken && this.roomId) {
+                const ownerDepth =
+                    this.servers.find((server) => server.id === failure.owner)
+                        ?.depth ?? -1;
+                for (const server of [...this.servers]
+                    .sort((a, b) => a.depth - b.depth)
+                    .filter((server) => server.depth > ownerDepth)) {
+                    try {
+                        const response = await fetch(
+                            `${server.id}/cluster/report`,
+                            {
+                                method: "POST",
+                                redirect: "manual",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    roomId: this.roomId,
+                                    jwtToken: this.token,
+                                    sessionToken: this.sessionToken,
+                                    owner: failure.owner,
+                                    revision: failure.revision,
+                                    failure: true,
+                                }),
+                                signal: AbortSignal.timeout(6000),
+                            },
+                        );
+                        if (response.ok) {
+                            route = await response.json();
+                            this.servers = route!.servers;
+                            this.failure = undefined;
+                            break;
+                        }
+                    } catch {
+                        /* An uncertain confirmation pauses; try another lower voter. */
+                    }
+                }
+            }
+            for (const seed of route ? [] : known) {
                 try {
                     const endpoint = new URL(seed);
                     endpoint.pathname = "/cluster/route";
@@ -149,11 +194,7 @@ export class RoutedSocket {
                     });
                     if (!response.ok) continue;
                     const value = await response.json();
-                    if (
-                        !Array.isArray(value.servers) ||
-                        value.servers.length > 64
-                    )
-                        continue;
+                    if (!Array.isArray(value.servers)) continue;
                     const valid = value.servers.every((server: Server) => {
                         const url = new URL(server.id);
                         return (
@@ -176,22 +217,14 @@ export class RoutedSocket {
             if (attempt !== this.attempt || this.stopped) return this;
             if (!route) throw new Error("Authoritative routing unavailable");
             const own = route.ownership;
-            const ownerDepth =
-                route.servers.find((server) => server.id === own?.owner)
-                    ?.depth ?? -1;
             const ordered = [...route.servers].sort(
                 (a, b) => a.depth - b.depth,
             );
+            if (own) this.roomId = own.roomId;
             const candidates =
                 !own || own.lifecycle === "DELETED"
                     ? ordered
-                    : own.leaseUntil > Date.now()
-                      ? ordered.filter((server) => server.id === own.owner)
-                      : ordered.filter(
-                            (server) =>
-                                server.id === own.owner ||
-                                server.depth > ownerDepth,
-                        );
+                    : ordered.filter((server) => server.id === own.owner);
             for (const server of candidates) {
                 if (attempt !== this.attempt || this.stopped) return this;
                 const url =
@@ -212,10 +245,17 @@ export class RoutedSocket {
                 });
                 if (!ready || attempt !== this.attempt || this.stopped) {
                     socket.disconnect();
+                    if (own && server.id === own.owner)
+                        this.failure = {
+                            owner: own.owner,
+                            revision: own.revision,
+                        };
                     continue;
                 }
                 this.transport?.disconnect();
                 this.transport = socket;
+                this.currentOwner = server.id;
+                let authenticating = true;
                 this.id = socket.id;
                 this.connected = true;
                 this.lastReply = performance.now();
@@ -234,6 +274,8 @@ export class RoutedSocket {
                 });
                 socket.on("auth:session", (value) => {
                     if (active()) {
+                        authenticating = false;
+                        this.lastReply = performance.now();
                         this.playerId = value.id;
                         this.dispatch("auth:session", value);
                     }
@@ -271,6 +313,8 @@ export class RoutedSocket {
                         epoch: room.epoch,
                         revision: room.revision,
                     };
+                    this.roomId = room.id;
+                    this.currentOwner = room.ownerServerId ?? server.id;
                     this.gameId = room.gameId;
                     const heldBomb = room.bombs?.find(
                         (bomb: { holder: number }) =>
@@ -310,9 +354,14 @@ export class RoutedSocket {
                 clearInterval(this.heartbeat);
                 this.heartbeat = setInterval(() => {
                     if (!active() || !this.foreground()) return;
+                    if (authenticating) {
+                        if (performance.now() - this.lastReply > 10000)
+                            this.recover();
+                        return;
+                    }
                     // Background throttling only requests a fresh authority check.
-                    // Ownership changes still require lease expiry and a DB CAS.
-                    if (performance.now() - this.lastReply > 1500)
+                    // A server-side suffix confirmation is required to change ownership.
+                    if (performance.now() - this.lastReply > 1250)
                         this.recover();
                     else {
                         socket.emit("cluster:ping");
@@ -332,6 +381,11 @@ export class RoutedSocket {
     }
     private recover() {
         if (this.stopped || this.retry) return;
+        if (this.currentOwner && this.meta)
+            this.failure = {
+                owner: this.currentOwner,
+                revision: this.meta.revision,
+            };
         this.attempt++;
         this.connected = false;
         clearInterval(this.heartbeat);

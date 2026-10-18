@@ -27,7 +27,7 @@ export function resumeDeadlines(game: GameState, pauseMs: number): GameState {
 export class DistributedRoom {
     checkpoint!: Checkpoint;
     private queue: Promise<unknown> = Promise.resolve();
-    private lastRenew = 0;
+    private lastConfirmation = 0;
     private lastFull = 0;
     private inputs = new Map<string, GameEvent>();
     private ticking = false;
@@ -45,10 +45,6 @@ export class DistributedRoom {
             result: GameResult,
             checkpoint: Checkpoint,
         ) => void,
-        private readonly replicate: (
-            result: ControlResult,
-            full: boolean,
-        ) => Promise<void>,
         private readonly now = Date.now,
         private readonly random = Math.random,
     ) {}
@@ -75,7 +71,7 @@ export class DistributedRoom {
             });
             if (!result.value) throw new Error("No recoverable checkpoint");
             this.checkpoint = result;
-            this.lastRenew = this.now();
+            this.lastConfirmation = this.now();
             if (result.ownership.lifecycle === "MIGRATING") {
                 const restored = structuredClone(result.value);
                 restored.game = resumeDeadlines(
@@ -88,6 +84,19 @@ export class DistributedRoom {
                                 result.ownership.savedAt),
                     ),
                 );
+                const floor = this.now() + 100;
+                if (restored.game.wordAt !== undefined)
+                    restored.game.wordAt = Math.max(
+                        floor,
+                        restored.game.wordAt,
+                    );
+                if (restored.game.bombAt !== undefined)
+                    restored.game.bombAt = Math.max(
+                        floor,
+                        restored.game.bombAt,
+                    );
+                for (const bomb of restored.game.room.bombs ?? [])
+                    bomb.at = Math.max(floor, bomb.at);
                 restored.resumeUntil = this.now() + GRACE_MS;
                 restored.pausedAt = this.now();
                 for (const session of Object.values(restored.sessions)) {
@@ -148,10 +157,9 @@ export class DistributedRoom {
             throw error;
         }
         this.checkpoint = result;
-        this.lastRenew = this.now();
-        // The independent durable control store is the required replication ACK.
-        // Peers are notified directly in parallel, including across a failed parent.
-        void this.replicate(result, kind !== "input").catch(() => {});
+        this.lastConfirmation = this.now();
+        // call(commit) returned only after the fixed voting suffix stored the
+        // state and the tail's signed commit decision flowed back through it.
         this.publish(
             {
                 state: this.state,
@@ -351,10 +359,10 @@ export class DistributedRoom {
         return this.serial(async () => {
             if (this.halted || this.deleted) return;
             const now = this.now();
-            if (now - this.lastRenew >= 1_000) {
+            if (now - this.lastConfirmation >= 1_000) {
                 const own = this.checkpoint.ownership;
-                const renewed = await this.control
-                    .call("renew", {
+                const confirmed = await this.control
+                    .call("confirm", {
                         roomId: this.roomId,
                         instance: own.instance,
                         epoch: own.epoch,
@@ -363,8 +371,8 @@ export class DistributedRoom {
                         this.halted = true;
                         throw error;
                     });
-                this.checkpoint.ownership = renewed.ownership;
-                this.lastRenew = now;
+                this.checkpoint.ownership = confirmed.ownership;
+                this.lastConfirmation = now;
             }
             const value = structuredClone(this.checkpoint.value!);
             const effects: GameResult["effects"] = [];
@@ -438,24 +446,13 @@ export class DistributedRoom {
                 });
                 this.checkpoint = result;
                 this.deleted = true;
-                await this.replicate(result, true);
                 return;
             }
             if (
                 Object.keys(value.sessions).length &&
                 now - this.lastFull >= 5_000
             ) {
-                void this.replicate(
-                    {
-                        ...this.checkpoint,
-                        servers: (
-                            await this.control.call("read", {
-                                roomId: this.roomId,
-                            })
-                        ).servers,
-                    },
-                    true,
-                ).catch(() => {});
+                await this.control.call("snapshot", { roomId: this.roomId });
                 this.lastFull = now;
             }
         }).finally(() => {
@@ -474,6 +471,7 @@ export class DistributedRoom {
         const own = this.checkpoint.ownership;
         return {
             roomInstanceId: own.instance,
+            ownerServerId: own.owner,
             epoch: own.epoch,
             revision: own.revision,
             migrating: !!this.checkpoint.value?.resumeUntil,

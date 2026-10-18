@@ -41,7 +41,8 @@ Alarm scheduling. It imports the shared core without bringing in
 
 The game state stores absolute epoch-millisecond deadlines. Distributed mode
 preserves game IDs, seats, bomb turns and question indices, shifts deadlines
-across a migration pause, and commits through the fenced PostgreSQL authority.
+across a migration pause, and commits through authenticated WebSocket suffix
+confirmations. There is no database-backed control plane.
 See [distributed operation and setup](../DISTRIBUTED.md).
 
 ## Verification
@@ -77,5 +78,5 @@ The Node and Workers adapters both validate these optional environment variables
 
 No server URLs or signing secrets are committed here. Omitted variables keep
 existing standalone deployments working. A configured hierarchy requires a
-server-specific capability and the control migration; missing configuration fails
+CA-signed server identity bundle and fixed voter roster; missing configuration fails
 closed. See [setup, tests, costs and limitations](../DISTRIBUTED.md).

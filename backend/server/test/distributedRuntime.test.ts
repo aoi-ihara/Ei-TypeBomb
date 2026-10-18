@@ -1,4 +1,4 @@
-import { receiveReplica } from "../../shared/distributed/replication";
+import { readLimitedBody } from "../../shared/distributed/replication";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
@@ -28,7 +28,6 @@ function fixture() {
     let now = 10_000;
     let failure = "";
     const published: unknown[] = [],
-        replicated: unknown[] = [],
         calls: string[] = [];
     let result: ControlResult = {
         ownership: {
@@ -38,7 +37,6 @@ function fixture() {
             epoch: 1,
             revision: 0,
             lifecycle: "CREATING",
-            leaseUntil: now + 3000,
             savedAt: now,
         },
         value: {
@@ -46,7 +44,6 @@ function fixture() {
             sessions: {},
             events: {},
         },
-        receipt: randomUUID(),
         servers: [],
     };
     const control: Control = {
@@ -64,9 +61,7 @@ function fixture() {
                         revision: result.ownership.revision + 1,
                         lifecycle: "ACTIVE",
                         savedAt: now,
-                        leaseUntil: now + 3000,
                     },
-                    receipt: randomUUID(),
                 };
             return structuredClone(result);
         },
@@ -75,9 +70,6 @@ function fixture() {
         room.id,
         control,
         (result) => published.push(result),
-        async (result) => {
-            replicated.push(result);
-        },
         () => now,
         () => 0,
     );
@@ -106,7 +98,6 @@ function fixture() {
         runtime,
         command,
         published,
-        replicated,
         calls,
         advance: (ms: number) => (now += ms),
         fail: (op: string) => (failure = op),
@@ -128,12 +119,12 @@ test("unacknowledged commit never publishes or changes local state", async () =>
     assert.equal(f.runtime.halted, true);
     await assert.rejects(f.runtime.connect("other"), /paused/);
 });
-test("authority read/renew failure stops deadline progression", async () => {
+test("authority confirmation failure stops deadline progression", async () => {
     const f = fixture();
     await f.runtime.open(room);
     const before = f.published.length;
     f.advance(1001);
-    f.fail("renew");
+    f.fail("confirm");
     await assert.rejects(f.runtime.tick(), /unreachable/);
     assert.equal(f.runtime.halted, true);
     assert.equal(f.published.length, before);
@@ -148,18 +139,18 @@ test("input coalesces per player and unchanged input does not replicate", async 
     await f.runtime.command(f.command("a", "game:start"), "a");
     f.advance(3001);
     await f.runtime.tick();
-    const before = f.replicated.length;
+    const before = f.calls.filter((op) => op === "commit").length;
     await f.runtime.apply({ type: "currentInput", playerId: "a", input: "a" });
     await f.runtime.apply({ type: "currentInput", playerId: "a", input: "ab" });
-    assert.equal(f.replicated.length, before);
+    assert.equal(f.calls.filter((op) => op === "commit").length, before);
     f.advance(100);
     await f.runtime.tick();
     assert.equal(f.runtime.state.room.typingFocusInput, "ab");
-    const after = f.replicated.length;
+    const after = f.calls.filter((op) => op === "commit").length;
     await f.runtime.apply({ type: "currentInput", playerId: "a", input: "ab" });
     f.advance(100);
     await f.runtime.tick();
-    assert.equal(f.replicated.length, after);
+    assert.equal(f.calls.filter((op) => op === "commit").length, after);
 });
 test("stale/evicted commands cannot poison authority or reapply an old action", async () => {
     const f = fixture();
@@ -214,7 +205,7 @@ test("distributed mode refuses missing credentials and plaintext public endpoint
                 },
                 "socket.io",
             ),
-        /requires/,
+        /requires/i,
     );
     assert.throws(
         () =>
@@ -223,8 +214,6 @@ test("distributed mode refuses missing credentials and plaintext public endpoint
                     PRIMARY_SERVER_URL: "http://primary.test",
                     SERVER_PUBLIC_URL: "http://primary.test",
                     CLUSTER_SERVER_TOKEN: "token",
-                    NEXT_PUBLIC_SUPABASE_URL: "https://db.test",
-                    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "pub",
                 },
                 "socket.io",
             ),
@@ -237,12 +226,7 @@ test("oversized chunked replication is rejected before control I/O", async () =>
         method: "POST",
         body: "x".repeat(524289),
     });
-    const response = await receiveReplica(
-        request,
-        { call: async () => assert.fail("No control I/O for oversized body") },
-        async () => assert.fail("No storage write"),
-    );
-    assert.equal(response.status, 413);
+    await assert.rejects(readLimitedBody(request, 524288), RangeError);
 });
 test("a finished game outcome survives a lost game:end delivery", async () => {
     const f = fixture();

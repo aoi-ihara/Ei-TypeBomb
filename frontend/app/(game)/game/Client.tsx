@@ -266,6 +266,7 @@ export default function Clinet({
         };
 
         const primarySocket = io(primaryUrl, {
+            sessionTokenPromise,
             reconnection: false,
             timeout: SERVER_FAILOVER_TIMEOUT_MS,
         });

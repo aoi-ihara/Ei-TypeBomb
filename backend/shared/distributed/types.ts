@@ -36,18 +36,15 @@ export type Ownership = {
     epoch: number;
     revision: number;
     lifecycle: Lifecycle;
-    leaseUntil: number;
     savedAt: number;
     pausedAt?: number;
 };
 export type Checkpoint = {
     ownership: Ownership;
     value: DurableRoom | null;
-    receipt: string;
 };
 export type ControlResult = Checkpoint & {
     servers: ServerInfo[];
-    duplicate?: boolean;
 };
 export interface Control {
     call(op: string, args?: Record<string, unknown>): Promise<ControlResult>;
@@ -63,7 +60,6 @@ export type Command = {
     revision: number;
     event: GameEvent;
 };
-export const LEASE_MS = 3_000;
 export const GRACE_MS = 20_000;
 export const MAX_SNAPSHOT_BYTES = 512 * 1024;
 export const GAME_RULES = {

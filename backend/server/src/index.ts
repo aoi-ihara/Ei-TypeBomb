@@ -7,8 +7,6 @@ import { verifyToken, verifyClientSessionToken } from "./lib/auth";
 import { getRoomFromId } from "./lib/get";
 import { capturePostHogEvent } from "./lib/posthog";
 import { createSocketRateLimit } from "./lib/socketRateLimit";
-import { probeRoomDatabase } from "./lib/databaseHealth";
-import { createDatabaseProbeRateLimit } from "./lib/databaseProbeRateLimit";
 import { createHealthRttProbeRateLimit } from "./lib/healthRttProbeRateLimit";
 import {
     logError,
@@ -35,27 +33,47 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 import { parseServerTopology } from "../../shared/topology";
 
-import { clusterConfig, HttpControl } from "../../shared/distributed/control";
+import { clusterConfig } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
-import {
-    Replicator,
-    receiveReplica,
-    newerReplica,
-} from "../../shared/distributed/replication";
-import type { Command, Checkpoint } from "../../shared/distributed/types";
-
+import { PeerControl } from "../../shared/distributed/peers";
+import { Identity } from "../../shared/distributed/identity";
+import { MAX_CLUSTER_FRAME_BYTES } from "../../shared/distributed/link";
+import { WebSocket as PeerSocket, WebSocketServer } from "ws";
+import type { Command } from "../../shared/distributed/types";
 const topology = parseServerTopology(process.env);
-const cluster = clusterConfig(process.env, "socket.io")
-    ? new HttpControl(process.env, "socket.io")
-    : null;
-const replicator = cluster
-    ? new Replicator(cluster.config!.id, process.env.CLUSTER_SERVER_TOKEN!)
-    : null;
+const config = clusterConfig(process.env, "socket.io");
+let cluster: PeerControl | null = null;
+const clusterReady = config
+    ? Identity.create(process.env.CLUSTER_SERVER_TOKEN!).then((identity) => {
+          cluster = new PeerControl(identity, config, async (id) => {
+              const url = new URL("/cluster/ws", id);
+              url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+              const socket = new PeerSocket(url, {
+                  maxPayload: MAX_CLUSTER_FRAME_BYTES,
+              });
+              await new Promise<void>((resolve, reject) => {
+                  const timer = setTimeout(() => {
+                      socket.close();
+                      reject(new Error("Peer connection timeout"));
+                  }, 1500);
+                  socket.once("open", () => {
+                      clearTimeout(timer);
+                      resolve();
+                  });
+                  socket.once("error", (error) => {
+                      clearTimeout(timer);
+                      reject(error);
+                  });
+              });
+              return socket as unknown as import("../../shared/distributed/link").ClusterSocket;
+          });
+          cluster.draining = process.env.CLUSTER_DRAINING === "true";
+      })
+    : Promise.resolve();
 
 const games = new Map<string, NodeGameAdapter | DistributedRoom>();
 // Game identity is scoped to a signed, tab-specific session, not a transport ID.
 const recommendedItems = new Map<string, string>();
-const replicas = new Map<string, Checkpoint>();
 const liveSessions = new Map<string, string>();
 const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
 const DISCONNECT_GRACE_MS = 20_000;
@@ -70,67 +88,73 @@ const httpServer = createServer(app);
 app.get("/health", (_req, res) => {
     res.json({ ok: true });
 });
-app.use("/cluster/route", express.json({ limit: "8kb" }));
-app.post("/cluster/route", async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    try {
-        if (!cluster) {
-            res.status(404).end();
-            return;
+app.use(["/cluster/route", "/cluster/report"], express.json({ limit: "8kb" }));
+for (const path of ["/cluster/route", "/cluster/report"]) {
+    app.options(path, (_req, res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Headers", "content-type");
+        res.setHeader("Access-Control-Allow-Methods", "POST");
+        res.status(204).end();
+    });
+    app.post(path, async (req, res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        try {
+            if (!cluster) {
+                res.status(404).end();
+                return;
+            }
+            const roomId = await verifyToken(req.body?.jwtToken);
+            if (!roomId || (req.body.roomId && req.body.roomId !== roomId)) {
+                res.status(403).end();
+                return;
+            }
+            if (path.endsWith("report")) {
+                await verifyClientSessionToken(req.body.sessionToken, roomId);
+                if (req.body.failure !== true)
+                    throw new Error("Missing failure report");
+            }
+            const result = await cluster.call(
+                path.endsWith("report") ? "report" : "read",
+                { roomId, owner: req.body.owner, revision: req.body.revision },
+            );
+            if (
+                path.endsWith("report") &&
+                result.ownership?.owner === cluster.config.id &&
+                result.ownership.lifecycle === "MIGRATING"
+            )
+                await createRoomIfNeeded(roomId, req.body.jwtToken);
+            res.json({ ownership: result.ownership, servers: result.servers });
+        } catch {
+            res.status(503).end();
         }
-        const roomId = await verifyToken(req.body?.jwtToken);
-        if (!roomId) {
-            res.status(403).end();
-            return;
-        }
-        await cluster.register();
-        const result = await cluster.call("read", { roomId });
-        res.json({ ownership: result.ownership, servers: result.servers });
-    } catch {
-        res.status(503).end();
+    });
+}
+const peerServer = new WebSocketServer({
+    noServer: true,
+    maxPayload: MAX_CLUSTER_FRAME_BYTES,
+});
+httpServer.on("upgrade", (request, socket, head) => {
+    if (request.url !== "/cluster/ws") return;
+    if (!cluster) {
+        socket.destroy();
+        return;
     }
+    peerServer.handleUpgrade(request, socket, head, (ws) => {
+        void cluster!
+            .accept(
+                ws as unknown as import("../../shared/distributed/link").ClusterSocket,
+            )
+            .catch(() => ws.close());
+    });
 });
-app.options("/cluster/route", (_req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "content-type");
-    res.setHeader("Access-Control-Allow-Methods", "POST");
-    res.status(204).end();
-});
-app.post(
-    "/internal/replicate",
-    express.raw({ type: "application/json", limit: "512kb" }),
-    async (req, res) => {
-        if (!cluster) {
-            res.status(404).end();
-            return;
-        }
-        const response = await receiveReplica(
-            new Request(`${cluster.config!.id}/internal/replicate`, {
-                method: "POST",
-                headers: { Authorization: req.headers.authorization ?? "" },
-                body: req.body,
-            }),
-            cluster,
-            async (checkpoint) => {
-                const id = checkpoint.ownership.roomId;
-                if (newerReplica(replicas.get(id), checkpoint))
-                    replicas.set(id, checkpoint);
-                if (replicas.size > 256)
-                    replicas.delete(replicas.keys().next().value!);
-                // Cache only; promotion always reloads the authoritative durable checkpoint.
-            },
-        );
-        res.status(response.status).end();
-    },
-);
 const io = new Server<
     EventHandlers<ClientPayloads>,
     EventHandlers<ServerPayloads>
 >(httpServer, {
     maxHttpBufferSize: 8192,
+    destroyUpgrade: false,
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
-const acceptDatabaseProbe = createDatabaseProbeRateLimit();
 const acceptHealthRttProbe = createHealthRttProbeRateLimit();
 
 const refreshServerState = () =>
@@ -159,40 +183,36 @@ const createRoomIfNeeded = async (
     const loadPromise = (async () => {
         if (cluster) {
             const saved = await cluster.call("read", { roomId });
-            const initial =
-                !saved.ownership || saved.ownership.lifecycle === "DELETED"
-                    ? await getRoomFromId(roomId, jwtToken)
-                    : undefined;
+            const fresh =
+                !saved.ownership || saved.ownership.lifecycle === "DELETED";
+            if (fresh && cluster.config.id !== cluster.config.primary)
+                throw new Error("Only the primary may load new room settings");
+            const initial = fresh
+                ? await getRoomFromId(roomId, jwtToken)
+                : undefined;
             if (initial) requireRoomItems(initial);
             if (
                 (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
                 !initial
             )
                 return null;
-            const game = new DistributedRoom(
-                roomId,
-                cluster,
-                (result) => {
-                    const index = rooms.findIndex((room) => room.id === roomId);
-                    if (index < 0) rooms.push(result.state.room);
-                    else rooms[index] = result.state.room;
-                    for (const effect of result.effects)
-                        if (
-                            effect.type === "broadcast" &&
-                            effect.packet.event !== "room:broadcast"
-                        ) {
-                            const emit = io
-                                .to(roomId)
-                                .emit.bind(io.to(roomId)) as (
-                                event: string,
-                                data?: unknown,
-                            ) => boolean;
-                            emit(effect.packet.event, effect.packet.data);
-                        }
-                    io.to(roomId).emit("room:broadcast", game.snapshot());
-                },
-                (result, full) => replicator!.send(result, full),
-            );
+            const game = new DistributedRoom(roomId, cluster, (result) => {
+                const index = rooms.findIndex((room) => room.id === roomId);
+                if (index < 0) rooms.push(result.state.room);
+                else rooms[index] = result.state.room;
+                for (const effect of result.effects)
+                    if (
+                        effect.type === "broadcast" &&
+                        effect.packet.event !== "room:broadcast"
+                    ) {
+                        const emit = io.to(roomId).emit.bind(io.to(roomId)) as (
+                            event: string,
+                            data?: unknown,
+                        ) => boolean;
+                        emit(effect.packet.event, effect.packet.data);
+                    }
+                io.to(roomId).emit("room:broadcast", game.snapshot());
+            });
             await game.open(initial ?? undefined);
             games.set(roomId, game);
             if (!rooms.some((room) => room.id === roomId))
@@ -369,7 +389,7 @@ io.on("connection", (socket) => {
         if (
             game instanceof DistributedRoom &&
             !game.halted &&
-            game.checkpoint.ownership.leaseUntil > Date.now()
+            game.checkpoint.ownership.owner === cluster?.config.id
         )
             emitRaw("cluster:pong");
     });
@@ -601,10 +621,11 @@ io.on("connection", (socket) => {
     });
 });
 
-if (cluster) {
-    awaitClusterStartup();
+if (config) {
+    void clusterReady.then(awaitClusterStartup);
     function awaitClusterStartup() {
-        void cluster!
+        if (!cluster) return;
+        void cluster
             .register()
             .catch((error) =>
                 console.error("Cluster registration failed", error.message),
@@ -636,7 +657,14 @@ if (cluster) {
     }, 100).unref();
 }
 const port = Number(process.env.PORT ?? 3001);
-httpServer.listen(port, () => {
-    startConsole(port);
-    console.info(`Server topology: ${topology.role}`);
-});
+void clusterReady
+    .then(() =>
+        httpServer.listen(port, () => {
+            startConsole(port);
+            console.info(`Server topology: ${topology.role}`);
+        }),
+    )
+    .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+    });
