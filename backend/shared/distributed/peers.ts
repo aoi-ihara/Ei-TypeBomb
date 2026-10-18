@@ -459,14 +459,33 @@ export class PeerControl implements Control {
         )
             throw new Error("Fenced owner");
         if (op === "confirm") {
-            // A solo owner may have become stale during a partition. Check
-            // peers opportunistically and stop the old runtime once a newer
-            // independently certified epoch becomes visible again.
-            const observed = await this.read(roomId);
-            if (observed &&
-                (observed.ownership.epoch > current.ownership.epoch ||
-                    (observed.ownership.epoch === current.ownership.epoch &&
-                        observed.ownership.owner !== this.config.id)))
+            // Opportunistic reconciliation must NEVER dial an offline Render
+            // during a gameplay heartbeat. Query only existing peer sockets,
+            // with a short bounded timeout, and always check local mirrors.
+            const observations: VotedCheckpoint[] = [];
+            const mirror = this.mirrors.get(roomId);
+            if (mirror) observations.push(mirror);
+            await Promise.allSettled([...this.links.values()].map(async (link) => {
+                let timer: ReturnType<typeof setTimeout> | undefined;
+                try {
+                    const remote = await Promise.race<VotedCheckpoint | null>([
+                        link.call("status", { roomId }),
+                        new Promise<null>((resolve) => {
+                            timer = setTimeout(() => resolve(null), 80);
+                        }),
+                    ]);
+                    if (remote) {
+                        await this.validate(remote);
+                        observations.push(remote);
+                    }
+                } finally {
+                    if (timer) clearTimeout(timer);
+                }
+            }));
+            if (observations.some((remote) =>
+                remote.ownership.epoch > current.ownership.epoch ||
+                (remote.ownership.epoch === current.ownership.epoch &&
+                    remote.ownership.owner !== this.config.id)))
                 throw new Error("Fenced by a newer remote owner");
             await this.rpc(this.config.id, "fence", {
                 roomId,
