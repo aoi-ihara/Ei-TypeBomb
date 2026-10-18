@@ -437,7 +437,11 @@ export class PeerControl implements Control {
                 value: initial,
                 voters,
             });
-            return this.result(await this.propose(cp, "init", old));
+            const initialized = await this.propose(cp, "init", old);
+            // Solo commit is allowed, but a crash-safe failover is possible
+            // only after at least one standby has received this checkpoint.
+            this.broadcast(initialized);
+            return this.result(initialized);
         }
         const local = await this.record(roomId),
             current = local.committed;
