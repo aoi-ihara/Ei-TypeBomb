@@ -188,7 +188,7 @@ test(
         t.after(() => mf.dispose());
         await mf.ready;
         const primary = await startNode(0);
-        await startNode(2);
+        const render = await startNode(2);
         const clients = [];
         await wait(async () => {
             try {
@@ -581,6 +581,24 @@ test(
         freshSocket.on("room:broadcast", (room) => (freshRoom = room));
         await wait(() => freshRoom, "new room at recovered primary");
         assert.equal(freshRoom.ownerServerId, urls[0]);
+
+        // Actual child-process outage: Render sleeping must NOT block a room
+        // running on Mac mini when Worker is healthy.
+        render.kill("SIGKILL");
+        await new Promise((resolve) => render.once("exit", resolve));
+        freshSocket.emit("room:join");
+        await wait(
+            () => freshRoom?.users?.length === 1,
+            "Mac mini + Worker commit a join while Render is asleep",
+        );
+        freshSocket.emit("room:leave");
+        await wait(
+            () => freshRoom?.users?.length === 0,
+            "Mac mini + Worker commit a leave while Render is asleep",
+        );
+        // Render restarts with a new incarnation, which must never inherit
+        // its lost votes for the old room.
+        await startNode(2);
         freshSocket.disconnect();
         assert.ok(
             databaseReads > readsBeforeFailover,
