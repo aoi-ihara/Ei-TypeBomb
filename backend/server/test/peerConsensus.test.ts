@@ -97,6 +97,22 @@ test("solo availability, approved transfer and no automatic failback", async () 
         revision: w.state.revision,
     });
     assert.equal(standalone.ownership.owner, n.ids[2]);
+    // The final surviving server actually commits a new game revision.
+    const solo = await n.hosts[2].call("commit", {
+        roomId: room.id,
+        instance: standalone.ownership.instance,
+        epoch: standalone.ownership.epoch,
+        revision: standalone.ownership.revision,
+        value: {
+            ...standalone.value!,
+            game: {
+                ...standalone.value!.game,
+                revision: standalone.ownership.revision + 1,
+            },
+        },
+    });
+    assert.equal(solo.ownership.owner, n.ids[2]);
+    assert.equal(solo.ownership.revision, standalone.ownership.revision + 1);
     n.alive[0] = true;
     await assert.rejects(
         n.hosts[0].call("open", { roomId: room.id }),
