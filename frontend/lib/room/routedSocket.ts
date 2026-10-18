@@ -41,6 +41,7 @@ export class RoutedSocket {
     private sessionToken?: string;
     private roomId?: string;
     private currentOwner?: string;
+    private routedRevision?: number;
     private failure?: { owner: string; revision: number };
     private deliveredResults = new Set<string>();
     private pending = new Map<
@@ -220,7 +221,10 @@ export class RoutedSocket {
             const ordered = [...route.servers].sort(
                 (a, b) => a.depth - b.depth,
             );
-            if (own) this.roomId = own.roomId;
+            if (own) {
+                this.roomId = own.roomId;
+                this.routedRevision = own.revision;
+            }
             const candidates =
                 !own || own.lifecycle === "DELETED"
                     ? ordered
@@ -381,10 +385,13 @@ export class RoutedSocket {
     }
     private recover() {
         if (this.stopped || this.retry) return;
-        if (this.currentOwner && this.meta)
+        if (
+            this.currentOwner &&
+            (this.meta || this.routedRevision !== undefined)
+        )
             this.failure = {
                 owner: this.currentOwner,
-                revision: this.meta.revision,
+                revision: this.meta?.revision ?? this.routedRevision!,
             };
         this.attempt++;
         this.connected = false;
