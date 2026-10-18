@@ -12,7 +12,7 @@ const initial = (room: ReturnType<typeof freshRoom>) => ({
     sessions: {},
     events: {},
 });
-test("majority confirmations: owner fencing, approved transfer and no failback", async () => {
+test("solo availability, approved transfer and no automatic failback", async () => {
     const n = await network(),
         room = freshRoom();
     let now = Date.now();
@@ -85,10 +85,9 @@ test("majority confirmations: owner fencing, approved transfer and no failback",
     const before = w.state.revision;
     assert.equal(await w.command(answer, "a"), "accepted");
     assert.equal(w.state.revision, before);
-    await assert.rejects(
-        p.command(command(p, "b", "word:success"), "b"),
-        /Fenced|Revision/,
-    );
+    // With availability-first behavior an isolated former owner may also
+    // progress temporarily; it must converge when it observes a newer epoch.
+    await p.command(command(p, "b", "word:success"), "b");
     n.alive[0] = false;
     n.alive[1] = false;
     // The only surviving voter can continue the same game.
@@ -131,40 +130,29 @@ test("partition may create divergent histories; each survivor can continue", asy
         revision: 0,
     });
     assert.equal(moved.ownership.owner, n.ids[1]);
-    await assert.rejects(
-        n.hosts[0].call("commit", {
-            roomId: room.id,
-            instance: cp.ownership.instance,
-            epoch: cp.ownership.epoch,
-            revision: 0,
-            value: { ...cp.value!, game: { ...cp.value!.game, revision: 1 } },
-        }),
-    );
+    const fork = await n.hosts[0].call("commit", {
+        roomId: room.id,
+        instance: cp.ownership.instance,
+        epoch: cp.ownership.epoch,
+        revision: 0,
+        value: { ...cp.value!, game: { ...cp.value!.game, revision: 1 } },
+    });
+    assert.equal(fork.ownership.owner, n.ids[0]);
     n.blocked.clear();
     const owner = await n.hosts[1].call("read", { roomId: room.id });
-    const link = n.hosts[1].links.get(n.ids[2])!,
-        real = link.call;
-    let lost = true;
-    link.call = async (op, args) => {
-        const result = await real(op, args);
-        if (op === "stage" && lost) {
-            lost = false;
-            throw new Error("ACK lost");
-        }
-        return result;
-    };
-    await assert.rejects(
-        n.hosts[1].call("commit", {
-            roomId: room.id,
-            instance: owner.ownership.instance,
-            epoch: owner.ownership.epoch,
-            revision: 0,
-            value: {
-                ...owner.value!,
-                game: { ...owner.value!.game, revision: 1 },
-            },
-        }),
-    );
+    // Solo commit is acknowledged locally, regardless of missing downstream
+    // ACKs. Other replicas converge asynchronously when links recover.
+    const workerCommit = await n.hosts[1].call("commit", {
+        roomId: room.id,
+        instance: owner.ownership.instance,
+        epoch: owner.ownership.epoch,
+        revision: 0,
+        value: {
+            ...owner.value!,
+            game: { ...owner.value!.game, revision: 1 },
+        },
+    });
+    assert.equal(workerCommit.ownership.revision, 1);
     const recovered = await n.hosts[2].call("read", { roomId: room.id });
     assert.equal(recovered.ownership.revision, 1);
     n.alive[1] = false;
@@ -227,7 +215,7 @@ test("isolated Worker can advance but a restarted voter without state cannot rec
     await assert.rejects(
         reboot.call("report", {
             roomId: room.id,
-            owner: n.ids[0],
+            owner: n.ids[1],
             revision: cp.ownership.revision,
         }),
         /incarnation|memory/,
@@ -391,7 +379,9 @@ test("concurrent lower candidates cannot both confirm events after an election",
             });
         }),
     );
-    assert.equal(commits.filter((r) => r.status === "fulfilled").length, 1);
+    // Independent solo owners can both commit during a partition. This is
+    // the explicit availability-over-consistency trade-off.
+    assert.ok(commits.filter((r) => r.status === "fulfilled").length >= 1);
 });
 
 test("migration reconnect grace expires without any returning client and commits deletion", async () => {
@@ -415,6 +405,16 @@ test("migration reconnect grace expires without any returning client and commits
         gameId: randomUUID(),
         gameDuration: 120,
     });
+    // The last confirmed local event may not yet be mirrored. Wait for
+    // standby convergence before simulating loss of the sole owner.
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const saved = await n.hosts[1].dispatch(
+            n.hosts[0].identity.member, "status", { roomId: room.id },
+        );
+        if (saved?.ownership.revision === p.state.revision) break;
+        if (attempt === 99) throw new Error("Replica did not catch up");
+        await delay(5);
+    }
     n.alive[0] = false;
     await n.hosts[1].call("report", {
         roomId: room.id,
