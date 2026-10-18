@@ -381,7 +381,7 @@ export class PeerControl implements Control {
         if (op === "snapshot") {
             const cp = (await this.record(roomId)).committed;
             if (!cp) throw new Error("Unknown room");
-            this.broadcast(cp);
+            void this.broadcast(cp);
             return this.result(cp);
         }
         if (op === "open") {
@@ -440,7 +440,12 @@ export class PeerControl implements Control {
             const initialized = await this.propose(cp, "init", old);
             // Solo commit is allowed, but a crash-safe failover is possible
             // only after at least one standby has received this checkpoint.
-            this.broadcast(initialized);
+            // Give an online standby a short opportunity to receive the
+            // initial room data; never wait indefinitely for sleeping peers.
+            await Promise.race([
+                this.broadcast(initialized),
+                new Promise<void>((resolve) => setTimeout(resolve, 150)),
+            ]);
             return this.result(initialized);
         }
         const local = await this.record(roomId),
@@ -511,7 +516,7 @@ export class PeerControl implements Control {
             undefined,
             args.kind === "input" ? current : undefined,
         );
-        this.broadcast(decided);
+        void this.broadcast(decided);
         return this.result(decided);
     }
     private async propose(
@@ -540,9 +545,9 @@ export class PeerControl implements Control {
                 : full;
         return this.rpc(this.config.id, "stage", { proposal: wire });
     }
-    private broadcast(cp: VotedCheckpoint) {
+    private async broadcast(cp: VotedCheckpoint): Promise<void> {
         const self = this.identity.member;
-        void Promise.allSettled(
+        await Promise.allSettled(
             [...this.members.values()]
                 .filter((member) => member.depth > self.depth)
                 .map((member) => {
