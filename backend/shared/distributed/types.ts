@@ -65,6 +65,9 @@ export type Command = {
     event: GameEvent;
 };
 export const GRACE_MS = 20_000;
+// Keep abandoned lobby seats short-lived, but preserve active match seats until
+// the match ends so an incidental transport loss cannot cancel everybody's game.
+export const NODE_DISCONNECT_GRACE_MS = 8_000;
 export const MAX_SNAPSHOT_BYTES = 512 * 1024;
 export const GAME_RULES = {
     allowSpectatorStart: true,

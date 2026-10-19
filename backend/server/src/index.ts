@@ -39,7 +39,7 @@ import { PeerControl } from "../../shared/distributed/peers";
 import { Identity } from "../../shared/distributed/identity";
 import { MAX_CLUSTER_FRAME_BYTES } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
-import type { Command } from "../../shared/distributed/types";
+import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
 const topology = parseServerTopology(process.env);
 const config = clusterConfig(process.env, "socket.io");
 let cluster: PeerControl | null = null;
@@ -670,7 +670,9 @@ io.on("connection", (socket) => {
         liveSessions.delete(key);
         const distributed = getGame();
         if (distributed instanceof DistributedRoom) {
-            void distributed.disconnect(user.id, true).catch((error) =>
+            // A transport interruption is not an intentional room exit. Keep
+            // the player's seat through reconnection, including live matches.
+            void distributed.disconnect(user.id, false, NODE_DISCONNECT_GRACE_MS).catch((error) =>
                 logError("Distributed socket disconnect cleanup failed", error, {
                     roomId,
                     userId: user.id,

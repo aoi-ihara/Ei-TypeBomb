@@ -565,6 +565,15 @@ export default function Clinet({
                 posthog.capture("game_quited");
             });
 
+            socket.on("cluster:recovered", ({ snapshotRecoveryMs }: {
+                snapshotRecoveryMs: number;
+            }) => {
+                if (!selected || socketRef.current !== socket) return;
+                posthog.capture("game_connection_snapshot_recovered", {
+                    snapshot_recovery_time_ms: snapshotRecoveryMs,
+                });
+            });
+
             socket.on("auth:session", ({ id }: { id: string }) => {
                 if (!selected || socketRef.current !== socket) return;
                 setUserId(id);

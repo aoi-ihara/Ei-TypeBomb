@@ -356,3 +356,64 @@ test("fresh empty room keeps the initial grace window until the first participan
     await f.runtime.tick();
     assert.equal(f.runtime.deleted, false);
 });
+
+
+test("transient Node disconnect preserves an active game and player seat past lobby grace", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    const originalGameId = f.runtime.state.room.gameId;
+    const seats = f.runtime.state.room.users.map((player) => player.id);
+    await f.runtime.disconnect("a", false, 8_000);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, false);
+    f.advance(8_001);
+    await f.runtime.tick();
+    assert.equal(f.runtime.state.room.isStart, true);
+    assert.equal(f.runtime.state.room.gameId, originalGameId);
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), seats);
+    await f.runtime.connect("a");
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, true);
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), seats);
+});
+
+test("abandoned live-game seat is cleaned after the match, not during it", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a", false, 8_000);
+    for (let round = 0; round < 8 && f.runtime.state.room.isStart; round++) {
+        f.advance(30_001);
+        await f.runtime.tick();
+        assert.deepEqual(
+            f.runtime.state.room.users.map((player) => player.id), ["a", "b"],
+        );
+    }
+    assert.equal(f.runtime.state.room.isStart, false);
+    await f.runtime.tick();
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
+});
+
+test("briefly disconnected lobby players leave after the Node grace window", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    await f.runtime.disconnect("a", false, 8_000);
+    f.advance(7_999);
+    await f.runtime.tick();
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["a", "b"]);
+    f.advance(2);
+    await f.runtime.tick();
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+});

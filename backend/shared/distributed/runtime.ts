@@ -368,7 +368,7 @@ export class DistributedRoom {
             await this.save(value, result.effects, "event");
         });
     }
-    disconnect(id: string, immediate = false): Promise<void> {
+    disconnect(id: string, immediate = false, graceMs = GRACE_MS): Promise<void> {
         return this.serial(async () => {
             if (this.halted || this.deleted) return;
             const value = structuredClone(this.checkpoint.value!);
@@ -390,7 +390,7 @@ export class DistributedRoom {
             value.sessions[id] = {
                 ...value.sessions[id],
                 connected: false,
-                expires: this.now() + GRACE_MS,
+                expires: this.now() + graceMs,
             };
             await this.save(value, [], "session");
         });
@@ -430,6 +430,14 @@ export class DistributedRoom {
             let changed = false;
             for (const [id, session] of Object.entries(value.sessions)) {
                 if (session.connected || session.expires > now) continue;
+                // Never convert a transient transport disconnect into a
+                // room:leave while a match is running: room:leave cancels the
+                // ENTIRE game. Keep this reserved seat reconnectable, and
+                // clear abandoned seats immediately after the match finishes.
+                // An explicit room:leave still cancels the game as intended.
+                if (value.game.room.isStart &&
+                    value.game.room.users.some((player) => player.id === id))
+                    continue;
                 delete value.sessions[id];
                 const result = this.reduce(value, {
                     type: "room:leave",
