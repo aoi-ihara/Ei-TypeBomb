@@ -61,6 +61,10 @@ export class RoutedSocket {
     private turn?: number;
     private bombId?: string;
     private playerId?: string;
+    // Only a participant who actually joined should be restored. Spectators
+    // and users who explicitly left must not be auto-enrolled.
+    private joinedRoom = false;
+    private rejoinOnSnapshot = false;
     constructor(
         private readonly seeds: string[],
         private readonly open: (url: string) => Transport,
@@ -92,6 +96,10 @@ export class RoutedSocket {
         for (const listener of this.listeners.get(event) ?? []) listener(data);
     }
     emit(event: string, data?: unknown) {
+        if (event === "room:leave") {
+            this.joinedRoom = false;
+            this.rejoinOnSnapshot = false;
+        }
         if (event === "auth:response") {
             const auth = data as { sessionToken?: string };
             this.sessionToken = auth.sessionToken ?? this.sessionToken;
@@ -110,6 +118,7 @@ export class RoutedSocket {
                 turn: this.turn,
                 bombId: this.bombId,
             };
+            if (event === "room:join") this.joinedRoom = true;
             this.pending.set(command.id, command);
             this.sendCommand(command);
             return this;
@@ -329,7 +338,23 @@ export class RoutedSocket {
                     );
                     this.turn = heldBomb?.turn;
                     this.bombId = heldBomb?.id;
+                    const inRoom = room.users.some(
+                        (player: { id: string }) => player.id === this.playerId,
+                    );
+                    if (inRoom) {
+                        this.joinedRoom = true;
+                        this.rejoinOnSnapshot = false;
+                    }
                     this.dispatch("room:broadcast", room);
+                    if (this.rejoinOnSnapshot && !inRoom && !room.isStart) {
+                        // The new owner has authenticated us but the old
+                        // Socket.IO disconnect already removed our seat.
+                        // Drop commands from the previous connection before
+                        // sending a fresh idempotent join to the new owner.
+                        this.rejoinOnSnapshot = false;
+                        this.pending.clear();
+                        this.emit("room:join");
+                    }
                     if (
                         room.outcome &&
                         !this.deliveredResults.has(room.outcome.gameId)
@@ -410,6 +435,7 @@ export class RoutedSocket {
             };
         this.attempt++;
         this.connected = false;
+        this.rejoinOnSnapshot = this.joinedRoom;
         clearInterval(this.heartbeat);
         this.transport?.disconnect();
         this.transport = undefined;
@@ -424,6 +450,8 @@ export class RoutedSocket {
     }
     disconnect() {
         this.stopped = true;
+        this.joinedRoom = false;
+        this.rejoinOnSnapshot = false;
         this.attempt++;
         this.connected = false;
         clearTimeout(this.retry);

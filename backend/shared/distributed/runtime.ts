@@ -353,11 +353,25 @@ export class DistributedRoom {
             await this.save(value, result.effects, "event");
         });
     }
-    disconnect(id: string): Promise<void> {
+    disconnect(id: string, immediate = false): Promise<void> {
         return this.serial(async () => {
             if (this.halted || this.deleted) return;
             const value = structuredClone(this.checkpoint.value!);
             if (!value.sessions[id]) return;
+            if (immediate) {
+                // Node Socket.IO disconnects should remove the player as soon
+                // as the owning socket is gone. Preserve the existing grace
+                // behavior for hibernating Worker sockets.
+                delete value.sessions[id];
+                const result = this.reduce(value, {
+                    type: "room:leave",
+                    playerId: id,
+                    reason: "disconnect",
+                });
+                value.game = result.state;
+                await this.save(value, result.effects, "event");
+                return;
+            }
             value.sessions[id] = {
                 ...value.sessions[id],
                 connected: false,
