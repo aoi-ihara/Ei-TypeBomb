@@ -461,7 +461,20 @@ io.on("connection", (socket) => {
         if (!roomId) return;
         const key = sessionKey(roomId, user.id);
         if (liveSessions.get(key) !== socket.id) return;
-        if (getGame() instanceof DistributedRoom) return;
+        const distributed = getGame();
+        if (distributed instanceof DistributedRoom) {
+            // An explicit exit differs from a transient transport disconnect:
+            // remove the player now, rather than waiting for reconnect grace.
+            void distributed.leave(user.id)
+                .then(() => {
+                    if (liveSessions.get(key) === socket.id)
+                        liveSessions.delete(key);
+                })
+                .catch((error) =>
+                    logError("Distributed room leave failed", error, { roomId }),
+                );
+            return;
+        }
         liveSessions.delete(key);
         deleteUser(user.id, "room_leave");
     });
