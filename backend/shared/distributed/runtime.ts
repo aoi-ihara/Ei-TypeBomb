@@ -135,21 +135,13 @@ export class DistributedRoom {
                     data: effect.packet.data,
                 };
         }
-        // Persist whether this instance has ever had a participant. A room
-        // created by an auth handshake gets a short grace window, but once
-        // everybody leaves it must not linger because of that same window.
+        // Persist whether the room has ever had a participant. Fresh rooms
+        // get a short initialization grace, even without a socket yet.
         value.hadPlayers ||= Boolean(
             this.checkpoint.value?.hadPlayers ||
             this.checkpoint.value?.game.room.users.length ||
             value.game.room.users.length
         );
-        // A game-end event may also empty seats. Only room:leave is evidence
-        // that an active participant intentionally/forcibly departed.
-        if (value.game.room.users.length) value.emptiedByLeave = false;
-        else if (effects.some(
-            (effect) => effect.type === "activity" &&
-                effect.activity.event === "player_left"
-        )) value.emptiedByLeave = true;
         // revision is the durable commit sequence, including typing/session changes.
         value.game.revision = own.revision + 1;
         if (
@@ -428,11 +420,11 @@ export class DistributedRoom {
             const value = structuredClone(this.checkpoint.value!);
             const effects: GameResult["effects"] = [];
             let changed = false;
-            // Preserve temporary absentees only while another participant
-            // is online. If everyone has abandoned the match, normal grace
-            // expiry must still retire the room instead of leaking it.
-            const hasConnectedParticipant = value.game.room.users.some(
-                (player) => value.sessions[player.id]?.connected,
+            // Every authenticated socket counts, including spectators and
+            // players who explicitly left the game but kept the room open.
+            // If no socket remains, normal expiry can safely retire the room.
+            const hasConnectedSocket = Object.values(value.sessions).some(
+                (session) => session.connected,
             );
             for (const [id, session] of Object.entries(value.sessions)) {
                 if (session.connected || session.expires > now) continue;
@@ -441,7 +433,7 @@ export class DistributedRoom {
                 // ENTIRE game. Keep this reserved seat reconnectable, and
                 // clear abandoned seats immediately after the match finishes.
                 // An explicit room:leave still cancels the game as intended.
-                if (value.game.room.isStart && hasConnectedParticipant &&
+                if (value.game.room.isStart && hasConnectedSocket &&
                     value.game.room.users.some((player) => player.id === id))
                     continue;
                 delete value.sessions[id];
@@ -495,11 +487,11 @@ export class DistributedRoom {
             if (
                 !value.game.room.users.length &&
                 !value.game.room.isStart &&
-                (value.emptiedByLeave || !Object.keys(value.sessions).length)
+                !Object.keys(value.sessions).length
             ) {
-                // Only a never-used room waits for an initial authentication.
-                // As soon as the last participant leaves, retire the room
-                // even when an authenticated spectator/socket remains open.
+                // Membership alone cannot retire a room: authenticated sockets
+                // can remain as spectators or rejoin after explicitly leaving.
+                // Wait for every socket session's disconnect grace to expire.
                 if (
                     !value.hadPlayers &&
                     now - this.checkpoint.ownership.savedAt < GRACE_MS &&

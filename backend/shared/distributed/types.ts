@@ -24,7 +24,7 @@ export type DurableRoom = {
     events: Record<string, number>;
     /** A player has joined this room at least once; used to clean up empty rooms. */
     hadPlayers?: boolean;
-    /** The last participant explicitly left or disconnected, not just a match ending. */
+    /** Legacy checkpoint field. No longer permits deleting a room with live sessions. */
     emptiedByLeave?: boolean;
     resumeUntil?: number;
     pausedAt?: number;

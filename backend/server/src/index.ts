@@ -474,17 +474,16 @@ io.on("connection", (socket) => {
         if (distributed instanceof DistributedRoom) {
             // An explicit exit differs from a transient transport disconnect:
             // remove the player now, rather than waiting for reconnect grace.
-            void distributed.leave(user.id)
-                .then(() => {
-                    if (liveSessions.get(key) === socket.id)
-                        liveSessions.delete(key);
-                })
-                .catch((error) =>
-                    logError("Distributed room leave failed", error, { roomId }),
-                );
+            // Leaving a match does not disconnect the authenticated socket.
+            // Keep liveSessions so this exact socket can join again and
+            // its eventual transport disconnect can retire the room.
+            void distributed.leave(user.id).catch((error) =>
+                logError("Distributed room leave failed", error, { roomId }),
+            );
             return;
         }
-        liveSessions.delete(key);
+        // Standalone sockets also stay in their Socket.IO room after leave.
+        // Only release their session mapping on actual socket disconnect.
         deleteUser(user.id, "room_leave");
     });
 

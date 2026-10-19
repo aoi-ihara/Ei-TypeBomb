@@ -519,8 +519,7 @@ export class PeerControl implements Control {
         if (op === "delete" && (
             current.value!.game.room.isStart ||
             current.value!.game.room.users.length > 0 ||
-            (Object.keys(current.value!.sessions).length > 0 &&
-                current.value!.emptiedByLeave !== true)
+            Object.keys(current.value!.sessions).length > 0
         ))
             throw new Error("Room still in use");
         if (
