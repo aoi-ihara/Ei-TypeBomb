@@ -128,7 +128,8 @@ export class RoutedSocket {
     }
     private recordServerTiming(header: string | null) {
         if (!this.recoveryDiagnostics || !header) return;
-        const keys: Record<string, keyof RecoveryDiagnostics> = {
+        const keys: Record<string, Exclude<keyof RecoveryDiagnostics,
+            "recoveryId" | "snapshotBeforeAuth">> = {
             read: "serverReadMs",
             ownerProbe: "serverProbeMs",
             promote: "serverPromoteMs",
