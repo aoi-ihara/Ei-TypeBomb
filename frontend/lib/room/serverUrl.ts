@@ -42,9 +42,16 @@ export const isTrustedServerUrl = (
     return trustedOrigins(selectedPrimary, clusterServers).includes(origin);
 };
 
-/** The developer-only override is browser-local and is never sent to the API. */
+/**
+ * Ignore browser-local overrides entirely in non-developer deployments.
+ * The settings route being inaccessible must also disable its stored values,
+ * especially before selecting authentication-token recipients.
+ */
 export const getStoredServerConfig = (): string => {
-    if (typeof window === "undefined") return "";
+    if (
+        process.env.NEXT_PUBLIC_DEVELOPER_MODE !== "true" ||
+        typeof window === "undefined"
+    ) return "";
     try {
         return window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY) ?? "";
     } catch {
