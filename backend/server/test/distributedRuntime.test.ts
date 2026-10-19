@@ -257,8 +257,10 @@ test("explicit distributed leave removes the player and broadcasts before grace 
     const before = f.published.length;
     await f.runtime.leave("a");
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
-    assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, true);
     assert.ok(f.published.length > before);
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b", "a"]);
     await f.runtime.leave("a");
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
 });
@@ -273,4 +275,22 @@ test("temporary disconnect retains player until grace window expires", async () 
     f.advance(1000);
     await f.runtime.tick();
     assert.equal(f.runtime.state.room.users.length, 1);
+});
+
+test("reliable leave command permits rejoining over the same authenticated session", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    // Model the routed client's retry-stable game:command for room:leave.
+    const leave = f.command("a", "room:join");
+    leave.event = { type: "room:leave", playerId: "a" };
+    assert.equal(await f.runtime.command(leave, "a"), "accepted");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    assert.equal(await f.runtime.command(leave, "a"), "accepted");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    assert.equal(await f.runtime.command(f.command("a", "room:join"), "a"), "accepted");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b", "a"]);
 });
