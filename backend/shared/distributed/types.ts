@@ -22,6 +22,8 @@ export type DurableRoom = {
         { connected: boolean; expires: number; recommendation?: string }
     >;
     events: Record<string, number>;
+    /** A player has joined this room at least once; used to clean up empty rooms. */
+    hadPlayers?: boolean;
     resumeUntil?: number;
     pausedAt?: number;
     outcome?: {
