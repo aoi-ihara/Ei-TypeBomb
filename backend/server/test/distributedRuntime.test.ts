@@ -344,7 +344,8 @@ test("last explicit leave retains a room while its socket remains connected", as
     await f.runtime.connect("a");
     await f.runtime.command(f.command("a", "room:join"), "a");
     await f.runtime.leave("a");
-    assert.deepEqual(f.runtime.state.room.users, []);
+    // Avoid narrowing Room.users to never[] in the subsequent rejoin assertion.
+    assert.equal(f.runtime.state.room.users.length, 0);
     assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, true);
     await f.runtime.tick();
     assert.equal(f.runtime.deleted, false);
