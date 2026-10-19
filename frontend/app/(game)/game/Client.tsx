@@ -266,6 +266,7 @@ export default function Clinet({
         };
 
         const primarySocket = io(primaryUrl, {
+            sessionTokenPromise,
             reconnection: false,
             timeout: SERVER_FAILOVER_TIMEOUT_MS,
         });
@@ -402,6 +403,7 @@ export default function Clinet({
         const attachSocketListeners = (candidate: Candidate) => {
             const { socket } = candidate;
             const retrySelectedConnection = () => {
+                if (process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") return;
                 if (disposed || !selected || socketRef.current !== socket || reconnectTimer) return;
                 reconnectTimer = setTimeout(() => {
                     reconnectTimer = null;
@@ -441,6 +443,7 @@ export default function Clinet({
                 (
                     newRoom: Room & {
                         words?: LegacyWord[];
+                        migrating?: boolean;
                         users: User[];
                         isStart: boolean;
                         bombHolder: number;
@@ -449,7 +452,7 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
-                    setServerError(null);
+                    setServerError(newRoom.migrating ? "サーバーを切り替えています。参加者の再接続を待っています…" : null);
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
                     const normalizedRoom: Room = {
@@ -658,7 +661,8 @@ export default function Clinet({
         };
 
         attachSocketListeners(primaryCandidate);
-        primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
+        if (process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS !== "true")
+            primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
 
         return () => {
             disposed = true;

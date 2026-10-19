@@ -1,4 +1,6 @@
 export const EVENT_RATE_LIMITS = {
+    "game:command": { capacity: 10, perSecond: 5 },
+    "cluster:ping": { capacity: 4, perSecond: 2 },
     currentInput: { capacity: 60, perSecond: 30 },
     "word:success": { capacity: 10, perSecond: 5 },
     "room:join": { capacity: 5, perSecond: 2 },

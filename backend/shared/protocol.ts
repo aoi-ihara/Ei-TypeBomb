@@ -1,5 +1,7 @@
 import type { Room, GameLoser } from "./types";
 export type ClientPayloads = {
+    "game:command": import("./distributed/types").Command;
+    "cluster:ping": undefined;
     "auth:response": { jwtToken: string; displayName: string; sessionToken?: string };
     "room:join": undefined;
     "room:leave": undefined;

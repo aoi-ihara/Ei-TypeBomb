@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { ROOM_JWT_POLICY, SESSION_JWT_POLICY } from "../../../shared/jwtPolicy";
 import { importJWK, jwtVerify, type JWK } from "jose";
 import { getAuthenticatedRoomId } from "../../../shared/roomJwt";
 import { getVerifiedSessionId } from "../../../shared/sessionJwt";
@@ -19,9 +20,7 @@ export const verifyToken = async (jwtToken: string): Promise<string | null> => {
         const { payload, protectedHeader } = await jwtVerify(
             jwtToken,
             publicKey,
-            {
-                algorithms: ["ES256"],
-            },
+            ROOM_JWT_POLICY,
         );
 
         return getAuthenticatedRoomId(payload, protectedHeader.kid, KEY_ID);
@@ -36,8 +35,6 @@ export const verifyClientSessionToken = async (
     token: string,
     roomId: string,
 ): Promise<string> => {
-    const { payload, protectedHeader } = await jwtVerify(token, await publicKeyPromise, {
-        algorithms: ["ES256"],
-    });
+    const { payload, protectedHeader } = await jwtVerify(token, await publicKeyPromise, SESSION_JWT_POLICY);
     return getVerifiedSessionId(payload, protectedHeader.kid, KEY_ID!, roomId);
 };

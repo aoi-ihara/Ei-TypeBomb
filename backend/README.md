@@ -43,3 +43,6 @@ This is a standalone backend: no active-match migration, persistent client
 identities, or cross-server synchronization yet. See [Cloudflare](cloudflare/README.md).
 
 See [Node](server/README.md) and [shared](shared/README.md).
+
+分散サーバーの構成、所有権・復元保証、必要なSQLとsecret、テスト手順は
+[分散ルーム運用ガイド](DISTRIBUTED.md)を参照してください。

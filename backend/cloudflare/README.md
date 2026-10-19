@@ -1,11 +1,12 @@
 # Ei-TypeBomb Cloudflare Worker
 
-An independent Cloudflare Workers + Durable Objects transport for the existing
-`backend/shared` game engine. The Node.js Socket.IO runtime remains unchanged.
+Cloudflare Workers + Durable Objects adapters for the existing `backend/shared`
+game engine and authenticated peer WebSocket confirmation protocol.
 
 ## Architecture
 
 - `src/index.ts`: routes `GET /ws/:roomId` upgrades to a room-specific Durable Object.
+- `src/ClusterDO.ts`: authenticated peer connections, registry and per-room ReplicaDO vote storage.
 - `src/RoomDO.ts`: native WebSocket packets, verified room sessions, game events,
   durable state, deadline alarms and hibernation-aware connection attachments.
 - `src/lib/auth.ts`: ES256 signature verification and shared room JWT policy.
@@ -13,8 +14,9 @@ An independent Cloudflare Workers + Durable Objects transport for the existing
   JWT with RLS and a publishable key; no service-role key or direct PostgreSQL credentials.
 - `../shared/`: unchanged game rules, validation, snapshots, item selection and rate limits.
 
-Each room gets its own Durable Object (SQLite-backed). The initial room document is
-loaded from Supabase after successful room JWT verification. Only authenticated
+Each room gets its own Durable Object (SQLite-backed). In standalone mode the initial room document is
+loaded from Supabase after successful room JWT verification. Distributed recovery
+never reloads it; only the primary creating a fresh instance may load settings. Only authenticated
 sockets receive room/game broadcasts. The JWT room ID must match the WebSocket
 URL. A session ID is assigned per connection, stored in its serialized WebSocket
 attachment, and restored after hibernation.
@@ -93,9 +95,9 @@ Production bindings and dashboard-managed production secrets are unchanged.
 
 ## Limitations
 
-- This is an **independent** gameplay backend. No active-game migration,
-  cross-runtime replication, stable player identity, or automatic failover
-  is implemented here. Switching servers resets Socket.IO-scoped identities.
+- Standalone deployments remain independent. Configured distributed deployments
+  share stable tab identities and fenced durable checkpoints with Node.
+  [Distributed setup and limitations](../DISTRIBUTED.md) describe the required migration/secrets.
 - Durable Object alarms guarantee wake-up, not an exact millisecond firing
   time. The shared core uses epoch deadlines, so late alarms apply current
   elapsed time rather than restarting timers.
@@ -109,10 +111,10 @@ Production bindings and dashboard-managed production secrets are unchanged.
 
 Clients can resume their tab-specific, signed player identity on the **same**
 Durable Object during a 20s disconnect grace period. Pending leaves are
-persisted and scheduled using Durable Object alarms. This does not migrate
-live games from another runtime: cross-server replication and ownership
-fencing are not yet implemented.
+persisted and scheduled using Durable Object alarms. In distributed mode,
+the shared runtime migrates games from Node using the signed local checkpoints and best-effort voting replicas;
+replicas never advance a game before acquiring its fenced ownership.
 
 Workers also understands the optional topology variables
 `PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, `SERVER_PUBLIC_URL`
-(validation only; parent registration is not enabled yet).
+plus the server-specific `CLUSTER_SERVER_TOKEN`. See [distributed setup](../DISTRIBUTED.md).
