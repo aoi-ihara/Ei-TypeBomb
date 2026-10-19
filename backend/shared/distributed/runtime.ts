@@ -135,6 +135,14 @@ export class DistributedRoom {
                     data: effect.packet.data,
                 };
         }
+        // Persist whether this instance has ever had a participant. A room
+        // created by an auth handshake gets a short grace window, but once
+        // everybody leaves it must not linger because of that same window.
+        value.hadPlayers ||= Boolean(
+            this.checkpoint.value?.hadPlayers ||
+            this.checkpoint.value?.game.room.users.length ||
+            value.game.room.users.length
+        );
         // revision is the durable commit sequence, including typing/session changes.
         value.game.revision = own.revision + 1;
         if (
@@ -464,11 +472,15 @@ export class DistributedRoom {
             }
             if (changed) await this.save(value, effects, kind);
             if (
-                !Object.keys(value.sessions).length &&
-                !value.game.room.isStart
+                !value.game.room.users.length &&
+                !value.game.room.isStart &&
+                (value.hadPlayers || !Object.keys(value.sessions).length)
             ) {
-                // A newly created room can have no sockets only until its first auth.
+                // Only a never-used room waits for an initial authentication.
+                // As soon as the last participant leaves, retire the room
+                // even when an authenticated spectator/socket remains open.
                 if (
+                    !value.hadPlayers &&
                     now - this.checkpoint.ownership.savedAt < GRACE_MS &&
                     !changed
                 )
