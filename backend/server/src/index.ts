@@ -508,10 +508,18 @@ io.on("connection", (socket) => {
                 capturePostHogEvent("room_authenticated");
                 sendRoomInfo(roomId);
             } catch (error) {
+                // A previous owner's boot is no longer eligible to vote. Do not
+                // weaken fencing: a lower-priority eligible voter must promote
+                // the room, or the client must wait for a recoverable owner.
+                const staleVoter =
+                    error instanceof Error &&
+                    error.message === "Ineligible voter or lost process memory";
                 reportError(
                     error instanceof ClientError
                         ? error.message
-                        : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
+                        : staleVoter
+                          ? "このサーバーでは以前のルーム状態を安全に復元できません。引き継ぎ先を確認しています。"
+                          : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
                     error,
                 );
             }

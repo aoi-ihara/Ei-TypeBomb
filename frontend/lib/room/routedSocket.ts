@@ -34,6 +34,7 @@ export class RoutedSocket {
     private stopped = false;
     private attempt = 0;
     private retry?: ReturnType<typeof setTimeout>;
+    private recoveryFailures = 0;
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
     private meta?: Meta;
@@ -280,6 +281,7 @@ export class RoutedSocket {
                 });
                 socket.on("auth:session", (value) => {
                     if (active()) {
+                        this.recoveryFailures = 0;
                         authenticating = false;
                         this.lastReply = performance.now();
                         this.playerId = value.id;
@@ -401,10 +403,13 @@ export class RoutedSocket {
         this.transport?.disconnect();
         this.transport = undefined;
         this.dispatch("disconnect");
+        // A stale owner can remain advertised until another eligible voter
+        // comes online. Avoid hammering every server with repeated auth errors.
+        const delay = Math.min(8_000, 500 * 2 ** Math.min(4, this.recoveryFailures++));
         this.retry = setTimeout(() => {
             this.retry = undefined;
             void this.connect();
-        }, 500);
+        }, delay);
     }
     disconnect() {
         this.stopped = true;
