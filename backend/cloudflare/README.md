@@ -115,6 +115,4 @@ persisted and scheduled using Durable Object alarms. In distributed mode,
 the shared runtime migrates games from Node using the signed local checkpoints and best-effort voting replicas;
 replicas never advance a game before acquiring its fenced ownership.
 
-Workers also understands the optional topology variables
-`PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, `SERVER_PUBLIC_URL`
-plus the server-specific `CLUSTER_SERVER_TOKEN`. See [distributed setup](../DISTRIBUTED.md).
+For deployment, use the same `ETB_CLUSTER_CONFIG` JSON on Worker, Node servers and Vercel. The `/ws` endpoint marks the Worker transport. Keep the Worker-specific `CLUSTER_SERVER_TOKEN` secret separate. See [distributed setup](../DISTRIBUTED.md).

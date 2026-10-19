@@ -43,9 +43,10 @@ RTT プローブは ID を検証してからアドレス枠を消費し、不正
 
 ## Distributed topology configuration
 
-Node.js accepts `PRIMARY_SERVER_URL`, `PARENT_SERVER_URL`, and optional
-`SERVER_PUBLIC_URL`. The same variables are supported by Cloudflare.
-For a primary, leave `PARENT_SERVER_URL` unset; replicas point to their
-immediate parent. Distributed mode requires `SERVER_PUBLIC_URL`, a dedicated
-`CLUSTER_SERVER_TOKEN` signed identity bundle. See
-[setup and failover guarantees](../DISTRIBUTED.md) before enabling it.
+Set the **same** `ETB_CLUSTER_CONFIG` on Vercel and every game server:
+
+```dotenv
+ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
+```
+
+The array defines priority and `/ws` identifies Workers. Every game host additionally needs its **own** `CLUSTER_SERVER_TOKEN` secret; it contains an individual signing key and is deliberately not embedded in the shared JSON. The current server and parent are derived automatically from that signed identity. Legacy topology variables remain supported for migration. See [distributed setup](../DISTRIBUTED.md).
