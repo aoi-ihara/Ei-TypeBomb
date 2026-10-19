@@ -515,11 +515,12 @@ export class PeerControl implements Control {
         )
             throw new Error("Revision conflict");
         const value = op === "delete" ? null : (args.value as DurableRoom);
-        if (
-            op === "delete" &&
-            (Object.keys(current.value!.sessions).length ||
-                current.value!.game.room.isStart)
-        )
+        if (op === "delete" && (
+            current.value!.game.room.isStart ||
+            current.value!.game.room.users.length > 0 ||
+            (Object.keys(current.value!.sessions).length > 0 &&
+                current.value!.emptiedByLeave !== true)
+        ))
             throw new Error("Room still in use");
         if (
             value &&
