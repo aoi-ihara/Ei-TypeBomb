@@ -1,3 +1,8 @@
+import { parseETBClusterConfig } from "./clusterConfig";
+
+export const SERVER_CONFIG_STORAGE_KEY = "server-config";
+export const SERVER_CONFIG_CHANGE_EVENT = "server-config-change";
+
 const originOf = (url: string | undefined | null): string | null => {
     if (!url) return null;
 
@@ -23,8 +28,8 @@ const trustedOrigins = (selectedPrimary?: string, clusterServers: string[] = [])
         .filter((origin): origin is string => origin !== null);
 
 /**
- * Only the configured servers and the primary explicitly selected in this
- * browser may receive the game's authentication token.
+ * Only servers that were configured by the deployment or explicitly selected
+ * in this browser may receive the game's authentication token.
  */
 export const isTrustedServerUrl = (
     url: string | undefined | null,
@@ -37,21 +42,31 @@ export const isTrustedServerUrl = (
     return trustedOrigins(selectedPrimary, clusterServers).includes(origin);
 };
 
-export const getStoredServerUrl = (): string => {
+/** The developer-only override is browser-local and is never sent to the API. */
+export const getStoredServerConfig = (): string => {
     if (typeof window === "undefined") return "";
     try {
-        return window.localStorage.getItem("server-url") ?? "";
+        return window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY) ?? "";
     } catch {
         return "";
     }
 };
 
-/** Prefer the browser's explicit override; cookies are not used. */
-export const resolveServerUrl = (
-    override: string | undefined | null = getStoredServerUrl(),
-): string | undefined => {
-    const url = override?.trim();
-    if (url && originOf(url)) return url;
-
-    return process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL;
+/** Null means no valid override; the deployment's config stays in force. */
+export const parseStoredServerConfig = (raw: string): string[] | null => {
+    if (!raw.trim()) return null;
+    try {
+        return parseETBClusterConfig(raw).map((server) => server.endpoint);
+    } catch {
+        return null;
+    }
 };
+
+export const getStoredClusterServers = (): string[] | null =>
+    parseStoredServerConfig(getStoredServerConfig());
+
+export const getEffectiveClusterServers = (defaults: string[]): string[] =>
+    getStoredClusterServers() ?? defaults;
+
+export const resolveServerUrl = (): string | undefined =>
+    process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL;
