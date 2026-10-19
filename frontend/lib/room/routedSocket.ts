@@ -101,7 +101,22 @@ export class RoutedSocket {
         if (
             ["room:join", "room:leave", "game:start", "word:success"].includes(event)
         ) {
-            if (!this.connected || !this.meta || this.pending.size) return this;
+            if (!this.connected || !this.meta) return this;
+            if (event === "room:leave") {
+                // Exiting must never be silently dropped because another
+                // command is awaiting an ACK. Retire pending gameplay actions
+                // and prioritize the explicit exit, retaining its ID for retry.
+                const existingLeave = [...this.pending.values()].find(
+                    (pending) => pending.event.type === "room:leave",
+                );
+                if (existingLeave) {
+                    this.sendCommand(existingLeave);
+                    return this;
+                }
+                this.pending.clear();
+            } else if (this.pending.size) {
+                return this;
+            }
             const command = {
                 originRevision: this.meta.revision,
                 id: crypto.randomUUID(),
