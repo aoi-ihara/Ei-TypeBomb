@@ -599,10 +599,7 @@ export default function Clinet({
                     snapshot_recovery_time_ms: snapshotRecoveryMs,
                     ...timingProperties,
                 });
-                console.info("[ETB failover timings]", {
-                    snapshotRecoveryMs,
-                    ...diagnostics,
-                });
+                console.info("[ETB failover timings]", diagnostics);
             });
 
             socket.on("auth:session", ({ id }: { id: string }) => {
