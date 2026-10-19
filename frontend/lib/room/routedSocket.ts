@@ -252,7 +252,6 @@ export class RoutedSocket {
                 // ownership promotions.
                 const controllers = known.map(() => new AbortController());
                 const routeStartedAt = performance.now();
-                if (this.recoveryDiagnostics) this.recoveryDiagnostics.routeCalls++;
                 try {
                     route = await Promise.any(
                         known.map(async (seed, index) => {
@@ -262,6 +261,10 @@ export class RoutedSocket {
                                 () => controllers[index].abort(), 6000,
                             );
                             try {
+                                // Each seed initiates its own parallel HTTP request.
+                                // The batch's elapsed time is measured separately.
+                                if (this.recoveryDiagnostics)
+                                    this.recoveryDiagnostics.routeCalls++;
                                 const response = await fetch(endpoint, {
                                     method: "POST",
                                     redirect: "manual",
