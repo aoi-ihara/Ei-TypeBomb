@@ -392,10 +392,14 @@ test("recovery records a start and waits for auth when the playable snapshot arr
                     if (url === servers[1].id) {
                         // Node may publish game.connect's snapshot before
                         // emitting auth:session for the newly joined socket.
-                        dispatch("room:broadcast", snapshot);
+                        dispatch("room:broadcast", { ...snapshot, migrating: true });
+                        setTimeout(
+                            () => dispatch("room:broadcast", snapshot),
+                            20,
+                        );
                         setTimeout(
                             () => dispatch("auth:session", { id: "player" }),
-                            35,
+                            120,
                         );
                     } else {
                         dispatch("auth:session", { id: "player" });
@@ -432,6 +436,7 @@ test("recovery records a start and waits for auth when the playable snapshot arr
         recoveryId: string;
         snapshotBeforeAuth: boolean;
         authenticationMs: number;
+        migrationWaitMs: number;
         fromDepth: number;
         toDepth: number;
     } | undefined;
@@ -439,7 +444,7 @@ test("recovery records a start and waits for auth when the playable snapshot arr
     socket.on("cluster:recovery-started", (event) => { started = event; });
     socket.on("cluster:recovered", (event) => { completed = event; });
     socket.on("room:broadcast", (room) => {
-        if (room.ownerServerId === servers[1].id)
+        if (room.ownerServerId === servers[1].id && !room.migrating)
             secondarySnapshotSeen = true;
     });
     const waitFor = async (check: () => boolean) => {
@@ -464,8 +469,11 @@ test("recovery records a start and waits for auth when the playable snapshot arr
         assert.equal(completed!.snapshotBeforeAuth, true);
         assert.equal(completed!.fromDepth, 0);
         assert.equal(completed!.toDepth, 1);
-        assert.ok(completed!.authenticationMs >= 25,
+        assert.ok(completed!.authenticationMs >= 100,
             "Authentication time includes the delayed auth:session event");
+        assert.ok(completed!.migrationWaitMs >= 0 &&
+            completed!.migrationWaitMs < completed!.authenticationMs,
+            "Migration wait must end at the ready snapshot before authentication");
     } finally {
         socket.disconnect();
         globalThis.fetch = originalFetch;

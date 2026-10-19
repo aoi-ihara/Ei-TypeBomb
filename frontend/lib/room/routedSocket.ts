@@ -397,8 +397,14 @@ export class RoutedSocket {
                             ? 0
                             : Math.max(0, finishedAt - authenticatedAt);
                         if (this.firstMigrationSnapshotAt !== undefined)
-                            metrics.migrationWaitMs +=
-                                finishedAt - this.firstMigrationSnapshotAt;
+                            // Stop the migration phase at the playable
+                            // snapshot, not at a later auth:session event.
+                            // Both signals still gate overall recovery.
+                            metrics.migrationWaitMs += Math.max(0,
+                                (snapshotBeforeAuth
+                                    ? readySnapshotBeforeAuthAt ?? finishedAt
+                                    : finishedAt) -
+                                this.firstMigrationSnapshotAt);
                     }
                     this.dispatch("cluster:recovered", {
                         snapshotRecoveryMs: Math.round(

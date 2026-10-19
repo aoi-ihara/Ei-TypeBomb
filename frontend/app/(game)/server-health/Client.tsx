@@ -105,15 +105,19 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
             // Keep the previous result visible while refreshing. Only the initial
             // check has health === undefined and therefore shows "接続中…".
             const connectionStartedAt = performance.now();
+            // Register listeners and the watchdog before initiating a socket
+            // connection. Otherwise a stalled connection might never report
+            // a result (Socket.IO's own timeout may be much longer).
             const socket = io(url, {
                 reconnection: false,
                 timeout: HEALTH_TIMEOUT_MS,
-                autoConnect: true,
+                autoConnect: false,
                 forceNew: true,
                 healthOnly: true,
             });
             activeSocketRef.current = socket;
 
+            let connectionTimer: ReturnType<typeof setTimeout> | null = null;
             let rttTimer: ReturnType<typeof setTimeout> | null = null;
             let finished = false;
 
@@ -124,6 +128,7 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
             ) => {
                 if (finished || checkId !== checkIdRef.current) return;
                 finished = true;
+                if (connectionTimer) clearTimeout(connectionTimer);
                 if (rttTimer) clearTimeout(rttTimer);
 
                 setHealth(nextHealth);
@@ -147,8 +152,9 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
             };
 
             const handleConnect = () => {
-                if (checkId !== checkIdRef.current) return;
-
+                if (checkId !== checkIdRef.current || finished) return;
+                if (connectionTimer) clearTimeout(connectionTimer);
+                connectionTimer = null;
                 const nextConnectionLatency = Math.round(
                     performance.now() - connectionStartedAt,
                 );
@@ -165,10 +171,11 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
                     );
                 });
 
-                socket.emit("health:ping", pingId);
                 rttTimer = setTimeout(() => {
+                    // Transport is connected, even if RTT probe is throttled.
                     finish(true, nextConnectionLatency, null);
                 }, HEALTH_TIMEOUT_MS);
+                socket.emit("health:ping", pingId);
             };
 
             const handleConnectError = () => {
@@ -177,6 +184,12 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
 
             socket.once("connect", handleConnect);
             socket.once("connect_error", handleConnectError);
+            socket.once("disconnect", handleConnectError);
+            connectionTimer = setTimeout(
+                () => finish(false, null, null),
+                HEALTH_TIMEOUT_MS,
+            );
+            void socket.connect();
         },
         [serverRole, url],
     );
@@ -257,11 +270,16 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
     }, []);
 
     const refreshing = servers.some((_, index) => states[index]?.refreshing);
-    const loading = servers.length > 0 &&
-        servers.every((_, index) => states[index]?.health === undefined);
 
     return (
-        <Shell title="サーバーの状況" size="small" loading={loading}>
+        // Shell hides its children while loading. HealthRow must be mounted
+        // immediately so its effect can actually start the first probe.
+        <Shell title="サーバーの状況" size="small">
+            {servers.length === 0 && (
+                <p className="text-sm opacity-60">
+                    サーバーが設定されていません。
+                </p>
+            )}
             {servers.map((url, index) => (
                 <HealthRow
                     key={url}
