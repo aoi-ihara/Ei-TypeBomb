@@ -366,8 +366,9 @@ export class PeerControl implements Control {
                 b.ownership.epoch - a.ownership.epoch ||
                 b.ownership.revision - a.ownership.revision,
         );
-        if (!candidates.length && this.config.id !== this.config.primary)
-            throw new Error("Replica has no certified checkpoint to restore");
+        // A fresh room has no checkpoint on any server. The caller decides
+        // whether this node may initialize it; recovered rooms still require
+        // their signed checkpoint and cannot be recreated from a guess.
         return candidates[0];
     }
     async call(
@@ -391,8 +392,6 @@ export class PeerControl implements Control {
                     throw new Error("Connect to the current owner");
                 return this.result(await this.promote(old, true));
             }
-            if (this.config.id !== this.config.primary)
-                throw new Error("Only primary can create a fresh room");
             // Registration normally runs in the background. At startup the
             // first room can race ahead of it and permanently exclude an
             // already-online standby from this room's fixed voting cohort.
@@ -401,16 +400,18 @@ export class PeerControl implements Control {
                 this.register(),
                 new Promise<void>((resolve) => setTimeout(resolve, 300)),
             ]);
-            // Use the known authenticated prefix. The fixed voting set never
-            // expands during a match; a sleeping/unregistered Render is optional.
+            // The creator is the first voter. A backup can initialize a fresh
+            // room when all earlier tiers are unavailable. Its signed cohort
+            // is a contiguous suffix, so no unreachable primary is required.
             const voters: Member[] = [];
-            for (const id of this.identity.member.roster) {
+            for (const id of this.identity.member.roster.slice(this.identity.member.depth)) {
                 const member = this.members.get(id);
                 if (!member) break;
                 voters.push(member);
             }
-            if (!voters.length)
-                throw new Error("Primary identity is missing");
+            if (!voters.length || voters[0].id !== this.config.id ||
+                voters[0].boot !== this.identity.member.boot)
+                throw new Error("Creator identity is missing");
             let reachableVoters = 1;
             await Promise.all(voters.slice(1).map(async (voter) => {
                 try {
@@ -961,8 +962,9 @@ export class PeerControl implements Control {
                 }
                 if (
                     JSON.stringify(cp.voters.map((v) => v.id)) !==
-                        JSON.stringify(this.identity.member.roster.slice(0, cp.voters.length)) ||
-                    owner.id !== this.config.primary ||
+                        JSON.stringify(this.identity.member.roster.slice(
+                            owner.depth, owner.depth + cp.voters.length,
+                        )) ||
                     start !== 0 ||
                     !released ||
                     (old &&

@@ -640,3 +640,56 @@ test("empty room tombstone allows retained authenticated sockets but rejects act
         revision: activeCheckpoint.ownership.revision,
     }), /Room still in use/);
 });
+
+test("secondary can initialize a fresh room when primary is offline", async () => {
+    const n = await network();
+    n.alive[0] = false;
+    const room = freshRoom();
+    const created = await n.hosts[1].call("open", {
+        roomId: room.id,
+        initial: initial(room),
+    });
+    assert.equal(created.ownership.owner, n.ids[1]);
+    const checkpoint = await n.hosts[1].read(room.id);
+    assert.deepEqual(checkpoint?.voters.map((v) => v.id), n.ids.slice(1));
+    assert.equal((await n.hosts[2].call("read", { roomId: room.id })).ownership.owner, n.ids[1]);
+});
+
+test("Render alone can initialize a fresh room without primary or secondary", async () => {
+    const n = await network();
+    n.alive[0] = false;
+    n.alive[1] = false;
+    const room = freshRoom();
+    const created = await n.hosts[2].call("open", {
+        roomId: room.id,
+        initial: initial(room),
+    });
+    assert.equal(created.ownership.owner, n.ids[2]);
+    assert.deepEqual((await n.hosts[2].read(room.id))?.voters.map((v) => v.id), [n.ids[2]]);
+    const runtime = new DistributedRoom(room.id, n.hosts[2], () => {});
+    await runtime.open();
+    await runtime.connect("player");
+    const join: Command = {
+        id: randomUUID(),
+        instance: runtime.checkpoint.ownership.instance,
+        epoch: runtime.checkpoint.ownership.epoch,
+        revision: runtime.state.revision,
+        originRevision: runtime.state.revision,
+        event: { type: "room:join", player: { id: "player" } },
+    };
+    assert.equal(await runtime.command(join, "player"), "accepted");
+    assert.equal(runtime.state.room.users.length, 1);
+});
+
+test("backup still refuses to open a room owned by an available primary", async () => {
+    const n = await network();
+    const room = freshRoom();
+    const created = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    await assert.rejects(n.hosts[1].call("open", {
+        roomId: room.id,
+        initial: initial(room),
+    }), /Connect to the current owner/);
+    assert.equal((await n.hosts[0].read(room.id))?.ownership.instance, created.ownership.instance);
+});
