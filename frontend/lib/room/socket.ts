@@ -9,6 +9,7 @@ import { getAuthToken } from "./auth";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (...args: any[]) => void;
 type Options = {
+    clusterServers?: string[];
     reconnection?: boolean;
     timeout?: number;
     autoConnect?: boolean;
@@ -145,11 +146,12 @@ export class WorkerSocket {
 /** A URL ending in /ws explicitly selects Workers, including custom domains. */
 export function io(url?: string, options?: Options) {
     if (
-        process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true" &&
+        (options?.clusterServers?.length || process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") &&
         !options?.healthOnly
     ) {
         const seeds = [
             url,
+            ...(options?.clusterServers ?? []),
             process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
             process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
             process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
