@@ -393,6 +393,14 @@ export class PeerControl implements Control {
             }
             if (this.config.id !== this.config.primary)
                 throw new Error("Only primary can create a fresh room");
+            // Registration normally runs in the background. At startup the
+            // first room can race ahead of it and permanently exclude an
+            // already-online standby from this room's fixed voting cohort.
+            // Allow a short bounded discovery window before sealing voters.
+            await Promise.race([
+                this.register(),
+                new Promise<void>((resolve) => setTimeout(resolve, 300)),
+            ]);
             // Use the known authenticated prefix. The fixed voting set never
             // expands during a match; a sleeping/unregistered Render is optional.
             const voters: Member[] = [];
