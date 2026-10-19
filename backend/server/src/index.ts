@@ -704,6 +704,8 @@ if (config) {
                         if (game.deleted || game.halted) {
                             games.delete(id);
                             rooms = rooms.filter((room) => room.id !== id);
+                            refreshServerState();
+                            logEvent("ROOM", `${game.deleted ? "deleted" : "unavailable"} ${id}`, { roomId: id });
                             io.to(id).emit("error", {
                                 message:
                                     "所有権の確認のため接続先を再確認しています。",
@@ -711,10 +713,12 @@ if (config) {
                             io.in(id).disconnectSockets(true);
                         }
                     })
-                    .catch(() => {
+                    .catch((error) => {
+                        logError("Distributed room maintenance failed", error, { roomId: id });
                         io.in(id).disconnectSockets(true);
                         games.delete(id);
                         rooms = rooms.filter((room) => room.id !== id);
+                        refreshServerState();
                     });
             }
     }, 100).unref();
