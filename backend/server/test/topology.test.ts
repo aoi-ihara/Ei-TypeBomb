@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseServerTopology } from "../../shared/topology";
+import { assertClusterIdentity } from "../../shared/distributed/control";
 
 const primary = "https://primary.example.test";
 const worker = "https://worker.example.test/ws";
@@ -78,7 +79,6 @@ test("host position is derived from signed certificate subject instead of per-ho
 });
 
 test("signed credential roster cannot silently disagree with public config", async () => {
-    const { assertClusterIdentity } = await import("../../shared/distributed/control");
     const raw = JSON.stringify({ version: 1, servers: [
         "https://primary.test", "https://worker.test/ws"
     ] });
