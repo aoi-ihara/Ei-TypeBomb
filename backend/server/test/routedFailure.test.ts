@@ -120,16 +120,20 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
     }> = [];
     let socket!: RoutedSocket;
     let connectedPlayers = 0;
+    let receivedSnapshots = 0;
+    let revision = 0;
+    let users: Array<{ id: string }> = [];
     const open = () => {
         const listeners = new Map<string, Array<(value?: any) => void>>();
         const dispatch = (event: string, value?: any) =>
             listeners.get(event)?.forEach((fn) => fn(value));
-        let revision = 0;
-        let users: Array<{ id: string }> = [];
-        const publish = () => dispatch("room:broadcast", {
-            id: "room", ownerServerId: url, roomInstanceId: "instance",
-            epoch: 1, revision: ++revision, users, bombs: [], isStart: false,
-        });
+        const publish = () => {
+            receivedSnapshots++;
+            dispatch("room:broadcast", {
+                id: "room", ownerServerId: url, roomInstanceId: "instance",
+                epoch: 1, revision: ++revision, users, bombs: [], isStart: false,
+            });
+        };
         const transport = {
             connected: true,
             commands: [] as string[],
@@ -180,7 +184,7 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
         }
     };
     try {
-        await waitFor(() => sessions.length === 1 && Boolean(socket.id === undefined || sessions[0].connected));
+        await waitFor(() => receivedSnapshots > 0);
         // Initial observer snapshot must never trigger a join.
         assert.deepEqual(sessions[0].commands, []);
         socket.emit("room:join");
