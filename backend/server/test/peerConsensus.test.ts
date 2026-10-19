@@ -435,11 +435,16 @@ test("migration reconnect grace expires without any returning client and commits
         await delay(5);
     }
     n.alive[0] = false;
+    const diagnosticTimings: Record<string, number> = {};
     await n.hosts[1].call("report", {
         roomId: room.id,
         owner: n.ids[0],
         revision: p.state.revision,
+        diagnosticTimings,
     });
+    assert.ok(diagnosticTimings.readMs >= 0);
+    assert.ok(diagnosticTimings.ownerProbeMs >= 0);
+    assert.ok(diagnosticTimings.promoteMs >= 0);
     const worker = new DistributedRoom(
         room.id,
         n.hosts[1],

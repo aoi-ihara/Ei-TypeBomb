@@ -99,6 +99,22 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
     });
     app.post(path, async (req, res) => {
         res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Expose-Headers", "Server-Timing");
+        const timings: Record<string, number> = {};
+        const exposeTimings = () => {
+            const labels: Record<string, string> = {
+                readMs: "read",
+                ownerProbeMs: "ownerProbe",
+                promoteMs: "promote",
+                resumeMs: "resume",
+            };
+            res.setHeader("Server-Timing", Object.entries(timings)
+                .filter(([key, value]) => labels[key] &&
+                    Number.isFinite(value) && value >= 0)
+                .map(([key, value]) =>
+                    `${labels[key]};dur=${value.toFixed(2)}`)
+                .join(", "));
+        };
         try {
             if (!cluster) {
                 res.status(404).end();
@@ -116,14 +132,22 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             }
             const result = await cluster.call(
                 path.endsWith("report") ? "report" : "read",
-                { roomId, owner: req.body.owner, revision: req.body.revision },
+                { roomId, owner: req.body.owner, revision: req.body.revision,
+                    diagnosticTimings: timings },
             );
             if (
                 path.endsWith("report") &&
                 result.ownership?.owner === cluster.config.id &&
                 result.ownership.lifecycle === "MIGRATING"
-            )
-                await createRoomIfNeeded(roomId, req.body.jwtToken);
+            ) {
+                const resumeStartedAt = performance.now();
+                try {
+                    await createRoomIfNeeded(roomId, req.body.jwtToken);
+                } finally {
+                    timings.resumeMs = performance.now() - resumeStartedAt;
+                }
+            }
+            exposeTimings();
             res.json({ ownership: result.ownership, servers: result.servers });
         } catch (error) {
             // Keep authentication errors and peer secrets out of HTTP responses.
@@ -131,6 +155,7 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             // missing certified checkpoints during failover experiments.
             const message = error instanceof Error ? error.message : "Unknown error";
             console.error(`Cluster ${path} failed:`, message);
+            exposeTimings();
             res.status(503).end();
         }
     });

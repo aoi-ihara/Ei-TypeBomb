@@ -25,6 +25,28 @@ type Transport = {
     disconnect(): unknown;
 };
 type Meta = { roomInstanceId: string; epoch: number; revision: number };
+
+// One diagnostic record per interrupted session. Each duration uses the same
+// browser monotonic clock; backend phase durations come from Server-Timing.
+type RecoveryDiagnostics = {
+    detectionHeartbeatAgeMs: number;
+    fromDepth: number;
+    retryWaitMs: number;
+    routeMs: number;
+    routeCalls: number;
+    reportMs: number;
+    reportCalls: number;
+    serverReadMs: number;
+    serverProbeMs: number;
+    serverPromoteMs: number;
+    serverResumeMs: number;
+    socketHandshakeMs: number;
+    socketCalls: number;
+    authenticationMs: number;
+    snapshotAfterAuthMs: number;
+    migrationWaitMs: number;
+    toDepth: number;
+};
 export class RoutedSocket {
     id?: string;
     connected = false;
@@ -36,6 +58,8 @@ export class RoutedSocket {
     private retry?: ReturnType<typeof setTimeout>;
     private recoveryFailures = 0;
     private recoveryStartedAt?: number;
+    private recoveryDiagnostics?: RecoveryDiagnostics;
+    private firstMigrationSnapshotAt?: number;
     private wasBackgrounded = false;
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
@@ -95,6 +119,24 @@ export class RoutedSocket {
     }
     private dispatch(event: string, data?: unknown) {
         for (const listener of this.listeners.get(event) ?? []) listener(data);
+    }
+    private recordServerTiming(header: string | null) {
+        if (!this.recoveryDiagnostics || !header) return;
+        const keys: Record<string, keyof RecoveryDiagnostics> = {
+            read: "serverReadMs",
+            ownerProbe: "serverProbeMs",
+            promote: "serverPromoteMs",
+            resume: "serverResumeMs",
+        };
+        for (const part of header.split(",")) {
+            const match = /^\s*([a-zA-Z]+);dur=([0-9.]+)\s*$/.exec(part);
+            if (!match || !keys[match[1]]) continue;
+            const duration = Number(match[2]);
+            if (Number.isFinite(duration))
+                // All report calls are accumulated, including unsuccessful
+                // attempts that return a valid Server-Timing header.
+                this.recoveryDiagnostics[keys[match[1]]] += duration;
+        }
     }
     emit(event: string, data?: unknown) {
         if (event === "room:leave") {
@@ -167,6 +209,8 @@ export class RoutedSocket {
                 for (const server of [...this.servers]
                     .sort((a, b) => a.depth - b.depth)
                     .filter((server) => server.depth > ownerDepth)) {
+                    const reportStartedAt = performance.now();
+                    if (this.recoveryDiagnostics) this.recoveryDiagnostics.reportCalls++;
                     try {
                         const response = await fetch(
                             `${server.id}/cluster/report`,
@@ -185,6 +229,7 @@ export class RoutedSocket {
                                 signal: AbortSignal.timeout(6000),
                             },
                         );
+                        this.recordServerTiming(response.headers.get("Server-Timing"));
                         if (response.ok) {
                             route = await response.json();
                             this.servers = route!.servers;
@@ -193,6 +238,10 @@ export class RoutedSocket {
                         }
                     } catch {
                         /* An uncertain confirmation pauses; try another lower voter. */
+                    } finally {
+                        if (this.recoveryDiagnostics)
+                            this.recoveryDiagnostics.reportMs +=
+                                performance.now() - reportStartedAt;
                     }
                 }
             }
@@ -202,6 +251,7 @@ export class RoutedSocket {
                 // Election/report RPCs remain sequential to avoid racing two
                 // ownership promotions.
                 const controllers = known.map(() => new AbortController());
+                const routeStartedAt = performance.now();
                 try {
                     route = await Promise.any(
                         known.map(async (seed, index) => {
@@ -211,6 +261,10 @@ export class RoutedSocket {
                                 () => controllers[index].abort(), 6000,
                             );
                             try {
+                                // Each seed initiates its own parallel HTTP request.
+                                // The batch's elapsed time is measured separately.
+                                if (this.recoveryDiagnostics)
+                                    this.recoveryDiagnostics.routeCalls++;
                                 const response = await fetch(endpoint, {
                                     method: "POST",
                                     redirect: "manual",
@@ -246,6 +300,9 @@ export class RoutedSocket {
                 } catch {
                     // All known nodes failed. The regular retry path will run.
                 } finally {
+                    if (this.recoveryDiagnostics)
+                        this.recoveryDiagnostics.routeMs +=
+                            performance.now() - routeStartedAt;
                     controllers.forEach((controller) => controller.abort());
                 }
             }
@@ -272,6 +329,8 @@ export class RoutedSocket {
                     server.transport === "websocket"
                         ? `${server.id}/ws`
                         : server.id;
+                const handshakeStartedAt = performance.now();
+                if (this.recoveryDiagnostics) this.recoveryDiagnostics.socketCalls++;
                 const socket = this.open(url);
                 const ready = await new Promise<boolean>((resolve) => {
                     const timer = setTimeout(() => resolve(false), 1200);
@@ -284,6 +343,9 @@ export class RoutedSocket {
                         resolve(false);
                     });
                 });
+                if (this.recoveryDiagnostics)
+                    this.recoveryDiagnostics.socketHandshakeMs +=
+                        performance.now() - handshakeStartedAt;
                 if (!ready || attempt !== this.attempt || this.stopped) {
                     socket.disconnect();
                     if (own && server.id === own.owner)
@@ -297,6 +359,8 @@ export class RoutedSocket {
                 this.transport = socket;
                 this.currentOwner = server.id;
                 let authenticating = true;
+                const authStartedAt = performance.now();
+                let authenticatedAt: number | undefined;
                 this.id = socket.id;
                 this.connected = true;
                 this.lastReply = performance.now();
@@ -318,6 +382,10 @@ export class RoutedSocket {
                         this.recoveryFailures = 0;
                         authenticating = false;
                         this.lastReply = performance.now();
+                        authenticatedAt = this.lastReply;
+                        if (this.recoveryDiagnostics)
+                            this.recoveryDiagnostics.authenticationMs +=
+                                this.lastReply - authStartedAt;
                         this.playerId = value.id;
                         this.dispatch("auth:session", value);
                     }
@@ -372,15 +440,32 @@ export class RoutedSocket {
                         this.rejoinOnSnapshot = false;
                     }
                     this.dispatch("room:broadcast", room);
+                    if (this.recoveryStartedAt !== undefined && room.migrating &&
+                        this.firstMigrationSnapshotAt === undefined)
+                        this.firstMigrationSnapshotAt = performance.now();
                     if (this.recoveryStartedAt !== undefined &&
                         !room.migrating &&
                         (!this.joinedRoom || inRoom)) {
+                        const finishedAt = performance.now();
+                        const metrics = this.recoveryDiagnostics;
+                        if (metrics) {
+                            metrics.toDepth = server.depth;
+                            if (authenticatedAt !== undefined)
+                                metrics.snapshotAfterAuthMs +=
+                                    finishedAt - authenticatedAt;
+                            if (this.firstMigrationSnapshotAt !== undefined)
+                                metrics.migrationWaitMs +=
+                                    finishedAt - this.firstMigrationSnapshotAt;
+                        }
                         this.dispatch("cluster:recovered", {
                             snapshotRecoveryMs: Math.round(
-                                performance.now() - this.recoveryStartedAt,
+                                finishedAt - this.recoveryStartedAt,
                             ),
+                            ...(metrics ?? {}),
                         });
                         this.recoveryStartedAt = undefined;
+                        this.recoveryDiagnostics = undefined;
+                        this.firstMigrationSnapshotAt = undefined;
                     }
                     if (this.rejoinOnSnapshot && !inRoom && !room.isStart) {
                         // The new owner has authenticated us but the old
@@ -462,8 +547,32 @@ export class RoutedSocket {
     private recover() {
         if (this.stopped || this.retry) return;
         if ((this.meta || this.joinedRoom) &&
-            this.recoveryStartedAt === undefined)
+            this.recoveryStartedAt === undefined) {
             this.recoveryStartedAt = performance.now();
+            this.recoveryDiagnostics = {
+                detectionHeartbeatAgeMs: Math.round(
+                    Math.max(0, performance.now() - this.lastReply),
+                ),
+                fromDepth: this.servers.find(
+                    (item) => item.id === this.currentOwner,
+                )?.depth ?? -1,
+                retryWaitMs: 0,
+                routeMs: 0,
+                routeCalls: 0,
+                reportMs: 0,
+                reportCalls: 0,
+                serverReadMs: 0,
+                serverProbeMs: 0,
+                serverPromoteMs: 0,
+                serverResumeMs: 0,
+                socketHandshakeMs: 0,
+                socketCalls: 0,
+                authenticationMs: 0,
+                snapshotAfterAuthMs: 0,
+                migrationWaitMs: 0,
+                toDepth: -1,
+            };
+        }
         if (
             this.currentOwner &&
             (this.meta || this.routedRevision !== undefined)
@@ -484,7 +593,11 @@ export class RoutedSocket {
         // A recovered server must not remain invisible behind an 8s backoff.
         // Bound retries without spinning when every endpoint is unavailable.
         const delay = Math.min(2_000, 250 * 2 ** Math.min(3, this.recoveryFailures++));
+        const waitingSince = performance.now();
         this.retry = setTimeout(() => {
+            if (this.recoveryDiagnostics)
+                this.recoveryDiagnostics.retryWaitMs +=
+                    performance.now() - waitingSince;
             this.retry = undefined;
             void this.connect();
         }, delay);
@@ -494,6 +607,8 @@ export class RoutedSocket {
         this.joinedRoom = false;
         this.rejoinOnSnapshot = false;
         this.recoveryStartedAt = undefined;
+        this.recoveryDiagnostics = undefined;
+        this.firstMigrationSnapshotAt = undefined;
         this.attempt++;
         this.connected = false;
         clearTimeout(this.retry);

@@ -601,7 +601,14 @@ export class PeerControl implements Control {
         roomId: string,
         args: Record<string, unknown>,
     ): Promise<ControlResult> {
+        // Diagnostic timings never affect votes, checkpoint contents, or
+        // failover decisions. The HTTP handler owns this ephemeral object.
+        const timings = args.diagnosticTimings as
+            | Record<string, number>
+            | undefined;
+        const readStartedAt = performance.now();
         const cp = await this.read(roomId);
+        if (timings) timings.readMs = performance.now() - readStartedAt;
         if (!cp || cp.ownership.lifecycle === "DELETED")
             throw new Error("No existing room to restore");
         if (
@@ -615,6 +622,7 @@ export class PeerControl implements Control {
             cp.voters.find((v) => v.id === cp.ownership.owner)!.depth
         )
             return this.result(cp);
+        const probeStartedAt = performance.now();
         try {
             const owner = await this.rpc(cp.ownership.owner, "probe", {
                 roomId,
@@ -629,8 +637,17 @@ export class PeerControl implements Control {
                 error.message === "Owner has not approved transfer"
             )
                 throw error;
+        } finally {
+            if (timings) timings.ownerProbeMs =
+                performance.now() - probeStartedAt;
         }
-        return this.result(await this.promote(cp));
+        const promotionStartedAt = performance.now();
+        try {
+            return this.result(await this.promote(cp));
+        } finally {
+            if (timings) timings.promoteMs =
+                performance.now() - promotionStartedAt;
+        }
     }
     private async promote(
         cp: VotedCheckpoint,

@@ -565,13 +565,41 @@ export default function Clinet({
                 posthog.capture("game_quited");
             });
 
-            socket.on("cluster:recovered", ({ snapshotRecoveryMs }: {
+            socket.on("cluster:recovered", (diagnostics: {
                 snapshotRecoveryMs: number;
+                detectionHeartbeatAgeMs?: number;
+                fromDepth?: number;
+                toDepth?: number;
+                retryWaitMs?: number;
+                routeMs?: number;
+                routeCalls?: number;
+                reportMs?: number;
+                reportCalls?: number;
+                serverReadMs?: number;
+                serverProbeMs?: number;
+                serverPromoteMs?: number;
+                serverResumeMs?: number;
+                socketHandshakeMs?: number;
+                socketCalls?: number;
+                authenticationMs?: number;
+                snapshotAfterAuthMs?: number;
+                migrationWaitMs?: number;
             }) => {
                 if (!selected || socketRef.current !== socket) return;
+                const { snapshotRecoveryMs, ...phases } = diagnostics;
+                const timingProperties = Object.fromEntries(
+                    Object.entries(phases).map(([key, value]) => [
+                        // Keep the existing event name for backwards
+                        // compatibility; new phase properties are additive.
+                        key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase()),
+                        typeof value === "number" ? Math.round(value) : value,
+                    ]),
+                );
                 posthog.capture("game_connection_snapshot_recovered", {
                     snapshot_recovery_time_ms: snapshotRecoveryMs,
+                    ...timingProperties,
                 });
+                console.info("[ETB failover timings]", diagnostics);
             });
 
             socket.on("auth:session", ({ id }: { id: string }) => {
