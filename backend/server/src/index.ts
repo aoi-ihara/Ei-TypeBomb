@@ -196,8 +196,8 @@ const createRoomIfNeeded = async (
             const saved = await cluster.call("read", { roomId });
             const fresh =
                 !saved.ownership || saved.ownership.lifecycle === "DELETED";
-            if (fresh && cluster.config.id !== cluster.config.primary)
-                throw new Error("Only the primary may load new room settings");
+            // Any surviving certified tier may initialize a genuinely fresh
+            // room, using its own signed suffix voting cohort.
             const initial = fresh
                 ? await getRoomFromId(roomId, jwtToken)
                 : undefined;
