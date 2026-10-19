@@ -204,8 +204,32 @@ const createRoomIfNeeded = async (
                 return null;
             const game = new DistributedRoom(roomId, cluster, (result) => {
                 const index = rooms.findIndex((room) => room.id === roomId);
+                const previous = index < 0 ? undefined : rooms[index];
                 if (index < 0) rooms.push(result.state.room);
                 else rooms[index] = result.state.room;
+                // Distributed checkpoints do not go through NodeGameAdapter's
+                // state/activity callbacks. Keep the server console in sync
+                // without refreshing on every typing/input checkpoint.
+                const oldPlayers = previous?.users.map((user) => user.id) ?? [];
+                const newPlayers = result.state.room.users.map((user) => user.id);
+                const membershipChanged =
+                    oldPlayers.length !== newPlayers.length ||
+                    oldPlayers.some((id, i) => id !== newPlayers[i]);
+                const gameChanged =
+                    previous?.isStart !== result.state.room.isStart ||
+                    previous?.gameId !== result.state.room.gameId;
+                if (membershipChanged || gameChanged || index < 0) {
+                    refreshServerState();
+                    for (const id of newPlayers.filter((id) => !oldPlayers.includes(id)))
+                        logEvent("ROOM", `joined ${roomId}`, { roomId, playerId: id });
+                    for (const id of oldPlayers.filter((id) => !newPlayers.includes(id)))
+                        logEvent("ROOM", `left ${roomId}`, { roomId, playerId: id });
+                    if (gameChanged && previous)
+                        logEvent("GAME", `state changed ${roomId}`, {
+                            roomId,
+                            isStart: result.state.room.isStart,
+                        });
+                }
                 for (const effect of result.effects)
                     if (
                         effect.type === "broadcast" &&
@@ -223,6 +247,8 @@ const createRoomIfNeeded = async (
             games.set(roomId, game);
             if (!rooms.some((room) => room.id === roomId))
                 rooms.push(game.state.room);
+            refreshServerState();
+            logEvent("ROOM", `loaded ${roomId}`, { roomId });
             return game.state.room;
         }
         const room = await getRoomFromId(roomId, jwtToken);
