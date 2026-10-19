@@ -286,7 +286,7 @@ test("reliable leave command permits rejoining over the same authenticated sessi
     await f.runtime.command(f.command("b", "room:join"), "b");
     // Model the routed client's retry-stable game:command for room:leave.
     const leave = f.command("a", "room:join");
-    leave.event = { type: "room:leave", playerId: "a" };
+    leave.event = { type: "room:leave", playerId: "a", reason: "room_leave" };
     assert.equal(await f.runtime.command(leave, "a"), "accepted");
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
     assert.equal(await f.runtime.command(leave, "a"), "accepted");
