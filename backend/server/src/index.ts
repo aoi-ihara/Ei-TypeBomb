@@ -173,6 +173,7 @@ const refreshServerState = () =>
             })),
             isStart: Boolean(room.isStart),
             bombHolder: room.bombs?.[0]?.holder ?? room.bombHolder,
+            bombHolders: room.bombs?.map((bomb) => bomb.holder),
         })),
     });
 
