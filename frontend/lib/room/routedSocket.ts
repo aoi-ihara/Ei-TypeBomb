@@ -191,39 +191,57 @@ export class RoutedSocket {
                     }
                 }
             }
-            for (const seed of route ? [] : known) {
+            if (!route && known.length) {
+                // Routing reads are non-mutating: try the known endpoints in
+                // parallel instead of waiting 6s for each offline tier.
+                // Election/report RPCs remain sequential to avoid racing two
+                // ownership promotions.
+                const controllers = known.map(() => new AbortController());
                 try {
-                    const endpoint = new URL(seed);
-                    endpoint.pathname = "/cluster/route";
-                    const response = await fetch(endpoint, {
-                        method: "POST",
-                        redirect: "manual",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ jwtToken: this.token }),
-                        // A healthy route may need to probe an unresponsive peer (up to 2s).
-                        // The old 1.2s abort could reject every healthy seed.
-                        signal: AbortSignal.timeout(6000),
-                    });
-                    if (!response.ok) continue;
-                    const value = await response.json();
-                    if (!Array.isArray(value.servers)) continue;
-                    const valid = value.servers.every((server: Server) => {
-                        const url = new URL(server.id);
-                        return (
-                            url.origin === server.id &&
-                            (url.protocol === "https:" ||
-                                ["localhost", "127.0.0.1"].includes(
-                                    url.hostname,
-                                ))
-                        );
-                    });
-                    if (valid) {
-                        route = value;
-                        this.servers = value.servers;
-                        break;
-                    }
+                    route = await Promise.any(
+                        known.map(async (seed, index) => {
+                            const endpoint = new URL(seed);
+                            endpoint.pathname = "/cluster/route";
+                            const timeout = setTimeout(
+                                () => controllers[index].abort(), 6000,
+                            );
+                            try {
+                                const response = await fetch(endpoint, {
+                                    method: "POST",
+                                    redirect: "manual",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ jwtToken: this.token }),
+                                    signal: controllers[index].signal,
+                                });
+                                if (!response.ok)
+                                    throw new Error("Routing endpoint unavailable");
+                                const value = await response.json();
+                                if (!Array.isArray(value.servers) ||
+                                    !value.servers.every((server: Server) => {
+                                        try {
+                                            const url = new URL(server.id);
+                                            return url.origin === server.id &&
+                                                (url.protocol === "https:" ||
+                                                    ["localhost", "127.0.0.1"].includes(url.hostname));
+                                        } catch {
+                                            return false;
+                                        }
+                                    }))
+                                    throw new Error("Invalid routing response");
+                                return value as {
+                                    ownership: Ownership | null;
+                                    servers: Server[];
+                                };
+                            } finally {
+                                clearTimeout(timeout);
+                            }
+                        }),
+                    );
+                    this.servers = route.servers;
                 } catch {
-                    /* Try every known node; no dependency on a live parent. */
+                    // All known nodes failed. The regular retry path will run.
+                } finally {
+                    controllers.forEach((controller) => controller.abort());
                 }
             }
             if (attempt !== this.attempt || this.stopped) return this;
