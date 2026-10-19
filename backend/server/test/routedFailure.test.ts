@@ -203,3 +203,60 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
         globalThis.fetch = originalFetch;
     }
 });
+
+test("routing reaches the surviving Render node without waiting for offline predecessors", async () => {
+    const originalFetch = globalThis.fetch;
+    const ids = [
+        "https://primary.test",
+        "https://secondary.test",
+        "https://render.test",
+    ];
+    const servers = ids.map((id, depth) => ({ id, depth, transport: "socket.io" }));
+    let pending = 0;
+    globalThis.fetch = ((url: string, options: RequestInit) => {
+        if (String(url).startsWith(ids[2]))
+            return Promise.resolve(Response.json({
+                ownership: {
+                    owner: ids[2], epoch: 3, revision: 2,
+                    instance: "instance", lifecycle: "ACTIVE", roomId: "room",
+                },
+                servers,
+            }));
+        pending++;
+        return new Promise<Response>((_, reject) => {
+            options.signal?.addEventListener("abort", () => {
+                pending--;
+                reject(new Error("Offline node request aborted"));
+            }, { once: true });
+        });
+    }) as typeof fetch;
+    let opened = "";
+    const open = (url: string) => {
+        opened = url;
+        const handlers = new Map<string, Array<(value?: any) => void>>();
+        const socket = {
+            connected: true,
+            on(event: string, fn: (value?: any) => void) {
+                handlers.set(event, [...(handlers.get(event) ?? []), fn]);
+                return socket;
+            },
+            emit() { return socket; },
+            disconnect() { socket.connected = false; },
+        };
+        setTimeout(() => handlers.get("auth:request")?.forEach((fn) => fn()), 0);
+        return socket;
+    };
+    const start = Date.now();
+    const socket = new RoutedSocket(ids, open, async () => "room-jwt", () => true);
+    const until = start + 2500;
+    try {
+        while (opened !== ids[2] && Date.now() < until)
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.equal(opened, ids[2]);
+        assert.ok(Date.now() - start < 2500, "Routing should not wait for two 6s timeouts");
+        assert.equal(pending, 0, "Loser probes should be canceled");
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});
