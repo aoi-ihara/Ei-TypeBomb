@@ -191,7 +191,9 @@ export class RoutedSocket {
                         redirect: "manual",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ jwtToken: this.token }),
-                        signal: AbortSignal.timeout(1200),
+                        // A healthy route may need to probe an unresponsive peer (up to 2s).
+                        // The old 1.2s abort could reject every healthy seed.
+                        signal: AbortSignal.timeout(6000),
                     });
                     if (!response.ok) continue;
                     const value = await response.json();

@@ -137,6 +137,24 @@ export class RoomDO extends DurableObject<Env> {
     async alarm(): Promise<void> {
         await this.enqueue(async () => {
             if (this.control) {
+                if (!this.distributed) {
+                    // DO isolates can be evicted independently of their persisted
+                    // alarms. Restore ownership/game state before advancing deadlines.
+                    const roomId = (await this.ctx.storage.get<string>("distributedRoomId")) ??
+                        this.ctx.getWebSockets()
+                            .map((ws) => this.session(ws))
+                            .find((session) => session?.roomId)?.roomId;
+                    if (roomId) {
+                        try {
+                            await this.ensureDistributed(roomId);
+                        } catch {
+                            // Do not discard a persisted deadline on transient
+                            // peer unavailability; retry restoration later.
+                            await this.ctx.storage.setAlarm(Date.now() + 1_000);
+                            return;
+                        }
+                    }
+                }
                 if (this.distributed) {
                     try {
                         await this.distributed.tick();
@@ -152,6 +170,7 @@ export class RoomDO extends DurableObject<Env> {
                             } catch {
                                 /* closed */
                             }
+                        await this.ctx.storage.delete("distributedRoomId");
                         await this.ctx.storage.deleteAlarm();
                         return;
                     }
@@ -318,6 +337,9 @@ export class RoomDO extends DurableObject<Env> {
             this.broadcast("room:broadcast", game.snapshot());
         });
         await game.open(initial ?? undefined);
+        // Persist the room identity before the first alarm fires so that
+        // a fresh isolate can rehydrate without any connected clients.
+        await this.ctx.storage.put("distributedRoomId", roomId);
         this.distributed = game;
         this.game = game.state;
     }
