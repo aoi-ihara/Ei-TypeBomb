@@ -30,6 +30,7 @@ import {
 } from "@/lib/online/memory-session";
 
 type Props = {
+    clusterServers: string[];
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
@@ -38,6 +39,7 @@ const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 const MAX_CURRENT_INPUT_LENGTH = 32;
 
 export default function Clinet({
+    clusterServers,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Props) {
@@ -224,13 +226,15 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl = resolveServerUrl();
+        const primaryUrl = clusterServers[0] ?? resolveServerUrl();
         // One signed player identity per mounted page, shared across reconnects.
         const sessionTokenPromise = getClientSessionToken().catch(() => null);
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
         let disposed = false;
-        const secondaryUrl = process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
-        const fallbackUrl = process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
+        const secondaryUrl = clusterServers[1] ?? process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
+        const fallbackUrl = clusterServers[2] ?? process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
+        const distributed = clusterServers.length > 0 ||
+            process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
         let failoverStarted = false;
@@ -266,6 +270,7 @@ export default function Clinet({
         };
 
         const primarySocket = io(primaryUrl, {
+            clusterServers,
             sessionTokenPromise,
             reconnection: false,
             timeout: SERVER_FAILOVER_TIMEOUT_MS,
@@ -294,7 +299,7 @@ export default function Clinet({
             }
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url, primaryUrl)) return;
+            if (!isTrustedServerUrl(candidate.url, primaryUrl, clusterServers)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -403,7 +408,7 @@ export default function Clinet({
         const attachSocketListeners = (candidate: Candidate) => {
             const { socket } = candidate;
             const retrySelectedConnection = () => {
-                if (process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") return;
+                if (distributed) return;
                 if (disposed || !selected || socketRef.current !== socket || reconnectTimer) return;
                 reconnectTimer = setTimeout(() => {
                     reconnectTimer = null;
@@ -616,6 +621,7 @@ export default function Clinet({
 
             if (secondaryUrl && secondaryUrl !== primaryUrl) {
                 const socket = io(secondaryUrl, {
+                    clusterServers,
                     reconnection: false,
                     timeout: SERVER_FAILOVER_TIMEOUT_MS,
                 });
@@ -637,6 +643,7 @@ export default function Clinet({
                 fallbackUrl !== secondaryUrl
             ) {
                 const socket = io(fallbackUrl, {
+                    clusterServers,
                     reconnection: false,
                     timeout: SERVER_FAILOVER_TIMEOUT_MS,
                 });
@@ -661,7 +668,7 @@ export default function Clinet({
         };
 
         attachSocketListeners(primaryCandidate);
-        if (process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS !== "true")
+        if (!distributed)
             primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
 
         return () => {

@@ -6,16 +6,25 @@
 
 Nodeはメモリだけを使い、Mac miniとRenderで同じプログラムを動かします。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
-環境変数は既存の3項目と、サーバー専用の署名付きidentity bundleです。
+環境変数のトポロジー設定は**全サーバーおよびVercelで同一**の `ETB_CLUSTER_CONFIG` へ統合します。配列の順序が優先順位、`/ws` の付いたURLがCloudflareのNative WebSocketを意味します。`/ws` はこの設定上の識別子であり、サーバー間のWSSは引き続き自動的に `/cluster/ws` を使います。
 
 ```dotenv
-PRIMARY_SERVER_URL=https://PRIMARY_HOST
-PARENT_SERVER_URL=                 # Primaryだけ空
-SERVER_PUBLIC_URL=https://THIS_HOST
-CLUSTER_SERVER_TOKEN=JSON_IDENTITY_BUNDLE
-# 既存のroom/session JWT公開鍵、Supabase publishable設定は新規設定取得用に維持
-# 任意: CLUSTER_DRAINING=true（所有権譲渡を承認する運用モード）
+ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
 ```
+
+Mac mini・Worker・Render・Vercelにはこの**同じ値**を設定してください。各ゲームサーバーの自己URLと親URLは署名付きidentityのsubjectを配列から探して自動導出します。従来の `PRIMARY_SERVER_URL` / `PARENT_SERVER_URL` / `SERVER_PUBLIC_URL` と `NEXT_PUBLIC_PRIMARY_SERVER_URL` / `NEXT_PUBLIC_SECONDARY_SERVER_URL` / `NEXT_PUBLIC_FALLBACK_SERVER_URL` / `NEXT_PUBLIC_DISTRIBUTED_ROOMS` は、新構成では設定不要です。旧形式は移行のため互換性を維持しています。
+
+**セキュリティに関する例外：** `CLUSTER_SERVER_TOKEN` は各サーバー固有の秘密鍵を含むため、全ノード共通の公開JSONにまとめません。各ゲームサーバーには従来どおり別の `CLUSTER_SERVER_TOKEN` Secretが1個必要です。Vercelのフロントエンドには設定せず、ブラウザへは公開URLの配列だけを渡します。既存のユーザーJWT公開鍵とSupabase Publishable設定も認証／ルーム取得のため継続して使用します。
+
+証明書と配列が一致しない場合は起動を拒否します。証明書は次のように生成できます。
+
+```sh
+cd backend/server
+node scripts/cluster-credentials.mjs /PRIVATE/NEW_DIRECTORY \
+  '{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
+```
+
+`server-0.json` はMac mini、`server-1.json` はWorker、`server-2.json` はRenderのSecretへ設定し、`offline-authority.json` はオフライン保管してください。
 
 子は親の `/cluster/ws` にWSS接続して登録し、認証済みトポロジーを伝播します。既知の他サーバーにも直接接続でき、親停止でレジストリを捨てません。台数・Node/Workerの位置はコードに固定していません。登録できるidentityはオフラインCAが署名したURL・親・depth・transportに限定します。
 

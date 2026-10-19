@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { PeerControl, type VoteRecord } from "../../shared/distributed/peers";
 import { Identity, type Member } from "../../shared/distributed/identity";
-import { clusterConfig } from "../../shared/distributed/control";
+import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import type { ClusterSocket } from "../../shared/distributed/link";
 import type { Env } from "./types";
 /** A per-room storage atom. It never advances games or initiates ownership. */
@@ -30,6 +30,7 @@ export class ClusterDO extends DurableObject<Env> {
                 env.CLUSTER_SERVER_TOKEN!,
                 boot,
             );
+            assertClusterIdentity(env, identity);
             const peer = new PeerControl(
                 identity,
                 config,

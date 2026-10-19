@@ -11,12 +11,13 @@ const originOf = (url: string | undefined | null): string | null => {
     }
 };
 
-const trustedOrigins = (selectedPrimary?: string): string[] =>
+const trustedOrigins = (selectedPrimary?: string, clusterServers: string[] = []): string[] =>
     [
         process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
         process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
         process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
         selectedPrimary,
+        ...clusterServers,
     ]
         .map(originOf)
         .filter((origin): origin is string => origin !== null);
@@ -28,11 +29,12 @@ const trustedOrigins = (selectedPrimary?: string): string[] =>
 export const isTrustedServerUrl = (
     url: string | undefined | null,
     selectedPrimary?: string,
+    clusterServers: string[] = [],
 ): boolean => {
     const origin = originOf(url);
     if (!origin) return false;
 
-    return trustedOrigins(selectedPrimary).includes(origin);
+    return trustedOrigins(selectedPrimary, clusterServers).includes(origin);
 };
 
 export const getStoredServerUrl = (): string => {

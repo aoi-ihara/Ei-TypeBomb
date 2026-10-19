@@ -71,12 +71,10 @@ a different signed identity; a reconnect receives an authoritative snapshot.
 
 ## Hierarchy configuration
 
-The Node and Workers adapters both validate these optional environment variables:
-- `PRIMARY_SERVER_URL`: canonical URL of the preferred primary
-- `PARENT_SERVER_URL`: URL of this node's immediate upstream server (blank only on primary)
-- `SERVER_PUBLIC_URL`: this node's URL; when set, validates misconfigured self-links
+Set the **same** `ETB_CLUSTER_CONFIG` on Vercel and every game server:
 
-No server URLs or signing secrets are committed here. Omitted variables keep
-existing standalone deployments working. A configured hierarchy requires a
-CA-signed server identity bundle and fixed voter roster; missing configuration fails
-closed. See [setup, tests, costs and limitations](../DISTRIBUTED.md).
+```dotenv
+ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
+```
+
+The array defines priority and `/ws` identifies Workers. Every game host additionally needs its **own** `CLUSTER_SERVER_TOKEN` secret; it contains an individual signing key and is deliberately not embedded in the shared JSON. The current server and parent are derived automatically from that signed identity. Legacy topology variables remain supported for migration. See [distributed setup](../DISTRIBUTED.md).

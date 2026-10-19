@@ -7,7 +7,21 @@ if (raw[0] === "--authority") {
     raw.shift();
     existingAuthority = raw.shift();
 }
-const [out, ...args] = raw;
+const [out, ...givenArgs] = raw;
+let args = givenArgs;
+if (givenArgs.length === 1 && givenArgs[0].startsWith("{")) {
+    const config = JSON.parse(givenArgs[0]);
+    if (config.version !== 1 || !Array.isArray(config.servers) ||
+        config.servers.length < 2) throw new Error("Invalid ETB_CLUSTER_CONFIG");
+    args = config.servers.map((url) => {
+        const parsed = new URL(url);
+        const worker = parsed.pathname === "/ws";
+        if (!["/", "/ws"].includes(parsed.pathname) || parsed.search || parsed.hash ||
+            parsed.username || parsed.password)
+            throw new Error("Cluster URLs must be origins or /ws");
+        return `${worker ? "websocket" : "socket.io"}=${parsed.origin}`;
+    });
+}
 if (!out || args.length < 2)
     throw new Error(
         "Usage: node scripts/cluster-credentials.mjs NEW_PRIVATE_DIRECTORY socket.io=https://primary websocket=https://worker socket.io=https://render ...",
