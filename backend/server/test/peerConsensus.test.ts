@@ -577,7 +577,7 @@ test("a stale singleton owner stops after a higher epoch becomes visible", async
     assert.equal(latest.ownership.owner, n.ids[1]);
 });
 
-test("empty room tombstone allows retained authenticated sockets but rejects active players", async () => {
+test("empty room tombstone requires all authenticated socket sessions to be gone", async () => {
     const n = await network();
     const room = freshRoom();
     const initialCheckpoint = await n.hosts[0].call("open", {
@@ -600,11 +600,34 @@ test("empty room tombstone allows retained authenticated sockets but rejects act
         revision: initialCheckpoint.ownership.revision,
         value,
     });
-    const deleted = await n.hosts[0].call("delete", {
+    // A previous player leaving cannot override a spectator's live socket.
+    await assert.rejects(n.hosts[0].call("delete", {
         roomId: room.id,
         instance: updated.ownership.instance,
         epoch: updated.ownership.epoch,
         revision: updated.ownership.revision,
+    }), /Room still in use/);
+    // After disconnect cleanup commits a checkpoint with no sessions, delete
+    // is allowed and a fresh instance can be created from the tombstone.
+    const cleaned = await n.hosts[0].call("commit", {
+        roomId: room.id,
+        instance: updated.ownership.instance,
+        epoch: updated.ownership.epoch,
+        revision: updated.ownership.revision,
+        value: {
+            ...updated.value!,
+            sessions: {},
+            game: {
+                ...updated.value!.game,
+                revision: updated.ownership.revision + 1,
+            },
+        },
+    });
+    const deleted = await n.hosts[0].call("delete", {
+        roomId: room.id,
+        instance: cleaned.ownership.instance,
+        epoch: cleaned.ownership.epoch,
+        revision: cleaned.ownership.revision,
     });
     assert.equal(deleted.ownership.lifecycle, "DELETED");
     const newRoom = await n.hosts[0].call("open", {

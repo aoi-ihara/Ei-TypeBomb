@@ -35,6 +35,7 @@ export class RoutedSocket {
     private attempt = 0;
     private retry?: ReturnType<typeof setTimeout>;
     private recoveryFailures = 0;
+    private recoveryStartedAt?: number;
     private wasBackgrounded = false;
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
@@ -109,7 +110,11 @@ export class RoutedSocket {
         if (
             ["room:join", "room:leave", "game:start", "word:success"].includes(event)
         ) {
-            if (!this.connected || !this.meta || this.pending.size) return this;
+            // A correct answer can be completed exactly as the transport
+            // closes. Retain its stable ID, game, turn and bomb until the
+            // next authenticated snapshot; the authority will validate it.
+            if (!this.meta || this.pending.size ||
+                (!this.connected && event !== "word:success")) return this;
             const command = {
                 originRevision: this.meta.revision,
                 id: crypto.randomUUID(),
@@ -120,7 +125,7 @@ export class RoutedSocket {
             };
             if (event === "room:join") this.joinedRoom = true;
             this.pending.set(command.id, command);
-            this.sendCommand(command);
+            if (this.connected) this.sendCommand(command);
             return this;
         }
         this.transport?.emit(event, data);
@@ -367,6 +372,16 @@ export class RoutedSocket {
                         this.rejoinOnSnapshot = false;
                     }
                     this.dispatch("room:broadcast", room);
+                    if (this.recoveryStartedAt !== undefined &&
+                        !room.migrating &&
+                        (!this.joinedRoom || inRoom)) {
+                        this.dispatch("cluster:recovered", {
+                            snapshotRecoveryMs: Math.round(
+                                performance.now() - this.recoveryStartedAt,
+                            ),
+                        });
+                        this.recoveryStartedAt = undefined;
+                    }
                     if (this.rejoinOnSnapshot && !inRoom && !room.isStart) {
                         // The new owner has authenticated us but the old
                         // Socket.IO disconnect already removed our seat.
@@ -446,6 +461,9 @@ export class RoutedSocket {
     }
     private recover() {
         if (this.stopped || this.retry) return;
+        if ((this.meta || this.joinedRoom) &&
+            this.recoveryStartedAt === undefined)
+            this.recoveryStartedAt = performance.now();
         if (
             this.currentOwner &&
             (this.meta || this.routedRevision !== undefined)
@@ -463,7 +481,9 @@ export class RoutedSocket {
         this.dispatch("disconnect");
         // A stale owner can remain advertised until another eligible voter
         // comes online. Avoid hammering every server with repeated auth errors.
-        const delay = Math.min(8_000, 500 * 2 ** Math.min(4, this.recoveryFailures++));
+        // A recovered server must not remain invisible behind an 8s backoff.
+        // Bound retries without spinning when every endpoint is unavailable.
+        const delay = Math.min(2_000, 250 * 2 ** Math.min(3, this.recoveryFailures++));
         this.retry = setTimeout(() => {
             this.retry = undefined;
             void this.connect();
@@ -473,6 +493,7 @@ export class RoutedSocket {
         this.stopped = true;
         this.joinedRoom = false;
         this.rejoinOnSnapshot = false;
+        this.recoveryStartedAt = undefined;
         this.attempt++;
         this.connected = false;
         clearTimeout(this.retry);

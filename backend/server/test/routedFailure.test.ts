@@ -260,3 +260,80 @@ test("routing reaches the surviving Render node without waiting for offline pred
         globalThis.fetch = originalFetch;
     }
 });
+
+
+test("a successful answer during an outage is replayed with its original turn", async () => {
+    const originalFetch = globalThis.fetch;
+    const url = "https://owner.test";
+    const servers = [{ id: url, depth: 0, transport: "socket.io" }];
+    const ownership = {
+        owner: url, epoch: 1, revision: 12, instance: "instance",
+        lifecycle: "ACTIVE", roomId: "room",
+    };
+    globalThis.fetch = (async () =>
+        Response.json({ ownership, servers })) as typeof fetch;
+    const sessions: Array<{ close(): void; commands: any[] }> = [];
+    let recoveryMs: number | undefined;
+    const open = () => {
+        const listeners = new Map<string, Array<(value?: any) => void>>();
+        const dispatch = (event: string, value?: any) =>
+            listeners.get(event)?.forEach((fn) => fn(value));
+        const session = {
+            commands: [] as any[],
+            on(event: string, fn: (value?: any) => void) {
+                listeners.set(event, [...(listeners.get(event) ?? []), fn]);
+                return session;
+            },
+            emit(event: string, value?: any) {
+                if (event === "auth:response") {
+                    dispatch("auth:session", { id: "player" });
+                    dispatch("room:broadcast", {
+                        id: "room", ownerServerId: url, roomInstanceId: "instance",
+                        epoch: 1, revision: 12, gameId: "game", isStart: true,
+                        migrating: false, users: [{ id: "player" }],
+                        bombs: [{ id: "bomb", holder: 0, turn: 4 }],
+                    });
+                }
+                if (event === "cluster:ping") dispatch("cluster:pong");
+                if (event === "game:command") {
+                    session.commands.push(value);
+                    dispatch("command:ack", { id: value.id, status: "accepted" });
+                }
+                return session;
+            },
+            connected: true,
+            disconnect() { session.connected = false; },
+            close() { session.connected = false; dispatch("disconnect"); },
+        };
+        sessions.push(session);
+        setTimeout(() => dispatch("auth:request"), 0);
+        return session;
+    };
+    const socket = new RoutedSocket([url], open, async () => "token", () => true);
+    socket.on("auth:request", () =>
+        socket.emit("auth:response", { jwtToken: "token" }));
+    socket.on("cluster:recovered", (value) => {
+        recoveryMs = value.snapshotRecoveryMs;
+    });
+    const waitFor = async (fn: () => boolean) => {
+        const deadline = Date.now() + 4_000;
+        while (!fn()) {
+            if (Date.now() >= deadline) throw new Error("Recovery timed out");
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+    };
+    try {
+        await waitFor(() => sessions.length === 1 && socket.connected);
+        sessions[0].close();
+        socket.emit("word:success");
+        await waitFor(() => sessions.length >= 2 && sessions[1].commands.length === 1);
+        assert.equal(sessions[1].commands[0].event.type, "word:success");
+        assert.equal(sessions[1].commands[0].gameId, "game");
+        assert.equal(sessions[1].commands[0].bombId, "bomb");
+        assert.equal(sessions[1].commands[0].turn, 4);
+        assert.equal(typeof recoveryMs, "number");
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});

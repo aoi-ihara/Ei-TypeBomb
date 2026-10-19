@@ -39,7 +39,7 @@ import { PeerControl } from "../../shared/distributed/peers";
 import { Identity } from "../../shared/distributed/identity";
 import { MAX_CLUSTER_FRAME_BYTES } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
-import type { Command } from "../../shared/distributed/types";
+import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
 const topology = parseServerTopology(process.env);
 const config = clusterConfig(process.env, "socket.io");
 let cluster: PeerControl | null = null;
@@ -474,17 +474,16 @@ io.on("connection", (socket) => {
         if (distributed instanceof DistributedRoom) {
             // An explicit exit differs from a transient transport disconnect:
             // remove the player now, rather than waiting for reconnect grace.
-            void distributed.leave(user.id)
-                .then(() => {
-                    if (liveSessions.get(key) === socket.id)
-                        liveSessions.delete(key);
-                })
-                .catch((error) =>
-                    logError("Distributed room leave failed", error, { roomId }),
-                );
+            // Leaving a match does not disconnect the authenticated socket.
+            // Keep liveSessions so this exact socket can join again and
+            // its eventual transport disconnect can retire the room.
+            void distributed.leave(user.id).catch((error) =>
+                logError("Distributed room leave failed", error, { roomId }),
+            );
             return;
         }
-        liveSessions.delete(key);
+        // Standalone sockets also stay in their Socket.IO room after leave.
+        // Only release their session mapping on actual socket disconnect.
         deleteUser(user.id, "room_leave");
     });
 
@@ -670,7 +669,9 @@ io.on("connection", (socket) => {
         liveSessions.delete(key);
         const distributed = getGame();
         if (distributed instanceof DistributedRoom) {
-            void distributed.disconnect(user.id, true).catch((error) =>
+            // A transport interruption is not an intentional room exit. Keep
+            // the player's seat through reconnection, including live matches.
+            void distributed.disconnect(user.id, false, NODE_DISCONNECT_GRACE_MS).catch((error) =>
                 logError("Distributed socket disconnect cleanup failed", error, {
                     roomId,
                     userId: user.id,
