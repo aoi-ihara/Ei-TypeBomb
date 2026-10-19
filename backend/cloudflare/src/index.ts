@@ -84,7 +84,11 @@ export default {
                     { ownership: result.ownership, servers: result.servers },
                     { headers: cors },
                 );
-            } catch {
+            } catch (error) {
+                // Diagnose failed promotion/peer lookups in Worker logs without
+                // exposing cluster internals or secrets to unauthenticated clients.
+                console.error("Cluster route/report failed:",
+                    error instanceof Error ? error.message : "Unknown error");
                 return new Response(null, { status: 503, headers: cors });
             }
         }
