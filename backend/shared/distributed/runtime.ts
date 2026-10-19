@@ -143,6 +143,13 @@ export class DistributedRoom {
             this.checkpoint.value?.game.room.users.length ||
             value.game.room.users.length
         );
+        // A game-end event may also empty seats. Only room:leave is evidence
+        // that an active participant intentionally/forcibly departed.
+        if (value.game.room.users.length) value.emptiedByLeave = false;
+        else if (effects.some(
+            (effect) => effect.type === "activity" &&
+                effect.activity.event === "player_left"
+        )) value.emptiedByLeave = true;
         // revision is the durable commit sequence, including typing/session changes.
         value.game.revision = own.revision + 1;
         if (
@@ -474,7 +481,7 @@ export class DistributedRoom {
             if (
                 !value.game.room.users.length &&
                 !value.game.room.isStart &&
-                (value.hadPlayers || !Object.keys(value.sessions).length)
+                (value.emptiedByLeave || !Object.keys(value.sessions).length)
             ) {
                 // Only a never-used room waits for an initial authentication.
                 // As soon as the last participant leaves, retire the room
