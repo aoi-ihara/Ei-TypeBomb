@@ -24,3 +24,22 @@ export function clusterConfig(env: ClusterEnv, transport: "socket.io" | "websock
     return { id: topology.publicUrl, parent: topology.parentUrl,
         primary: topology.primaryUrl!, transport };
 }
+
+// A certificate is the authenticated source of this host's identity.
+// Refuse a stale or independently signed roster even if its subject matches.
+export function assertClusterIdentity(
+    env: ClusterEnv,
+    identity: { member: { id: string; parent: string | null; depth: number;
+        transport: "socket.io" | "websocket"; roster: string[] } },
+): void {
+    if (env.ETB_CLUSTER_CONFIG === undefined) return;
+    const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
+    const origins = servers.map(s => s.origin);
+    const depth = origins.indexOf(identity.member.id);
+    if (depth < 0 ||
+        depth !== identity.member.depth ||
+        identity.member.parent !== (origins[depth - 1] ?? null) ||
+        identity.member.transport !== servers[depth].transport ||
+        JSON.stringify(identity.member.roster) !== JSON.stringify(origins))
+        throw new Error("Signed cluster identity does not match ETB_CLUSTER_CONFIG");
+}

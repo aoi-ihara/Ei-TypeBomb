@@ -76,3 +76,18 @@ test("host position is derived from signed certificate subject instead of per-ho
     assert.throws(() => parseServerTopology({ETB_CLUSTER_CONFIG: config,
         CLUSTER_SERVER_TOKEN: subject("https://not-in-roster.test")}));
 });
+
+test("signed credential roster cannot silently disagree with public config", async () => {
+    const { assertClusterIdentity } = await import("../../shared/distributed/control");
+    const raw = JSON.stringify({ version: 1, servers: [
+        "https://primary.test", "https://worker.test/ws"
+    ] });
+    assert.doesNotThrow(() => assertClusterIdentity({ETB_CLUSTER_CONFIG:raw}, {
+        member: {id:"https://worker.test",parent:"https://primary.test",depth:1,
+            transport:"websocket",roster:["https://primary.test","https://worker.test"]}
+    }));
+    assert.throws(() => assertClusterIdentity({ETB_CLUSTER_CONFIG:raw}, {
+        member: {id:"https://worker.test",parent:"https://primary.test",depth:1,
+            transport:"websocket",roster:["https://primary.test","https://different.test"]}
+    }), /does not match/);
+});

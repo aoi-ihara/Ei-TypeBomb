@@ -33,7 +33,7 @@ import {
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
 import { parseServerTopology } from "../../shared/topology";
 
-import { clusterConfig } from "../../shared/distributed/control";
+import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { Identity } from "../../shared/distributed/identity";
@@ -45,6 +45,7 @@ const config = clusterConfig(process.env, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
     ? Identity.create(process.env.CLUSTER_SERVER_TOKEN!).then((identity) => {
+          assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
               const url = new URL("/cluster/ws", id);
               url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
