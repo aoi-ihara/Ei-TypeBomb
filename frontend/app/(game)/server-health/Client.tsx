@@ -190,58 +190,75 @@ function useServerHealth(url: string | undefined, serverRole: ServerRole) {
     };
 }
 
+
+type HealthRowState = { health: boolean | undefined; refreshing: boolean };
+
+function HealthRow({
+    url, name, serverRole, refreshSignal, index, onStatus,
+}: {
+    url: string;
+    name: string;
+    serverRole: ServerRole;
+    refreshSignal: number;
+    index: number;
+    onStatus: (index: number, state: HealthRowState) => void;
+}) {
+    const { health, rttLatency, refreshing, checkServer } =
+        useServerHealth(url, serverRole);
+    useEffect(() => {
+        onStatus(index, { health, refreshing });
+    }, [health, refreshing, index, onStatus]);
+    useEffect(() => {
+        if (refreshSignal > 0) checkServer("manual");
+    }, [refreshSignal, checkServer]);
+    return <ServerStatus name={name} health={health} rttLatency={rttLatency} />;
+}
+
 export default function ServerHealth({ clusterServers }: { clusterServers: string[] }) {
-    const primaryUrl = clusterServers[0] ?? process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL;
-    const secondaryUrl = clusterServers[1] ?? process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
-    const fallbackUrl = clusterServers[2] ?? process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
+    // The shared config is an ordered array of arbitrary length; only use
+    // the legacy three URLs when the new config was not supplied.
+    const servers = clusterServers.length > 0 ? clusterServers : [
+        process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
+        process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
+        process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+    ].filter((url): url is string => Boolean(url));
 
-    const primary = useServerHealth(primaryUrl, "primary");
-    const secondary = useServerHealth(secondaryUrl, "secondary");
-    const fallback = useServerHealth(fallbackUrl, "fallback");
+    const [refreshSignal, setRefreshSignal] = useState(0);
+    const [states, setStates] = useState<Record<number, HealthRowState>>({});
+    const onStatus = useCallback((index: number, next: HealthRowState) => {
+        setStates((previous) => {
+            const current = previous[index];
+            if (current?.health === next.health &&
+                current?.refreshing === next.refreshing) return previous;
+            return { ...previous, [index]: next };
+        });
+    }, []);
 
-    const refreshing =
-        primary.refreshing || secondary.refreshing || fallback.refreshing;
-
-    const handleRefresh = useCallback(() => {
-        primary.checkServer("manual");
-        secondary.checkServer("manual");
-        fallback.checkServer("manual");
-    }, [primary.checkServer, secondary.checkServer, fallback.checkServer]);
+    const refreshing = servers.some((_, index) => states[index]?.refreshing);
+    const loading = servers.length > 0 &&
+        servers.every((_, index) => states[index]?.health === undefined);
 
     return (
-        <Shell
-            title="サーバーの状況"
-            size="small"
-            loading={
-                primary.health === undefined &&
-                secondary.health === undefined &&
-                fallback.health === undefined
-            }
-        >
-            <ServerStatus
-                name="プレイマリサーバー"
-                health={primary.health}
-                rttLatency={primary.rttLatency}
-            />
-
-            <ServerStatus
-                name="セカンダリサーバー"
-                health={secondary.health}
-                rttLatency={secondary.rttLatency}
-            />
-
-            <ServerStatus
-                name="フォールバックサーバー"
-                health={fallback.health}
-                rttLatency={fallback.rttLatency}
-            />
-
-            <Button
-                iconName="rotateCcw"
-                onClick={handleRefresh}
-                loading={refreshing}
-                className="w-full"
-            >
+        <Shell title="サーバーの状況" size="small" loading={loading}>
+            {servers.map((url, index) => (
+                <HealthRow
+                    key={url}
+                    index={index}
+                    url={url}
+                    name={
+                        index === 0 ? "プライマリサーバー"
+                        : index === 1 ? "セカンダリサーバー"
+                        : index === 2 ? "フォールバックサーバー"
+                        : `第${index + 1}サーバー`
+                    }
+                    serverRole={index === 0 ? "primary" : index === 1 ? "secondary" : "fallback"}
+                    refreshSignal={refreshSignal}
+                    onStatus={onStatus}
+                />
+            ))}
+            <Button iconName="rotateCcw"
+                onClick={() => setRefreshSignal((current) => current + 1)}
+                loading={refreshing} className="w-full">
                 更新
             </Button>
         </Shell>

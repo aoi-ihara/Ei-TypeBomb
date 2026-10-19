@@ -1,6 +1,6 @@
 import Client from "./Client";
 import { cookies } from "next/headers";
-import { parseETBClusterConfig } from "../../../../backend/shared/clusterConfig";
+import { parseETBClusterConfig } from "@/lib/room/clusterConfig";
 
 export default async function SettingsPage() {
     const cookieStore = await cookies();
