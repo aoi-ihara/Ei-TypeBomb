@@ -97,10 +97,14 @@ export class RoutedSocket {
             this.transport?.emit(event, data);
             return this;
         }
+        if (event === "room:leave") {
+            // Explicit exit is processed by the authenticated owner socket
+            // immediately; a transient transport loss still gets grace.
+            this.transport?.emit(event);
+            return this;
+        }
         if (
-            ["room:join", "room:leave", "game:start", "word:success"].includes(
-                event,
-            )
+            ["room:join", "game:start", "word:success"].includes(event)
         ) {
             if (!this.connected || !this.meta || this.pending.size) return this;
             const command = {
