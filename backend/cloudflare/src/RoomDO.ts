@@ -306,11 +306,7 @@ export class RoomDO extends DurableObject<Env> {
         const saved = await this.control.call("read", {
             roomId: roomId,
         });
-        if (
-            (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
-            this.control.config.id !== this.control.config.primary
-        )
-            throw new Error("Only primary may load fresh settings");
+        // Fresh rooms may start on the first reachable certified tier.
         if (
             (!saved.ownership || saved.ownership.lifecycle === "DELETED") &&
             !jwtToken
