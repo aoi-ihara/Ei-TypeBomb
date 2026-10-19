@@ -254,9 +254,12 @@ export class RoutedSocket {
                 this.roomId = own.roomId;
                 this.routedRevision = own.revision;
             }
+            // After a certified tombstone only the configured primary may
+            // create a new room instance. Trying a standby first produces a
+            // misleading room/auth error and cannot succeed safely.
             const candidates =
                 !own || own.lifecycle === "DELETED"
-                    ? ordered
+                    ? ordered.filter((server) => server.depth === 0)
                     : ordered.filter((server) => server.id === own.owner);
             for (const server of candidates) {
                 if (attempt !== this.attempt || this.stopped) return this;
