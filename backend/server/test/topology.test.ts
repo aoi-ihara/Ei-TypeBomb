@@ -36,3 +36,43 @@ test("invalid or cyclic server configurations are rejected", () => {
         { PRIMARY_SERVER_URL: "https://example.test?token=123" },
     ]) assert.throws(() => parseServerTopology(config));
 });
+
+import { parseETBClusterConfig } from "../../shared/clusterConfig";
+test("a single JSON value defines ordered hosts and Worker /ws transport", () => {
+    const config = JSON.stringify({ version: 1, servers: [
+        "https://primary.example.com", "https://worker.example.com/ws", "https://render.example.com"
+    ] });
+    const servers = parseETBClusterConfig(config);
+    assert.deepEqual(servers.map(s => s.transport), ["socket.io","websocket","socket.io"]);
+    assert.deepEqual(servers.map(s => s.origin), [
+        "https://primary.example.com", "https://worker.example.com", "https://render.example.com"
+    ]);
+});
+test("invalid shared topology is rejected", () => {
+    for (const config of [
+        '{"version":2,"servers":["https://a.test"]}',
+        '{"version":1,"servers":[]}',
+        '{"version":1,"servers":["https://a.test","https://a.test/ws"]}',
+        '{"version":1,"servers":["http://example.com"]}',
+        '{"version":1,"servers":["https://a.test/path"]}',
+        '{"version":1,"servers":["https://a.test/?token=1"]}',
+    ]) assert.throws(() => parseETBClusterConfig(config));
+});
+test("host position is derived from signed certificate subject instead of per-host URL variables", () => {
+    const servers = ["https://primary.test","https://worker.test/ws","https://render.test"];
+    const config = JSON.stringify({ version: 1, servers });
+    const subject = (sub: string) => {
+        const data = Buffer.from(JSON.stringify({sub})).toString("base64url");
+        return JSON.stringify({ certificate: "header."+data+".signature" });
+    };
+    assert.deepEqual(parseServerTopology({ETB_CLUSTER_CONFIG: config,
+        CLUSTER_SERVER_TOKEN: subject("https://worker.test")}), {
+        role: "replica", primaryUrl: "https://primary.test",
+        parentUrl: "https://primary.test", publicUrl: "https://worker.test",
+    });
+    assert.equal(parseServerTopology({ETB_CLUSTER_CONFIG: config,
+        CLUSTER_SERVER_TOKEN: subject("https://render.test")}).parentUrl,
+        "https://worker.test");
+    assert.throws(() => parseServerTopology({ETB_CLUSTER_CONFIG: config,
+        CLUSTER_SERVER_TOKEN: subject("https://not-in-roster.test")}));
+});
