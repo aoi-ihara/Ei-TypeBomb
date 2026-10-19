@@ -408,7 +408,10 @@ test(
         // The Socket.IO transport drops this ACK once; the routed client
         // must retry the very same command ID, not apply the action twice.
         dropNextAck = true;
-        routed.emit("room:leave"); // Observer command is a no-op.
+        // Explicit room:leave now bypasses game:command so it can remove the
+        // player immediately. Use an invalid pre-game success command to
+        // exercise retry-stable command IDs without changing room membership.
+        routed.emit("word:success");
         await wait(
             () => routedCommands.length >= 2,
             "lost ACK retries the same event ID",

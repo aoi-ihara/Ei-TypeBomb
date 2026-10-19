@@ -331,6 +331,29 @@ export class DistributedRoom {
             await this.save(value, [], "session");
         });
     }
+    /** Explicit room exit must remove the player immediately, not wait for
+     * the temporary-disconnect grace period. */
+    leave(id: string): Promise<void> {
+        return this.serial(async () => {
+            if (this.halted || this.deleted) return;
+            const value = structuredClone(this.checkpoint.value!);
+            const present = value.game.room.users.some((user) => user.id === id);
+            const session = value.sessions[id];
+            if (!present && !session) return;
+            delete value.sessions[id];
+            if (present) {
+                const result = this.reduce(value, {
+                    type: "room:leave",
+                    playerId: id,
+                    reason: "room_leave",
+                });
+                value.game = result.state;
+                await this.save(value, result.effects, "event");
+            } else {
+                await this.save(value, [], "session");
+            }
+        });
+    }
     disconnect(id: string): Promise<void> {
         return this.serial(async () => {
             if (this.halted || this.deleted) return;
