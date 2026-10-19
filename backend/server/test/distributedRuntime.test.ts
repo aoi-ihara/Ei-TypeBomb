@@ -325,3 +325,34 @@ test("a disconnected Node player can authenticate again and rejoin", async () =>
     assert.equal(await f.runtime.command(f.command("a", "room:join"), "a"), "accepted");
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b", "a"]);
 });
+
+test("last player disconnect retires the distributed room without a second grace period", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.disconnect("a", true);
+    assert.deepEqual(f.runtime.state.room.users, []);
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, true);
+    assert.ok(f.calls.includes("delete"));
+});
+
+test("last explicit leave retires an empty room even with an authenticated socket", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.leave("a");
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, true);
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, true);
+});
+
+test("fresh empty room keeps the initial grace window until the first participant", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("spectator");
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, false);
+});
