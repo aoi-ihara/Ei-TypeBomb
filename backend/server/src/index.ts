@@ -159,6 +159,10 @@ const io = new Server<
 >(httpServer, {
     maxHttpBufferSize: 8192,
     destroyUpgrade: false,
+    // A missing peer is detected within roughly 8 seconds of its last ping.
+    // Explicit disconnects still remove the player immediately.
+    pingInterval: 3_000,
+    pingTimeout: 5_000,
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
 const acceptHealthRttProbe = createHealthRttProbeRateLimit();
