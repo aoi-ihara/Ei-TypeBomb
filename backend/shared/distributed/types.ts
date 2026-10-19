@@ -24,6 +24,8 @@ export type DurableRoom = {
     events: Record<string, number>;
     /** A player has joined this room at least once; used to clean up empty rooms. */
     hadPlayers?: boolean;
+    /** The last participant explicitly left or disconnected, not just a match ending. */
+    emptiedByLeave?: boolean;
     resumeUntil?: number;
     pausedAt?: number;
     outcome?: {
