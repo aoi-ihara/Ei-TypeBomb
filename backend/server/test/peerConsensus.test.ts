@@ -576,3 +576,67 @@ test("a stale singleton owner stops after a higher epoch becomes visible", async
     const latest = await n.hosts[0].call("read", { roomId: room.id });
     assert.equal(latest.ownership.owner, n.ids[1]);
 });
+
+test("empty room tombstone allows retained authenticated sockets but rejects active players", async () => {
+    const n = await network();
+    const room = freshRoom();
+    const initialCheckpoint = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    const value = {
+        ...initialCheckpoint.value!,
+        game: {
+            ...initialCheckpoint.value!.game,
+            revision: initialCheckpoint.ownership.revision + 1,
+        },
+        hadPlayers: true,
+        emptiedByLeave: true,
+        sessions: { spectator: { connected: true, expires: 0 } },
+    };
+    const updated = await n.hosts[0].call("commit", {
+        roomId: room.id,
+        instance: initialCheckpoint.ownership.instance,
+        epoch: initialCheckpoint.ownership.epoch,
+        revision: initialCheckpoint.ownership.revision,
+        value,
+    });
+    const deleted = await n.hosts[0].call("delete", {
+        roomId: room.id,
+        instance: updated.ownership.instance,
+        epoch: updated.ownership.epoch,
+        revision: updated.ownership.revision,
+    });
+    assert.equal(deleted.ownership.lifecycle, "DELETED");
+    const newRoom = await n.hosts[0].call("open", {
+        roomId: room.id, initial: initial(room),
+    });
+    assert.notEqual(newRoom.ownership.instance, initialCheckpoint.ownership.instance);
+
+    const active = freshRoom();
+    const fresh = await n.hosts[0].call("open", {
+        roomId: active.id, initial: initial(active),
+    });
+    const activeCheckpoint = await n.hosts[0].call("commit", {
+        roomId: active.id,
+        instance: fresh.ownership.instance,
+        epoch: fresh.ownership.epoch,
+        revision: fresh.ownership.revision,
+        value: {
+            ...fresh.value!,
+            game: {
+                ...fresh.value!.game,
+                room: { ...fresh.value!.game.room, users: [{ id: "active" }] },
+                revision: fresh.ownership.revision + 1,
+            },
+            sessions: { active: { connected: true, expires: 0 } },
+            hadPlayers: true,
+            emptiedByLeave: false,
+        },
+    });
+    await assert.rejects(n.hosts[0].call("delete", {
+        roomId: active.id,
+        instance: activeCheckpoint.ownership.instance,
+        epoch: activeCheckpoint.ownership.epoch,
+        revision: activeCheckpoint.ownership.revision,
+    }), /Room still in use/);
+});
