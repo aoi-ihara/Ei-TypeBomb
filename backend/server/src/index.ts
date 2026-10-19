@@ -98,6 +98,7 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
         res.status(204).end();
     });
     app.post(path, async (req, res) => {
+        const requestStartedAt = performance.now();
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("Access-Control-Expose-Headers", "Server-Timing");
         const timings: Record<string, number> = {};
@@ -107,7 +108,12 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
                 ownerProbeMs: "ownerProbe",
                 promoteMs: "promote",
                 resumeMs: "resume",
+                authMs: "auth",
+                totalMs: "total",
+                resumeReadMs: "resumeRead",
+                resumeOpenMs: "resumeOpen",
             };
+            timings.totalMs = performance.now() - requestStartedAt;
             res.setHeader("Server-Timing", Object.entries(timings)
                 .filter(([key, value]) => labels[key] &&
                     Number.isFinite(value) && value >= 0)
@@ -130,6 +136,7 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
                 if (req.body.failure !== true)
                     throw new Error("Missing failure report");
             }
+            timings.authMs = performance.now() - requestStartedAt;
             const result = await cluster.call(
                 path.endsWith("report") ? "report" : "read",
                 { roomId, owner: req.body.owner, revision: req.body.revision,
@@ -142,7 +149,7 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             ) {
                 const resumeStartedAt = performance.now();
                 try {
-                    await createRoomIfNeeded(roomId, req.body.jwtToken);
+                    await createRoomIfNeeded(roomId, req.body.jwtToken, timings);
                 } finally {
                     timings.resumeMs = performance.now() - resumeStartedAt;
                 }
@@ -209,6 +216,7 @@ const refreshServerState = () =>
 const createRoomIfNeeded = async (
     roomId: string,
     jwtToken: string,
+    timings?: Record<string, number>,
 ): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
     if (existingRoom) return Promise.resolve(existingRoom);
@@ -218,7 +226,14 @@ const createRoomIfNeeded = async (
 
     const loadPromise = (async () => {
         if (cluster) {
-            const saved = await cluster.call("read", { roomId });
+            const readStartedAt = performance.now();
+            let saved: Awaited<ReturnType<typeof cluster.call>>;
+            try {
+                saved = await cluster.call("read", { roomId });
+            } finally {
+                if (timings) timings.resumeReadMs =
+                    performance.now() - readStartedAt;
+            }
             const fresh =
                 !saved.ownership || saved.ownership.lifecycle === "DELETED";
             // Any surviving certified tier may initialize a genuinely fresh
@@ -277,7 +292,13 @@ const createRoomIfNeeded = async (
                     }
                 io.to(roomId).emit("room:broadcast", game.snapshot());
             });
-            await game.open(initial ?? undefined);
+            const openStartedAt = performance.now();
+            try {
+                await game.open(initial ?? undefined);
+            } finally {
+                if (timings) timings.resumeOpenMs =
+                    performance.now() - openStartedAt;
+            }
             games.set(roomId, game);
             if (!rooms.some((room) => room.id === roomId))
                 rooms.push(game.state.room);

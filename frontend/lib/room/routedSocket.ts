@@ -29,6 +29,8 @@ type Meta = { roomInstanceId: string; epoch: number; revision: number };
 // One diagnostic record per interrupted session. Each duration uses the same
 // browser monotonic clock; backend phase durations come from Server-Timing.
 type RecoveryDiagnostics = {
+    recoveryId: string;
+    snapshotBeforeAuth: boolean;
     detectionHeartbeatAgeMs: number;
     fromDepth: number;
     retryWaitMs: number;
@@ -40,6 +42,10 @@ type RecoveryDiagnostics = {
     serverProbeMs: number;
     serverPromoteMs: number;
     serverResumeMs: number;
+    serverAuthMs: number;
+    serverTotalMs: number;
+    serverResumeReadMs: number;
+    serverResumeOpenMs: number;
     socketHandshakeMs: number;
     socketCalls: number;
     authenticationMs: number;
@@ -127,6 +133,10 @@ export class RoutedSocket {
             ownerProbe: "serverProbeMs",
             promote: "serverPromoteMs",
             resume: "serverResumeMs",
+            auth: "serverAuthMs",
+            total: "serverTotalMs",
+            resumeRead: "serverResumeReadMs",
+            resumeOpen: "serverResumeOpenMs",
         };
         for (const part of header.split(",")) {
             const match = /^\s*([a-zA-Z]+);dur=([0-9.]+)\s*$/.exec(part);
@@ -361,6 +371,7 @@ export class RoutedSocket {
                 let authenticating = true;
                 const authStartedAt = performance.now();
                 let authenticatedAt: number | undefined;
+                let readySnapshotBeforeAuthAt: number | undefined;
                 this.id = socket.id;
                 this.connected = true;
                 this.lastReply = performance.now();
@@ -368,6 +379,36 @@ export class RoutedSocket {
                     this.transport === socket &&
                     attempt === this.attempt &&
                     !this.stopped;
+                const finishRecovery = (
+                    finishedAt: number,
+                    snapshotBeforeAuth: boolean,
+                ) => {
+                    // In distributed Node, game.connect() can broadcast a room
+                    // snapshot before the server emits auth:session. Both are
+                    // needed for a valid, measured recovery.
+                    if (this.recoveryStartedAt === undefined ||
+                        authenticatedAt === undefined) return;
+                    const metrics = this.recoveryDiagnostics;
+                    if (metrics) {
+                        metrics.toDepth = server.depth;
+                        metrics.snapshotBeforeAuth = snapshotBeforeAuth;
+                        metrics.snapshotAfterAuthMs += snapshotBeforeAuth
+                            ? 0
+                            : Math.max(0, finishedAt - authenticatedAt);
+                        if (this.firstMigrationSnapshotAt !== undefined)
+                            metrics.migrationWaitMs +=
+                                finishedAt - this.firstMigrationSnapshotAt;
+                    }
+                    this.dispatch("cluster:recovered", {
+                        snapshotRecoveryMs: Math.round(
+                            finishedAt - this.recoveryStartedAt,
+                        ),
+                        ...(metrics ?? {}),
+                    });
+                    this.recoveryStartedAt = undefined;
+                    this.recoveryDiagnostics = undefined;
+                    this.firstMigrationSnapshotAt = undefined;
+                };
                 socket.on("disconnect", () => {
                     if (active()) this.recover();
                 });
@@ -388,6 +429,8 @@ export class RoutedSocket {
                                 this.lastReply - authStartedAt;
                         this.playerId = value.id;
                         this.dispatch("auth:session", value);
+                        if (readySnapshotBeforeAuthAt !== undefined)
+                            finishRecovery(this.lastReply, true);
                     }
                 });
                 socket.on("command:ack", ({ id, status }) => {
@@ -446,26 +489,9 @@ export class RoutedSocket {
                     if (this.recoveryStartedAt !== undefined &&
                         !room.migrating &&
                         (!this.joinedRoom || inRoom)) {
-                        const finishedAt = performance.now();
-                        const metrics = this.recoveryDiagnostics;
-                        if (metrics) {
-                            metrics.toDepth = server.depth;
-                            if (authenticatedAt !== undefined)
-                                metrics.snapshotAfterAuthMs +=
-                                    finishedAt - authenticatedAt;
-                            if (this.firstMigrationSnapshotAt !== undefined)
-                                metrics.migrationWaitMs +=
-                                    finishedAt - this.firstMigrationSnapshotAt;
-                        }
-                        this.dispatch("cluster:recovered", {
-                            snapshotRecoveryMs: Math.round(
-                                finishedAt - this.recoveryStartedAt,
-                            ),
-                            ...(metrics ?? {}),
-                        });
-                        this.recoveryStartedAt = undefined;
-                        this.recoveryDiagnostics = undefined;
-                        this.firstMigrationSnapshotAt = undefined;
+                        if (authenticatedAt === undefined)
+                            readySnapshotBeforeAuthAt = performance.now();
+                        else finishRecovery(performance.now(), false);
                     }
                     if (this.rejoinOnSnapshot && !inRoom && !room.isStart) {
                         // The new owner has authenticated us but the old
@@ -550,6 +576,8 @@ export class RoutedSocket {
             this.recoveryStartedAt === undefined) {
             this.recoveryStartedAt = performance.now();
             this.recoveryDiagnostics = {
+                recoveryId: crypto.randomUUID(),
+                snapshotBeforeAuth: false,
                 detectionHeartbeatAgeMs: Math.round(
                     Math.max(0, performance.now() - this.lastReply),
                 ),
@@ -565,6 +593,10 @@ export class RoutedSocket {
                 serverProbeMs: 0,
                 serverPromoteMs: 0,
                 serverResumeMs: 0,
+                serverAuthMs: 0,
+                serverTotalMs: 0,
+                serverResumeReadMs: 0,
+                serverResumeOpenMs: 0,
                 socketHandshakeMs: 0,
                 socketCalls: 0,
                 authenticationMs: 0,
@@ -572,6 +604,12 @@ export class RoutedSocket {
                 migrationWaitMs: 0,
                 toDepth: -1,
             };
+            this.dispatch("cluster:recovery-started", {
+                recoveryId: this.recoveryDiagnostics.recoveryId,
+                fromDepth: this.recoveryDiagnostics.fromDepth,
+                detectionHeartbeatAgeMs:
+                    this.recoveryDiagnostics.detectionHeartbeatAgeMs,
+            });
         }
         if (
             this.currentOwner &&

@@ -574,8 +574,28 @@ export default function Clinet({
                 posthog.capture("game_quited");
             });
 
+            socket.on("cluster:recovery-started", ({
+                recoveryId, fromDepth, detectionHeartbeatAgeMs,
+            }: {
+                recoveryId: string;
+                fromDepth: number;
+                detectionHeartbeatAgeMs: number;
+            }) => {
+                if (!selected || socketRef.current !== socket) return;
+                posthog.capture("game_connection_recovery_started", {
+                    recovery_id: recoveryId,
+                    from_depth: fromDepth,
+                    detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
+                });
+                console.info("[ETB failover started]", {
+                    recoveryId, fromDepth, detectionHeartbeatAgeMs,
+                });
+            });
+
             socket.on("cluster:recovered", (diagnostics: {
                 snapshotRecoveryMs: number;
+                recoveryId?: string;
+                snapshotBeforeAuth?: boolean;
                 detectionHeartbeatAgeMs?: number;
                 fromDepth?: number;
                 toDepth?: number;
@@ -588,6 +608,10 @@ export default function Clinet({
                 serverProbeMs?: number;
                 serverPromoteMs?: number;
                 serverResumeMs?: number;
+                serverAuthMs?: number;
+                serverTotalMs?: number;
+                serverResumeReadMs?: number;
+                serverResumeOpenMs?: number;
                 socketHandshakeMs?: number;
                 socketCalls?: number;
                 authenticationMs?: number;
