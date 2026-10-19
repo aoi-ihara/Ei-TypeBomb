@@ -125,7 +125,12 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             )
                 await createRoomIfNeeded(roomId, req.body.jwtToken);
             res.json({ ownership: result.ownership, servers: result.servers });
-        } catch {
+        } catch (error) {
+            // Keep authentication errors and peer secrets out of HTTP responses.
+            // Server-side diagnostics distinguish identity, connectivity and
+            // missing certified checkpoints during failover experiments.
+            const message = error instanceof Error ? error.message : "Unknown error";
+            console.error(`Cluster ${path} failed:`, message);
             res.status(503).end();
         }
     });
