@@ -294,3 +294,34 @@ test("reliable leave command permits rejoining over the same authenticated sessi
     assert.equal(await f.runtime.command(f.command("a", "room:join"), "a"), "accepted");
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b", "a"]);
 });
+
+test("Node socket disconnect removes a distributed player immediately and publishes the room", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    const before = f.published.length;
+    await f.runtime.disconnect("a", true);
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
+    assert.ok(f.published.length > before);
+    // Duplicate disconnects must not remove other players or publish again.
+    const after = f.published.length;
+    await f.runtime.disconnect("a", true);
+    assert.equal(f.published.length, after);
+});
+
+test("a disconnected Node player can authenticate again and rejoin", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    await f.runtime.disconnect("a", true);
+    await f.runtime.connect("a");
+    assert.equal(await f.runtime.command(f.command("a", "room:join"), "a"), "accepted");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b", "a"]);
+});
