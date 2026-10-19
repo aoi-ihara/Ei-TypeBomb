@@ -666,16 +666,17 @@ io.on("connection", (socket) => {
         liveSessions.delete(key);
         const distributed = getGame();
         if (distributed instanceof DistributedRoom) {
-            void distributed.disconnect(user.id).catch(() => {});
+            void distributed.disconnect(user.id, true).catch((error) =>
+                logError("Distributed socket disconnect cleanup failed", error, {
+                    roomId,
+                    userId: user.id,
+                }),
+            );
             return;
         }
-        const previous = pendingLeaves.get(key);
-        if (previous) clearTimeout(previous);
-        const timer = setTimeout(() => {
-            pendingLeaves.delete(key);
-            if (!liveSessions.has(key)) deleteUser(user.id, "disconnect");
-        }, DISCONNECT_GRACE_MS);
-        pendingLeaves.set(key, timer);
+        // Socket.IO already reported this socket as disconnected. Remove its
+        // player now instead of delaying the room broadcast by 20 seconds.
+        deleteUser(user.id, "disconnect");
     });
 });
 
