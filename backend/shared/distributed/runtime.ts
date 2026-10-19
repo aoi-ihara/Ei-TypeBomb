@@ -340,18 +340,17 @@ export class DistributedRoom {
             const present = value.game.room.users.some((user) => user.id === id);
             const session = value.sessions[id];
             if (!present && !session) return;
-            delete value.sessions[id];
-            if (present) {
-                const result = this.reduce(value, {
-                    type: "room:leave",
-                    playerId: id,
-                    reason: "room_leave",
-                });
-                value.game = result.state;
-                await this.save(value, result.effects, "event");
-            } else {
-                await this.save(value, [], "session");
-            }
+            // Keep the authenticated socket session while it remains connected:
+            // a player may exit and rejoin the same room without reauthenticating.
+            // Transport disconnect and its grace timer clean it up later.
+            if (!present) return;
+            const result = this.reduce(value, {
+                type: "room:leave",
+                playerId: id,
+                reason: "room_leave",
+            });
+            value.game = result.state;
+            await this.save(value, result.effects, "event");
         });
     }
     disconnect(id: string): Promise<void> {

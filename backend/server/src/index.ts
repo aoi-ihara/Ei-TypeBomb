@@ -172,7 +172,8 @@ const refreshServerState = () =>
                 displayName: player.displayName,
             })),
             isStart: Boolean(room.isStart),
-            bombHolder: room.bombHolder,
+            bombHolder: room.bombs?.[0]?.holder ?? room.bombHolder,
+            bombHolders: room.bombs?.map((bomb) => bomb.holder),
         })),
     });
 
@@ -218,7 +219,11 @@ const createRoomIfNeeded = async (
                 const gameChanged =
                     previous?.isStart !== result.state.room.isStart ||
                     previous?.gameId !== result.state.room.gameId;
-                if (membershipChanged || gameChanged || index < 0) {
+                const bombChanged =
+                    previous?.bombHolder !== result.state.room.bombHolder ||
+                    JSON.stringify(previous?.bombs?.map((bomb) => bomb.holder) ?? []) !==
+                        JSON.stringify(result.state.room.bombs?.map((bomb) => bomb.holder) ?? []);
+                if (membershipChanged || gameChanged || bombChanged || index < 0) {
                     refreshServerState();
                     for (const id of newPlayers.filter((id) => !oldPlayers.includes(id)))
                         logEvent("ROOM", `joined ${roomId}`, { roomId, playerId: id });

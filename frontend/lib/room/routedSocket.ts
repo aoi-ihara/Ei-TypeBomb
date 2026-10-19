@@ -35,6 +35,7 @@ export class RoutedSocket {
     private attempt = 0;
     private retry?: ReturnType<typeof setTimeout>;
     private recoveryFailures = 0;
+    private wasBackgrounded = false;
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
     private meta?: Meta;
@@ -97,14 +98,8 @@ export class RoutedSocket {
             this.transport?.emit(event, data);
             return this;
         }
-        if (event === "room:leave") {
-            // Explicit exit is processed by the authenticated owner socket
-            // immediately; a transient transport loss still gets grace.
-            this.transport?.emit(event);
-            return this;
-        }
         if (
-            ["room:join", "game:start", "word:success"].includes(event)
+            ["room:join", "room:leave", "game:start", "word:success"].includes(event)
         ) {
             if (!this.connected || !this.meta || this.pending.size) return this;
             const command = {
@@ -365,7 +360,19 @@ export class RoutedSocket {
                 });
                 clearInterval(this.heartbeat);
                 this.heartbeat = setInterval(() => {
-                    if (!active() || !this.foreground()) return;
+                    if (!active()) return;
+                    if (!this.foreground()) {
+                        this.wasBackgrounded = true;
+                        return;
+                    }
+                    if (this.wasBackgrounded) {
+                        // Background tabs can suspend JS timers while Socket.IO
+                        // stays connected. Do not treat suspension as a dead owner.
+                        this.wasBackgrounded = false;
+                        this.lastReply = performance.now();
+                        socket.emit("cluster:ping");
+                        return;
+                    }
                     if (authenticating) {
                         if (performance.now() - this.lastReply > 10000)
                             this.recover();

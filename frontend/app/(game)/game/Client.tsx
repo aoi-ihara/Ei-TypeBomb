@@ -242,6 +242,11 @@ export default function Clinet({
         let primaryTimer: ReturnType<typeof setTimeout> | null = null;
         let secondaryTimer: ReturnType<typeof setTimeout> | null = null;
         let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+        let disconnectNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+        const cancelDisconnectNotice = () => {
+            if (disconnectNoticeTimer) clearTimeout(disconnectNoticeTimer);
+            disconnectNoticeTimer = null;
+        };
 
         const showNotice = (nextNotice: Omit<GameNoticeProps, "visible">) => {
             if (noticeTimer) clearTimeout(noticeTimer);
@@ -420,7 +425,16 @@ export default function Clinet({
 
             socket.on("disconnect", () => {
                 if (!selected || socketRef.current !== socket || disposed) return;
-                setServerError("接続が切れました。再接続しています…");
+                cancelDisconnectNotice();
+                // Sleeping tabs may suspend the heartbeat and transport. Keep
+                // transient background recovery silent; show errors only if a
+                // foreground reconnection remains unsuccessful.
+                disconnectNoticeTimer = setTimeout(() => {
+                    disconnectNoticeTimer = null;
+                    if (!disposed && socketRef.current === socket &&
+                        !socket.connected && document.visibilityState === "visible")
+                        setServerError("接続が切れました。再接続しています…");
+                }, document.visibilityState === "hidden" ? 6000 : 3000);
                 retrySelectedConnection();
             });
             socket.on("connect_error", () => {
@@ -457,6 +471,7 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
+                    cancelDisconnectNotice();
                     setServerError(newRoom.migrating ? "サーバーを切り替えています。参加者の再接続を待っています…" : null);
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
@@ -677,6 +692,7 @@ export default function Clinet({
             clearPrimaryTimer();
             clearSecondaryTimer();
             if (noticeTimer) clearTimeout(noticeTimer);
+            cancelDisconnectNotice();
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
             primaryCandidate.socket.disconnect();
