@@ -246,3 +246,31 @@ test("a finished game outcome survives a lost game:end delivery", async () => {
     assert.equal(snapshot.outcome?.gameId, gameId);
     assert.ok(snapshot.outcome?.data.losers?.length);
 });
+
+test("explicit distributed leave removes the player and broadcasts before grace expires", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    const before = f.published.length;
+    await f.runtime.leave("a");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
+    assert.ok(f.published.length > before);
+    await f.runtime.leave("a");
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+});
+
+test("temporary disconnect retains player until grace window expires", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.disconnect("a");
+    assert.equal(f.runtime.state.room.users.length, 1);
+    f.advance(1000);
+    await f.runtime.tick();
+    assert.equal(f.runtime.state.room.users.length, 1);
+});
