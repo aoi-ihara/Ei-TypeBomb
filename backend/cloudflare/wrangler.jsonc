@@ -6,6 +6,11 @@
     "durable_objects": {
         "bindings": [
             {
+                "name": "CLUSTER",
+                "class_name": "ClusterDO",
+            },
+            { "name": "REPLICAS", "class_name": "ReplicaDO" },
+            {
                 "name": "ROOMS",
                 "class_name": "GameRoom",
             },
@@ -18,6 +23,7 @@
             "custom_domain": true,
         },
     ],
+    "triggers": { "crons": ["* * * * *"] },
     "observability": {
         "enabled": true,
         "logs": { "enabled": true },
@@ -36,10 +42,19 @@
             "tag": "v1",
             "new_sqlite_classes": ["RoomDO"],
         },
+        {
+            "tag": "distributed-v2",
+            "new_sqlite_classes": ["ClusterDO", "ReplicaDO"],
+        },
     ],
     "previews": {
         "durable_objects": {
             "bindings": [
+                {
+                    "name": "CLUSTER",
+                    "class_name": "ClusterDO",
+                },
+                { "name": "REPLICAS", "class_name": "ReplicaDO" },
                 {
                     "name": "ROOMS",
                     "class_name": "RoomDO",

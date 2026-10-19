@@ -1,13 +1,8 @@
-# Database connection
+# Room configuration lookup
 
-The Socket.IO server reads room configuration directly from PostgreSQL with a
-least-privilege database role. It no longer needs a Supabase service-role key.
-
-Set `SUPABASE_DATABASE_URL` to a PostgreSQL connection string that authenticates
-as the read-only `etb_server` role. The role only needs `SELECT` access to
-`public.ei_typebomb_rooms` plus the matching RLS policy.
-
-Do not expose this connection string to the client or commit it to the repository.
+Only a fresh room instance loads settings/items from Supabase PostgREST with the
+verified room JWT and publishable key. No service-role key or PostgreSQL control
+connection is used. Existing games recover exclusively from peer checkpoints.
 
 # Socket.IO rate limit
 
@@ -45,3 +40,13 @@ RTT プローブは ID を検証してからアドレス枠を消費し、不正
 
 共通ゲームコアと runtime の境界、ビルド出力、将来の拡張については
 [共通コアのREADME](../shared/README.md) を参照してください。
+
+## Distributed topology configuration
+
+Set the **same** `ETB_CLUSTER_CONFIG` on Vercel and every game server:
+
+```dotenv
+ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
+```
+
+The array defines priority and `/ws` identifies Workers. Every game host additionally needs its **own** `CLUSTER_SERVER_TOKEN` secret; it contains an individual signing key and is deliberately not embedded in the shared JSON. The current server and parent are derived automatically from that signed identity. Legacy topology variables remain supported for migration. See [distributed setup](../DISTRIBUTED.md).

@@ -85,6 +85,11 @@ export function parseClientEvent(
                     "認証情報が不正です。ルームに入り直してください。",
                 );
             }
+            if ("sessionToken" in data &&
+                (typeof data.sessionToken !== "string" ||
+                    !data.sessionToken.length || data.sessionToken.length > 4096)) {
+                throw new ClientError("セッション情報が不正です。");
+            }
             return {
                 event,
                 data: {
@@ -92,6 +97,7 @@ export function parseClientEvent(
                     displayName: validateDisplayName(
                         "displayName" in data ? data.displayName : undefined,
                     ),
+                    ...("sessionToken" in data ? { sessionToken: data.sessionToken as string } : {}),
                 },
             };
         default:

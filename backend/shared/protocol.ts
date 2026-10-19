@@ -1,6 +1,8 @@
 import type { Room, GameLoser } from "./types";
 export type ClientPayloads = {
-    "auth:response": { jwtToken: string; displayName: string };
+    "game:command": import("./distributed/types").Command;
+    "cluster:ping": undefined;
+    "auth:response": { jwtToken: string; displayName: string; sessionToken?: string };
     "room:join": undefined;
     "room:leave": undefined;
     "game:start": undefined;
@@ -19,6 +21,7 @@ export type WireRoom = Omit<Room, "password"> & {
 export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
+    "auth:session": { id: string };
     "room:broadcast": WireRoom;
     "typing:input": {
         input: string;
