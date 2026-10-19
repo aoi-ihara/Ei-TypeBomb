@@ -90,7 +90,10 @@ test(
             JWT_PUBLIC_KEY: JSON.stringify(await exportJWK(publicKey)),
             NEXT_PUBLIC_SUPABASE_URL: api,
             NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test-only",
-            PRIMARY_SERVER_URL: urls[0],
+            ETB_CLUSTER_CONFIG: JSON.stringify({
+                version: 1,
+                servers: urls.map((url, i) => i === 1 ? url + "/ws" : url),
+            }),
         };
         const roomToken = await new SignJWT({
             id: roomId,
@@ -124,8 +127,6 @@ test(
                     env: {
                         ...process.env,
                         ...common,
-                        SERVER_PUBLIC_URL: urls[i],
-                        PARENT_SERVER_URL: urls[i - 1] ?? "",
                         CLUSTER_SERVER_TOKEN: tokens[i],
                         PORT: String(ports[i]),
                         NEXT_PUBLIC_POSTHOG_KEY: "",
@@ -179,8 +180,6 @@ test(
                 },
                 bindings: {
                     ...common,
-                    SERVER_PUBLIC_URL: urls[1],
-                    PARENT_SERVER_URL: urls[0],
                     CLUSTER_SERVER_TOKEN: tokens[1],
                 },
             }),
