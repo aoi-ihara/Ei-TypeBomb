@@ -149,12 +149,19 @@ export function io(url?: string, options?: Options) {
         (options?.clusterServers?.length || process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") &&
         !options?.healthOnly
     ) {
+        // An explicit ordered cluster list must not be mixed with the
+        // deployment's legacy hosts; otherwise the browser override can
+        // silently connect to an unintended server.
+        const configured = options?.clusterServers?.length
+            ? options.clusterServers
+            : [
+                process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
+                process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
+                process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+            ];
         const seeds = [
             url,
-            ...(options?.clusterServers ?? []),
-            process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
-            process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
-            process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+            ...configured,
         ]
             .filter((value): value is string => !!value)
             .map((value) => new URL(value).origin);

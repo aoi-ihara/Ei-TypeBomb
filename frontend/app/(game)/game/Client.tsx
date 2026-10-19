@@ -9,7 +9,11 @@ import GameView from "@/components/feature/GameView";
 import type { GameNoticeProps } from "@/components/feature/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
 import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
-import { isTrustedServerUrl, resolveServerUrl } from "@/lib/room/serverUrl";
+import {
+    getEffectiveClusterServers,
+    isTrustedServerUrl,
+    resolveServerUrl,
+} from "@/lib/room/serverUrl";
 import { Position } from "@/type";
 import { newPositions } from "@/lib/ui/position";
 import posthog from "posthog-js";
@@ -226,14 +230,19 @@ export default function Clinet({
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
         // SOCKET
-        const primaryUrl = clusterServers[0] ?? resolveServerUrl();
+        const configuredServers = getEffectiveClusterServers(clusterServers);
+        const primaryUrl = configuredServers[0] ?? resolveServerUrl();
         // One signed player identity per mounted page, shared across reconnects.
         const sessionTokenPromise = getClientSessionToken().catch(() => null);
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
         let disposed = false;
-        const secondaryUrl = clusterServers[1] ?? process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
-        const fallbackUrl = clusterServers[2] ?? process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
-        const distributed = clusterServers.length > 0 ||
+        const secondaryUrl = configuredServers.length
+            ? configuredServers[1]
+            : process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL;
+        const fallbackUrl = configuredServers.length
+            ? configuredServers[2]
+            : process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
+        const distributed = configuredServers.length > 0 ||
             process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
@@ -275,7 +284,7 @@ export default function Clinet({
         };
 
         const primarySocket = io(primaryUrl, {
-            clusterServers,
+            clusterServers: configuredServers,
             sessionTokenPromise,
             reconnection: false,
             timeout: SERVER_FAILOVER_TIMEOUT_MS,
@@ -304,7 +313,7 @@ export default function Clinet({
             }
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url, primaryUrl, clusterServers)) return;
+            if (!isTrustedServerUrl(candidate.url, primaryUrl, configuredServers)) return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -673,7 +682,7 @@ export default function Clinet({
 
             if (secondaryUrl && secondaryUrl !== primaryUrl) {
                 const socket = io(secondaryUrl, {
-                    clusterServers,
+                    clusterServers: configuredServers,
                     reconnection: false,
                     timeout: SERVER_FAILOVER_TIMEOUT_MS,
                 });
@@ -695,7 +704,7 @@ export default function Clinet({
                 fallbackUrl !== secondaryUrl
             ) {
                 const socket = io(fallbackUrl, {
-                    clusterServers,
+                    clusterServers: configuredServers,
                     reconnection: false,
                     timeout: SERVER_FAILOVER_TIMEOUT_MS,
                 });

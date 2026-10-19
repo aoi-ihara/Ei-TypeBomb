@@ -10,6 +10,22 @@ import {
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
+import { useSyncExternalStore } from "react";
+import {
+    getStoredServerConfig,
+    parseStoredServerConfig,
+    SERVER_CONFIG_CHANGE_EVENT,
+} from "@/lib/room/serverUrl";
+
+const subscribeConfig = (listener: () => void) => {
+    window.addEventListener("storage", listener);
+    window.addEventListener(SERVER_CONFIG_CHANGE_EVENT, listener);
+    return () => {
+        window.removeEventListener("storage", listener);
+        window.removeEventListener(SERVER_CONFIG_CHANGE_EVENT, listener);
+    };
+};
+const getServerSnapshot = () => "";
 
 const HEALTH_TIMEOUT_MS = 2_000;
 const HEALTH_REFRESH_INTERVAL_MS = 60_000;
@@ -215,13 +231,19 @@ function HealthRow({
 }
 
 export default function ServerHealth({ clusterServers }: { clusterServers: string[] }) {
-    // The shared config is an ordered array of arbitrary length; only use
-    // the legacy three URLs when the new config was not supplied.
-    const servers = clusterServers.length > 0 ? clusterServers : [
-        process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
-        process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
-        process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
-    ].filter((url): url is string => Boolean(url));
+    const storedConfig = useSyncExternalStore(
+        subscribeConfig,
+        getStoredServerConfig,
+        getServerSnapshot,
+    );
+    // The browser override is ordered exactly like ETB_CLUSTER_CONFIG.
+    // No override means the deployment's configured servers remain active.
+    const servers = parseStoredServerConfig(storedConfig) ??
+        (clusterServers.length > 0 ? clusterServers : [
+            process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
+            process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
+            process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+        ].filter((url): url is string => Boolean(url)));
 
     const [refreshSignal, setRefreshSignal] = useState(0);
     const [states, setStates] = useState<Record<number, HealthRowState>>({});
