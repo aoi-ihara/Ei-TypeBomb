@@ -428,6 +428,12 @@ export class DistributedRoom {
             const value = structuredClone(this.checkpoint.value!);
             const effects: GameResult["effects"] = [];
             let changed = false;
+            // Preserve temporary absentees only while another participant
+            // is online. If everyone has abandoned the match, normal grace
+            // expiry must still retire the room instead of leaking it.
+            const hasConnectedParticipant = value.game.room.users.some(
+                (player) => value.sessions[player.id]?.connected,
+            );
             for (const [id, session] of Object.entries(value.sessions)) {
                 if (session.connected || session.expires > now) continue;
                 // Never convert a transient transport disconnect into a
@@ -435,7 +441,7 @@ export class DistributedRoom {
                 // ENTIRE game. Keep this reserved seat reconnectable, and
                 // clear abandoned seats immediately after the match finishes.
                 // An explicit room:leave still cancels the game as intended.
-                if (value.game.room.isStart &&
+                if (value.game.room.isStart && hasConnectedParticipant &&
                     value.game.room.users.some((player) => player.id === id))
                     continue;
                 delete value.sessions[id];

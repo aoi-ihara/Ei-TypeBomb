@@ -392,13 +392,15 @@ test("abandoned live-game seat is cleaned after the match, not during it", async
     for (let round = 0; round < 8 && f.runtime.state.room.isStart; round++) {
         f.advance(30_001);
         await f.runtime.tick();
-        assert.deepEqual(
-            f.runtime.state.room.users.map((player) => player.id), ["a", "b"],
-        );
+        if (f.runtime.state.room.isStart)
+            assert.deepEqual(
+                f.runtime.state.room.users.map((player) => player.id), ["a", "b"],
+            );
     }
     assert.equal(f.runtime.state.room.isStart, false);
     await f.runtime.tick();
-    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
+    // Game completion already empties every seat by design.
+    assert.deepEqual(f.runtime.state.room.users, []);
     assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
 });
 

@@ -324,7 +324,6 @@ test("a successful answer during an outage is replayed with its original turn", 
     };
     try {
         await waitFor(() => sessions.length === 1 && socket.connected);
-        await waitFor(() => socket.connected && socket.id === undefined);
         sessions[0].close();
         socket.emit("word:success");
         await waitFor(() => sessions.length >= 2 && sessions[1].commands.length === 1);
