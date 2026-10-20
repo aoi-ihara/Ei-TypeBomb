@@ -744,3 +744,42 @@ test("a newer certified mirror outranks a locally committed old tombstone in rou
     const status = await n.hosts[2].dispatch(n.hosts[2].identity.member, "status", { roomId: room.id });
     assert.equal(status.ownership.instance, newer.ownership.instance);
 });
+
+test("a full migrated lobby frees old seats and cannot later cancel replacement players' match", async () => {
+    const n = await network(), room = { ...freshRoom(), maxPlayers: 2 };
+    let now = Date.now();
+    const primary = new DistributedRoom(room.id, n.hosts[0], () => {}, () => now);
+    await primary.open(room);
+    for (const id of ["old-a", "old-b"]) {
+        await primary.connect(id);
+        await primary.apply({ type: "room:join", player: { id } });
+    }
+    await delay(20);
+    n.alive[0] = false;
+    await n.hosts[1].call("report", { roomId: room.id, owner: n.ids[0], revision: 0 });
+    const fallback = new DistributedRoom(room.id, n.hosts[1], () => {}, () => now);
+    await fallback.open();
+    assert.equal(fallback.snapshot().migrating, false);
+    assert.equal(fallback.state.room.users.length, 0);
+    assert.equal(fallback.checkpoint.value!.sessions["old-a"], undefined);
+    assert.equal(fallback.checkpoint.value!.sessions["old-b"], undefined);
+    const command = (type: "room:join" | "game:start", id: string): Command => ({
+        id: randomUUID(), instance: fallback.checkpoint.ownership.instance,
+        epoch: fallback.checkpoint.ownership.epoch, revision: fallback.state.revision,
+        originRevision: fallback.state.revision,
+        event: type === "room:join" ? { type, player: { id } }
+            : { type, playerId: id, gameId: randomUUID(), gameDuration: room.gameDuration },
+    });
+    for (const id of ["new-a", "new-b"]) {
+        await fallback.connect(id);
+        assert.equal(await fallback.command(command("room:join", id), id), "accepted");
+    }
+    assert.deepEqual(fallback.state.room.users.map((user) => user.id), ["new-a", "new-b"]);
+    await fallback.command(command("game:start", "new-a"), "new-a");
+    const gameId = fallback.state.room.gameId;
+    now += 21_000;
+    await fallback.tick();
+    assert.equal(fallback.state.room.isStart, true);
+    assert.equal(fallback.state.room.gameId, gameId);
+    assert.deepEqual(fallback.state.room.users.map((user) => user.id), ["new-a", "new-b"]);
+});

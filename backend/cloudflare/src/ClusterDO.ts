@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { PeerControl, type VoteRecord } from "../../shared/distributed/peers";
 import { Identity, type Member } from "../../shared/distributed/identity";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
-import type { ClusterSocket } from "../../shared/distributed/link";
+import { bufferPeerSocket, type ClusterSocket } from "../../shared/distributed/link";
 import type { Env } from "./types";
 /** A per-room storage atom. It never advances games or initiates ownership. */
 export class ReplicaDO extends DurableObject<Env> {
@@ -38,6 +38,7 @@ export class ClusterDO extends DurableObject<Env> {
                     const url = new URL("/cluster/ws", id);
                     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
                     const ws = new WebSocket(url.toString());
+                    const buffered = bufferPeerSocket(ws);
                     await new Promise<void>((resolve, reject) => {
                         const timer = setTimeout(() => {
                             ws.close();
@@ -52,7 +53,7 @@ export class ClusterDO extends DurableObject<Env> {
                             reject(new Error("Peer connection failed"));
                         });
                     });
-                    return ws as unknown as ClusterSocket;
+                    return buffered;
                 },
                 {
                     load: (room) =>

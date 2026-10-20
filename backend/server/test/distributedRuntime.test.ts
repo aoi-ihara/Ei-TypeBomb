@@ -59,7 +59,7 @@ function fixture() {
                     ownership: {
                         ...result.ownership,
                         revision: result.ownership.revision + 1,
-                        lifecycle: "ACTIVE",
+                        lifecycle: (args.value as NonNullable<ControlResult["value"]>).resumeUntil ? "MIGRATING" : "ACTIVE",
                         savedAt: now,
                     },
                 };
@@ -96,6 +96,8 @@ function fixture() {
     });
     return {
         runtime,
+        control,
+        now: () => now,
         command,
         published,
         calls,
@@ -609,4 +611,68 @@ test("an active match does not extend a closed spectator's shorter cleanup deadl
     await f.runtime.tick();
     assert.equal(f.runtime.checkpoint.value!.sessions.spectator, undefined);
     assert.equal(f.runtime.state.room.isStart, true);
+});
+
+
+test("reopening an already migrating room preserves the original reconnect deadline", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a");
+    await f.runtime.disconnect("b");
+    const deadline = f.runtime.checkpoint.value!.resumeUntil;
+    f.advance(5_000);
+    const reopened = new DistributedRoom(room.id, f.control, () => {}, f.now);
+    await reopened.open();
+    assert.equal(reopened.checkpoint.value!.resumeUntil, deadline);
+    await reopened.connect("new-page");
+    f.advance(15_001);
+    await reopened.tick();
+    assert.equal(reopened.snapshot().migrating, false);
+    assert.equal(reopened.state.room.isStart, false);
+});
+
+test("leaving a paused match clears migration wait so a new page can join immediately", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a");
+    await f.runtime.disconnect("b");
+    await f.runtime.connect("new-page");
+    await f.runtime.leave("a");
+    assert.equal(f.runtime.snapshot().migrating, false);
+    assert.equal(await f.runtime.command(f.command("new-page", "room:join"), "new-page"), "accepted");
+    assert.deepEqual(f.runtime.state.room.users.map((user) => user.id), ["new-page"]);
+});
+
+test("restoring an expired migration wait cannot create a fresh grace period", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a");
+    await f.runtime.disconnect("b");
+    const deadline = f.runtime.checkpoint.value!.resumeUntil;
+    f.advance(20_001);
+    const reopened = new DistributedRoom(room.id, f.control, () => {}, f.now);
+    await reopened.open();
+    assert.equal(reopened.checkpoint.value!.resumeUntil, deadline);
+    await reopened.connect("new-page");
+    await reopened.tick();
+    assert.equal(reopened.snapshot().migrating, false);
+    assert.equal(await reopened.command({ ...f.command("new-page", "room:join"),
+        instance: reopened.checkpoint.ownership.instance,
+        epoch: reopened.checkpoint.ownership.epoch,
+        revision: reopened.state.revision, originRevision: reopened.state.revision }, "new-page"), "accepted");
 });

@@ -97,7 +97,10 @@ export class DistributedRoom {
                     );
                 for (const bomb of restored.game.room.bombs ?? [])
                     bomb.at = Math.max(floor, bomb.at);
-                restored.resumeUntil = this.now() + GRACE_MS;
+                // A runtime/owner may reopen repeatedly while clients retry.
+                // Preserve an existing deadline rather than renewing the wait
+                // on every recovery (including one already in the past).
+                restored.resumeUntil ??= this.now() + GRACE_MS;
                 restored.pausedAt = this.now();
                 for (const session of Object.values(restored.sessions)) {
                     session.connected = false;
@@ -123,6 +126,19 @@ export class DistributedRoom {
         kind: string,
     ) {
         this.assertActive();
+        // Before reopening a lobby, retire disconnected seats and their
+        // session deadlines. Otherwise ghosts can fill the lobby or cancel a
+        // replacement match when their old disconnect grace expires.
+        if (!value.game.room.isStart && value.resumeUntil !== undefined) {
+            value.game.room.users = value.game.room.users.filter((player) => {
+                if (value.sessions[player.id]?.connected) return true;
+                delete value.sessions[player.id];
+                return false;
+            });
+            delete value.resumeUntil;
+            delete value.pausedAt;
+            this.pauseAt = undefined;
+        }
         const own = this.checkpoint.ownership;
         for (const effect of effects) {
             if (
