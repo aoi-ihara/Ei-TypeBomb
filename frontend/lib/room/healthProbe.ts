@@ -43,7 +43,12 @@ function boundedProbe(
         timer = setTimeout(cancel, timeoutMs);
         // Start only after setting the timeout/cancellation handlers.
         void Promise.resolve()
-            .then(() => run(controller.signal))
+            .then(() => {
+                // React cleanup may abort the probe before this microtask runs.
+                // Never create a socket/fetch after cancellation.
+                if (controller.signal.aborted) return unhealthy();
+                return run(controller.signal);
+            })
             .then(finish, cancel);
     });
 }
@@ -97,6 +102,11 @@ export function probeServerTransport(
 ): Promise<HealthProbeResult> {
     const startedAt = now();
     return boundedProbe((signal) => new Promise((resolve) => {
+        // Defensive guard for callers that deliver an already-aborted signal.
+        if (signal.aborted) {
+            resolve(unhealthy());
+            return;
+        }
         const socket = open();
         let finished = false;
         const finish = (healthy: boolean) => {

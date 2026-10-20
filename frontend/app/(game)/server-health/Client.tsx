@@ -90,6 +90,9 @@ function HealthRow({
             // session. The Worker adapter selects /ws/health automatically.
             const socket = io(url, {
                 healthOnly: true,
+                // Do not count a successful HTTP polling connection as a
+                // WebSocket success when upgrades are blocked.
+                transports: ["websocket"],
                 autoConnect: false,
                 reconnection: false,
                 forceNew: true,

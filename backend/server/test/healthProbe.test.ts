@@ -137,3 +137,36 @@ test("reordering servers invalidates the prior row identities", () => {
     ];
     assert.equal(old.filter((key) => updated.includes(key)).length, 0);
 });
+
+
+test("immediate cleanup does not start a deferred transport probe", async () => {
+    const controller = new AbortController();
+    let opened = 0;
+    const pending = probeServerTransport(() => {
+        opened++;
+        return {
+            on() {},
+            connect() {},
+            disconnect() {},
+        };
+    }, controller.signal);
+    // Abort synchronously, before boundedProbe's start microtask.
+    controller.abort();
+    assert.deepEqual(await pending, { healthy: false, latencyMs: null });
+    await Promise.resolve();
+    assert.equal(opened, 0, "Canceled probes must not create sockets");
+});
+
+test("immediate cleanup does not start a deferred HTTP fetch", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const pending = probeServerHealth("https://server.example.test",
+        controller.signal, (async () => {
+            requests++;
+            return Response.json({ ok: true });
+        }) as typeof fetch);
+    controller.abort();
+    assert.deepEqual(await pending, { healthy: false, latencyMs: null });
+    await Promise.resolve();
+    assert.equal(requests, 0, "Canceled probes must not issue requests");
+});
