@@ -24,6 +24,11 @@ type Transport = {
     emit(event: string, data?: unknown): unknown;
     disconnect(): unknown;
 };
+type RecoveryFailure = { code: string; retryable: false; message: string };
+class RecoveryStopped extends Error {
+    constructor(readonly failure: RecoveryFailure) { super(failure.message); }
+}
+
 type Meta = { roomInstanceId: string; epoch: number; revision: number };
 
 export const recoveryRetryDelayMs = (failures: number): number =>
@@ -78,6 +83,7 @@ export class RoutedSocket {
     private roomId?: string;
     private currentOwner?: string;
     private routedRevision?: number;
+    private routedInstance?: string;
     private failure?: { owner: string; revision: number };
     private deliveredResults = new Set<string>();
     private pending = new Map<
@@ -181,7 +187,11 @@ export class RoutedSocket {
         if (event === "auth:response") {
             const auth = data as { sessionToken?: string };
             this.sessionToken = auth.sessionToken ?? this.sessionToken;
-            this.transport?.emit(event, data);
+            this.transport?.emit(event, {
+                ...(data as Record<string, unknown>),
+                ...((this.meta?.roomInstanceId ?? this.routedInstance)
+                    ? { expectedInstance: this.meta?.roomInstanceId ?? this.routedInstance } : {}),
+            });
             return this;
         }
         if (
@@ -245,6 +255,7 @@ export class RoutedSocket {
                 | { ownership: Ownership | null; servers: Server[] }
                 | undefined;
             const failure = this.failure;
+            let terminalReport: RecoveryFailure | undefined;
             if (failure && this.sessionToken && this.roomId) {
                 const ownerDepth =
                     this.servers.find((server) => server.id === failure.owner)
@@ -273,6 +284,11 @@ export class RoutedSocket {
                             },
                         );
                         this.recordServerTiming(response.headers.get("Server-Timing"));
+                        if (response.status === 409) {
+                            const problem = await response.json();
+                            if (problem.retryable === false && typeof problem.code === "string")
+                                terminalReport = problem;
+                        }
                         if (response.ok) {
                             route = await response.json();
                             this.servers = route!.servers;
@@ -287,6 +303,7 @@ export class RoutedSocket {
                                 performance.now() - reportStartedAt;
                     }
                 }
+                if (!route && terminalReport) throw new RecoveryStopped(terminalReport);
             }
             if (!route && known.length) {
                 // Routing reads are non-mutating: try the known endpoints in
@@ -312,9 +329,15 @@ export class RoutedSocket {
                                     method: "POST",
                                     redirect: "manual",
                                     headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ jwtToken: this.token }),
+                                    body: JSON.stringify({ jwtToken: this.token,
+                                        expectedInstance: this.meta?.roomInstanceId ?? this.routedInstance }),
                                     signal: controllers[index].signal,
                                 });
+                                if (response.status === 409) {
+                                    const problem = await response.json();
+                                    if (problem.retryable === false && typeof problem.code === "string")
+                                        terminalReport = problem;
+                                }
                                 if (!response.ok)
                                     throw new Error("Routing endpoint unavailable");
                                 const value = await response.json();
@@ -350,6 +373,7 @@ export class RoutedSocket {
                 }
             }
             if (attempt !== this.attempt || this.stopped) return this;
+            if (!route && terminalReport) throw new RecoveryStopped(terminalReport);
             if (!route) throw new Error("Authoritative routing unavailable");
             const own = route.ownership;
             const ordered = [...route.servers].sort(
@@ -358,6 +382,7 @@ export class RoutedSocket {
             if (own) {
                 this.roomId = own.roomId;
                 this.routedRevision = own.revision;
+                this.routedInstance = own.instance;
             }
             // Try certified tiers in priority order for fresh/deleted rooms.
             // A reachable backup can initialize its own signed cohort when
@@ -454,13 +479,17 @@ export class RoutedSocket {
                 });
                 socket.on("error", (error) => {
                     if (active()) {
-                        this.dispatch("error", error);
-                        this.recover();
+                        const hasLowerTier = this.servers.some((peer) => peer.depth > server.depth);
+                        if (error?.retryable === false && !hasLowerTier)
+                            this.stopRecovery(error);
+                        else {
+                            this.dispatch("error", error);
+                            this.recover();
+                        }
                     }
                 });
                 socket.on("auth:session", (value) => {
                     if (active()) {
-                        this.recoveryFailures = 0;
                         authenticating = false;
                         this.lastReply = performance.now();
                         authenticatedAt = this.lastReply;
@@ -503,6 +532,7 @@ export class RoutedSocket {
                 });
                 socket.on("room:broadcast", (room) => {
                     if (!active()) return;
+                    if (!room.migrating) this.recoveryFailures = 0;
                     const previous = this.meta;
                     if (
                         previous &&
@@ -623,13 +653,34 @@ export class RoutedSocket {
                 return this;
             }
             throw new Error("No reachable room owner");
-        } catch {
-            if (attempt === this.attempt && !this.stopped) this.recover();
+        } catch (error) {
+            if (attempt === this.attempt && !this.stopped) {
+                if (error instanceof RecoveryStopped) this.stopRecovery(error.failure);
+                else this.recover();
+            }
         }
         return this;
     }
+    private stopRecovery(problem: RecoveryFailure) {
+        this.stopped = true;
+        this.attempt++;
+        this.connected = false;
+        clearTimeout(this.retry);
+        this.retry = undefined;
+        clearInterval(this.heartbeat);
+        this.transport?.disconnect();
+        this.transport = undefined;
+        this.dispatch("disconnect");
+        this.dispatch("cluster:recovery-failed", problem);
+        this.dispatch("error", problem);
+    }
     private recover() {
         if (this.stopped || this.retry) return;
+        if (this.recoveryFailures >= 60) {
+            this.stopRecovery({ code: "RECOVERY_TIMEOUT", retryable: false,
+                message: "接続先の復旧を確認できないため自動再試行を停止しました。サーバーの状態を確認してから再接続してください。" });
+            return;
+        }
         if ((this.meta || this.joinedRoom) &&
             this.recoveryStartedAt === undefined) {
             this.recoveryStartedAt = performance.now();

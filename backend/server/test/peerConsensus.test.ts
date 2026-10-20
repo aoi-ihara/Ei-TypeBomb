@@ -721,3 +721,26 @@ test("backup still refuses to open a room owned by an available primary", async 
     }), /Connect to the current owner/);
     assert.equal((await n.hosts[0].read(room.id))?.ownership.instance, created.ownership.instance);
 });
+
+test("a newer certified mirror outranks a locally committed old tombstone in route/status", async () => {
+    const n = await network(), room = freshRoom();
+    const created = await n.hosts[0].call("open", { roomId: room.id, initial: initial(room) });
+    const deleted = await n.hosts[0].call("delete", { roomId: room.id,
+        instance: created.ownership.instance, epoch: created.ownership.epoch,
+        revision: created.ownership.revision });
+    await n.hosts[2].dispatch(n.hosts[0].identity.member, "install", {
+        checkpoint: { ...deleted, servers: undefined },
+    });
+    n.hosts[0].members.delete(n.ids[2]);
+    n.hosts[0].links.delete(n.ids[2]);
+    n.alive[2] = false;
+    const newer = await n.hosts[0].call("open", { roomId: room.id, initial: initial(room) });
+    assert.equal((newer as any).voters.length, 2);
+    const checkpoint = { ...newer, servers: undefined };
+    await n.hosts[2].dispatch(n.hosts[0].identity.member, "mirror", { checkpoint });
+    n.alive[0] = n.alive[1] = false;
+    const read = await n.hosts[2].call("read", { roomId: room.id });
+    assert.equal(read.ownership.instance, newer.ownership.instance);
+    const status = await n.hosts[2].dispatch(n.hosts[2].identity.member, "status", { roomId: room.id });
+    assert.equal(status.ownership.instance, newer.ownership.instance);
+});

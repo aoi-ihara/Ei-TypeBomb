@@ -1,3 +1,4 @@
+import { recoveryFailure } from "../../shared/distributed/recovery";
 import { readLimitedBody } from "../../shared/distributed/replication";
 import type { Env } from "./types";
 import { clusterConfig } from "../../shared/distributed/control";
@@ -77,6 +78,7 @@ export default {
                 const control = new WorkerControl(env);
                 const result = await control.call(report ? "report" : "read", {
                     roomId,
+                    expectedInstance: data.expectedInstance,
                     owner: data.owner,
                     revision: data.revision,
                 });
@@ -97,7 +99,10 @@ export default {
                 // exposing cluster internals or secrets to unauthenticated clients.
                 console.error("Cluster route/report failed:",
                     error instanceof Error ? error.message : "Unknown error");
-                return new Response(null, { status: 503, headers: cors });
+                const failure = recoveryFailure(error);
+                return failure
+                    ? Response.json(failure, { status: 409, headers: cors })
+                    : new Response(null, { status: 503, headers: cors });
             }
         }
         const match = /^\/ws\/([^/]+)$/.exec(url.pathname);

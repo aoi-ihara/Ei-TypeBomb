@@ -393,6 +393,19 @@ export class DistributedRoom {
                 connected: false,
                 expires: this.now() + graceMs,
             };
+            if (value.game.room.isStart && !value.resumeUntil &&
+                value.game.room.users.every((player) => !value.sessions[player.id]?.connected)) {
+                // Preserve the whole match, including deadlines, when every
+                // player loses transport. Lobby expiry must not cancel it
+                // before the shared reconnect grace has elapsed.
+                value.resumeUntil = this.now() + GRACE_MS;
+                value.pausedAt = this.now();
+                this.pauseAt = this.now();
+                for (const player of value.game.room.users) {
+                    const session = value.sessions[player.id];
+                    if (session) session.expires = Math.max(session.expires, value.resumeUntil);
+                }
+            }
             await this.save(value, [], "session");
         });
     }

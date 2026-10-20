@@ -724,3 +724,56 @@ test("leave confirmation requires the matching authoritative ACK, not a stale ab
         globalThis.fetch = originalFetch;
     }
 });
+
+test("classified report failure stops automatic retries and preserves the reason", async () => {
+    const original = globalThis.fetch;
+    const servers = [
+        { id: "https://primary.test", depth: 0, transport: "socket.io" },
+        { id: "https://render.test", depth: 2, transport: "socket.io" },
+    ];
+    const ownership = { owner: servers[0].id, epoch: 1, revision: 3,
+        instance: "old", lifecycle: "ACTIVE", roomId: "room" };
+    let reports = 0;
+    const problem = { code: "VOTER_STATE_LOST", retryable: false,
+        message: "以前の投票状態を復旧してください。" };
+    globalThis.fetch = (async (url: string) => {
+        if (String(url).endsWith("/report")) {
+            reports++;
+            return Response.json(problem, { status: 409 });
+        }
+        return Response.json({ ownership, servers });
+    }) as typeof fetch;
+    const open = () => {
+        const listeners = new Map<string, ((data?: any) => void)[]>();
+        const socket = {
+            connected: true,
+            on(event: string, listener: (data?: any) => void) {
+                listeners.set(event, [...(listeners.get(event) ?? []), listener]);
+                return socket;
+            },
+            emit(event: string) {
+                if (event === "auth:response") setTimeout(() =>
+                    listeners.get("error")?.forEach((listener) => listener({ message: "owner offline" })), 0);
+            },
+            disconnect() { socket.connected = false; },
+        };
+        setTimeout(() => listeners.get("auth:request")?.forEach((listener) => listener()), 0);
+        return socket;
+    };
+    const socket = new RoutedSocket([servers[0].id], open,
+        async () => "room-token", () => true, async () => "session");
+    socket.on("auth:request", () => socket.emit("auth:response", { sessionToken: "session" }));
+    let failed: unknown;
+    socket.on("cluster:recovery-failed", (value) => failed = value);
+    try {
+        for (let i = 0; i < 100 && !failed; i++)
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.deepEqual(failed, problem);
+        await new Promise((resolve) => setTimeout(resolve, 700));
+        assert.equal(reports, 1);
+        assert.equal(socket.connected, false);
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = original;
+    }
+});

@@ -36,7 +36,8 @@ import { parseServerTopology } from "../../shared/topology";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
-import { Identity } from "../../shared/distributed/identity";
+import { recoveryFailure } from "../../shared/distributed/recovery";
+import { persistentPeerIdentity } from "./lib/peerStorage";
 import { MAX_CLUSTER_FRAME_BYTES } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
 import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
@@ -44,7 +45,8 @@ const topology = parseServerTopology(process.env);
 const config = clusterConfig(process.env, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
-    ? Identity.create(process.env.CLUSTER_SERVER_TOKEN!).then((identity) => {
+    ? persistentPeerIdentity(process.env.CLUSTER_SERVER_TOKEN!,
+        process.env.CLUSTER_STATE_DIR ?? ".cluster-state").then(async ({ identity, storage }) => {
           assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
               const url = new URL("/cluster/ws", id);
@@ -67,7 +69,8 @@ const clusterReady = config
                   });
               });
               return socket as unknown as import("../../shared/distributed/link").ClusterSocket;
-          });
+          }, storage);
+          await cluster.restoreRegistry(storage.members());
           cluster.draining = process.env.CLUSTER_DRAINING === "true";
       })
     : Promise.resolve();
@@ -143,7 +146,7 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             timings.authMs = performance.now() - requestStartedAt;
             const result = await cluster.call(
                 path.endsWith("report") ? "report" : "read",
-                { roomId, owner: req.body.owner, revision: req.body.revision,
+                { roomId, expectedInstance: req.body.expectedInstance, owner: req.body.owner, revision: req.body.revision,
                     diagnosticTimings: timings },
             );
             if (
@@ -167,7 +170,9 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             const message = error instanceof Error ? error.message : "Unknown error";
             console.error(`Cluster ${path} failed:`, message);
             exposeTimings();
-            res.status(503).end();
+            const failure = recoveryFailure(error);
+            if (failure) res.status(409).json(failure);
+            else res.status(503).end();
         }
     });
 }
@@ -221,6 +226,7 @@ const createRoomIfNeeded = async (
     roomId: string,
     jwtToken: string,
     timings?: Record<string, number>,
+    expectedInstance?: string,
 ): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
     if (existingRoom) return Promise.resolve(existingRoom);
@@ -233,7 +239,7 @@ const createRoomIfNeeded = async (
             const readStartedAt = performance.now();
             let saved: Awaited<ReturnType<typeof cluster.call>>;
             try {
-                saved = await cluster.call("read", { roomId });
+                saved = await cluster.call("read", { roomId, expectedInstance });
             } finally {
                 if (timings) timings.resumeReadMs =
                     performance.now() - readStartedAt;
@@ -467,7 +473,7 @@ io.on("connection", (socket) => {
             displayName: user.displayName,
             roomId,
         });
-        socket.emit("error", { message });
+        socket.emit("error", { message, ...recoveryFailure(error) });
     };
 
     const emitRaw = socket.emit.bind(socket) as (
@@ -570,6 +576,8 @@ io.on("connection", (socket) => {
                 const room = await createRoomIfNeeded(
                     jwtResult,
                     response.jwtToken,
+                    undefined,
+                    response.expectedInstance,
                 );
                 if (!room) {
                     throw new ClientError(
@@ -615,18 +623,10 @@ io.on("connection", (socket) => {
                 capturePostHogEvent("room_authenticated");
                 sendRoomInfo(roomId);
             } catch (error) {
-                // A previous owner's boot is no longer eligible to vote. Do not
-                // weaken fencing: a lower-priority eligible voter must promote
-                // the room, or the client must wait for a recoverable owner.
-                const staleVoter =
-                    error instanceof Error &&
-                    error.message === "Ineligible voter or lost process memory";
                 reportError(
                     error instanceof ClientError
                         ? error.message
-                        : staleVoter
-                          ? "このサーバーでは以前のルーム状態を安全に復元できません。引き継ぎ先を確認しています。"
-                          : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
+                        : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
                     error,
                 );
             }

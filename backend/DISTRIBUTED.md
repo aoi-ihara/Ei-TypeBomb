@@ -4,7 +4,7 @@
 
 ゲーム状態・プレイヤー・トポロジー・所有権・確認状態にPostgreSQL/Supabaseを使いません。DBへのアクセスは担当Primaryが**新しいルームインスタンス**を作成するときの設定・問題取得だけです。移行時はレプリカの確定checkpointを使います。ルームが不明で必要なサーバーに接続できない場合、DBから作り直さず停止します。フロントエンドの既存のルーム編集・認証・オンライン記憶機能は変更しません。
 
-Nodeはメモリだけを使い、Mac miniとRenderで同じプログラムを動かします。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
+Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteにboot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・認証済みレジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
 環境変数のトポロジー設定は**全サーバーおよびVercelで同一**の `ETB_CLUSTER_CONFIG` へ統合します。配列の順序が優先順位、`/ws` の付いたURLがCloudflareのNative WebSocketを意味します。`/ws` はこの設定上の識別子であり、サーバー間のWSSは引き続き自動的に `/cluster/ws` を使います。
 
@@ -54,10 +54,16 @@ node scripts/cluster-credentials.mjs /PRIVATE/NEW_DIRECTORY \
 | Primary + Worker + Render | 通常運用、下位へ非同期複製 |
 | Primaryのみ | Primary上でゲームを継続できる（ただし未複製の状態を失う可能性） |
 | Workerのみ | Workerが該当ルームのcheckpointを既に持つ場合、単独で引き継ぎ・継続 |
-| Renderのみ | Renderが同ルームの有効なcheckpointを既に持ち、Nodeプロセスが再起動せず残っている場合に継続 |
+| Renderのみ | Renderが同ルームの投票資格と有効なcheckpointを保持していれば継続。再起動後は同じ永続ディスクを利用すること |
 | どのサーバーにも対象ルームのcheckpointがない | 復元不可能。推測でDBからゲームを再構築しない |
 
-Node.jsは投票状態・ゲーム状態をメモリに保持します。スリープ/終了したRenderが再起動すると元の起動IDとメモリを失うため、**再起動したRenderが単独で古いゲームを復元できるわけではありません**。WorkerのDurable Objectsには永続化したcheckpointがあり、復元適性が異なります。
+NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを使うプロセスの同時起動はSQLiteの排他ロックで拒否され、SIGKILLでもOSがロックを解除します。証明書変更やDB破損は新しい投票状態に置換せず起動を拒否します。boot IDだけを設定・コピーして使い回さないでください。
+
+**Renderでは永続ディスクをマウントし、`CLUSTER_STATE_DIR=/var/data/ei-typebomb-cluster` などを設定してください。** Mac miniにも再起動後に維持されるディレクトリを指定します。既定のローカルディレクトリは、Renderの一時ファイルシステムを永続化しません。ディスクの追加・プラン変更・本番デプロイはこのコード変更では実施しません。同一identityを別々のディスクで同時起動する構成はサポートしません。
+
+この変更以前にメモリから失われた投票記録は復活しません。旧bootのミラーしか残っていない場合は安全に選出できず、`VOTER_STATE_LOST` として自動再試行を停止します。未登録の固定投票者は `VOTER_NOT_IN_COHORT`、既知の対戦のcheckpointが見つからない場合は `CHECKPOINT_UNAVAILABLE` です。サーバー／永続ディスクを復旧してから利用者がページを再読み込みして再接続できます。一時障害は最大60回再試行し、成功snapshotが得られなければ `RECOVERY_TIMEOUT` として停止します。
+
+クライアントは取得済みのinstance IDをルート照会と認証に渡し、状態消失を新規ルームとして再作成することを防ぎます。ただし初回アクセス／ページの完全再読込では、どのサーバーにもcheckpointがないルームを過去に遊ばれたルームと区別できません。永続ストレージを全台で消した場合の履歴検知には、別の永続インスタンス台帳が必要です。
 
 初期化時に署名済みrosterの先頭から連続した登録済みノードをルームの固定投票者として採用します。Primary1台でも新規ルームは開始できますが、その時にまだ登録されていない後続サーバーはそのルームの選出投票者になりません。非投票ミラーを自動的に選出投票者へ変更する機能はありません。**完全なフェイルオーバーを希望する場合は、必要な下位サーバーがゲーム開始前に登録されていることを確認してください。**
 
@@ -112,3 +118,19 @@ PostgreSQL、DB資格情報、外部サービスへの接続はテストに不�
 メモリ/メッセージ上限はcheckpoint約512KiB、frame 2MiB（選出時の新旧checkpointを含む）、registry/roster 1,000件、接続当たりpending RPC 128件です。100msは集約間隔で、ネットワーク到達の保証ではありません。大規模構成では暗号検証とACKの遅延を実測してください。
 
 標準WebSocketの接続はClusterDOを稼働状態に保ち、duration課金が発生します（[Cloudflareの説明](https://developers.cloudflare.com/durable-objects/examples/websocket-server/)）。現実装はhibernationで接続/未処理ACKを誤って復元しない方を優先しています。DOストレージは投票promise・確定状態のACK前保存に必要であり、高頻度入力では書き込みも増えます。無料枠内の常時運用は保証しません。本番デプロイと実クラウド間の停止演習は別途必要です。
+
+## 2026-10-20 障害の再現・修正検証
+
+実プロセスの検証は `npm run test:integration --prefix backend/cloudflare` で実行します。認証にはテスト用ES256鍵と実際の検証コードを使用し、ゲーム通信は実Socket.IO／workerd WebSocketです。Supabaseの設定取得だけはローカルHTTP fixtureです。本番サーバー・本番データを停止／更新しません。
+
+- Primary停止→Worker単独で対戦と入力継続。
+- Primaryとworkerd停止→Render単独で同じgameId・instance・プレイヤーを復元。
+- RenderをSIGKILL→同じSQLiteで再起動し、旧owner停止後に昇格。所有者になったRenderの再SIGKILLからも復元。
+- 全対戦プレイヤーと観戦者の実接続を切断し、Nodeの8秒ロビー猶予を超える9秒後に同じ対戦へ復帰（対戦復帰猶予は20秒）。全員切断時は期限を停止し、全員復帰時に停止時間を加算。
+- Primary再起動時にrouteはRenderを返し、旧ownerへのゲーム認証は拒否。Renderでの退出を他の接続にも配信。
+- Renderだけで新規JWT／ルーム設定から作成し、2プレイヤーが参加して対戦開始・カウントダウン完了。
+- RenderのSQLiteを削除→再起動→稼働中ownerから署名付きミラーを受信→ownerとWorkerを停止。`Ineligible voter or lost process memory` を実際に記録し、HTTP 409／`VOTER_STATE_LOST` を1回だけ通知して停止。DBから元のゲームを捏造しない。
+
+修正前に追加したテストでは、Render再起動後の `gameId` が `undefined`（元のgameId不一致）となり失敗しました。全員切断の単体再現では、9秒後の `isStart` が `false` となり失敗しました。boot検証を削除せず、保存と猶予処理を修正しています。また、古い確定tombstoneが新しい署名付きミラーより優先される `read/status` の失敗を再現し、epoch・revisionの新しい方を返すよう修正しました。ミラーを保存しても投票資格を付与しません。
+
+**未解決の方式上の制約：** 上記はクラッシュと再起動の検証です。ネットワーク分断中の厳密な単一owner保証は、この文書の「意図的な整合性上の制限」のとおりありません。可用性を保ったままそれを保証するには、全サーバーが確認する外部の排他的リース／fencing authorityなどへの方式変更が必要です。今回その保証を追加したとは扱いません。

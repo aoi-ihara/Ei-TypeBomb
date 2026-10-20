@@ -90,9 +90,13 @@ export function parseClientEvent(
                     !data.sessionToken.length || data.sessionToken.length > 4096)) {
                 throw new ClientError("セッション情報が不正です。");
             }
+            if ("expectedInstance" in data &&
+                (typeof data.expectedInstance !== "string" || data.expectedInstance.length > 100))
+                throw new ClientError("ルーム識別子が不正です。");
             return {
                 event,
                 data: {
+                    ...("expectedInstance" in data ? { expectedInstance: data.expectedInstance as string } : {}),
                     jwtToken: data.jwtToken,
                     displayName: validateDisplayName(
                         "displayName" in data ? data.displayName : undefined,
