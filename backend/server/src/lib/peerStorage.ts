@@ -28,8 +28,12 @@ export class NodePeerStorage implements PeerStorage {
             const previousId = previous?.id ?? (previous?.certificate ? readRecord(previous.certificate).sub : undefined);
             if (previousId && previousId !== nextId)
                 throw new Error("Stable cluster server ID changed: restore the original ID to preserve votes");
-            if (previous?.declaration)
-                Identity.assertDurableTopology(previous.declaration, declaration, previous.boot);
+            if (previous?.declaration) {
+                if (previous.declaration.startsWith("{") && declaration.startsWith("{"))
+                    Identity.assertDurableTopology(previous.declaration, declaration, previous.boot);
+                else if (previous.declaration !== declaration)
+                    throw new Error("Cluster topology changed: drain rooms and use a new state directory");
+            }
             if (previous?.certificate && !previous.declaration)
                 Identity.assertLegacyTopology(previous.certificate, declaration, previous.boot);
             this.boot = previous?.boot ?? randomUUID();
@@ -79,8 +83,13 @@ export function nodeClusterEnv<T extends ClusterEnv & { CLUSTER_STATE_DIR?: stri
         const id = previous.id ?? (previous.certificate ? readRecord(previous.certificate).sub : undefined);
         if (typeof id !== "string") throw new Error("Invalid persisted cluster ID");
         const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
-        if (servers.some(server => server.id === id))
+        if (servers.some(server => server.id === id)) {
+            // Version 1 deployments still use URL identities; retain their
+            // previous environment behavior for backward compatibility.
+            if (JSON.parse(env.ETB_CLUSTER_CONFIG).version === 1)
+                return { ...env, SERVER_PUBLIC_URL: id };
             return { ...env, SERVER_NODE_ID: id };
+        }
         // An old v1 deployment that still has its URL in the roster.
         // Do not guess a different identity from its position in the list.
         throw new Error("Persisted server ID is not in ETB_CLUSTER_CONFIG; retain its old ID in a version 2 entry");
