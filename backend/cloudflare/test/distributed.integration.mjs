@@ -36,9 +36,9 @@ const freePort = async () => {
     return port;
 };
 
-test(
-    "real Socket.IO → workerd WebSocket → Socket.IO preserves a running match",
-    { timeout: 90000 },
+for (const scenario of ["worker", "render", "render-restart", "render-state-loss"]) test(
+    `real Socket.IO → workerd → Socket.IO failover: ${scenario}`,
+    { timeout: 120000 },
     async (t) => {
         const temp = await mkdtemp(resolve(tmpdir(), "etb-workerd-"));
         t.after(() => rm(temp, { recursive: true, force: true }));
@@ -118,6 +118,7 @@ test(
             ),
         );
         const processes = [];
+        const processLogs = [];
         const startNode = async (i) => {
             const child = spawn(
                 process.execPath,
@@ -128,6 +129,7 @@ test(
                         ...process.env,
                         ...common,
                         CLUSTER_SERVER_TOKEN: tokens[i],
+                        CLUSTER_STATE_DIR: resolve(temp, `node-${i}`),
                         PORT: String(ports[i]),
                         NEXT_PUBLIC_POSTHOG_KEY: "",
                         DOTENV_CONFIG_PATH: resolve(temp, "no-env"),
@@ -137,6 +139,7 @@ test(
             );
             processes.push(child);
             let output = "";
+            processLogs.push(() => output);
             child.stdout.on("data", (chunk) => (output += chunk));
             child.stderr.on("data", (chunk) => (output += chunk));
             try {
@@ -187,7 +190,7 @@ test(
         t.after(() => mf.dispose());
         await mf.ready;
         const primary = await startNode(0);
-        const render = await startNode(2);
+        let render = await startNode(2);
         const clients = [];
         await wait(async () => {
             try {
@@ -474,6 +477,145 @@ test(
         // Give the Worker a chance to receive the confirmed state. Losing
         // the only owner before any checkpoint transfer is unrecoverable.
         await delay(200);
+        if (scenario !== "worker") {
+            let recoveryFailure;
+            let recoveryFailures = 0;
+            routed.on("cluster:recovery-failed", (problem) => {
+                recoveryFailure = problem;
+                recoveryFailures++;
+            });
+            if (scenario === "render-state-loss") {
+                render.kill("SIGKILL");
+                await new Promise((resolve) => render.once("exit", resolve));
+                await rm(resolve(temp, "node-2"), { recursive: true, force: true });
+                render = await startNode(2);
+                // Keep the owner alive long enough to send a real signed
+                // mirror to the new incarnation. It must never become a vote.
+                await delay(6_000);
+            }
+            await mf.dispose();
+            primary.kill("SIGKILL");
+            await new Promise((resolve) => primary.once("exit", resolve));
+            if (scenario === "render-state-loss") {
+                await wait(() => recoveryFailure, "lost voter memory is classified", 30000);
+                assert.equal(recoveryFailure.code, "VOTER_STATE_LOST");
+                assert.match(processLogs.map((read) => read()).join("\n"),
+                    /Cluster \/cluster\/report failed: Ineligible voter or lost process memory/);
+                assert.equal(recoveryFailure.retryable, false);
+                await delay(2_500);
+                assert.equal(recoveryFailures, 1, "unrecoverable reports do not loop");
+                assert.equal(routed.connected, false);
+                assert.equal(databaseReads, readsBeforeFailover, "never recreate missing game from settings");
+                return;
+            }
+            if (scenario === "render-restart") {
+                render.kill("SIGKILL");
+                await new Promise((resolve) => render.once("exit", resolve));
+                await startNode(2);
+            }
+            await wait(() => observed?.ownerServerId === urls[2],
+                "routed client reaches sole surviving Render", 30000);
+            let r1 = await nodeClient(2, 0), r2 = await nodeClient(2, 1);
+            await wait(() => !r1.room.migrating, "Render resumes both players");
+            assert.equal(r1.room.gameId, expected.gameId);
+            assert.equal(r1.room.roomInstanceId, expected.roomInstanceId);
+            assert.deepEqual(r1.room.users, expected.users);
+            if (scenario === "render-restart") {
+                const epoch = observed.epoch;
+                const activeRender = processes.at(-1);
+                activeRender.kill("SIGKILL");
+                await new Promise((resolve) => activeRender.once("exit", resolve));
+                await startNode(2);
+                await wait(() => observed?.epoch > epoch, "incumbent Render reopens after SIGKILL", 25000);
+                r1 = await nodeClient(2, 0);
+                r2 = await nodeClient(2, 1);
+                await wait(() => !r1.room.migrating, "restarted Render resumes");
+                assert.equal(r1.room.gameId, expected.gameId);
+                assert.equal(r1.room.roomInstanceId, expected.roomInstanceId);
+            }
+            const renderTyping = r1.room.bombs[0].holder === 0 ? r1 : r2;
+            renderTyping.send("currentInput", "render-solo");
+            await wait(() => r2.room.typingFocusInput === "render-solo", "sole Render accepts gameplay input");
+            // All actual game transports disappear together. The observer is
+            // also closed; a spectator must not be required to retain a match.
+            routed.disconnect();
+            r1.socket.disconnect();
+            r2.socket.disconnect();
+            await delay(9_000);
+            const returned = await nodeClient(2, 0);
+            const returned2 = await nodeClient(2, 1);
+            assert.equal(returned.room.isStart, true);
+            assert.equal(returned.room.gameId, expected.gameId);
+            await startNode(0);
+            const route = await fetch(`${urls[0]}/cluster/route`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jwtToken: roomToken }),
+            }).then((response) => response.json());
+            assert.equal(route.ownership.owner, urls[2], "no automatic failback");
+            const staleOwnerSocket = io(urls[0], { transports: ["websocket"], reconnection: false });
+            clients.push(staleOwnerSocket);
+            let staleOwnerError;
+            let staleOwnerSnapshot;
+            staleOwnerSocket.on("auth:request", () => staleOwnerSocket.emit("auth:response", {
+                jwtToken: roomToken, sessionToken: observerSession, displayName: "Old owner",
+            }));
+            staleOwnerSocket.on("error", (error) => staleOwnerError = error);
+            staleOwnerSocket.on("room:broadcast", (room) => staleOwnerSnapshot = room);
+            await wait(() => staleOwnerError, "old owner rejects gameplay authentication");
+            assert.equal(staleOwnerSnapshot, undefined);
+            staleOwnerSocket.disconnect();
+            returned.socket.emit("room:leave");
+            await wait(() => returned2.room.users.length === 0 && !returned2.room.isStart,
+                "explicit Render leave is broadcast to the other player");
+            // Stop the recovered primary again, leaving Render to create a
+            // completely new room from the normal JWT/settings path.
+            const recoveredPrimary = processes.at(-1);
+            recoveredPrimary.kill("SIGKILL");
+            await new Promise((resolve) => recoveredPrimary.once("exit", resolve));
+            const freshId = randomUUID();
+            const signRoom = (claims, audience) => new SignJWT(claims)
+                .setProtectedHeader({ alg: "ES256", kid }).setIssuer("ei-typebomb")
+                .setAudience(audience).setIssuedAt().setExpirationTime("1h").sign(privateKey);
+            const freshToken = await signRoom({ id: freshId, role: "authenticated" }, "authenticated");
+            const freshSession = await signRoom({ roomId: freshId, sessionId: randomUUID(), role: "client_session" }, "ei-typebomb:client-session");
+            const readsBeforeMissing = databaseReads;
+            const missing = await fetch(`${urls[2]}/cluster/route`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jwtToken: freshToken, expectedInstance: "previous-instance" }),
+            });
+            assert.equal(missing.status, 409);
+            assert.equal((await missing.json()).code, "CHECKPOINT_UNAVAILABLE");
+            assert.equal(databaseReads, readsBeforeMissing);
+            let freshRoom;
+            const fresh = new RoutedSocket(urls, (target) => nativeTransport(target, freshId),
+                async () => freshToken, () => true, async () => freshSession);
+            t.after(() => fresh.disconnect());
+            fresh.on("auth:request", () => fresh.emit("auth:response", {
+                jwtToken: freshToken, sessionToken: freshSession, displayName: "Render only",
+            }));
+            fresh.on("room:broadcast", (room) => freshRoom = room);
+            await wait(() => freshRoom, "fresh room on Render alone", 25000);
+            fresh.emit("room:join");
+            await wait(() => freshRoom.users.length === 1, "join new room on Render alone");
+            assert.equal(freshRoom.ownerServerId, urls[2]);
+            const secondSession = await signRoom({ roomId: freshId, sessionId: randomUUID(), role: "client_session" }, "ei-typebomb:client-session");
+            let secondRoom;
+            const second = new RoutedSocket(urls, (target) => nativeTransport(target, freshId),
+                async () => freshToken, () => true, async () => secondSession);
+            t.after(() => second.disconnect());
+            second.on("auth:request", () => second.emit("auth:response", {
+                jwtToken: freshToken, sessionToken: secondSession, displayName: "Second Render player",
+            }));
+            second.on("room:broadcast", (room) => secondRoom = room);
+            await wait(() => secondRoom, "second fresh Render authentication");
+            second.emit("room:join");
+            await wait(() => freshRoom.users.length === 2, "two fresh Render participants");
+            fresh.emit("game:start");
+            await wait(() => secondRoom.isStart && secondRoom.bombs?.[0]?.wordIndex !== undefined,
+                "new Render-only match is playable");
+            assert.deepEqual(unexpected, []);
+            return;
+        }
         render.kill("SIGKILL");
         await new Promise((resolve) => render.once("exit", resolve));
         primary.kill("SIGKILL");

@@ -1,3 +1,4 @@
+import { recoveryFailure } from "../../shared/distributed/recovery";
 import { DurableObject } from "cloudflare:workers";
 import {
     applyGameEvent,
@@ -116,7 +117,7 @@ export class RoomDO extends DurableObject<Env> {
                     error instanceof ClientError
                         ? error.message
                         : "認証またはルーム処理に失敗しました。再度お試しください。";
-                this.send(ws, "error", { message: text });
+                this.send(ws, "error", { message: text, ...recoveryFailure(error) });
             }
         });
     }
@@ -300,11 +301,13 @@ export class RoomDO extends DurableObject<Env> {
     private async ensureDistributed(
         roomId: string,
         jwtToken?: string,
+        expectedInstance?: string,
     ): Promise<void> {
         if (this.distributed) return;
         if (!this.control) throw new Error("Cluster disabled");
         const saved = await this.control.call("read", {
             roomId: roomId,
+            expectedInstance,
         });
         // Fresh rooms may start on the first reachable certified tier.
         if (
@@ -388,6 +391,7 @@ export class RoomDO extends DurableObject<Env> {
                 await this.ensureDistributed(
                     authenticatedRoomId,
                     response.jwtToken,
+                    response.expectedInstance,
                 );
             }
             if (!this.game) {

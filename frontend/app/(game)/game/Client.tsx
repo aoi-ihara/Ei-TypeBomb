@@ -459,10 +459,11 @@ export default function Clinet({
                 }
             });
 
-            socket.on("error", (error: { message?: unknown } | null) => {
+            socket.on("error", (error: { message?: unknown; retryable?: boolean } | null) => {
                 if (!selected || socketRef.current !== socket) return;
                 if (typeof error?.message !== "string" || !error.message.trim())
                     return;
+                if (error.retryable === false) cancelDisconnectNotice();
                 setServerError(error.message);
             });
 

@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Local Cloudflare / integration-test state
 .wrangler/
+
+# Node cluster voting state (requires a persistent disk in production)
+.cluster-state/

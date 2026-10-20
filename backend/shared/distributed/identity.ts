@@ -93,7 +93,7 @@ export class Identity {
     ) {}
     static async create(
         bundle: string,
-        boot = crypto.randomUUID(),
+        boot: string = crypto.randomUUID(),
     ): Promise<Identity> {
         const credential = JSON.parse(bundle) as Credential;
         const info = await Identity.inspect(

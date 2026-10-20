@@ -10,6 +10,7 @@ export type VotedCheckpoint = Checkpoint & {
 };
 export type VoteRecord = {
     committed?: VotedCheckpoint;
+    mirror?: VotedCheckpoint;
     pending?: Proposal;
     promised: number;
     candidate: string;
@@ -79,6 +80,7 @@ export class PeerControl implements Control {
                     contact: 0,
                 };
                 this.records.set(room, value);
+                if (value.mirror) this.mirrors.set(room, value.mirror);
                 return value;
             })().finally(() => this.loading.delete(room));
             this.loading.set(room, loading);
@@ -336,11 +338,23 @@ export class PeerControl implements Control {
             servers: this.servers(),
         }) as ControlResult;
     }
+    private async latestLocal(roomId: string): Promise<VotedCheckpoint | undefined> {
+        const committed = (await this.record(roomId)).committed;
+        const mirror = this.mirrors.get(roomId);
+        if (!committed) return mirror;
+        if (!mirror) return committed;
+        return mirror.ownership.epoch > committed.ownership.epoch ||
+            (mirror.ownership.epoch === committed.ownership.epoch &&
+                mirror.ownership.revision > committed.ownership.revision)
+            ? mirror : committed;
+    }
     async read(roomId: string): Promise<VotedCheckpoint | undefined> {
         const candidates: VotedCheckpoint[] = [];
-        const local =
-            (await this.record(roomId)).committed ?? this.mirrors.get(roomId);
-        if (local) candidates.push(local);
+        const local = await this.latestLocal(roomId);
+        if (local) {
+            await this.validate(local);
+            candidates.push(local);
+        }
         await Promise.all(
             [
                 ...new Set([
@@ -377,7 +391,12 @@ export class PeerControl implements Control {
     ): Promise<ControlResult> {
         const roomId = args.roomId as string;
         if (op === "register") return this.register();
-        if (op === "read") return this.result(await this.read(roomId));
+        if (op === "read") {
+            const cp = await this.read(roomId);
+            if (!cp && args.expectedInstance)
+                throw new Error("Expected checkpoint is unavailable");
+            return this.result(cp);
+        }
         if (op === "report") return this.report(roomId, args);
         if (op === "snapshot") {
             const cp = (await this.record(roomId)).committed;
@@ -392,6 +411,8 @@ export class PeerControl implements Control {
                     throw new Error("Connect to the current owner");
                 return this.result(await this.promote(old, true));
             }
+            if (!old && args.expectedInstance)
+                throw new Error("Expected checkpoint is unavailable");
             // Registration normally runs in the background. At startup the
             // first room can race ahead of it and permanently exclude an
             // already-online standby from this room's fixed voting cohort.
@@ -654,8 +675,8 @@ export class PeerControl implements Control {
         selfRecovery = false,
     ): Promise<VotedCheckpoint> {
         const self = cp.voters.find((v) => v.id === this.config.id);
+        if (!self) throw new Error("Server is not in the room voting cohort");
         if (
-            !self ||
             self.boot !== this.identity.member.boot ||
             (!selfRecovery &&
                 self.depth <=
@@ -740,12 +761,7 @@ export class PeerControl implements Control {
             op !== "install"
         )
             throw new Error("Missing room ID");
-        if (op === "status")
-            return (
-                (await this.record(args.roomId)).committed ??
-                this.mirrors.get(args.roomId) ??
-                null
-            );
+        if (op === "status") return (await this.latestLocal(args.roomId)) ?? null;
         if (op === "ballot") return (await this.record(args.roomId)).promised;
         if (op === "prepared") return (await this.record(args.roomId)).pending;
         if (op === "probe") {
@@ -768,23 +784,17 @@ export class PeerControl implements Control {
         if (op === "mirror") {
             const cp = args.checkpoint as VotedCheckpoint;
             await this.validate(cp);
-            const voted = (await this.record(cp.ownership.roomId)).committed;
-            if (
-                voted &&
-                (voted.ownership.epoch > cp.ownership.epoch ||
-                    (voted.ownership.epoch === cp.ownership.epoch &&
-                        voted.ownership.revision >= cp.ownership.revision))
-            )
-                return false;
-            const old = this.mirrors.get(cp.ownership.roomId);
-            if (
-                !old ||
-                cp.ownership.epoch > old.ownership.epoch ||
-                (cp.ownership.epoch === old.ownership.epoch &&
-                    cp.ownership.revision > old.ownership.revision)
-            )
+            return this.serial(cp.ownership.roomId, async () => {
+                const record = await this.record(cp.ownership.roomId);
+                const latest = await this.latestLocal(cp.ownership.roomId);
+                if (latest && (latest.ownership.epoch > cp.ownership.epoch ||
+                    (latest.ownership.epoch === cp.ownership.epoch &&
+                        latest.ownership.revision >= cp.ownership.revision)))
+                    return false;
+                await this.store(cp.ownership.roomId, { ...record, mirror: cp });
                 this.mirrors.set(cp.ownership.roomId, cp);
-            return true;
+                return true;
+            });
         }
         const roomId =
             op === "stage"
@@ -818,6 +828,7 @@ export class PeerControl implements Control {
                     return previous;
                 await this.store(roomId, {
                     committed: cp,
+                    mirror: record.mirror,
                     promised: Math.max(record.promised, cp.ownership.epoch),
                     candidate: cp.ownership.owner,
                     contact: record.contact || cp.ownership.savedAt,
@@ -1055,6 +1066,7 @@ export class PeerControl implements Control {
             if (decided.hash !== cp.hash) throw new Error("Wrong ACK");
             await this.store(roomId, {
                 committed: decided,
+                mirror: record.mirror,
                 promised: cp.ownership.epoch,
                 candidate: owner.id,
                 contact: Date.now(),

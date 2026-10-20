@@ -530,3 +530,27 @@ test("last disconnected lobby player retires its room on the next tick", async (
     await f.runtime.tick();
     assert.equal(f.runtime.deleted, true);
 });
+
+test("all players disconnect: freeze deadlines and retain seats through recovery grace", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    const gameId = f.runtime.state.room.gameId;
+    const wordAt = f.runtime.state.wordAt;
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    await f.runtime.disconnect("b", "lobby", 8_000);
+    f.advance(9_000);
+    await f.runtime.tick();
+    assert.equal(f.runtime.state.room.isStart, true);
+    assert.equal(f.runtime.state.room.gameId, gameId);
+    assert.deepEqual(f.runtime.state.room.users.map((p) => p.id), ["a", "b"]);
+    assert.ok(f.runtime.checkpoint.value!.resumeUntil);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    assert.equal(f.runtime.checkpoint.value!.resumeUntil, undefined);
+    if (wordAt !== undefined) assert.equal(f.runtime.state.wordAt, wordAt + 9_000);
+});
