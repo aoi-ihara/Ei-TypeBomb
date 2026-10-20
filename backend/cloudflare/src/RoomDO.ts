@@ -472,11 +472,19 @@ export class RoomDO extends DurableObject<Env> {
             await this.scheduleNextAlarm();
             return;
         }
+        if (event === "room:leave" && this.distributed) {
+            // Treat explicit leave separately from transient WebSocket loss:
+            // never queue it behind a gameplay command or reconnection grace.
+            // session.id is the verified authenticated identity, not client data.
+            await this.distributed.leave(session.id);
+            this.game = this.distributed.state;
+            this.sendRoomInfo();
+            await this.scheduleNextAlarm();
+            return;
+        }
         if (
             this.distributed &&
-            ["room:join", "room:leave", "game:start", "word:success"].includes(
-                event,
-            )
+            ["room:join", "game:start", "word:success"].includes(event)
         )
             return;
         if (event === "item:recommend") {

@@ -156,10 +156,13 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
                     if (value.event.type === "room:join") {
                         users = [{ id: "player" }];
                         connectedPlayers++;
-                    } else if (value.event.type === "room:leave") {
-                        users = [];
                     }
                     dispatch("command:ack", { id: value.id, status: "accepted" });
+                    publish();
+                }
+                if (event === "room:leave") {
+                    transport.commands.push("room:leave");
+                    users = [];
                     publish();
                 }
                 if (event === "cluster:ping") dispatch("cluster:pong");
@@ -479,6 +482,154 @@ test("recovery records a start and waits for auth when the playable snapshot arr
         assert.ok(completed!.migrationWaitMs >= 0 &&
             completed!.migrationWaitMs < completed!.authenticationMs,
             "Migration wait must end at the ready snapshot before authentication");
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});
+
+
+test("an explicit leave bypasses a lost game-command ACK and does not rejoin on failover", async () => {
+    const originalFetch = globalThis.fetch;
+    const url = "https://owner.test";
+    const servers = [{ id: url, depth: 0, transport: "socket.io" }];
+    const ownership = {
+        owner: url, epoch: 1, revision: 4, instance: "instance",
+        lifecycle: "ACTIVE", roomId: "room",
+    };
+    globalThis.fetch = (async () => Response.json({ ownership, servers })) as typeof fetch;
+    const sessions: Array<{
+        sends: string[];
+        close(): void;
+        emitSnapshot(): void;
+    }> = [];
+    const open = () => {
+        const listeners = new Map<string, Array<(value?: any) => void>>();
+        const dispatch = (event: string, value?: any) =>
+            listeners.get(event)?.forEach((fn) => fn(value));
+        const snapshot = () => dispatch("room:broadcast", {
+            id: "room", roomInstanceId: "instance", ownerServerId: url,
+            epoch: 1, revision: 4, isStart: false,
+            users: [{ id: "player" }], bombs: [],
+        });
+        const transport = {
+            connected: true,
+            sends: [] as string[],
+            on(event: string, fn: (value?: any) => void) {
+                listeners.set(event, [...(listeners.get(event) ?? []), fn]);
+                return transport;
+            },
+            emit(event: string, value?: any) {
+                if (event === "auth:response") {
+                    dispatch("auth:session", { id: "player" });
+                    snapshot();
+                } else if (event === "game:command") {
+                    // Deliberately lose the ACK: before the fix a pending
+                    // command caused room:leave to be silently ignored.
+                    transport.sends.push(value.event.type);
+                } else if (event === "room:leave") {
+                    transport.sends.push("room:leave");
+                } else if (event === "cluster:ping") dispatch("cluster:pong");
+            },
+            disconnect() { transport.connected = false; },
+            close() { transport.connected = false; dispatch("disconnect"); },
+            emitSnapshot: snapshot,
+        };
+        sessions.push(transport);
+        setTimeout(() => dispatch("auth:request"), 0);
+        return transport;
+    };
+    const socket = new RoutedSocket([url], open, async () => "jwt", () => true);
+    socket.on("auth:request", () => socket.emit("auth:response", { jwtToken: "jwt" }));
+    const until = async (predicate: () => boolean) => {
+        const deadline = Date.now() + 4_000;
+        while (!predicate()) {
+            if (Date.now() > deadline) throw new Error("Timed out waiting for reconnect");
+            await new Promise((resolve) => setTimeout(resolve, 15));
+        }
+    };
+    try {
+        await until(() => sessions.length === 1 && socket.connected);
+        sessions[0].emitSnapshot();
+        socket.emit("game:start");
+        assert.ok(sessions[0].sends.includes("game:start"));
+        socket.emit("room:leave");
+        assert.ok(sessions[0].sends.includes("room:leave"),
+            "The leave must not be blocked by the unacknowledged game:start");
+        // Even a stale pre-leave snapshot must not opt us back in.
+        sessions[0].emitSnapshot();
+        sessions[0].close();
+        await until(() => sessions.length >= 2);
+        // The newly authenticated owner receives the queued exit exactly once.
+        await until(() => sessions[1].sends.includes("room:leave"));
+        assert.ok(!sessions[1].sends.includes("room:join"));
+        assert.ok(!sessions[1].sends.includes("game:start"),
+            "Canceled commands must not replay after leave");
+        socket.emit("room:join");
+        assert.ok(sessions[1].sends.includes("room:join"),
+            "An intentional rejoin must still work after leaving");
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test("leaving while disconnected defers the exit until the next authenticated socket", async () => {
+    const originalFetch = globalThis.fetch;
+    const url = "https://owner.test";
+    const ownership = {
+        owner: url, epoch: 1, revision: 3, instance: "instance",
+        lifecycle: "ACTIVE", roomId: "room",
+    };
+    globalThis.fetch = (async () => Response.json({
+        ownership, servers: [{ id: url, depth: 0, transport: "socket.io" }],
+    })) as typeof fetch;
+    const sessions: Array<{ leaveCount: number; close(): void }> = [];
+    const open = () => {
+        const handlers = new Map<string, Array<(data?: any) => void>>();
+        const dispatch = (event: string, value?: any) =>
+            handlers.get(event)?.forEach((cb) => cb(value));
+        const transport = {
+            connected: true, leaveCount: 0,
+            on(event: string, handler: (data?: any) => void) {
+                handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+                return transport;
+            },
+            emit(event: string) {
+                if (event === "auth:response") {
+                    dispatch("auth:session", { id: "player" });
+                    dispatch("room:broadcast", {
+                        id: "room", roomInstanceId: "instance",
+                        ownerServerId: url, epoch: 1, revision: 3,
+                        users: [{ id: "player" }], bombs: [], isStart: false,
+                    });
+                }
+                if (event === "room:leave") transport.leaveCount++;
+                if (event === "cluster:ping") dispatch("cluster:pong");
+            },
+            disconnect() { transport.connected = false; },
+            close() { transport.connected = false; dispatch("disconnect"); },
+        };
+        sessions.push(transport);
+        setTimeout(() => dispatch("auth:request"), 0);
+        return transport;
+    };
+    const socket = new RoutedSocket([url], open, async () => "jwt", () => true);
+    socket.on("auth:request", () => socket.emit("auth:response", { jwtToken: "jwt" }));
+    const until = async (predicate: () => boolean) => {
+        const deadline = Date.now() + 4_000;
+        while (!predicate()) {
+            if (Date.now() > deadline) throw new Error("Timed out");
+            await new Promise((resolve) => setTimeout(resolve, 15));
+        }
+    };
+    try {
+        await until(() => sessions.length === 1 && socket.connected);
+        sessions[0].close();
+        socket.emit("room:leave");
+        assert.equal(sessions[0].leaveCount, 0);
+        await until(() => sessions.length >= 2 && sessions[1].leaveCount === 1);
+        assert.equal(sessions[1].leaveCount, 1);
     } finally {
         socket.disconnect();
         globalThis.fetch = originalFetch;
