@@ -729,9 +729,11 @@ io.on("connection", (socket) => {
         liveSessions.delete(key);
         const distributed = getGame();
         if (distributed instanceof DistributedRoom) {
-            // A transport interruption is not an intentional room exit. Keep
-            // the player's seat through reconnection, including live matches.
-            void distributed.disconnect(user.id, false, NODE_DISCONNECT_GRACE_MS).catch((error) =>
+            // A confirmed Socket.IO disconnect removes idle/lobby users
+            // immediately. During an active match preserve the seat for
+            // recovery: killing a game because of transient failover would
+            // otherwise affect every remaining player.
+            void distributed.disconnect(user.id, "lobby", NODE_DISCONNECT_GRACE_MS).catch((error) =>
                 logError("Distributed socket disconnect cleanup failed", error, {
                     roomId,
                     userId: user.id,

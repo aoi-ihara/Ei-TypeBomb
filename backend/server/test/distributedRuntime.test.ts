@@ -481,3 +481,52 @@ test("briefly disconnected lobby players leave after the Node grace window", asy
     await f.runtime.tick();
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["b"]);
 });
+
+
+test("Socket.IO lobby disconnect removes a seat and its session immediately", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    const published = f.published.length;
+
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    assert.deepEqual(f.runtime.state.room.users.map((user) => user.id), ["b"]);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
+    assert.equal(f.runtime.checkpoint.value?.sessions.b?.connected, true);
+    assert.ok(f.published.length > published, "Other players see the departure promptly");
+});
+
+test("an active match is not canceled by the lobby-only immediate disconnect", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.connect("b");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.command(f.command("b", "room:join"), "b");
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    const gameId = f.runtime.state.room.gameId;
+
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    assert.equal(f.runtime.state.room.isStart, true);
+    assert.equal(f.runtime.state.room.gameId, gameId);
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, false);
+    assert.ok(f.runtime.state.room.users.some((user) => user.id === "a"));
+    await f.runtime.connect("a");
+    assert.equal(f.runtime.checkpoint.value?.sessions.a?.connected, true);
+    assert.equal(f.runtime.state.room.gameId, gameId);
+});
+
+test("last disconnected lobby player retires its room on the next tick", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    assert.deepEqual(f.runtime.state.room.users, []);
+    assert.equal(Object.keys(f.runtime.checkpoint.value?.sessions ?? {}).length, 0);
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, true);
+});

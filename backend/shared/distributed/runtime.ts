@@ -360,15 +360,24 @@ export class DistributedRoom {
             await this.save(value, result.effects, "event");
         });
     }
-    disconnect(id: string, immediate = false, graceMs = GRACE_MS): Promise<void> {
+    disconnect(
+        id: string,
+        immediate: boolean | "lobby" = false,
+        graceMs = GRACE_MS,
+    ): Promise<void> {
         return this.serial(async () => {
             if (this.halted || this.deleted) return;
             const value = structuredClone(this.checkpoint.value!);
             if (!value.sessions[id]) return;
-            if (immediate) {
-                // Node Socket.IO disconnects should remove the player as soon
-                // as the owning socket is gone. Preserve the existing grace
-                // behavior for hibernating Worker sockets.
+            // Evaluate the match state inside the serialized mutation. A
+            // concurrently committed game:start must never be canceled by
+            // a stale pre-start disconnect decision.
+            if (immediate === true ||
+                (immediate === "lobby" && !value.game.room.isStart)) {
+                // A disconnected lobby participant has no active match to
+                // preserve. Remove their session and seat immediately; do
+                // not leave ghost users visible through the grace window.
+                // Explicit immediate cleanup keeps its existing semantics.
                 delete value.sessions[id];
                 const result = this.reduce(value, {
                     type: "room:leave",
