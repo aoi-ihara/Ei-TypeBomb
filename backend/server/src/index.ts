@@ -87,6 +87,10 @@ const pendingRoomLoads = new Map<string, Promise<Room | null>>();
 const app = express();
 const httpServer = createServer(app);
 app.get("/health", (_req, res) => {
+    // Public, credential-free browser RTT probe. Cache and CORS are explicit
+    // so a previous response cannot masquerade as current availability.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-store");
     res.json({ ok: true });
 });
 app.use(["/cluster/route", "/cluster/report"], express.json({ limit: "8kb" }));

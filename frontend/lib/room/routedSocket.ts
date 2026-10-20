@@ -26,6 +26,9 @@ type Transport = {
 };
 type Meta = { roomInstanceId: string; epoch: number; revision: number };
 
+export const recoveryRetryDelayMs = (failures: number): number =>
+    failures === 0 ? 0 : Math.min(2_000, 250 * 2 ** Math.min(3, failures));
+
 // One diagnostic record per interrupted session. Each duration uses the same
 // browser monotonic clock; backend phase durations come from Server-Timing.
 type RecoveryDiagnostics = {
@@ -637,7 +640,10 @@ export class RoutedSocket {
         // comes online. Avoid hammering every server with repeated auth errors.
         // A recovered server must not remain invisible behind an 8s backoff.
         // Bound retries without spinning when every endpoint is unavailable.
-        const delay = Math.min(2_000, 250 * 2 ** Math.min(3, this.recoveryFailures++));
+        // The first confirmation begins immediately: an unconditional 250ms
+        // sleep adds latency after every detected failure. Repeated failures
+        // still use exponential backoff to avoid hammering offline hosts.
+        const delay = recoveryRetryDelayMs(this.recoveryFailures++);
         const waitingSince = performance.now();
         this.retry = setTimeout(() => {
             if (this.recoveryDiagnostics)
