@@ -66,12 +66,13 @@ function ServerStatus({
 }
 
 function HealthRow({
-    url, name, serverRole, refreshSignal, onStatus,
+    url, name, serverRole, refreshSignal, refreshTrigger, onStatus,
 }: {
     url: string;
     name: string;
     serverRole: ServerRole;
     refreshSignal: number;
+    refreshTrigger: HealthCheckTrigger;
     onStatus: (url: string, state: HealthRowState) => void;
 }) {
     const [health, setHealth] = useState<boolean | undefined>(undefined);
@@ -85,7 +86,7 @@ function HealthRow({
         onStatus(url, { health: undefined, refreshing: true });
         // Preserve the last answer during refresh, rather than showing an
         // error or hiding the entire page while the next probe is pending.
-        const trigger: HealthCheckTrigger = refreshSignal === 0 ? "initial" : "manual";
+        const trigger: HealthCheckTrigger = refreshTrigger;
         void probeServerHealth(url, controller.signal).then((result) => {
             if (!active) return;
             setHealth(result.healthy);
@@ -104,7 +105,7 @@ function HealthRow({
             active = false;
             controller.abort();
         };
-    }, [url, serverRole, refreshSignal, onStatus]);
+    }, [url, serverRole, refreshSignal, refreshTrigger, onStatus]);
 
     return <ServerStatus name={name} health={health} rttLatency={rttLatency} />;
 }
@@ -124,7 +125,7 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
             process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
         ].filter((url): url is string => Boolean(url)));
 
-    const [refreshSignal, setRefreshSignal] = useState(0);
+    const [refresh, setRefresh] = useState<{ signal: number; trigger: HealthCheckTrigger }>({ signal: 0, trigger: "initial" });
     const [states, setStates] = useState<Record<string, HealthRowState>>({});
     const onStatus = useCallback((url: string, next: HealthRowState) => {
         setStates((previous) => {
@@ -137,7 +138,7 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
 
     useEffect(() => {
         const interval = window.setInterval(
-            () => setRefreshSignal((previous) => previous + 1),
+            () => setRefresh((previous) => ({ signal: previous.signal + 1, trigger: "interval" })),
             HEALTH_REFRESH_INTERVAL_MS,
         );
         return () => window.clearInterval(interval);
@@ -161,7 +162,8 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
                         : `第${index + 1}サーバー`
                     }
                     serverRole={index === 0 ? "primary" : index === 1 ? "secondary" : "fallback"}
-                    refreshSignal={refreshSignal}
+                    refreshSignal={refresh.signal}
+                    refreshTrigger={refresh.trigger}
                     onStatus={onStatus}
                 />
             ))}
@@ -169,7 +171,7 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
                 HTTP /health の応答時間。接続可能性の目安で、ルームの所有権は別途確認されます。
             </p>
             <Button iconName="rotateCcw"
-                onClick={() => setRefreshSignal((current) => current + 1)}
+                onClick={() => setRefresh((previous) => ({ signal: previous.signal + 1, trigger: "manual" }))}
                 loading={refreshing} className="w-full">
                 更新
             </Button>
