@@ -4,6 +4,7 @@ export type TopologyEnv = {
     PRIMARY_SERVER_URL?: string;
     PARENT_SERVER_URL?: string;
     SERVER_PUBLIC_URL?: string;
+    SERVER_NODE_ID?: string;
     RENDER_EXTERNAL_URL?: string;
 };
 export type ServerTopology = {
@@ -28,7 +29,15 @@ export function parseServerTopology(env: TopologyEnv, transport?: "socket.io" | 
         const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
         const primaryUrl = servers[0].origin;
         const candidates = servers.filter(server => server.transport === transport);
-        const own = serverUrl(env.SERVER_PUBLIC_URL ?? env.RENDER_EXTERNAL_URL, "SERVER_PUBLIC_URL")
+        const selected = env.SERVER_NODE_ID
+            ? servers.find(server => server.id === env.SERVER_NODE_ID)
+            : undefined;
+        if (env.SERVER_NODE_ID && !selected)
+            throw new Error("SERVER_NODE_ID is absent from ETB_CLUSTER_CONFIG");
+        const explicit = serverUrl(env.SERVER_PUBLIC_URL ?? env.RENDER_EXTERNAL_URL, "SERVER_PUBLIC_URL");
+        if (selected && explicit && selected.origin !== explicit)
+            throw new Error("SERVER_NODE_ID and SERVER_PUBLIC_URL select different servers");
+        const own = selected?.origin ?? explicit
             ?? (candidates.length === 1 ? candidates[0].origin
                 : transport === "socket.io" && servers[0].transport === "socket.io" ? primaryUrl : null);
         if (!own) return { role: "standalone", primaryUrl, parentUrl: null, publicUrl: null };
