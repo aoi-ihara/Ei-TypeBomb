@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { chromium } from "playwright";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { build } from "esbuild";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
@@ -36,13 +37,13 @@ const freePort = async () => {
     return port;
 };
 
-for (const scenario of ["worker", "render", "render-restart", "render-state-loss", "fallback5-reopen"]) test(
+for (const scenario of ["worker", "render", "render-restart", "render-state-loss", "fallback5-reopen", "browser-close-render", "browser-close-worker", "browser-close-fallback5"]) test(
     `real Socket.IO → workerd → Socket.IO failover: ${scenario}`,
     { timeout: 180000 },
     async (t) => {
         const temp = await mkdtemp(resolve(tmpdir(), "etb-workerd-"));
         t.after(() => rm(temp, { recursive: true, force: true }));
-        const fallbackIndex = scenario === "fallback5-reopen" ? 6 : 2;
+        const fallbackIndex = ["fallback5-reopen", "browser-close-fallback5"].includes(scenario) ? 6 : 2;
         const ports = await Promise.all(Array.from({ length: fallbackIndex + 1 }, () => freePort()));
         const urls = ports.map((port) => `http://127.0.0.1:${port}`);
         const { credentials } = await import(
@@ -67,7 +68,18 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         };
         let databaseReads = 0;
         const unexpected = [];
+        let browserBundle;
         const broker = createServer((req, res) => {
+            if (req.url === "/test/browser.js") {
+                res.setHeader("Content-Type", "text/javascript");
+                res.end(browserBundle);
+                return;
+            }
+            if (req.url === "/test/browser") {
+                res.setHeader("Content-Type", "text/html");
+                res.end('<!doctype html><title>Real game transport test</title><button onclick="gameSocket.emit(\'room:join\')">Join</button><button onclick="gameSocket.emit(\'game:start\')">Start</button><pre id="state"></pre><script src="/test/browser.js"></script>');
+                return;
+            }
             if (req.url.startsWith("/rest/v1/ei_typebomb_rooms")) {
                 databaseReads++;
                 const requested =
@@ -82,7 +94,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             }
         });
         await new Promise((resolve) => broker.listen(0, "127.0.0.1", resolve));
-        t.after(() => new Promise((resolve) => broker.close(resolve)));
+        t.after(() => new Promise((resolve) => { broker.closeAllConnections(); broker.close(resolve); }));
         const api = `http://127.0.0.1:${broker.address().port}`;
         const { privateKey, publicKey } = await generateKeyPair("ES256");
         const kid = "integration-test";
@@ -423,6 +435,159 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             "lost ACK retries the same event ID",
         );
         assert.equal(new Set(routedCommands).size, 1);
+
+        if (scenario.startsWith("browser-close-")) {
+            routed.closePage();
+            routed.disconnect();
+            await delay(200);
+            const bundle = await build({
+                entryPoints: [resolve(root, "backend/cloudflare/test/browserGameClient.mjs")],
+                bundle: true, platform: "browser", format: "iife", write: false,
+            });
+            browserBundle = bundle.outputFiles[0].text;
+            const browser = await chromium.launch({ headless: true });
+            t.after(() => browser.close());
+            const context = await browser.newContext();
+            context.setDefaultTimeout(10000);
+            const pages = await Promise.all([context.newPage(), context.newPage()]);
+            const openPage = async (page, player, sessionToken = sessions[player]) => {
+                await page.goto(`${api}/test/browser`);
+                await page.evaluate((config) => window.boot(config), {
+                    urls, roomId, jwtToken: roomToken, sessionToken, name: `Browser ${player}`,
+                });
+                await page.waitForFunction(() => !!window.room, null, { timeout: 10000 }).catch(async (error) => {
+                    throw new Error(`${error.message}; browser errors=${JSON.stringify(await page.evaluate(() => window.errors))}`);
+                });
+            };
+            await Promise.all(pages.map((page, i) => openPage(page, i)));
+            for (const page of pages) await page.getByRole("button", { name: "Join", exact: true }).click();
+            await pages[0].waitForFunction(() => window.room.users.length === 2);
+            await pages[0].getByRole("button", { name: "Start", exact: true }).click();
+            await pages[0].waitForFunction(() => window.room.isStart && window.room.bombs?.[0]?.wordIndex !== undefined);
+            const gameId = await pages[0].evaluate(() => window.room.gameId);
+            await delay(300);
+            const workerOwner = scenario.endsWith("worker");
+            if (!workerOwner) {
+                await mf.dispose();
+                await Promise.all(processes.slice(2).map(child => {
+                    child.kill("SIGKILL");
+                    return new Promise(resolve => child.once("exit", resolve));
+                }));
+            }
+            primary.kill("SIGKILL");
+            await new Promise(resolve => primary.once("exit", resolve));
+            if (workerOwner) {
+                render.kill("SIGKILL");
+                await new Promise(resolve => render.once("exit", resolve));
+            }
+            for (const page of pages) await page.waitForFunction(({owner, gameId}) =>
+                window.room?.ownerServerId === owner && !window.room.migrating && window.room.gameId === gameId,
+                {owner: urls[workerOwner ? 1 : fallbackIndex], gameId}, { timeout: 30000 });
+            const oldConnectionId = await pages[0].evaluate(() => window.gameSocket.id);
+            const beforeReconnect = await pages[0].evaluate(() => window.authentications);
+            await pages[0].evaluate(() => window.gameSocket.transport.disconnect());
+            await pages[0].waitForFunction(({count,gameId}) => window.authentications > count &&
+                window.room.isStart && !window.room.migrating && window.room.gameId === gameId,
+                {count:beforeReconnect,gameId}, {timeout:10000});
+            const oldInstance = await pages[0].evaluate(() => window.room.roomInstanceId);
+            const leaveEndpoint = `${urls[workerOwner ? 1 : fallbackIndex]}/cluster/leave`;
+            for (const invalid of [
+                {sessionToken:"forged",expectedInstance:oldInstance},
+                {sessionToken:roomToken,expectedInstance:oldInstance},
+                {sessionToken:sessions[0]},
+                {sessionToken:sessions[0],expectedInstance:randomUUID()},
+                {sessionToken:sessions[0],expectedInstance:oldInstance,connectionId:oldConnectionId},
+            ]) {
+                const response = await fetch(leaveEndpoint,{method:"POST",headers:{"Content-Type":"text/plain"},
+                    body:JSON.stringify({jwtToken:roomToken,connectionId:await pages[0].evaluate(() => window.gameSocket.id),...invalid})});
+                assert.equal(response.ok,false,"forged/stale exit must be rejected");
+            }
+            assert.equal(await pages[1].evaluate(() => window.room.gameId),gameId);
+            assert.equal(await pages[1].evaluate(() => window.room.isStart),true);
+            // Closing a real Chromium tab must retire its seat, even in a match.
+            // Deliberately lose the WebSocket leave packet: the HTTP beacon
+            // must still retire the seat before the 20s recovery grace.
+            await pages[0].evaluate(() => {
+                const transport = window.gameSocket.transport, emit = transport.emit.bind(transport);
+                transport.emit = (event, data) => event === "room:leave" ? transport : emit(event, data);
+            });
+            pages[0].on("request", request => { if (request.url().endsWith("/cluster/leave")) t.diagnostic("Closing page sent authenticated exit beacon"); });
+            await pages[0].close({ runBeforeUnload: true });
+            await pages[1].waitForFunction(id => !window.room.users.some(user => user.id === id), players[0], { timeout: 3000 });
+            assert.equal(await pages[1].evaluate(() => window.room.isStart), false);
+            console.log(`Browser ${scenario}: tab closed and seat removed`);
+            // Reopen with a NEW page identity: old seats cannot be hidden by reconnecting.
+            const replacementId = randomUUID();
+            const replacementToken = await new SignJWT({role:"client_session", roomId, sessionId:replacementId})
+                .setProtectedHeader({alg:"ES256",kid}).setIssuer("ei-typebomb").setAudience("ei-typebomb:client-session")
+                .setIssuedAt().setExpirationTime("1h").sign(privateKey);
+            await pages[1].getByRole("button", {name:"Join",exact:true}).click();
+            let replacement = await context.newPage();
+            await openPage(replacement, 0, replacementToken);
+            await replacement.getByRole("button", {name:"Join", exact:true}).click();
+            await pages[1].waitForFunction(id => window.room.users.some(user => user.id === id), replacementId);
+            // A cached/restored page may keep the same authenticated socket.
+            // HTTP exit must allow that connection to rejoin without reauth.
+            const liveExit = await fetch(leaveEndpoint,{method:"POST",headers:{"Content-Type":"text/plain"},
+                body:JSON.stringify({jwtToken:roomToken,sessionToken:replacementToken,expectedInstance:oldInstance,
+                    connectionId:await replacement.evaluate(() => window.gameSocket.id)})});
+            assert.equal(liveExit.ok,true);
+            await pages[1].waitForFunction(id => !window.room.users.some(user => user.id === id),replacementId,{timeout:3000});
+            await replacement.getByRole("button",{name:"Join",exact:true}).click();
+            await pages[1].waitForFunction(id => window.room.users.some(user => user.id === id),replacementId,{timeout:3000});
+            // Lobby close is also immediate, without ending the surviving seat.
+            await replacement.close({runBeforeUnload:true});
+            await pages[1].waitForFunction(id => !window.room.users.some(user => user.id === id),replacementId,{timeout:3000});
+            assert.equal(await pages[1].evaluate(id => window.room.users.some(user => user.id === id),players[1]),true);
+            replacement = await context.newPage();
+            const nextId = randomUUID();
+            const nextToken = await new SignJWT({role:"client_session",roomId,sessionId:nextId})
+                .setProtectedHeader({alg:"ES256",kid}).setIssuer("ei-typebomb").setAudience("ei-typebomb:client-session")
+                .setIssuedAt().setExpirationTime("1h").sign(privateKey);
+            await openPage(replacement,0,nextToken);
+            await replacement.getByRole("button",{name:"Join",exact:true}).click();
+            await pages[1].waitForFunction(() => window.room.users.length === 2);
+            await pages[1].getByRole("button", {name:"Start", exact:true}).click();
+            await pages[1].waitForFunction(() => window.room.isStart && window.room.bombs?.[0]?.wordIndex !== undefined);
+            // Close the whole room, then create and play a fresh instance with the same room URL.
+            await replacement.close({ runBeforeUnload: true });
+            await pages[1].close({ runBeforeUnload: true });
+            console.log(`Browser ${scenario}: all player tabs closed`);
+            const endpoint = `${urls[workerOwner ? 1 : fallbackIndex]}/cluster/route`;
+            await wait(async () => (await fetch(endpoint, {method:"POST", headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({jwtToken:roomToken})}).then(r=>r.json())).ownership?.lifecycle === "DELETED", "browser close tombstone", 4000);
+            console.log(`Browser ${scenario}: certified tombstone observed`);
+            if (!workerOwner) {
+                render.kill("SIGKILL");
+                await new Promise(resolve => render.once("exit",resolve));
+                render = await startNode(fallbackIndex);
+            }
+            const freshIds = [];
+            const freshPages = await Promise.all([context.newPage(), context.newPage()]);
+            for (let i=0;i<2;i++) {
+                const sessionId = randomUUID();
+                freshIds.push(sessionId);
+                const token = await new SignJWT({role:"client_session",roomId,sessionId})
+                    .setProtectedHeader({alg:"ES256",kid}).setIssuer("ei-typebomb").setAudience("ei-typebomb:client-session")
+                    .setIssuedAt().setExpirationTime("1h").sign(privateKey);
+                await openPage(freshPages[i], i, token);
+                await freshPages[i].getByRole("button", {name:"Join", exact:true}).click();
+            }
+            await freshPages[0].waitForFunction(() => window.room.users.length === 2);
+            await freshPages[0].getByRole("button", {name:"Start", exact:true}).click();
+            await freshPages[0].waitForFunction(() => window.room.isStart && window.room.bombs?.[0]?.wordIndex !== undefined);
+            const replay = await fetch(leaveEndpoint,{method:"POST",headers:{"Content-Type":"text/plain"},
+                body:JSON.stringify({jwtToken:roomToken,sessionToken:sessions[0],expectedInstance:oldInstance,connectionId:oldConnectionId})});
+            assert.equal(replay.ok,false,"a delayed old-page exit must not affect the new room instance");
+            const activeRoom = await freshPages[0].evaluate(() => window.room);
+            const turn = activeRoom.bombs[0].turn;
+            const answering = freshIds.indexOf(activeRoom.users[activeRoom.bombs[0].holder].id);
+            await freshPages[answering].evaluate(() => window.gameSocket.emit("word:success"));
+            await freshPages[0].waitForFunction(turn => window.room.bombs[0].turn > turn,turn);
+            assert.notEqual(activeRoom.roomInstanceId,oldInstance);
+            for (const page of freshPages) assert.deepEqual(await page.evaluate(() => window.errors), []);
+            return;
+        }
 
         const p1 = await nodeClient(0, 0),
             p2 = await nodeClient(0, 1);

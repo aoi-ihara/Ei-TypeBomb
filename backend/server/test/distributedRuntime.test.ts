@@ -676,3 +676,27 @@ test("restoring an expired migration wait cannot create a fresh grace period", a
         epoch: reopened.checkpoint.ownership.epoch,
         revision: reopened.state.revision, originRevision: reopened.state.revision }, "new-page"), "accepted");
 });
+
+test("intentional page exit immediately clears the active seat and session, unlike transport loss", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id, `${id}-old`);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    const instance = f.runtime.checkpoint.ownership.instance;
+    await assert.rejects(f.runtime.closeSession("a", "retired-instance"), /Room instance changed/);
+    assert.equal(f.runtime.state.room.isStart, true);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.connected, true);
+    await f.runtime.connect("a", "a-new");
+    await assert.rejects(f.runtime.closeSession("a", instance, "a-old"), /Page session was replaced/);
+    assert.equal(f.runtime.state.room.isStart, true);
+    await f.runtime.closeSession("a", instance, "a-new");
+    assert.equal(f.runtime.state.room.isStart, false);
+    assert.equal(f.runtime.state.room.users.some(player => player.id === "a"), false);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a, undefined);
+    assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
+    await f.runtime.closeSession("a", instance); // duplicate unload delivery is harmless
+    assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
+});

@@ -328,12 +328,13 @@ export class DistributedRoom {
             return "accepted";
         });
     }
-    connect(id: string): Promise<void> {
+    connect(id: string, connectionId?: string): Promise<void> {
         return this.serial(async () => {
             this.assertActive();
             const value = structuredClone(this.checkpoint.value!);
             value.sessions[id] = {
                 ...value.sessions[id],
+                connectionId: connectionId ?? value.sessions[id]?.connectionId,
                 connected: true,
                 expires: 0,
             };
@@ -376,15 +377,26 @@ export class DistributedRoom {
             await this.save(value, result.effects, "event");
         });
     }
+    /** Page exit is explicit intent; unlike transport loss it has no recovery grace. */
+    closeSession(id: string, instance: string, connectionId?: string, preserveConnection = false): Promise<void> {
+        return this.disconnect(id, true, 0, instance, connectionId, preserveConnection);
+    }
     disconnect(
         id: string,
         immediate: boolean | "lobby" = false,
         graceMs = GRACE_MS,
+        expectedInstance?: string,
+        expectedConnectionId?: string,
+        preserveConnection = false,
     ): Promise<void> {
         return this.serial(async () => {
+            if (expectedInstance && this.checkpoint.ownership.instance !== expectedInstance)
+                throw new Error("Room instance changed");
             if (this.halted || this.deleted) return;
             const value = structuredClone(this.checkpoint.value!);
             if (!value.sessions[id]) return;
+            if (expectedConnectionId && value.sessions[id].connectionId !== expectedConnectionId)
+                throw new Error("Page session was replaced");
             // Evaluate the match state inside the serialized mutation. A
             // concurrently committed game:start must never be canceled by
             // a stale pre-start disconnect decision.
@@ -394,7 +406,7 @@ export class DistributedRoom {
                 // preserve. Remove their session and seat immediately; do
                 // not leave ghost users visible through the grace window.
                 // Explicit immediate cleanup keeps its existing semantics.
-                delete value.sessions[id];
+                if (!preserveConnection) delete value.sessions[id];
                 const result = this.reduce(value, {
                     type: "room:leave",
                     playerId: id,

@@ -766,6 +766,7 @@ export default function Clinet({
             cancelDisconnectNotice();
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
+            if ("closePage" in primaryCandidate.socket) primaryCandidate.socket.closePage();
             primaryCandidate.socket.disconnect();
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();

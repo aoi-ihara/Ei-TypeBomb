@@ -16,6 +16,8 @@ jobs:
           node-version: '22'
       - run: npm ci --prefix backend/server
       - run: npm ci --prefix backend/cloudflare
+      - name: Install Chromium for real tab-close regression tests
+        run: npm exec --prefix backend/cloudflare -- playwright install --with-deps chromium
       - run: npm test --prefix backend/server
       - name: Real Node process crashes, authenticated peer WebSockets and workerd
         run: npm run test:integration --prefix backend/cloudflare

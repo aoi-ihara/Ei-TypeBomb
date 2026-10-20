@@ -89,6 +89,7 @@ export class RoomDO extends DurableObject<Env> {
             roomId: null,
             targetRoomId: roomId,
         };
+        session.connectionId = session.id;
         this.ctx.acceptWebSocket(server);
         server.serializeAttachment(session);
         this.send(server, "connect", { id: session.id });
@@ -350,6 +351,24 @@ export class RoomDO extends DurableObject<Env> {
         });
     }
 
+    /** Called only after the HTTP handler verifies both room and page JWTs. */
+    async closePageSession(roomId: string, id: string, instance: string, connectionId: string): Promise<void> {
+        await this.enqueue(async () => {
+            if (!this.control) throw new Error("Cluster disabled");
+            const saved = await this.control.call("read", { roomId, expectedInstance: instance });
+            if (saved.ownership?.instance !== instance || saved.ownership.owner !== this.control.config.id)
+                throw new Error("Room instance changed");
+            if (saved.ownership.lifecycle === "DELETED") return;
+            await this.ensureDistributed(roomId, undefined, instance);
+            const live = this.ctx.getWebSockets().some(ws => {
+                const active = this.session(ws);
+                return ws.readyState === WebSocket.OPEN && active?.id === id && active.connectionId === connectionId;
+            });
+            await this.distributed!.closeSession(id, instance, connectionId, live);
+            await this.scheduleNextAlarm();
+        });
+    }
+
     private async handle(
         ws: WebSocket,
         session: Session,
@@ -431,7 +450,7 @@ export class RoomDO extends DurableObject<Env> {
             await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
             await this.scheduleNextAlarm();
             if (this.distributed) {
-                await this.distributed.connect(stableId);
+                await this.distributed.connect(stableId, session.connectionId);
                 this.game = this.distributed.state;
                 await this.scheduleNextAlarm();
             }

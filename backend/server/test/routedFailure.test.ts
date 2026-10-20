@@ -777,3 +777,47 @@ test("classified report failure stops automatic retries and preserves the reason
         globalThis.fetch = original;
     }
 });
+
+test("a certified deleted room does not bind a new page to the retired checkpoint", async () => {
+    const originalFetch = globalThis.fetch;
+    const primary = "https://primary.test", fallback = "https://render.test";
+    const servers = [{ id: primary, depth: 0, transport: "socket.io" },
+        { id: fallback, depth: 1, transport: "socket.io" }];
+    globalThis.fetch = (async () => Response.json({ servers, ownership: {
+        owner: fallback, roomId: "room", instance: "retired-instance", epoch: 5,
+        revision: 12, lifecycle: "DELETED",
+    } })) as typeof fetch;
+    const errors: unknown[] = [];
+    let fresh = false;
+    const socket = new RoutedSocket([fallback], () => {
+        const handlers = new Map<string, ((data?: any) => void)[]>();
+        const dispatch = (event: string, data?: any) => handlers.get(event)?.forEach(fn => fn(data));
+        const transport = {
+            connected: true,
+            on(event: string, fn: (data?: any) => void) { handlers.set(event, [...(handlers.get(event) ?? []), fn]); return this; },
+            emit(event: string, data?: any) {
+                if (event === "auth:response") {
+                    if (data.expectedInstance) dispatch("error", { code: "CHECKPOINT_UNAVAILABLE", retryable: false,
+                        message: "以前の対戦のチェックポイントを取得できません。" });
+                    else {
+                        dispatch("auth:session", {id:"new-page"});
+                        dispatch("room:broadcast", {id:"room",roomInstanceId:"fresh-instance",epoch:1,revision:1,users:[],bombs:[]});
+                    }
+                }
+                return this;
+            },
+            disconnect() { this.connected = false; },
+        };
+        setTimeout(() => dispatch("auth:request"), 0);
+        return transport;
+    }, async () => "token", () => true, async () => "page-token");
+    socket.on("auth:request", () => socket.emit("auth:response", {jwtToken:"token",sessionToken:"page-token"}));
+    socket.on("error", error => errors.push(error));
+    socket.on("room:broadcast", () => fresh = true);
+    try {
+        const until = Date.now() + 3000;
+        while (!fresh && !errors.length && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+        assert.deepEqual(errors, []);
+        assert.equal(fresh, true);
+    } finally { socket.disconnect(); globalThis.fetch = originalFetch; }
+});
