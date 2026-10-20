@@ -2,17 +2,23 @@
 
 import { io as socketIo } from "socket.io-client";
 import { decodeJwt } from "jose";
+import { RoutedSocket } from "./routedSocket";
 import { getAuthToken } from "./auth";
 
 // Only the event API used by the game is shared; Workers uses native WebSocket.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Listener = (...args: any[]) => void;
 type Options = {
+    clusterServers?: string[];
     reconnection?: boolean;
     timeout?: number;
     autoConnect?: boolean;
     forceNew?: boolean;
     healthOnly?: boolean;
+    // Socket.IO normally connects over HTTP polling before upgrading.
+    // Health checks explicitly require the WebSocket transport itself.
+    transports?: ("polling" | "websocket")[];
+    sessionTokenPromise?: Promise<string | null>;
 };
 
 export class WorkerSocket {
@@ -67,7 +73,11 @@ export class WorkerSocket {
             this.failed();
         }, this.options.timeout ?? 10_000);
         try {
-            const token = await getAuthToken();
+            // Health probes never authenticate to game rooms. Avoid blocking
+            // the connection behind a stalled/unrelated JWT request.
+            const token = this.options.healthOnly
+                ? undefined
+                : await getAuthToken();
             if (this.stopped || attempt !== this.attempt) return;
             let roomId = "health";
             if (token && !this.options.healthOnly) {
@@ -142,6 +152,42 @@ export class WorkerSocket {
 
 /** A URL ending in /ws explicitly selects Workers, including custom domains. */
 export function io(url?: string, options?: Options) {
+    if (
+        (options?.clusterServers?.length || process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") &&
+        !options?.healthOnly
+    ) {
+        // An explicit ordered cluster list must not be mixed with the
+        // deployment's legacy hosts; otherwise the browser override can
+        // silently connect to an unintended server.
+        const configured = options?.clusterServers?.length
+            ? options.clusterServers
+            : [
+                process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
+                process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
+                process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+            ];
+        const seeds = [
+            url,
+            ...configured,
+        ]
+            .filter((value): value is string => !!value)
+            .map((value) => new URL(value).origin);
+        return new RoutedSocket(
+            [...new Set(seeds)],
+            (target) =>
+                directSocket(target, {
+                    ...options,
+                    autoConnect: true,
+                    reconnection: false,
+                }),
+            getAuthToken,
+            undefined,
+            async () => (await options?.sessionTokenPromise) ?? undefined,
+        );
+    }
+    return directSocket(url, options);
+}
+function directSocket(url?: string, options?: Options) {
     let isWorker = false;
     try {
         isWorker = !!url && new URL(url).pathname.replace(/\/$/, "") === "/ws";

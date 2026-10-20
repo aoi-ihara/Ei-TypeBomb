@@ -12,6 +12,7 @@ type ConsoleRoom = {
     players: ConsolePlayer[];
     isStart: boolean;
     bombHolder?: number;
+    bombHolders?: number[];
 };
 
 type ServerState = {
@@ -210,8 +211,8 @@ const renderRoomCard = (room: ConsoleRoom) => {
         const [row, column] = PLAYER_POSITIONS[index];
         const isHolder =
             room.isStart &&
-            room.bombHolder !== undefined &&
-            room.bombHolder === index;
+            (room.bombHolders?.includes(index) ??
+                (room.bombHolder !== undefined && room.bombHolder === index));
         rows[row][column] = isHolder
             ? colorize("■", ansi.cyan600)
             : colorize("■", ansi.slate300);
