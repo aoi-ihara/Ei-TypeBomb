@@ -2,6 +2,8 @@ import { Identity, digest, readStatement, type Member } from "./identity";
 import { attachLink, type ClusterSocket, type PeerLink } from "./link";
 import type { Control, ControlResult, Checkpoint, DurableRoom } from "./types";
 import { difference, applyDifference } from "./replication";
+import { canDeleteRoom } from "../session";
+import { compareRoomVersion } from "./version";
 
 export type VotedCheckpoint = Checkpoint & {
     voters: Member[];
@@ -331,9 +333,7 @@ export class PeerControl implements Control {
         const mirror = this.mirrors.get(roomId);
         if (!committed) return mirror;
         if (!mirror) return committed;
-        return mirror.ownership.epoch > committed.ownership.epoch ||
-            (mirror.ownership.epoch === committed.ownership.epoch &&
-                mirror.ownership.revision > committed.ownership.revision)
+        return compareRoomVersion(mirror.ownership, committed.ownership) > 0
             ? mirror : committed;
     }
     async read(roomId: string): Promise<VotedCheckpoint | undefined> {
@@ -363,11 +363,7 @@ export class PeerControl implements Control {
                     }
                 }),
         );
-        candidates.sort(
-            (a, b) =>
-                b.ownership.epoch - a.ownership.epoch ||
-                b.ownership.revision - a.ownership.revision,
-        );
+        candidates.sort((a, b) => compareRoomVersion(b.ownership, a.ownership));
         // A fresh room has no checkpoint on any server. The caller decides
         // whether this node may initialize it; recovered rooms still require
         // their signed checkpoint and cannot be recreated from a guess.
@@ -525,10 +521,8 @@ export class PeerControl implements Control {
         )
             throw new Error("Revision conflict");
         const value = op === "delete" ? null : (args.value as DurableRoom);
-        if (op === "delete" && (
-            current.value!.game.room.isStart ||
-            current.value!.game.room.users.length > 0 ||
-            Object.keys(current.value!.sessions).length > 0
+        if (op === "delete" && !canDeleteRoom(
+            current.value!.game.room, Object.keys(current.value!.sessions).length,
         ))
             throw new Error("Room still in use");
         if (
@@ -775,9 +769,7 @@ export class PeerControl implements Control {
             return this.serial(cp.ownership.roomId, async () => {
                 const record = await this.record(cp.ownership.roomId);
                 const latest = await this.latestLocal(cp.ownership.roomId);
-                if (latest && (latest.ownership.epoch > cp.ownership.epoch ||
-                    (latest.ownership.epoch === cp.ownership.epoch &&
-                        latest.ownership.revision >= cp.ownership.revision)))
+                if (latest && compareRoomVersion(latest.ownership, cp.ownership) >= 0)
                     return false;
                 await this.store(cp.ownership.roomId, { ...record, mirror: cp });
                 this.mirrors.set(cp.ownership.roomId, cp);
@@ -809,10 +801,7 @@ export class PeerControl implements Control {
                     (previous.ownership.lifecycle !== "DELETED" ||
                         cp.ownership.epoch <= previous.ownership.epoch))
                     throw new Error("Instance replacement lacks tombstone");
-                if (previous &&
-                    (previous.ownership.epoch > cp.ownership.epoch ||
-                        (previous.ownership.epoch === cp.ownership.epoch &&
-                            previous.ownership.revision >= cp.ownership.revision)))
+                if (previous && compareRoomVersion(previous.ownership, cp.ownership) >= 0)
                     return previous;
                 await this.store(roomId, {
                     committed: cp,

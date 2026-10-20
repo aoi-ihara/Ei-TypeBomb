@@ -5,8 +5,9 @@ import {
     canStart,
     nextGameDeadline,
     type GameEvent,
-    type GameRules,
+    DEFAULT_GAME_RULES as RULES,
 } from "../../shared/game";
+import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
 import { roomSnapshot } from "../../shared/protocol";
 import { eventRateLimit } from "../../shared/rateLimits";
 import { createKeyedRateLimit } from "../../shared/keyedRateLimit";
@@ -27,12 +28,6 @@ import { clusterConfig } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { WorkerControl } from "./lib/cluster";
 import type { Command } from "../../shared/distributed/types";
-
-const RULES: GameRules = {
-    allowSpectatorStart: true,
-    allowCountdownPass: true,
-    clearInputOnStop: false,
-};
 
 /**
  * One authoritative game per room. All connected sockets are hibernatable,
@@ -112,7 +107,8 @@ export class RoomDO extends DurableObject<Env> {
             } catch (error) {
                 console.error(
                     "Worker room event failed",
-                    error instanceof Error ? error.name : "Unknown",
+                    { roomId: session.roomId, playerId: session.id, event: packet.event,
+                        error: error instanceof Error ? error.message : String(error) },
                 );
                 const text =
                     error instanceof ClientError
@@ -149,10 +145,12 @@ export class RoomDO extends DurableObject<Env> {
                     if (roomId) {
                         try {
                             await this.ensureDistributed(roomId);
-                        } catch {
+                        } catch (error) {
                             // Do not discard a persisted deadline on transient
                             // peer unavailability; retry restoration later.
                             await this.ctx.storage.setAlarm(Date.now() + 1_000);
+                            console.error("Worker room restore failed", { roomId,
+                                error: error instanceof Error ? error.message : String(error) });
                             return;
                         }
                     }
@@ -160,7 +158,9 @@ export class RoomDO extends DurableObject<Env> {
                 if (this.distributed) {
                     try {
                         await this.distributed.tick();
-                    } catch {
+                    } catch (error) {
+                        console.error("Worker room maintenance failed", { roomId: this.game?.room.id,
+                            error: error instanceof Error ? error.message : String(error) });
                         this.distributed.dispose();
                     }
                     if (this.distributed.halted || this.distributed.deleted) {
@@ -206,12 +206,10 @@ export class RoomDO extends DurableObject<Env> {
                 }
             }
             await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
-            if (
-                !this.ctx
-                    .getWebSockets()
-                    .some((ws) => ws.readyState === WebSocket.OPEN) &&
-                Object.keys(this.pendingLeaves).length === 0
-            ) {
+            const openSessions = this.ctx.getWebSockets().filter(ws =>
+                ws.readyState === WebSocket.OPEN && this.session(ws)?.roomId).length;
+            if (this.game && canDeleteRoom(this.game.room,
+                openSessions + Object.keys(this.pendingLeaves).length)) {
                 this.game = null;
                 await this.ctx.storage.delete("state");
                 await this.ctx.storage.deleteAlarm();
@@ -375,6 +373,7 @@ export class RoomDO extends DurableObject<Env> {
         event: string,
         data: unknown,
     ): Promise<void> {
+        if (ws.readyState !== WebSocket.OPEN) return;
         if (event === "ping") {
             this.send(ws, "pong");
             return;
@@ -399,14 +398,14 @@ export class RoomDO extends DurableObject<Env> {
                     "認証されたルームが接続先と一致しません。",
                 );
             }
+            const stableId = response.sessionToken
+                ? await verifyClientSessionToken(response.sessionToken, authenticatedRoomId, this.env)
+                : session.id;
+            if (session.roomId && session.id !== stableId)
+                throw new ClientError("接続済みセッションの認証情報は変更できません。");
             if (this.control) {
                 if (!response.sessionToken)
                     throw new ClientError("署名付きセッションが必要です。");
-                await verifyClientSessionToken(
-                    response.sessionToken,
-                    authenticatedRoomId,
-                    this.env,
-                );
                 await this.ensureDistributed(
                     authenticatedRoomId,
                     response.jwtToken,
@@ -425,13 +424,6 @@ export class RoomDO extends DurableObject<Env> {
                 this.game = { room, revision: 0 };
                 await this.ctx.storage.put("state", this.game);
             }
-            const stableId = response.sessionToken
-                ? await verifyClientSessionToken(
-                      response.sessionToken,
-                      authenticatedRoomId,
-                      this.env,
-                  )
-                : session.id;
             session.id = stableId;
             session.roomId = authenticatedRoomId;
             session.displayName = response.displayName;
@@ -484,7 +476,9 @@ export class RoomDO extends DurableObject<Env> {
                 );
                 this.sendRoomInfo();
                 this.send(ws, "command:ack", { id: command.id, status });
-            } catch {
+            } catch (error) {
+                console.error("Worker command failed", { roomId: session.roomId, playerId: session.id,
+                    error: error instanceof Error ? error.message : String(error) });
                 if (this.distributed.halted) this.send(ws, "cluster:paused");
                 else
                     this.send(ws, "command:ack", {
@@ -495,12 +489,16 @@ export class RoomDO extends DurableObject<Env> {
             await this.scheduleNextAlarm();
             return;
         }
-        if (event === "room:leave" && this.distributed) {
+        if (event === "room:leave") {
             // Treat explicit leave separately from transient WebSocket loss:
             // never queue it behind a gameplay command or reconnection grace.
             // session.id is the verified authenticated identity, not client data.
-            await this.distributed.leave(session.id);
-            this.game = this.distributed.state;
+            if (this.distributed) {
+                await this.distributed.leave(session.id);
+                this.game = this.distributed.state;
+            } else {
+                await this.apply({ type: "room:leave", playerId: session.id, reason: "room_leave" });
+            }
             this.sendRoomInfo();
             await this.scheduleNextAlarm();
             // Acknowledge only after the authoritative change is committed.
@@ -562,13 +560,6 @@ export class RoomDO extends DurableObject<Env> {
                         id: session.id,
                         displayName: session.displayName,
                     },
-                });
-                break;
-            case "room:leave":
-                await this.apply({
-                    type: "room:leave",
-                    playerId: session.id,
-                    reason: "room_leave",
                 });
                 break;
             case "game:start":
@@ -688,7 +679,7 @@ export class RoomDO extends DurableObject<Env> {
         if (this.distributed) {
             // Remove lobby seats immediately, but preserve Workers' default
             // 20-second reconnect grace during active matches.
-            await this.distributed.disconnect(session.id, "lobby");
+            await this.distributed.disconnect(session.id, "lobby", undefined, undefined, session.connectionId);
             await this.scheduleNextAlarm();
             return;
         }
@@ -701,10 +692,9 @@ export class RoomDO extends DurableObject<Env> {
             await this.apply({
                 type: "room:leave", playerId: session.id, reason: "disconnect",
             });
-            const anyOpen = this.ctx.getWebSockets().some(
-                (other) => other.readyState === WebSocket.OPEN,
-            );
-            if (!anyOpen && Object.keys(this.pendingLeaves).length === 0) {
+            const openSessions = this.ctx.getWebSockets().filter(other =>
+                other !== ws && other.readyState === WebSocket.OPEN && this.session(other)?.roomId).length;
+            if (canDeleteRoom(this.game!.room, openSessions + Object.keys(this.pendingLeaves).length)) {
                 this.game = null;
                 await this.ctx.storage.delete("state");
                 await this.ctx.storage.deleteAlarm();
@@ -715,7 +705,10 @@ export class RoomDO extends DurableObject<Env> {
         }
         // A disconnected player in a running match is allowed to recover
         // before standalone Workers process a game-canceling room:leave.
-        this.pendingLeaves[session.id] = Date.now() + 20_000;
+        if (!this.game) return;
+        this.pendingLeaves[session.id] = disconnectDeadline(
+            this.game.room, session.id, Date.now(), undefined, this.pendingLeaves[session.id],
+        );
         await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
         await this.scheduleNextAlarm();
     }

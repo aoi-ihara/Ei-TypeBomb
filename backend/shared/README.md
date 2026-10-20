@@ -8,6 +8,7 @@ Node server and the Cloudflare Worker adapter. Runtime-specific code lives in
 
 - `types.ts`: serializable rooms, users, bombs and game state
 - `game.ts`: pure `applyGameEvent` transitions and absolute game deadlines
+- `session.ts`: session shape, reconnect deadlines and empty-room policy
 - `protocol.ts`: client/server event contracts and safe public room snapshots
 - `validation.ts`: payload checks, auth responses, recommendations and hints
 - `room.ts`: database column projection and common `roomFromRow` mapping
@@ -17,6 +18,7 @@ Node server and the Cloudflare Worker adapter. Runtime-specific code lives in
 - `roomJwt.ts`: validated room identity claims _after_ JWT signature verification
 - `jwtPolicy.ts`: ES256 issuer, audience and required expiry policies
 - `distributed/`: durable ownership protocol, ordered replication and paused recovery
+  (`version.ts` also supplies the browser's snapshot version fence)
 
 The shared limiter takes a clock supplied by its caller. The runtime chooses
 whether keys represent sockets, clients, remote IPs or Durable Object sessions
@@ -41,9 +43,13 @@ Alarm scheduling. It imports the shared core without bringing in
 
 The game state stores absolute epoch-millisecond deadlines. Distributed mode
 preserves game IDs, seats, bomb turns and question indices, shifts deadlines
-across a migration pause, and commits through authenticated WebSocket best-effort replication (solo commits; temporary divergence possible)
-confirmations. There is no database-backed control plane.
+across a migration pause, and commits locally with best-effort WebSocket
+replication (solo commits; temporary divergence possible). Peer declarations
+check public topology and do not cryptographically authenticate the sender.
+There is no database-backed control plane.
 See [distributed operation and setup](../DISTRIBUTED.md).
+See [lifecycle audit and invariants](../../docs/architecture/server-lifecycle.md)
+and [executed validation](../../docs/architecture/server-lifecycle-validation.md).
 
 ## Verification
 
