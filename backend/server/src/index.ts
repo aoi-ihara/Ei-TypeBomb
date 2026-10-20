@@ -53,7 +53,10 @@ const clusterReady = config
         .then(declaration => persistentPeerIdentity(declaration, process.env.CLUSTER_STATE_DIR ?? ".cluster-state")).then(async ({ identity, storage }) => {
           assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
-              const url = new URL("/cluster/ws", id);
+              const destination = parseETBClusterConfig(clusterEnv.ETB_CLUSTER_CONFIG!)
+                  .find(server => (server.id ?? server.origin) === id)?.origin;
+              if (!destination) throw new Error("Unknown cluster peer ID");
+              const url = new URL("/cluster/ws", destination);
               url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
               const socket = new PeerSocket(url, {
                   maxPayload: MAX_CLUSTER_FRAME_BYTES,
