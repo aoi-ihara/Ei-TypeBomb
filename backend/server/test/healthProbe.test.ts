@@ -170,3 +170,19 @@ test("immediate cleanup does not start a deferred HTTP fetch", async () => {
     await Promise.resolve();
     assert.equal(requests, 0, "Canceled probes must not issue requests");
 });
+
+
+test("an immediate transport error cannot start a socket after it has closed", async () => {
+    let connects = 0;
+    let closes = 0;
+    const result = await probeServerTransport(() => ({
+        on(event, listener) {
+            if (event === "connect_error") listener();
+        },
+        connect() { connects++; },
+        disconnect() { closes++; },
+    }));
+    assert.deepEqual(result, { healthy: false, latencyMs: null });
+    assert.equal(connects, 0);
+    assert.equal(closes, 1);
+});

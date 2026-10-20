@@ -127,10 +127,12 @@ export function probeServerTransport(
         socket.on("error", () => finish(false));
         // WorkerSocket.connect() is async. Treat an unexpected rejection as
         // a failed probe, without leaving an unhandled promise rejection.
-        try {
-            void Promise.resolve(socket.connect()).catch(() => finish(false));
-        } catch {
-            finish(false);
+        if (!finished && !signal.aborted) {
+            try {
+                void Promise.resolve(socket.connect()).catch(() => finish(false));
+            } catch {
+                finish(false);
+            }
         }
     }), externalSignal, timeoutMs);
 }
