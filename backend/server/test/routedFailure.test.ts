@@ -337,3 +337,145 @@ test("a successful answer during an outage is replayed with its original turn", 
         globalThis.fetch = originalFetch;
     }
 });
+
+
+test("recovery records a start and waits for auth when the playable snapshot arrives first", async () => {
+    const originalFetch = globalThis.fetch;
+    const servers = [
+        { id: "https://primary.test", depth: 0, transport: "socket.io" },
+        { id: "https://secondary.test", depth: 1, transport: "socket.io" },
+    ];
+    const makeOwner = (depth: number) => ({
+        owner: servers[depth].id,
+        epoch: depth + 1,
+        revision: 12 + depth,
+        instance: "instance",
+        lifecycle: "ACTIVE",
+        roomId: "room",
+    });
+    globalThis.fetch = (async (url: string) => {
+        if (String(url).endsWith("/cluster/report"))
+            return Response.json({ ownership: makeOwner(1), servers });
+        return Response.json({ ownership: makeOwner(0), servers });
+    }) as typeof fetch;
+
+    type FakeSession = {
+        connected: boolean;
+        close(): void;
+        disconnect(): void;
+    };
+    const sessions: FakeSession[] = [];
+    const open = (url: string) => {
+        const handlers = new Map<string, Array<(data?: any) => void>>();
+        const dispatch = (event: string, data?: any) =>
+            handlers.get(event)?.forEach((handler) => handler(data));
+        const snapshot = {
+            id: "room",
+            roomInstanceId: "instance",
+            epoch: url === servers[1].id ? 2 : 1,
+            revision: url === servers[1].id ? 13 : 12,
+            ownerServerId: url,
+            gameId: "game",
+            isStart: true,
+            migrating: false,
+            users: [{ id: "player" }],
+            bombs: [],
+        };
+        const transport = {
+            connected: true,
+            on(event: string, handler: (data?: any) => void) {
+                handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+                return transport;
+            },
+            emit(event: string) {
+                if (event === "auth:response") {
+                    if (url === servers[1].id) {
+                        // Node may publish game.connect's snapshot before
+                        // emitting auth:session for the newly joined socket.
+                        dispatch("room:broadcast", { ...snapshot, migrating: true });
+                        setTimeout(
+                            () => dispatch("room:broadcast", snapshot),
+                            20,
+                        );
+                        setTimeout(
+                            () => dispatch("auth:session", { id: "player" }),
+                            120,
+                        );
+                    } else {
+                        dispatch("auth:session", { id: "player" });
+                        dispatch("room:broadcast", snapshot);
+                    }
+                }
+                if (event === "cluster:ping") dispatch("cluster:pong");
+                return transport;
+            },
+            disconnect() { transport.connected = false; },
+            close() {
+                transport.connected = false;
+                dispatch("disconnect");
+            },
+        };
+        sessions.push(transport);
+        setTimeout(() => dispatch("auth:request"), 0);
+        return transport;
+    };
+
+    const socket = new RoutedSocket(
+        servers.map((s) => s.id),
+        open,
+        async () => "room-jwt",
+        () => true,
+        async () => "session-jwt",
+    );
+    socket.on("auth:request", () => socket.emit("auth:response", {
+        jwtToken: "room-jwt",
+        sessionToken: "session-jwt",
+    }));
+    let started: { recoveryId: string; fromDepth: number } | undefined;
+    let completed: {
+        recoveryId: string;
+        snapshotBeforeAuth: boolean;
+        authenticationMs: number;
+        migrationWaitMs: number;
+        fromDepth: number;
+        toDepth: number;
+    } | undefined;
+    let secondarySnapshotSeen = false;
+    socket.on("cluster:recovery-started", (event) => { started = event; });
+    socket.on("cluster:recovered", (event) => { completed = event; });
+    socket.on("room:broadcast", (room) => {
+        if (room.ownerServerId === servers[1].id && !room.migrating)
+            secondarySnapshotSeen = true;
+    });
+    const waitFor = async (check: () => boolean) => {
+        const until = Date.now() + 4000;
+        while (!check()) {
+            if (Date.now() >= until) throw new Error("Recovery timed out");
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+    };
+    try {
+        await waitFor(() => sessions.length === 1 && socket.connected);
+        // Initial auth/room snapshot must be processed before testing failover.
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        sessions[0].close();
+        await waitFor(() => secondarySnapshotSeen);
+        assert.ok(started, "Recovery start is captured independently of its completion");
+        assert.equal(started.fromDepth, 0);
+        assert.equal(completed, undefined,
+            "A room snapshot cannot end recovery before authentication");
+        await waitFor(() => completed !== undefined);
+        assert.equal(completed!.recoveryId, started.recoveryId);
+        assert.equal(completed!.snapshotBeforeAuth, true);
+        assert.equal(completed!.fromDepth, 0);
+        assert.equal(completed!.toDepth, 1);
+        assert.ok(completed!.authenticationMs >= 100,
+            "Authentication time includes the delayed auth:session event");
+        assert.ok(completed!.migrationWaitMs >= 0 &&
+            completed!.migrationWaitMs < completed!.authenticationMs,
+            "Migration wait must end at the ready snapshot before authentication");
+    } finally {
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});

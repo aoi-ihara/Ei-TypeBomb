@@ -70,7 +70,11 @@ export class WorkerSocket {
             this.failed();
         }, this.options.timeout ?? 10_000);
         try {
-            const token = await getAuthToken();
+            // Health probes never authenticate to game rooms. Avoid blocking
+            // the connection behind a stalled/unrelated JWT request.
+            const token = this.options.healthOnly
+                ? undefined
+                : await getAuthToken();
             if (this.stopped || attempt !== this.attempt) return;
             let roomId = "health";
             if (token && !this.options.healthOnly) {
