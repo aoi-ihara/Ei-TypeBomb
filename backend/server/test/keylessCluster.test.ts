@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { clusterConfig } from "../../shared/distributed/control";
+import { parseServerTopology } from "../../shared/topology";
 import { Identity, digest } from "../../shared/distributed/identity";
 import { PeerControl } from "../../shared/distributed/peers";
 import { nodeClusterEnv, persistentPeerIdentity } from "../src/lib/peerStorage";
