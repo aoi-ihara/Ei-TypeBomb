@@ -3,7 +3,7 @@
 import posthog from "posthog-js";
 
 export type ServerRole = "primary" | "secondary" | "fallback";
-export type HealthCheckType = "rtt" | "database";
+export type HealthCheckType = "rtt" | "transport" | "database";
 export type HealthCheckTrigger = "initial" | "interval" | "manual";
 
 export function captureServerHealthCheck({

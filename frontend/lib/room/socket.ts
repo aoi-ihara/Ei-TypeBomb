@@ -15,6 +15,9 @@ type Options = {
     autoConnect?: boolean;
     forceNew?: boolean;
     healthOnly?: boolean;
+    // Socket.IO normally connects over HTTP polling before upgrading.
+    // Health checks explicitly require the WebSocket transport itself.
+    transports?: ("polling" | "websocket")[];
     sessionTokenPromise?: Promise<string | null>;
 };
 
