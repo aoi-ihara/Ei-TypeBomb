@@ -266,6 +266,6 @@ export function attachLink(
                 authenticatingBytes -= size;
             });
     });
-    send({ type: "challenge", id: identity.member.id, nonce });
+    if (!closed) send({ type: "challenge", id: identity.member.id, nonce });
     return ready;
 }

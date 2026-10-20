@@ -189,3 +189,18 @@ test("first route after Primary restart reads the live Render owner over WebSock
     assert.equal(route.ownership.owner, n.ids[2], "first route must not expose the persisted former owner");
     assert.equal(route.ownership.epoch, current.ownership.epoch);
 });
+
+test("a buffered close before authentication rejects without sending on a closed socket", async () => {
+    const [identity] = await identities();
+    const listeners = new Map<string, (event: any) => void>();
+    const socket = bufferPeerSocket({
+        send() { assert.fail("cannot send on a closed socket"); },
+        close() {},
+        addEventListener(type, listener) { listeners.set(type, listener); },
+    });
+    listeners.get("close")!({});
+    await assert.rejects(
+        attachLink(socket, identity, undefined, async () => null, () => {}, () => {}),
+        /Peer disconnected/,
+    );
+});
