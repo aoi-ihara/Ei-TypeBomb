@@ -28,6 +28,8 @@ export class NodePeerStorage implements PeerStorage {
             if (previousId && previousId !== nextId) throw new Error("Cluster server URL changed: use a new state directory");
             if (previous?.declaration && previous.declaration !== declaration)
                 throw new Error("Cluster topology changed: drain rooms and use a new state directory");
+            if (previous?.certificate && !previous.declaration)
+                Identity.assertLegacyTopology(previous.certificate, declaration, previous.boot);
             this.boot = previous?.boot ?? randomUUID();
             this.put("identity", { id: nextId, declaration, boot: this.boot });
             this.db.prepare("DELETE FROM state WHERE key IN ('credential', 'identity-pins')").run();

@@ -29,7 +29,7 @@ Mac mini・Worker・Render・Vercelにはこの同じ値を設定します。`CL
 
 ### 旧データの移行
 
-全サーバーを停止し、同じ新版へ更新して再起動してください。通信プロトコルはversion 3で、旧署名版との稼働中混在はサポートしません。旧トークンは削除済みのまま起動できます。SQLite/DO内の旧秘密鍵・pinは初期化時に削除し、自己URL・boot・投票状態・checkpoint・tombstoneは維持します。旧checkpointのJWT形式は公開payloadとして読み、署名は検証しません。整合性、構成、instance、boot、epoch、revision、投票者集合の検査は維持します。
+全サーバーを停止し、同じ新版へ更新して再起動してください。通信プロトコルはversion 3で、旧署名版との稼働中混在はサポートしません。旧トークンは削除済みのまま起動できます。SQLite/DO内の旧秘密鍵・pinは初期化時に削除し、自己URL・boot・投票状態・checkpoint・tombstoneは維持します。旧certificateのURL・depth・parent・transport・rosterが現在の構成と一致することを、保存内容の更新前に検査します。不一致なら旧メタデータ・鍵・pin・投票状態を保持したまま停止するため、元の構成へ戻して再起動できます。旧checkpointのJWT形式は公開payloadとして読み、署名は検証しません。整合性、構成、instance、boot、epoch、revision、投票者集合の検査は維持します。
 
 永続ディスク/DOの投票状態が失われた場合、bootを推測で使い回して復旧しません。既存ルームの資格がないノードの昇格は拒否し、復旧不能な状態は既存の分類エラーで停止します。新しい保存領域にして同じbootだけをコピーする運用は避けてください。
 

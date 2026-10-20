@@ -67,6 +67,16 @@ export class Identity {
         return identity;
     }
     publicIdentity() { return { version: 3, declaration: this.member.declaration, boot: this.member.boot }; }
+    /** Compare every persisted topology claim before any legacy metadata is
+     * replaced. Same URL alone does not make old votes compatible. */
+    static assertLegacyTopology(certificate: string, declaration: string, boot: string): void {
+        const previous = Identity.inspect(certificate, boot);
+        const next = Identity.inspect(declaration, boot);
+        if (previous.id !== next.id || previous.depth !== next.depth ||
+            previous.parent !== next.parent || previous.transport !== next.transport ||
+            JSON.stringify(previous.roster) !== JSON.stringify(next.roster))
+            throw new Error("Cluster topology changed: drain rooms and use a new state directory");
+    }
     static inspect(declaration: string, boot: string): Member {
         const data = readRecord(declaration);
         const id = data.id ?? data.sub;

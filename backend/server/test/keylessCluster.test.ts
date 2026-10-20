@@ -101,3 +101,38 @@ test("an interrupted first database creation can bootstrap without saved identit
     const initialized = await persistentPeerIdentity(await Identity.generate(servers, servers[0].origin), dir);
     initialized.storage.close();
 });
+
+for (const [change, endpoints] of Object.entries({
+    roster: ["https://primary.test", "https://worker.test/ws", "https://render.test", "https://extra.test"],
+    order: ["https://worker.test/ws", "https://primary.test", "https://render.test"],
+    depth: ["https://worker.test/ws", "https://render.test"],
+    parent: ["https://primary.test", "https://replacement.test/ws", "https://render.test"],
+    transport: ["https://primary.test", "https://worker.test/ws", "https://render.test/ws"],
+})) test(`legacy SQLite migration rejects changed ${change} without modifying any saved rows`, async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), "etb-legacy-topology-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const id = servers[2].origin;
+    const claims = {...JSON.parse(await Identity.generate(servers,id)),sub:id};
+    delete claims.id;
+    const certificate = `legacy.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.unused`;
+    const path = join(dir,"cluster.sqlite");
+    const db = new DatabaseSync(path);
+    db.exec("CREATE TABLE state (key TEXT PRIMARY KEY,value TEXT NOT NULL)");
+    for (const [key,value] of Object.entries({identity:{certificate,boot:"kept-boot"},
+        credential:{unchanged:"legacy key"},"identity-pins":{unchanged:"pins"},
+        registry:[],"room:sentinel":{promised:42,candidate:id,contact:7}})) {
+        db.prepare("INSERT INTO state VALUES (?,?)").run(key,JSON.stringify(value));
+    }
+    const before = db.prepare("SELECT key,value FROM state ORDER BY key").all();
+    db.close();
+    const changed = parseETBClusterConfig(JSON.stringify({version:1,servers:endpoints}));
+    await assert.rejects(persistentPeerIdentity(await Identity.generate(changed,id),dir), /topology changed/i);
+    const unchanged = new DatabaseSync(path,{readOnly:true});
+    assert.deepEqual(unchanged.prepare("SELECT key,value FROM state ORDER BY key").all(),before);
+    unchanged.close();
+    // A rejected upgrade must leave the original configuration usable.
+    const restored = await persistentPeerIdentity(await Identity.generate(servers,id),dir);
+    assert.equal(restored.identity.member.boot,"kept-boot");
+    assert.equal((await restored.storage.load("sentinel"))!.promised,42);
+    restored.storage.close();
+});

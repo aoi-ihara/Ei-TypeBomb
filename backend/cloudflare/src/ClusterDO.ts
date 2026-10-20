@@ -26,19 +26,21 @@ export class ClusterDO extends DurableObject<Env> {
             if (!config) throw new Error("Cluster disabled");
             const boot =
                 (await ctx.storage.get<string>("boot")) ?? crypto.randomUUID();
-            await ctx.storage.put("boot", boot);
             const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG!);
             const declaration = await Identity.generate(servers, config.id);
             const previousDeclaration = await ctx.storage.get<string>("declaration");
             if (previousDeclaration && previousDeclaration !== declaration)
                 throw new Error("Cluster topology changed: drain rooms before replacing storage");
             const legacy = await ctx.storage.get<string>("certificate");
-            if (legacy && Identity.inspect(legacy, boot).id !== config.id)
-                throw new Error("Cluster server URL changed");
+            if (legacy) Identity.assertLegacyTopology(legacy, declaration, boot);
             const identity = await Identity.create(declaration, boot);
-            await ctx.storage.put("declaration", declaration);
-            await ctx.storage.delete(["credential", "identity-pins", "certificate"]);
             assertClusterIdentity(env, identity);
+            // Keep every legacy value intact if validation fails; commit all
+            // metadata replacement/removal together only after it succeeds.
+            await ctx.storage.transaction(async storage => {
+                await storage.put({ boot, declaration });
+                await storage.delete(["credential", "identity-pins", "certificate"]);
+            });
             const peer = new PeerControl(
                 identity,
                 config,
