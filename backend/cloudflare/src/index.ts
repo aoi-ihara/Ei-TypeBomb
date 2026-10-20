@@ -20,7 +20,15 @@ export default {
         const url = new URL(request.url);
         const topology = parseServerTopology(env);
         if (url.pathname === "/health") {
-            return Response.json({ ok: true, role: topology.role });
+            if (request.method !== "GET")
+                return new Response(null, { status: 405 });
+            return Response.json(
+                { ok: true, role: topology.role },
+                { headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-store",
+                } },
+            );
         }
         if (url.pathname === "/cluster/ws")
             return env.CLUSTER.get(env.CLUSTER.idFromName("server")).fetch(

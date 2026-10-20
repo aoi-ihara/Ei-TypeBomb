@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { io } from "@/lib/room/socket";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { probeServerHealth } from "@/lib/room/healthProbe";
 import {
     captureServerHealthCheck,
     type HealthCheckTrigger,
@@ -10,7 +10,6 @@ import {
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
-import { useSyncExternalStore } from "react";
 import {
     getStoredServerConfig,
     parseStoredServerConfig,
@@ -27,8 +26,7 @@ const subscribeConfig = (listener: () => void) => {
 };
 const getServerSnapshot = () => "";
 
-const HEALTH_TIMEOUT_MS = 2_000;
-const HEALTH_REFRESH_INTERVAL_MS = 60_000;
+type HealthRowState = { health: boolean | undefined; refreshing: boolean };
 
 function ServerStatus({
     name,
@@ -45,7 +43,6 @@ function ServerStatus({
             className="font-bold animate-appear flex gap-2 justify-between w-full"
         >
             {name}
-
             <div
                 className={`font-mono flex items-center gap-1 justify-between ${
                     health === true
@@ -55,16 +52,7 @@ function ServerStatus({
                           : "text-gray-500"
                 }`}
             >
-                <Icon
-                    name={
-                        health === true
-                            ? "check"
-                            : health === false
-                              ? "x"
-                              : "info"
-                    }
-                />
-
+                <Icon name={health === true ? "check" : health === false ? "x" : "info"} />
                 {health === true
                     ? rttLatency !== null
                         ? `${rttLatency}ms`
@@ -77,171 +65,52 @@ function ServerStatus({
     );
 }
 
-function useServerHealth(url: string | undefined, serverRole: ServerRole) {
-    const [health, setHealth] = useState<boolean | undefined>(undefined);
-    const [connectionLatency, setConnectionLatency] = useState<number | null>(
-        null,
-    );
-    const [rttLatency, setRttLatency] = useState<number | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
-    const activeSocketRef = useRef<ReturnType<typeof io> | null>(null);
-    const checkIdRef = useRef(0);
-
-    const checkServer = useCallback(
-        (trigger: HealthCheckTrigger = "manual") => {
-            const checkId = ++checkIdRef.current;
-            setRefreshing(true);
-            activeSocketRef.current?.disconnect();
-            activeSocketRef.current = null;
-
-            if (!url) {
-                setHealth(false);
-                setConnectionLatency(null);
-                setRttLatency(null);
-                setRefreshing(false);
-                return;
-            }
-
-            // Keep the previous result visible while refreshing. Only the initial
-            // check has health === undefined and therefore shows "接続中…".
-            const connectionStartedAt = performance.now();
-            // Register listeners and the watchdog before initiating a socket
-            // connection. Otherwise a stalled connection might never report
-            // a result (Socket.IO's own timeout may be much longer).
-            const socket = io(url, {
-                reconnection: false,
-                timeout: HEALTH_TIMEOUT_MS,
-                autoConnect: false,
-                forceNew: true,
-                healthOnly: true,
-            });
-            activeSocketRef.current = socket;
-
-            let connectionTimer: ReturnType<typeof setTimeout> | null = null;
-            let rttTimer: ReturnType<typeof setTimeout> | null = null;
-            let finished = false;
-
-            const finish = (
-                nextHealth: boolean,
-                nextConnectionLatency: number | null,
-                nextRttLatency: number | null,
-            ) => {
-                if (finished || checkId !== checkIdRef.current) return;
-                finished = true;
-                if (connectionTimer) clearTimeout(connectionTimer);
-                if (rttTimer) clearTimeout(rttTimer);
-
-                setHealth(nextHealth);
-                setConnectionLatency(nextConnectionLatency);
-                setRttLatency(nextRttLatency);
-                setRefreshing(false);
-
-                captureServerHealthCheck({
-                    serverRole,
-                    checkType: "rtt",
-                    healthy: nextHealth,
-                    latencyMs: nextRttLatency,
-                    connectionLatencyMs: nextConnectionLatency,
-                    trigger,
-                });
-
-                socket.disconnect();
-                if (activeSocketRef.current === socket) {
-                    activeSocketRef.current = null;
-                }
-            };
-
-            const handleConnect = () => {
-                if (checkId !== checkIdRef.current || finished) return;
-                if (connectionTimer) clearTimeout(connectionTimer);
-                connectionTimer = null;
-                const nextConnectionLatency = Math.round(
-                    performance.now() - connectionStartedAt,
-                );
-                const pingId = crypto.randomUUID();
-                const rttStartedAt = performance.now();
-
-                socket.once("health:pong", (receivedPingId: unknown) => {
-                    if (receivedPingId !== pingId) return;
-
-                    finish(
-                        true,
-                        nextConnectionLatency,
-                        Math.round(performance.now() - rttStartedAt),
-                    );
-                });
-
-                rttTimer = setTimeout(() => {
-                    // Transport is connected, even if RTT probe is throttled.
-                    finish(true, nextConnectionLatency, null);
-                }, HEALTH_TIMEOUT_MS);
-                socket.emit("health:ping", pingId);
-            };
-
-            const handleConnectError = () => {
-                finish(false, null, null);
-            };
-
-            socket.once("connect", handleConnect);
-            socket.once("connect_error", handleConnectError);
-            socket.once("disconnect", handleConnectError);
-            connectionTimer = setTimeout(
-                () => finish(false, null, null),
-                HEALTH_TIMEOUT_MS,
-            );
-            void socket.connect();
-        },
-        [serverRole, url],
-    );
-
-    useEffect(() => {
-        const initialCheck = window.setTimeout(() => checkServer("initial"), 0);
-        const interval = window.setInterval(
-            () => checkServer("interval"),
-            HEALTH_REFRESH_INTERVAL_MS,
-        );
-
-        return () => {
-            window.clearTimeout(initialCheck);
-            window.clearInterval(interval);
-            checkIdRef.current++;
-            activeSocketRef.current?.disconnect();
-            activeSocketRef.current = null;
-        };
-    }, [checkServer]);
-
-    return {
-        health,
-        connectionLatency,
-        rttLatency,
-        refreshing,
-        checkServer,
-    };
-}
-
-
-type HealthRowState = { health: boolean | undefined; refreshing: boolean };
-
 function HealthRow({
-    url, name, serverRole, refreshSignal, index, onStatus,
+    url, name, serverRole, refreshSignal, refreshTrigger, onStatus,
 }: {
     url: string;
     name: string;
     serverRole: ServerRole;
     refreshSignal: number;
-    index: number;
-    onStatus: (index: number, state: HealthRowState) => void;
+    refreshTrigger: HealthCheckTrigger;
+    onStatus: (url: string, state: HealthRowState) => void;
 }) {
-    const { health, rttLatency, refreshing, checkServer } =
-        useServerHealth(url, serverRole);
+    const [health, setHealth] = useState<boolean | undefined>(undefined);
+    const [rttLatency, setRttLatency] = useState<number | null>(null);
+
     useEffect(() => {
-        onStatus(index, { health, refreshing });
-    }, [health, refreshing, index, onStatus]);
-    useEffect(() => {
-        if (refreshSignal > 0) checkServer("manual");
-    }, [refreshSignal, checkServer]);
+        // Aborting the previous run prevents an older, slower response from
+        // overwriting the newest result after a manual refresh or URL change.
+        const controller = new AbortController();
+        let active = true;
+        onStatus(url, { health: undefined, refreshing: true });
+        // Preserve the last answer during refresh, rather than showing an
+        // error or hiding the entire page while the next probe is pending.
+        const trigger: HealthCheckTrigger = refreshTrigger;
+        void probeServerHealth(url, controller.signal).then((result) => {
+            if (!active) return;
+            setHealth(result.healthy);
+            setRttLatency(result.latencyMs);
+            onStatus(url, { health: result.healthy, refreshing: false });
+            captureServerHealthCheck({
+                serverRole,
+                checkType: "rtt",
+                healthy: result.healthy,
+                latencyMs: result.latencyMs,
+                connectionLatencyMs: null,
+                trigger,
+            });
+        });
+        return () => {
+            active = false;
+            controller.abort();
+        };
+    }, [url, serverRole, refreshSignal, refreshTrigger, onStatus]);
+
     return <ServerStatus name={name} health={health} rttLatency={rttLatency} />;
 }
+
+const HEALTH_REFRESH_INTERVAL_MS = 60_000;
 
 export default function ServerHealth({ clusterServers }: { clusterServers: string[] }) {
     const storedConfig = useSyncExternalStore(
@@ -249,8 +118,6 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
         getStoredServerConfig,
         getServerSnapshot,
     );
-    // The browser override is ordered exactly like ETB_CLUSTER_CONFIG.
-    // No override means the deployment's configured servers remain active.
     const servers = parseStoredServerConfig(storedConfig) ??
         (clusterServers.length > 0 ? clusterServers : [
             process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
@@ -258,32 +125,35 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
             process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
         ].filter((url): url is string => Boolean(url)));
 
-    const [refreshSignal, setRefreshSignal] = useState(0);
-    const [states, setStates] = useState<Record<number, HealthRowState>>({});
-    const onStatus = useCallback((index: number, next: HealthRowState) => {
+    const [refresh, setRefresh] = useState<{ signal: number; trigger: HealthCheckTrigger }>({ signal: 0, trigger: "initial" });
+    const [states, setStates] = useState<Record<string, HealthRowState>>({});
+    const onStatus = useCallback((url: string, next: HealthRowState) => {
         setStates((previous) => {
-            const current = previous[index];
+            const current = previous[url];
             if (current?.health === next.health &&
                 current?.refreshing === next.refreshing) return previous;
-            return { ...previous, [index]: next };
+            return { ...previous, [url]: next };
         });
     }, []);
 
-    const refreshing = servers.some((_, index) => states[index]?.refreshing);
+    useEffect(() => {
+        const interval = window.setInterval(
+            () => setRefresh((previous) => ({ signal: previous.signal + 1, trigger: "interval" })),
+            HEALTH_REFRESH_INTERVAL_MS,
+        );
+        return () => window.clearInterval(interval);
+    }, []);
+
+    const refreshing = servers.some((url) => states[url]?.refreshing);
 
     return (
-        // Shell hides its children while loading. HealthRow must be mounted
-        // immediately so its effect can actually start the first probe.
         <Shell title="サーバーの状況" size="small">
             {servers.length === 0 && (
-                <p className="text-sm opacity-60">
-                    サーバーが設定されていません。
-                </p>
+                <p className="text-sm opacity-60">サーバーが設定されていません。</p>
             )}
             {servers.map((url, index) => (
                 <HealthRow
                     key={url}
-                    index={index}
                     url={url}
                     name={
                         index === 0 ? "プライマリサーバー"
@@ -292,12 +162,16 @@ export default function ServerHealth({ clusterServers }: { clusterServers: strin
                         : `第${index + 1}サーバー`
                     }
                     serverRole={index === 0 ? "primary" : index === 1 ? "secondary" : "fallback"}
-                    refreshSignal={refreshSignal}
+                    refreshSignal={refresh.signal}
+                    refreshTrigger={refresh.trigger}
                     onStatus={onStatus}
                 />
             ))}
+            <p className="w-full text-xs opacity-60">
+                HTTP /health の応答時間。接続可能性の目安で、ルームの所有権は別途確認されます。
+            </p>
             <Button iconName="rotateCcw"
-                onClick={() => setRefreshSignal((current) => current + 1)}
+                onClick={() => setRefresh((previous) => ({ signal: previous.signal + 1, trigger: "manual" }))}
                 loading={refreshing} className="w-full">
                 更新
             </Button>

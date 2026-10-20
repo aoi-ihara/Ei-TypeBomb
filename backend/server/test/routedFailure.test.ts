@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RoutedSocket } from "../../../frontend/lib/room/routedSocket";
+import { RoutedSocket, recoveryRetryDelayMs } from "../../../frontend/lib/room/routedSocket";
+
+test("a first interrupted session starts recovery without a fixed 250ms delay", () => {
+    assert.deepEqual([0, 1, 2, 3, 4].map(recoveryRetryDelayMs),
+        [0, 500, 1000, 2000, 2000]);
+});
 
 test("a reloaded tab reports a failed owner before receiving its first game snapshot", async () => {
     const originalFetch = globalThis.fetch;
