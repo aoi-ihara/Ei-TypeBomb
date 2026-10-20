@@ -136,3 +136,71 @@ for (const [change, endpoints] of Object.entries({
     assert.equal((await restored.storage.load("sentinel"))!.promised,42);
     restored.storage.close();
 });
+
+
+test("v1 voter can rotate URLs in v2 without losing checkpoint, instance, or boot", async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), "etb-url-rotation-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const oldUrl = "https://old-primary.test";
+    const oldConfig = parseETBClusterConfig(JSON.stringify({ version: 1, servers: [oldUrl] }));
+    const declaration = await Identity.generate(oldConfig, oldUrl);
+    const first = await persistentPeerIdentity(declaration, dir);
+    const firstConfig = clusterConfig({ETB_CLUSTER_CONFIG: JSON.stringify({version:1,servers:[oldUrl]}),
+        SERVER_PUBLIC_URL:oldUrl}, "socket.io")!;
+    const oldPeer = new PeerControl(first.identity, firstConfig, offline, first.storage);
+    const room = freshRoom();
+    const initial = { game: { room, revision: 0 }, sessions: {}, events: {} };
+    await oldPeer.call("open", { roomId: room.id, initial });
+    const previous = (await oldPeer.read(room.id))!;
+    const boot = first.identity.member.boot;
+    oldPeer.close();
+    first.storage.close();
+
+    // Keep the old logical ID as the voter identity. Only the connection URL
+    // changes; saved hashes and the room's voter set must stay unmodified.
+    const changed = JSON.stringify({ version: 2, servers: [
+        { id: oldUrl, url: "https://new-primary.test" },
+    ] });
+    const env = nodeClusterEnv({ ETB_CLUSTER_CONFIG: changed, CLUSTER_STATE_DIR: dir });
+    assert.equal(env.SERVER_NODE_ID, oldUrl);
+    const nextConfig = clusterConfig(env, "socket.io")!;
+    assert.equal(nextConfig.id, oldUrl);
+    assert.equal(parseServerTopology(env, "socket.io").publicUrl, "https://new-primary.test");
+    const next = await persistentPeerIdentity(
+        await Identity.generate(parseETBClusterConfig(changed), nextConfig.id), dir);
+    t.after(() => next.storage.close());
+    assert.equal(next.identity.member.boot, boot);
+    const peer = new PeerControl(next.identity, nextConfig, offline, next.storage);
+    const checkpoint = (await peer.read(room.id))!;
+    assert.equal(checkpoint.hash, previous.hash);
+    assert.equal(checkpoint.ownership.instance, previous.ownership.instance);
+    assert.equal(checkpoint.ownership.owner, oldUrl);
+    assert.deepEqual(checkpoint.voters, previous.voters);
+    assert.equal(peer.servers()[0].url, "https://new-primary.test");
+    const rejoined = await peer.call("open", { roomId: room.id });
+    assert.equal(rejoined.ownership.instance, previous.ownership.instance);
+    peer.close();
+});
+
+test("v2 refuses reorder or voter membership changes but leaves persisted vote rows intact", async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), "etb-v2-safety-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const original = JSON.stringify({version:2,servers:[
+        {id:"primary",url:"https://primary.test"},
+        {id:"backup",url:"https://backup.test"},
+    ]});
+    const old = await persistentPeerIdentity(await Identity.generate(parseETBClusterConfig(original),"primary"),dir);
+    await old.storage.save("sentinel", {promised:91,candidate:"primary",contact:123});
+    old.storage.close();
+    const reordered = JSON.stringify({version:2,servers:[
+        {id:"backup",url:"https://backup.test"},
+        {id:"primary",url:"https://primary.test"},
+    ]});
+    await assert.rejects(
+        persistentPeerIdentity(await Identity.generate(parseETBClusterConfig(reordered),"primary"),dir),
+        /topology changed/i);
+    const stillThere = await persistentPeerIdentity(
+        await Identity.generate(parseETBClusterConfig(original),"primary"),dir);
+    assert.equal((await stillThere.storage.load("sentinel"))!.promised,91);
+    stillThere.storage.close();
+});
