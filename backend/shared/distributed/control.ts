@@ -10,19 +10,18 @@ export function clusterConfig(env: ClusterEnv, transport: "socket.io" | "websock
     }
     if (!topology.publicUrl || !env.ETB_CLUSTER_CONFIG)
         throw new Error("Distributed mode requires ETB_CLUSTER_CONFIG and SERVER_PUBLIC_URL");
-    if (env.ETB_CLUSTER_CONFIG !== undefined) {
-        const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
-        const me = servers.find(s => s.origin === topology.publicUrl);
-        if (!me || me.transport !== transport)
-            throw new Error("Cluster transport does not match ETB_CLUSTER_CONFIG (/ws marks Workers)");
-    }
+    const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
+    const me = servers.find(s => s.origin === topology.publicUrl);
+    if (!me || me.transport !== transport)
+        throw new Error("Cluster transport does not match ETB_CLUSTER_CONFIG (/ws marks Workers)");
     for (const value of [topology.publicUrl, topology.parentUrl, topology.primaryUrl])
         if (value && (new URL(value).origin !== value ||
             (new URL(value).protocol !== "https:" &&
                 !["localhost", "127.0.0.1"].includes(new URL(value).hostname))))
             throw new Error("Cluster requires HTTPS origins");
-    return { id: topology.publicUrl, parent: topology.parentUrl,
-        primary: topology.primaryUrl!, transport };
+    return { id: me.id ?? me.origin,
+        parent: servers[servers.indexOf(me) - 1]?.id ?? null,
+        primary: servers[0].id ?? servers[0].origin, transport };
 }
 
 // Validate only public configuration consistency; this does not authenticate a peer.
@@ -33,12 +32,12 @@ export function assertClusterIdentity(
 ): void {
     if (env.ETB_CLUSTER_CONFIG === undefined) return;
     const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
-    const origins = servers.map(s => s.origin);
-    const depth = origins.indexOf(identity.member.id);
+    const ids = servers.map(s => s.id ?? s.origin);
+    const depth = ids.indexOf(identity.member.id);
     if (depth < 0 ||
         depth !== identity.member.depth ||
-        identity.member.parent !== (origins[depth - 1] ?? null) ||
+        identity.member.parent !== (ids[depth - 1] ?? null) ||
         identity.member.transport !== servers[depth].transport ||
-        JSON.stringify(identity.member.roster) !== JSON.stringify(origins))
+        JSON.stringify(identity.member.roster) !== JSON.stringify(ids))
         throw new Error("Cluster declaration does not match ETB_CLUSTER_CONFIG");
 }
