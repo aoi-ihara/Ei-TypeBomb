@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { Identity, readRecord, type Member } from "../../../shared/distributed/identity";
+import { parseETBClusterConfig } from "../../../shared/clusterConfig";
 import type { ClusterEnv } from "../../../shared/distributed/control";
 import type { PeerStorage, VoteRecord } from "../../../shared/distributed/peers";
 
@@ -25,9 +26,10 @@ export class NodePeerStorage implements PeerStorage {
             const nextId = declaration.startsWith("{") ? readRecord(declaration).id : declaration;
             const previous = this.get<{ id?: string; declaration?: string; certificate?: string; boot: string }>("identity");
             const previousId = previous?.id ?? (previous?.certificate ? readRecord(previous.certificate).sub : undefined);
-            if (previousId && previousId !== nextId) throw new Error("Cluster server URL changed: use a new state directory");
-            if (previous?.declaration && previous.declaration !== declaration)
-                throw new Error("Cluster topology changed: drain rooms and use a new state directory");
+            if (previousId && previousId !== nextId)
+                throw new Error("Stable cluster server ID changed: restore the original ID to preserve votes");
+            if (previous?.declaration)
+                Identity.assertDurableTopology(previous.declaration, declaration, previous.boot);
             if (previous?.certificate && !previous.declaration)
                 Identity.assertLegacyTopology(previous.certificate, declaration, previous.boot);
             this.boot = previous?.boot ?? randomUUID();
@@ -62,10 +64,10 @@ export async function persistentPeerIdentity(declaration: string, directory: str
     } catch (error) { storage.close(); throw error; }
 }
 
-/** Read only the public URL from existing disk metadata before topology is
- * selected. Never require or recreate an old secret key to boot the server. */
-export function nodeClusterEnv<T extends ClusterEnv & { CLUSTER_STATE_DIR?: string }>(env: T): T & { SERVER_PUBLIC_URL?: string } {
-    if (env.SERVER_PUBLIC_URL || env.RENDER_EXTERNAL_URL || !env.ETB_CLUSTER_CONFIG) return env;
+/** Reuse the durable voter ID across endpoint rotations. Legacy v1 clusters
+ * continue selecting their origin. Never regenerate a voter ID from a new URL. */
+export function nodeClusterEnv<T extends ClusterEnv & { CLUSTER_STATE_DIR?: string }>(env: T): T & { SERVER_PUBLIC_URL?: string; SERVER_NODE_ID?: string } {
+    if (env.SERVER_NODE_ID || env.SERVER_PUBLIC_URL || env.RENDER_EXTERNAL_URL || !env.ETB_CLUSTER_CONFIG) return env;
     const path = resolve(env.CLUSTER_STATE_DIR ?? ".cluster-state", "cluster.sqlite");
     if (!existsSync(path)) return env;
     const db = new DatabaseSync(path, { readOnly: true });
@@ -75,7 +77,12 @@ export function nodeClusterEnv<T extends ClusterEnv & { CLUSTER_STATE_DIR?: stri
         if (!row) return env;
         const previous = JSON.parse(row.value as string);
         const id = previous.id ?? (previous.certificate ? readRecord(previous.certificate).sub : undefined);
-        if (typeof id !== "string") throw new Error("Invalid persisted cluster URL");
-        return { ...env, SERVER_PUBLIC_URL: id };
+        if (typeof id !== "string") throw new Error("Invalid persisted cluster ID");
+        const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
+        if (servers.some(server => server.id === id))
+            return { ...env, SERVER_NODE_ID: id };
+        // An old v1 deployment that still has its URL in the roster.
+        // Do not guess a different identity from its position in the list.
+        throw new Error("Persisted server ID is not in ETB_CLUSTER_CONFIG; retain its old ID in a version 2 entry");
     } finally { db.close(); }
 }
