@@ -744,3 +744,27 @@ test("a newer certified mirror outranks a locally committed old tombstone in rou
     const status = await n.hosts[2].dispatch(n.hosts[2].identity.member, "status", { roomId: room.id });
     assert.equal(status.ownership.instance, newer.ownership.instance);
 });
+
+test("a migrated lobby accepts a new page without waiting for departed players", async () => {
+    const n = await network(), room = freshRoom();
+    const primary = new DistributedRoom(room.id, n.hosts[0], () => {});
+    await primary.open(room);
+    for (const id of ["old-a", "old-b"]) {
+        await primary.connect(id);
+        await primary.apply({ type: "room:join", player: { id } });
+    }
+    await delay(20);
+    n.alive[0] = false;
+    await n.hosts[1].call("report", { roomId: room.id, owner: n.ids[0], revision: 0 });
+    const fallback = new DistributedRoom(room.id, n.hosts[1], () => {});
+    await fallback.open();
+    await fallback.connect("new-page");
+    assert.equal(fallback.state.room.isStart, false);
+    assert.equal(fallback.snapshot().migrating, false);
+    const command: Command = { id: randomUUID(), instance: fallback.checkpoint.ownership.instance,
+        epoch: fallback.checkpoint.ownership.epoch, revision: fallback.state.revision,
+        originRevision: fallback.state.revision,
+        event: { type: "room:join", player: { id: "new-page" } } };
+    assert.equal(await fallback.command(command, "new-page"), "accepted");
+    assert.ok(fallback.state.room.users.some((user) => user.id === "new-page"));
+});

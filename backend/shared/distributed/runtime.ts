@@ -97,7 +97,10 @@ export class DistributedRoom {
                     );
                 for (const bomb of restored.game.room.bombs ?? [])
                     bomb.at = Math.max(floor, bomb.at);
-                restored.resumeUntil = this.now() + GRACE_MS;
+                // A runtime/owner may reopen repeatedly while clients retry.
+                // Preserve an existing deadline rather than renewing the wait
+                // on every recovery (including one already in the past).
+                restored.resumeUntil ??= this.now() + GRACE_MS;
                 restored.pausedAt = this.now();
                 for (const session of Object.values(restored.sessions)) {
                     session.connected = false;
@@ -123,6 +126,14 @@ export class DistributedRoom {
         kind: string,
     ) {
         this.assertActive();
+        // Reconnect barriers protect a running match. A migrated lobby or a
+        // canceled match must remain joinable, even if old sessions still have
+        // a bounded cleanup deadline.
+        if (!value.game.room.isStart && value.resumeUntil !== undefined) {
+            delete value.resumeUntil;
+            delete value.pausedAt;
+            this.pauseAt = undefined;
+        }
         const own = this.checkpoint.ownership;
         for (const effect of effects) {
             if (
