@@ -52,10 +52,11 @@ export type Member = ServerInfo & {
 export class Identity {
     private constructor(readonly member: Member, readonly servers: ClusterServer[]) {}
     static async generate(servers: ClusterServer[], id: string): Promise<string> {
-        const depth = servers.findIndex(server => server.origin === id);
+        const ids = servers.map(server => server.id ?? server.origin);
+        const depth = ids.indexOf(id);
         if (depth < 0) throw new Error("Server absent from configured roster");
-        return JSON.stringify({ id, depth, parent: servers[depth - 1]?.origin ?? null,
-            transport: servers[depth].transport, roster: servers.map(s => s.origin), servers });
+        return JSON.stringify({ id, depth, parent: ids[depth - 1] ?? null,
+            transport: servers[depth].transport, roster: ids, servers });
     }
     static async create(declaration: string, boot: string = crypto.randomUUID()) {
         const data = readRecord(declaration);
@@ -67,15 +68,19 @@ export class Identity {
         return identity;
     }
     publicIdentity() { return { version: 3, declaration: this.member.declaration, boot: this.member.boot }; }
-    /** Compare every persisted topology claim before any legacy metadata is
-     * replaced. Same URL alone does not make old votes compatible. */
-    static assertLegacyTopology(certificate: string, declaration: string, boot: string): void {
-        const previous = Identity.inspect(certificate, boot);
+    /** Check stable voter identity, not network addresses: existing checkpoint
+     * hashes contain these claims. Changing URLs is safe; changing voters,
+     * order or transport while rooms exist requires an explicit drain. */
+    static assertDurableTopology(previous: string, declaration: string, boot: string): void {
+        const old = Identity.inspect(previous, boot);
         const next = Identity.inspect(declaration, boot);
-        if (previous.id !== next.id || previous.depth !== next.depth ||
-            previous.parent !== next.parent || previous.transport !== next.transport ||
-            JSON.stringify(previous.roster) !== JSON.stringify(next.roster))
-            throw new Error("Cluster topology changed: drain rooms and use a new state directory");
+        if (old.id !== next.id || old.depth !== next.depth ||
+            old.parent !== next.parent || old.transport !== next.transport ||
+            JSON.stringify(old.roster) !== JSON.stringify(next.roster))
+            throw new Error("Cluster voter membership changed: drain rooms and use a new state directory");
+    }
+    static assertLegacyTopology(certificate: string, declaration: string, boot: string): void {
+        Identity.assertDurableTopology(certificate, declaration, boot);
     }
     static inspect(declaration: string, boot: string): Member {
         const data = readRecord(declaration);
@@ -88,10 +93,14 @@ export class Identity {
             new Set(data.roster).size !== data.roster.length || !data.roster.includes(id) ||
             (data.parent !== null && typeof data.parent !== "string"))
             throw new Error("Invalid server declaration");
-        const url = new URL(id);
-        if (url.origin !== id || (url.protocol !== "https:" &&
-            !(url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname))))
-            throw new Error("Unsafe peer URL");
+        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id)) {
+            let url: URL;
+            try { url = new URL(id); }
+            catch { throw new Error("Invalid stable peer ID"); }
+            if (url.origin !== id || (url.protocol !== "https:" &&
+                !(url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname))))
+                throw new Error("Unsafe peer URL");
+        }
         const legacy = !declaration.startsWith("{");
         return { id, depth: data.depth, parent: data.parent, transport: data.transport,
             roster: data.roster, boot, seen: Date.now(),
@@ -99,11 +108,12 @@ export class Identity {
     }
     async inspectPeer(declaration: string, boot: string): Promise<Member> {
         const member = Identity.inspect(declaration, boot);
-        const index = this.servers.findIndex(s => s.origin === member.id);
+        const index = this.servers.findIndex(s => (s.id ?? s.origin) === member.id);
         if (index < 0) throw new Error("Unconfigured peer origin");
-        if (member.depth !== index || member.parent !== (this.servers[index - 1]?.origin ?? null) ||
+        if (member.depth !== index ||
+            member.parent !== (this.servers[index - 1]?.id ?? this.servers[index - 1]?.origin ?? null) ||
             member.transport !== this.servers[index].transport ||
-            JSON.stringify(member.roster) !== JSON.stringify(this.servers.map(s => s.origin)))
+            JSON.stringify(member.roster) !== JSON.stringify(this.servers.map(s => s.id ?? s.origin)))
             throw new Error("Peer declaration differs from configured topology");
         return member;
     }
