@@ -25,7 +25,7 @@ import { encodeWireMessage, parseWireMessage } from "./lib/wire";
 import { clusterConfig } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { WorkerControl } from "./lib/cluster";
-import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
+import type { Command } from "../../shared/distributed/types";
 
 const RULES: GameRules = {
     allowSpectatorStart: true,
@@ -663,12 +663,9 @@ export class RoomDO extends DurableObject<Env> {
         });
         if (replacement) return;
         if (this.distributed) {
-            // Match Node's disconnect policy: lobby seats are released as
-            // soon as the socket is confirmed gone, while an active match
-            // keeps its seat during transient connectivity/failover losses.
-            await this.distributed.disconnect(
-                session.id, "lobby", NODE_DISCONNECT_GRACE_MS,
-            );
+            // Remove lobby seats immediately, but preserve Workers' default
+            // 20-second reconnect grace during active matches.
+            await this.distributed.disconnect(session.id, "lobby");
             await this.scheduleNextAlarm();
             return;
         }
