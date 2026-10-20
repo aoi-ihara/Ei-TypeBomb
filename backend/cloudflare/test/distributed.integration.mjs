@@ -127,7 +127,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         );
         const processes = [];
         const processLogs = [];
-        const startNode = async (i) => {
+        const startNode = async (i, restoredWithoutUrl = false) => {
             const child = spawn(
                 process.execPath,
                 ["--import", "tsx", "src/index.ts"],
@@ -137,7 +137,8 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                         ...process.env,
                         ...common,
                         CLUSTER_SERVER_TOKEN: undefined,
-                        SERVER_PUBLIC_URL: urls[i],
+                        SERVER_PUBLIC_URL: i === 0 || i === fallbackIndex ? undefined : urls[i],
+                        RENDER_EXTERNAL_URL: i === fallbackIndex && !restoredWithoutUrl ? urls[i] : undefined,
                         CLUSTER_STATE_DIR: resolve(temp, `node-${i}`),
                         PORT: String(ports[i]),
                         NEXT_PUBLIC_POSTHOG_KEY: "",
@@ -221,10 +222,9 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         // Neither registration nor room reads are callable before peer auth.
         for (const url of urls) {
             const document = await fetch(`${url}/cluster/identity`).then(r => r.json());
-            assert.deepEqual(Object.keys(document).sort(), ["authorityKey", "certificate"]);
-            assert.equal("d" in document.authorityKey, false);
-            const claims = JSON.parse(Buffer.from(document.certificate.split(".")[1], "base64url"));
-            assert.equal("d" in claims.publicKey, false);
+            assert.deepEqual(Object.keys(document).sort(), ["boot", "declaration", "version"]);
+            assert.equal(document.version, 3);
+            assert.equal(JSON.stringify(document).includes("privateKey"), false);
             const socket = new WebSocket(
                 `${url.replace("http", "ws")}/cluster/ws`,
             );
@@ -663,7 +663,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 const retained = [];
                 if (scenario === "render-state-loss") {
                     const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
-                    retained.push(...db.prepare("SELECT key, value FROM state WHERE key IN ('credential', 'identity-pins')").all());
+                    retained.push(...db.prepare("SELECT key, value FROM state WHERE key = 'identity'").all());
                     db.close();
                 }
                 await rm(stateDir, { recursive: true, force: true });
@@ -671,7 +671,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                     await mkdir(stateDir, { mode: 0o700 });
                     const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
                     db.exec("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-                    for (const row of retained) db.prepare("INSERT INTO state (key, value) VALUES (?, ?)").run(row.key, row.value);
+                    for (const row of retained) { const meta = JSON.parse(row.value); delete meta.boot; db.prepare("INSERT INTO state (key, value) VALUES (?, ?)").run(row.key, JSON.stringify(meta)); }
                     db.close();
                 }
                 render = await startNode(2);
@@ -688,8 +688,8 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             await new Promise((resolve) => primary.once("exit", resolve));
             if (["render-state-loss", "render-identity-loss"].includes(scenario)) {
                 await wait(() => recoveryFailure, "lost persistent state is classified", 30000);
-                assert.equal(recoveryFailure.code, scenario === "render-state-loss" ? "VOTER_STATE_LOST" : "CHECKPOINT_UNAVAILABLE");
-                if (scenario === "render-state-loss") assert.match(processLogs.map((read) => read()).join("\n"),
+                assert.equal(recoveryFailure.code, "VOTER_STATE_LOST");
+                assert.match(processLogs.map((read) => read()).join("\n"),
                     /Cluster \/cluster\/report failed: Ineligible voter or lost process memory/);
                 assert.equal(recoveryFailure.retryable, false);
                 await delay(2_500);
@@ -701,7 +701,17 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             if (scenario === "render-restart") {
                 render.kill("SIGKILL");
                 await new Promise((resolve) => render.once("exit", resolve));
-                await startNode(2);
+                // Reproduce the reported upgrade: the old disk has only a
+                // certificate subject, with no token or self-URL environment.
+                const oldDb = new DatabaseSync(resolve(temp, "node-2/cluster.sqlite"));
+                const metadata = JSON.parse(oldDb.prepare("SELECT value FROM state WHERE key = 'identity'").get().value);
+                const oldClaims = { ...JSON.parse(metadata.declaration), sub: urls[2] };
+                delete oldClaims.id;
+                const certificate = `legacy.${Buffer.from(JSON.stringify(oldClaims)).toString("base64url")}.unused`;
+                oldDb.prepare("UPDATE state SET value = ? WHERE key = 'identity'")
+                    .run(JSON.stringify({ certificate, boot: metadata.boot }));
+                oldDb.close();
+                await startNode(2, true);
             }
             await wait(() => observed?.ownerServerId === urls[fallbackIndex],
                 "routed client reaches sole surviving Render", 30000);

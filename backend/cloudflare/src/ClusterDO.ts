@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { PeerControl, type VoteRecord } from "../../shared/distributed/peers";
-import { Identity, type Member, type IdentityPins } from "../../shared/distributed/identity";
+import { Identity, type Member } from "../../shared/distributed/identity";
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { bufferPeerSocket, type ClusterSocket } from "../../shared/distributed/link";
@@ -27,21 +27,17 @@ export class ClusterDO extends DurableObject<Env> {
             const boot =
                 (await ctx.storage.get<string>("boot")) ?? crypto.randomUUID();
             await ctx.storage.put("boot", boot);
-            const servers = env.ETB_CLUSTER_CONFIG ? parseETBClusterConfig(env.ETB_CLUSTER_CONFIG) : undefined;
-            const savedBundle = await ctx.storage.get<string>("credential");
-            const bundle = env.CLUSTER_SERVER_TOKEN ?? savedBundle
-                ?? await Identity.generate(servers!, config.id);
-            const identity = await Identity.create(bundle, boot);
-            const previousCertificate = await ctx.storage.get<string>("certificate");
-            if (previousCertificate && previousCertificate !== identity.member.certificate) {
-                if (!env.CLUSTER_SERVER_TOKEN && !savedBundle)
-                    throw new Error("Existing cluster state has no saved signing key: upgrade once with CLUSTER_SERVER_TOKEN before removing it");
-                throw new Error("Cluster identity changed: drain rooms before replacing identity storage");
-            }
-            await ctx.storage.put("credential", bundle);
-            if (servers) identity.enableDiscovery(servers,
-                await ctx.storage.get<IdentityPins>("identity-pins") ?? {},
-                pins => ctx.storage.put("identity-pins", pins));
+            const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG!);
+            const declaration = await Identity.generate(servers, config.id);
+            const previousDeclaration = await ctx.storage.get<string>("declaration");
+            if (previousDeclaration && previousDeclaration !== declaration)
+                throw new Error("Cluster topology changed: drain rooms before replacing storage");
+            const legacy = await ctx.storage.get<string>("certificate");
+            if (legacy && Identity.inspect(legacy, boot).id !== config.id)
+                throw new Error("Cluster server URL changed");
+            const identity = await Identity.create(declaration, boot);
+            await ctx.storage.put("declaration", declaration);
+            await ctx.storage.delete(["credential", "identity-pins", "certificate"]);
             assertClusterIdentity(env, identity);
             const peer = new PeerControl(
                 identity,
@@ -78,15 +74,7 @@ export class ClusterDO extends DurableObject<Env> {
                 },
             );
             peer.draining = env.CLUSTER_DRAINING === "true";
-            // Registry entries are accepted only after their HTTPS identities
-            // have been verified and pinned; identity replacement is refused above.
-            const previous = await ctx.storage.get<string>("certificate");
-            await peer.restoreRegistry(
-                previous === identity.member.certificate
-                    ? ((await ctx.storage.get<Member[]>("registry")) ?? [])
-                    : [],
-            );
-            await ctx.storage.put("certificate", identity.member.certificate);
+            await peer.restoreRegistry((await ctx.storage.get<Member[]>("registry")) ?? []);
             return peer;
         });
         // Network registration starts after local initialization, outside the
@@ -111,7 +99,7 @@ export class ClusterDO extends DurableObject<Env> {
         server.accept();
         void peer
             .accept(server as unknown as ClusterSocket)
-            .catch(() => server.close(1008, "Authentication failed"));
+            .catch(() => server.close(1008, "Cluster handshake failed"));
         return new Response(null, { status: 101, webSocket: client });
     }
 }

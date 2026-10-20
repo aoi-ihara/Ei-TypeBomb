@@ -1,7 +1,6 @@
 import { parseETBClusterConfig } from "./clusterConfig";
 export type TopologyEnv = {
     ETB_CLUSTER_CONFIG?: string;
-    CLUSTER_SERVER_TOKEN?: string;
     PRIMARY_SERVER_URL?: string;
     PARENT_SERVER_URL?: string;
     SERVER_PUBLIC_URL?: string;
@@ -24,25 +23,14 @@ function serverUrl(value: string | undefined, key: string): string | null {
     const normalized = parsed.toString();
     return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
-/** The certificate subject selects this host from the common config.
- * The identity must be cryptographically verified by Identity.create. */
-function certificateSubject(bundle: string): string {
-    try {
-        const { certificate } = JSON.parse(bundle);
-        const payload = certificate.split(".")[1];
-        const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-        if (typeof claims.sub !== "string") throw new Error("Missing subject");
-        return claims.sub;
-    } catch { throw new Error("Invalid CLUSTER_SERVER_TOKEN certificate"); }
-}
 export function parseServerTopology(env: TopologyEnv, transport?: "socket.io" | "websocket"): ServerTopology {
     if (env.ETB_CLUSTER_CONFIG !== undefined) {
         const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
         const primaryUrl = servers[0].origin;
         const candidates = servers.filter(server => server.transport === transport);
         const own = serverUrl(env.SERVER_PUBLIC_URL ?? env.RENDER_EXTERNAL_URL, "SERVER_PUBLIC_URL")
-            ?? (env.CLUSTER_SERVER_TOKEN ? certificateSubject(env.CLUSTER_SERVER_TOKEN)
-                : candidates.length === 1 ? candidates[0].origin : null);
+            ?? (candidates.length === 1 ? candidates[0].origin
+                : transport === "socket.io" && servers[0].transport === "socket.io" ? primaryUrl : null);
         if (!own) return { role: "standalone", primaryUrl, parentUrl: null, publicUrl: null };
         const index = servers.findIndex(server => server.origin === own);
         if (index < 0) throw new Error("Server identity is absent from ETB_CLUSTER_CONFIG");

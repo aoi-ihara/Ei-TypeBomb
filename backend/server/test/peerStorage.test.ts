@@ -10,17 +10,17 @@ import { PeerControl } from "../../shared/distributed/peers";
 test("durable incarnation and promises survive reopen; a second SQLite connection cannot share the voter", async (t) => {
     const dir = await mkdtemp(join(tmpdir(), "etb-vote-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
-    const first = new NodePeerStorage(dir, "certificate");
+    const first = new NodePeerStorage(dir, "https://primary.test");
     const boot = first.boot;
     await first.save("room", { promised: 73, candidate: "owner", contact: 10 });
-    assert.throws(() => new NodePeerStorage(dir, "certificate"), /locked/);
+    assert.throws(() => new NodePeerStorage(dir, "https://primary.test"), /locked/);
     first.close();
-    const second = new NodePeerStorage(dir, "certificate");
+    const second = new NodePeerStorage(dir, "https://primary.test");
     assert.equal(second.boot, boot);
     assert.equal((await second.load("room"))!.promised, 73);
     assert.equal(await second.load("unknown"), undefined);
     second.close();
-    assert.throws(() => new NodePeerStorage(dir, "changed-certificate"), /certificate changed/);
+    assert.throws(() => new NodePeerStorage(dir, "https://different.test"), /URL changed/);
 });
 
 test("restored sole owner recovers its certified game without changing boot or instance", async (t) => {
@@ -69,5 +69,5 @@ test("corrupt persistent storage fails closed instead of generating a fresh inca
     const dir = await mkdtemp(join(tmpdir(), "etb-corrupt-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
     await writeFile(join(dir, "cluster.sqlite"), "broken disk data");
-    assert.throws(() => new NodePeerStorage(dir, "certificate"), /database/);
+    assert.throws(() => new NodePeerStorage(dir, "https://primary.test"), /database/);
 });

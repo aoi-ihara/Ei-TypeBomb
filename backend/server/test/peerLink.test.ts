@@ -43,7 +43,7 @@ async function identities() {
         ).map((bundle) => Identity.create(JSON.stringify(bundle))),
     );
 }
-test("outbound TLS target and inbound client mutually authenticate before RPC", async () => {
+test("outbound TLS target and inbound client negotiate public topology before RPC", async () => {
     const [a, b] = await identities(),
         [left, right] = sockets();
     const [client, server] = await Promise.all([
@@ -72,7 +72,7 @@ test("outbound TLS target and inbound client mutually authenticate before RPC", 
         client.close();
     }
 });
-test("relaying two inbound authentication challenges cannot impersonate a client", async () => {
+test("two inbound handshakes with the wrong direction are rejected", async () => {
     const [a, b] = await identities(),
         [left, right] = sockets();
     let ready = 0,
@@ -105,7 +105,7 @@ test("relaying two inbound authentication challenges cannot impersonate a client
 });
 
 for (const transport of ["in-memory", "real WebSocket"]) test(
-    `an immediately issued RPC waits for both authentication proofs: ${transport}`,
+    `an immediately issued RPC waits for both handshake records: ${transport}`,
     async (t) => {
         const [a, b] = await identities();
         let left: ClusterSocket, right: ClusterSocket;
@@ -126,10 +126,10 @@ for (const transport of ["in-memory", "real WebSocket"]) test(
                 listener.close(() => resolve());
             }));
         }
-        const proof = a.proof.bind(a);
-        // Signing can finish after the opposite direction has verified its hello.
+        const proof = a.statement.bind(a);
+        // Metadata processing can finish after the opposite direction has verified its hello.
         // Start the first RPC as soon as the local link announces readiness.
-        a.proof = async (...args: Parameters<Identity["proof"]>) => {
+        a.statement = async (...args: Parameters<Identity["statement"]>) => {
             await new Promise((resolve) => setTimeout(resolve, 100));
             return proof(...args);
         };
@@ -167,8 +167,8 @@ test("first route after Primary restart reads the live Render owner over WebSock
         for (const socket of listener.clients) socket.terminate();
         listener.close(() => resolve());
     }));
-    const identity = n.hosts[0].identity, proof = identity.proof.bind(identity);
-    identity.proof = async (...args: Parameters<Identity["proof"]>) => {
+    const identity = n.hosts[0].identity, proof = identity.statement.bind(identity);
+    identity.statement = async (...args: Parameters<Identity["statement"]>) => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         return proof(...args);
     };
@@ -190,7 +190,7 @@ test("first route after Primary restart reads the live Render owner over WebSock
     assert.equal(route.ownership.epoch, current.ownership.epoch);
 });
 
-test("a buffered close before authentication rejects without sending on a closed socket", async () => {
+test("a buffered close before handshake rejects without sending on a closed socket", async () => {
     const [identity] = await identities();
     const listeners = new Map<string, (event: any) => void>();
     const socket = bufferPeerSocket({

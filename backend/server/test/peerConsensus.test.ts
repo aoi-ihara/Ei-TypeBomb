@@ -240,7 +240,7 @@ test("isolated Worker can advance but a restarted voter without state cannot rec
         /incarnation|memory/,
     );
 });
-test("signed identity rejects outsiders and requires a certified voting prefix", async () => {
+test("configured topology rejects outsiders and requires a certified voting prefix", async () => {
     const n = await network();
     const other = await credentials([
         "https://evil.test",
@@ -249,7 +249,7 @@ test("signed identity rejects outsiders and requires a certified voting prefix",
     const forged = await Identity.create(JSON.stringify(other[0]));
     await assert.rejects(
         n.hosts[0].restoreRegistry([forged.member]),
-        /signature/,
+        /Unconfigured/,
     );
     const room = freshRoom();
     n.hosts[0].members.delete(n.ids[2]);

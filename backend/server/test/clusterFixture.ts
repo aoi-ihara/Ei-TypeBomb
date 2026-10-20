@@ -1,32 +1,11 @@
-import { generateKeyPair, exportJWK, SignJWT } from "jose";
-import { Identity, type Credential } from "../../shared/distributed/identity";
+import { Identity } from "../../shared/distributed/identity";
 import { PeerControl } from "../../shared/distributed/peers";
 import type { Room } from "../../shared/types";
 import { randomUUID } from "node:crypto";
 export async function credentials(ids: string[]) {
-    const ca = await generateKeyPair("ES256");
-    const authorityKey = await exportJWK(ca.publicKey);
-    return Promise.all(
-        ids.map(async (id, depth) => {
-            const pair = await generateKeyPair("ES256", { extractable: true });
-            const privateKey = await exportJWK(pair.privateKey),
-                publicKey = await exportJWK(pair.publicKey);
-            const certificate = await new SignJWT({
-                depth,
-                parent: ids[depth - 1] ?? null,
-                transport: depth === 1 ? "websocket" : "socket.io",
-                publicKey,
-                roster: ids,
-            })
-                .setProtectedHeader({ alg: "ES256", typ: "JWT" })
-                .setSubject(id)
-                .setIssuer("etb-cluster")
-                .setAudience("etb-cluster-server")
-                .setExpirationTime("1y")
-                .sign(ca.privateKey);
-            return { privateKey, authorityKey, certificate } as Credential;
-        }),
-    );
+    const servers = ids.map((origin, depth) => ({ origin, endpoint: origin,
+        transport: depth === 1 ? "websocket" as const : "socket.io" as const }));
+    return Promise.all(ids.map(async id => JSON.parse(await Identity.generate(servers, id))));
 }
 export const freshRoom = (): Room => ({
     id: randomUUID(),

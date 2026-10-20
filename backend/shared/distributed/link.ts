@@ -1,4 +1,4 @@
-import { Identity, verify, type Member } from "./identity";
+import { Identity, readStatement, type Member } from "./identity";
 export const MAX_CLUSTER_FRAME_BYTES = 2 * 1024 * 1024;
 export type ClusterSocket = {
     send(data: string): void;
@@ -51,8 +51,8 @@ export type PeerLink = {
     call(op: string, args: Record<string, unknown>): Promise<any>;
     close(): void;
 };
-/** Mutual challenge-response authenticates the connection before any RPC. A
- * per-connection challenge prevents replay of a previously recorded hello. */
+/** Protocol negotiation and ordering only. Declarations/nonces are unsigned;
+ * anyone with network access can impersonate a configured peer. */
 export function attachLink(
     socket: ClusterSocket,
     identity: Identity,
@@ -68,9 +68,9 @@ export function attachLink(
     const nonce = crypto.randomUUID();
     let answeredChallenge = false;
     let closed = false;
-    let authentication = Promise.resolve();
-    let authenticatingFrames = 0;
-    let authenticatingBytes = 0;
+    let negotiation = Promise.resolve();
+    let handshakeFrames = 0;
+    let handshakeBytes = 0;
     let peer: Member | undefined;
     let link: PeerLink | undefined;
     const pending = new Map<
@@ -88,7 +88,7 @@ export function attachLink(
         rejectReady = reject;
     });
     const timer = setTimeout(() => {
-        rejectReady(new Error("Peer authentication timeout"));
+        rejectReady(new Error("Peer handshake timeout"));
         socket.close();
     }, 2000);
     const send = (value: unknown) => socket.send(JSON.stringify(value));
@@ -118,7 +118,7 @@ export function attachLink(
         const message = JSON.parse(event.data);
         if (message.type === "challenge") {
             if (answeredChallenge)
-                throw new Error("Repeated authentication challenge");
+                throw new Error("Repeated handshake challenge");
             answeredChallenge = true;
             if (
                 typeof message.nonce !== "string" ||
@@ -127,12 +127,12 @@ export function attachLink(
                 throw new Error("Invalid challenge");
             send({
                 type: "hello",
-                certificate: identity.member.certificate,
+                version: 3,
+                declaration: identity.member.declaration,
                 boot: identity.member.boot,
-                // Outbound clients know the TLS-authenticated server URL.
-                // Inbound servers sign only a server-role proof for their own
-                // audience, never an arbitrary client's chosen audience.
-                proof: await identity.proof(
+                // Direction and nonce detect accidental crossed/replayed frames;
+                // these public values do not authenticate the remote process.
+                statement: await identity.statement(
                     expected ?? identity.member.id,
                     {
                         challenge: message.nonce,
@@ -141,15 +141,15 @@ export function attachLink(
                 ),
             });
         } else if (message.type === "hello") {
+            if (message.version !== 3) throw new Error("Incompatible cluster protocol");
             const member = await identity.inspectPeer(
-                message.certificate,
+                message.declaration,
                 message.boot,
             );
             if (expected && member.id !== expected)
                 throw new Error("Wrong peer");
-            const proof = await verify(
-                message.proof,
-                member.publicKey,
+            const proof = readStatement(
+                message.statement,
                 expected ?? identity.member.id,
                 member.id,
             );
@@ -158,7 +158,7 @@ export function attachLink(
                 proof.challenge !== nonce ||
                 proof.sub !== member.boot
             )
-                throw new Error("Replay of peer authentication");
+                throw new Error("Invalid peer handshake");
             if (closed || peer) return;
             peer = member;
             link = {
@@ -187,7 +187,7 @@ export function attachLink(
             onReady(link);
             resolveReady(link);
         } else {
-            if (!peer || !link) throw new Error("Unauthenticated peer");
+            if (!peer || !link) throw new Error("Peer handshake incomplete");
             if (message.type === "reply") {
                 const p = pending.get(message.id);
                 if (!p) return;
@@ -240,29 +240,29 @@ export function attachLink(
             void receive(event).catch(invalid);
             return;
         }
-        // WebSocket preserves frame order, but async signing/verification does
+        // WebSocket preserves frame order, but async handshake processing does
         // not. Finish challenge and hello in order before processing the first
-        // RPC. Once authenticated, dispatch concurrently so nested RPC replies
+        // RPC. After negotiation, dispatch concurrently so nested RPC replies
         // are never blocked behind the request that needs them.
         if (typeof event.data !== "string" || event.data.length > MAX_CLUSTER_FRAME_BYTES) {
             invalid();
             return;
         }
         const size = new TextEncoder().encode(event.data).byteLength;
-        authenticatingBytes += size;
-        if (++authenticatingFrames > 128 || authenticatingBytes > MAX_CLUSTER_FRAME_BYTES) {
+        handshakeBytes += size;
+        if (++handshakeFrames > 128 || handshakeBytes > MAX_CLUSTER_FRAME_BYTES) {
             invalid();
             return;
         }
-        authentication = authentication
+        negotiation = negotiation
             .then(async () => {
                 if (peer) void receive(event).catch(invalid);
                 else await receive(event);
             })
             .catch(invalid)
             .finally(() => {
-                authenticatingFrames--;
-                authenticatingBytes -= size;
+                handshakeFrames--;
+                handshakeBytes -= size;
             });
     });
     if (!closed) send({ type: "challenge", id: identity.member.id, nonce });

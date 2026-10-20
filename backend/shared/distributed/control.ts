@@ -1,6 +1,6 @@
 import { parseServerTopology, type TopologyEnv } from "../topology";
 import { parseETBClusterConfig } from "../clusterConfig";
-export type ClusterEnv = TopologyEnv & { CLUSTER_SERVER_TOKEN?: string };
+export type ClusterEnv = TopologyEnv;
 export function clusterConfig(env: ClusterEnv, transport: "socket.io" | "websocket") {
     const topology = parseServerTopology(env, transport);
     if (topology.role === "standalone") {
@@ -8,8 +8,8 @@ export function clusterConfig(env: ClusterEnv, transport: "socket.io" | "websock
             throw new Error("Set SERVER_PUBLIC_URL to select this server from ETB_CLUSTER_CONFIG (Render uses RENDER_EXTERNAL_URL automatically)");
         return null;
     }
-    if (!topology.publicUrl || (!env.CLUSTER_SERVER_TOKEN && !env.ETB_CLUSTER_CONFIG))
-        throw new Error("Automatic server identity requires ETB_CLUSTER_CONFIG and SERVER_PUBLIC_URL");
+    if (!topology.publicUrl || !env.ETB_CLUSTER_CONFIG)
+        throw new Error("Distributed mode requires ETB_CLUSTER_CONFIG and SERVER_PUBLIC_URL");
     if (env.ETB_CLUSTER_CONFIG !== undefined) {
         const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
         const me = servers.find(s => s.origin === topology.publicUrl);
@@ -25,8 +25,7 @@ export function clusterConfig(env: ClusterEnv, transport: "socket.io" | "websock
         primary: topology.primaryUrl!, transport };
 }
 
-// A certificate is the authenticated source of this host's identity.
-// Refuse a stale or independently signed roster even if its subject matches.
+// Validate only public configuration consistency; this does not authenticate a peer.
 export function assertClusterIdentity(
     env: ClusterEnv,
     identity: { member: { id: string; parent: string | null; depth: number;
@@ -41,5 +40,5 @@ export function assertClusterIdentity(
         identity.member.parent !== (origins[depth - 1] ?? null) ||
         identity.member.transport !== servers[depth].transport ||
         JSON.stringify(identity.member.roster) !== JSON.stringify(origins))
-        throw new Error("Signed cluster identity does not match ETB_CLUSTER_CONFIG");
+        throw new Error("Cluster declaration does not match ETB_CLUSTER_CONFIG");
 }
