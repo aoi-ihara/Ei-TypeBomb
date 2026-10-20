@@ -200,6 +200,7 @@ export class PeerControl implements Control {
             .sort((a, b) => a.depth - b.depth)
             .map(({ id, parent, depth, transport, seen }) => ({
                 id,
+                url: this.identity.servers.find(server => (server.id ?? server.origin) === id)?.origin ?? id,
                 parent,
                 depth,
                 transport,
