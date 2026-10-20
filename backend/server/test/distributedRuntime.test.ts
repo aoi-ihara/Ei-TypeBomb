@@ -196,7 +196,7 @@ test("pause shifts all deadlines together without changing questions, bombs or s
     assert.deepEqual(restored.room.users, state.room.users);
     assert.equal(state.bombAt, 20_000);
 });
-test("distributed mode refuses missing credentials and plaintext public endpoints", () => {
+test("distributed mode requires public topology and refuses plaintext public endpoints", () => {
     assert.equal(clusterConfig({}, "socket.io"), null);
     assert.throws(
         () =>
@@ -215,7 +215,7 @@ test("distributed mode refuses missing credentials and plaintext public endpoint
                 {
                     PRIMARY_SERVER_URL: "http://primary.test",
                     SERVER_PUBLIC_URL: "http://primary.test",
-                    CLUSTER_SERVER_TOKEN: "token",
+                    ETB_CLUSTER_CONFIG: JSON.stringify({version:1,servers:["http://primary.test"]}),
                 },
                 "socket.io",
             ),

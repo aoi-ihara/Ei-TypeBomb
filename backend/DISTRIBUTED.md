@@ -4,7 +4,7 @@
 
 ゲーム状態・プレイヤー・トポロジー・所有権・確認状態にPostgreSQL/Supabaseを使いません。DBへのアクセスは担当Primaryが**新しいルームインスタンス**を作成するときの設定・問題取得だけです。移行時はレプリカの確定checkpointを使います。ルームが不明で必要なサーバーに接続できない場合、DBから作り直さず停止します。フロントエンドの既存のルーム編集・認証・オンライン記憶機能は変更しません。
 
-Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteに署名秘密鍵・確認済み公開鍵・boot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・認証済みレジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
+Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteにboot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・レジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
 環境変数のトポロジー設定は**全サーバーおよびVercelで同一**の `ETB_CLUSTER_CONFIG` へ統合します。配列の順序が優先順位、`/ws` の付いたURLがCloudflareのNative WebSocketを意味します。`/ws` はこの設定上の識別子であり、サーバー間のWSSは引き続き自動的に `/cluster/ws` を使います。
 
@@ -12,30 +12,37 @@ Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteに署名秘密
 ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
 ```
 
-Mac mini・Worker・Render・Vercelにはこの**同じ値**を設定してください。Mac miniは `SERVER_PUBLIC_URL` で自身のHTTPS originを指定します。Renderはプラットフォームの `RENDER_EXTERNAL_URL` を自動使用します。Workerが配列に1台だけなら `/ws` エントリから自身を特定し、複数なら `SERVER_PUBLIC_URL` を設定します。親と優先順位は配列から導出します。判別できないNodeをPrimaryと推測せず、明確な設定エラーで起動を拒否します。
+Mac mini・Worker・Render・Vercelにはこの同じ値を設定します。`CLUSTER_SERVER_TOKEN` は読み込まず、サーバー固有の秘密鍵・CA・公開鍵pin・署名認証は使用しません。プレイヤーのroom/session JWT認証とSupabase設定は引き続き必要です。
 
-### トークン不要のサーバー検証
+### 自己URLと再起動
 
-`CLUSTER_SERVER_TOKEN` の新規発行・設定は不要です。各ホストはES256秘密鍵と自身の証明書を自動生成し、NodeのSQLiteまたはWorkerのClusterDOへ保存します。秘密鍵はHTTP・WebSocket・ブラウザへ公開しません。プレイヤーのJWT認証とSupabase設定は引き続き必要です。
+- `SERVER_PUBLIC_URL` の明示設定を最優先し、Renderでは `RENDER_EXTERNAL_URL` を使用します。
+- Nodeでは、URL環境変数がなくても `CLUSTER_STATE_DIR/cluster.sqlite` の公開メタデータから以前の自己URLを復元します。旧証明書しかないDBでもsubjectだけを読み、秘密鍵を要求しません。
+- 保存状態のないNodeでは、唯一のNodeエントリ、または配列先頭のNodeを選びます。したがって通常のMac mini Primaryは追加設定不要です。Render以外に新規Nodeレプリカを追加するときは `SERVER_PUBLIC_URL` を明示してください。URLから稼働マシンそのものを自動識別する機能はありません。
+- Workerが1台なら `/ws` エントリを選び、複数なら `SERVER_PUBLIC_URL` が必要です。
 
-接続時は証明書のsubjectが `ETB_CLUSTER_CONFIG` のallowlistに含まれることを確認し、そのHTTPS originの `GET /cluster/identity` から証明書・公開鍵を取得します。リダイレクトは禁止し、取得時間と応答サイズを制限します。localhost以外のHTTPは許可しません。証明書の署名と設定中のURL・親・順位・transport・rosterを検証してから、その証明書と公開鍵を永続保存します。WebSocketでは従来どおりnonce・接続方向・bootの署名付きchallenge-responseを行います。
+### 認証を行わないサーバー間通信
 
-確認済みの相手が停止しても、保存した公開鍵でcheckpointを検証できます。未確認で停止中の相手は信頼できたことにせず、復旧までその署名の検証を拒否します。確認済みの鍵が変わった場合も自動で置換しません。URLのDNS/TLSと、そのURLを配信するアプリケーションが初回確認の信頼境界です。鍵交換を中継する公開エンドポイントに秘密情報を含めないでください。
+サーバー間WebSocketは、公開されたdeclaration（URL・親・順位・transport・roster・boot）と接続方向・nonceを交換してからRPCを受け付けます。これらは署名しない公開情報です。設定外URL・構成不一致・不正なフレーム順序は拒否しますが、設定内URLを名乗る第三者のなりすましは拒否できません。`GET /cluster/identity` は鍵の配布ではなく公開メタデータの診断用です。
 
-既存のトークンは移行互換のため読み込めます。**旧バージョンから移行するときは、最初は既存トークンを残して全ホストを新版で一度起動し、署名鍵が永続化された後にトークン設定を削除します。** 旧SQLiteは秘密鍵を保存していないため、初回更新と同時にトークンを消すと以前の署名鍵を再現できず、状態を上書きせず起動を拒否します。移行時は、既に手動設定済みのCAで署名検証できる旧証明書をオフラインでも確認・保存できるため、peer停止中の復旧を公開鍵取得待ちにしません。旧コードと自動生成鍵の混在はサポートしません。
+**`/cluster/ws` へ到達できる相手を信頼する構成です。** ネットワークへ到達できる第三者は、公開構成を使ってpeerを名乗り、checkpointや所有権情報を偽造できます。HTTP/WSSのTLSは使用しますが、受信したpeerの身元をこのアプリは認証しません。hashは偶発的なデータ不整合の検出用であり、改ざんの認証にはなりません。ユーザーの明示指示により、以前のサーバー署名による保護を廃止しています。
 
-Nodeの永続ディスクやWorkerのDOストレージを失うと、秘密鍵・boot・投票履歴も失われます。残ったノードのpinを消すだけでは安全に復元できません。既存ルームを終了し、全ノードの旧状態を保存したうえで、新クラスタとして再構成してください。稼働中のルームを保ったまま鍵を自動交換する機能はありません。
+### 旧データの移行
+
+全サーバーを停止し、同じ新版へ更新して再起動してください。通信プロトコルはversion 3で、旧署名版との稼働中混在はサポートしません。旧トークンは削除済みのまま起動できます。SQLite/DO内の旧秘密鍵・pinは初期化時に削除し、自己URL・boot・投票状態・checkpoint・tombstoneは維持します。旧certificateのURL・depth・parent・transport・rosterが現在の構成と一致することを、保存内容の更新前に検査します。不一致なら旧メタデータ・鍵・pin・投票状態を保持したまま停止するため、元の構成へ戻して再起動できます。旧checkpointのJWT形式は公開payloadとして読み、署名は検証しません。整合性、構成、instance、boot、epoch、revision、投票者集合の検査は維持します。
+
+永続ディスク/DOの投票状態が失われた場合、bootを推測で使い回して復旧しません。既存ルームの資格がないノードの昇格は拒否し、復旧不能な状態は既存の分類エラーで停止します。新しい保存領域にして同じbootだけをコピーする運用は避けてください。
 
 ## 所有権と確定方式：可用性最優先
 
-このPRは**ゲームを止めないこと**を優先し、過半数や末尾のACKがなくても、所有者が持つ署名付きcheckpointをローカルで確定できるようにしています。RenderがスリープしていてもMac miniとWorkerは動作し、Mac miniが落ちた後も、Workerにcheckpointが保存済みなら**Worker単独で移行・続行**できます。さらにWorkerが落ちても、Renderにcheckpointが既に届いていればRender単独で復旧できます。
+このPRは**ゲームを止めないこと**を優先し、過半数や末尾のACKがなくても、所有者が持つcheckpointをローカルで確定できるようにしています。RenderがスリープしていてもMac miniとWorkerは動作し、Mac miniが落ちた後も、Workerにcheckpointが保存済みなら**Worker単独で移行・続行**できます。さらにWorkerが落ちても、Renderにcheckpointが既に届いていればRender単独で復旧できます。
 
-- 各ルームにはinstance、owner、epoch、revision、固定投票者集合と署名付きcheckpointが存在します。
+- 各ルームにはinstance、owner、epoch、revision、固定投票者集合とcheckpointが存在します。
 - ゲームイベントは現ownerのローカル保存と署名により確定し、下位へのWebSocketレプリケーションは**best-effort**です。100ms入力集約と5秒Snapshotは維持します。
 - 新規ルーム作成時と所有権移行時には、応答する下位サーバーへの初期checkpoint配布を最大150ms待機します。それを超えてもゲームを停止しません。
 - 障害報告を受けた下位候補は、元ownerの健全性を確認します。元ownerが応答せず、候補が同じルームの証明済みcheckpointを保持していれば、**他ノードの同意を待たず**新epochで引き継ぎます。
 - フェイルバックは引き続き行いません。クライアントは得られる範囲で最大epochのownerを探します。旧ownerは他サーバーの新epochを再発見した時点で停止する仕組みです。
-- イベントID重複排除と、偽造した署名/別ルーム/旧epochを拒否する検証は維持します。
+- イベントID重複排除と、不正な形式/別ルーム/旧epochを拒否する検証は維持します。
 
 ### 意図的な整合性上の制限
 
@@ -55,7 +62,7 @@ Nodeの永続ディスクやWorkerのDOストレージを失うと、秘密鍵�
 | Renderのみ | Renderが同ルームの投票資格と有効なcheckpointを保持していれば継続。再起動後は同じ永続ディスクを利用すること |
 | どのサーバーにも対象ルームのcheckpointがない | 復元不可能。推測でDBからゲームを再構築しない |
 
-NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを使うプロセスの同時起動はSQLiteの排他ロックで拒否され、SIGKILLでもOSがロックを解除します。証明書変更やDB破損は新しい投票状態に置換せず起動を拒否します。boot IDだけを設定・コピーして使い回さないでください。
+NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを使うプロセスの同時起動はSQLiteの排他ロックで拒否され、SIGKILLでもOSがロックを解除します。自己URL・構成の変更やDB破損は新しい投票状態に置換せず起動を拒否します。boot IDだけを設定・コピーして使い回さないでください。
 
 **Renderでは永続ディスクをマウントし、`CLUSTER_STATE_DIR=/var/data/ei-typebomb-cluster` などを設定してください。** Mac miniにも再起動後に維持されるディレクトリを指定します。既定のローカルディレクトリは、Renderの一時ファイルシステムを永続化しません。ディスクの追加・プラン変更・本番デプロイはこのコード変更では実施しません。同一identityを別々のディスクで同時起動する構成はサポートしません。
 
@@ -63,7 +70,7 @@ NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを�
 
 クライアントは取得済みのinstance IDをルート照会と認証に渡し、状態消失を新規ルームとして再作成することを防ぎます。ただし初回アクセス／ページの完全再読込では、どのサーバーにもcheckpointがないルームを過去に遊ばれたルームと区別できません。永続ストレージを全台で消した場合の履歴検知には、別の永続インスタンス台帳が必要です。
 
-初期化時に署名済みrosterの先頭から連続した登録済みノードをルームの固定投票者として採用します。Primary1台でも新規ルームは開始できますが、その時にまだ登録されていない後続サーバーはそのルームの選出投票者になりません。非投票ミラーを自動的に選出投票者へ変更する機能はありません。**完全なフェイルオーバーを希望する場合は、必要な下位サーバーがゲーム開始前に登録されていることを確認してください。**
+初期化時に構成のrosterの先頭から連続した登録済みノードをルームの固定投票者として採用します。Primary1台でも新規ルームは開始できますが、その時にまだ登録されていない後続サーバーはそのルームの選出投票者になりません。非投票ミラーを自動的に選出投票者へ変更する機能はありません。**完全なフェイルオーバーを希望する場合は、必要な下位サーバーがゲーム開始前に登録されていることを確認してください。**
 
 ## 同期・復元・削除
 
@@ -71,15 +78,15 @@ NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを�
 
 クライアントはforegroundで約1.25秒応答がないと下位へ `/cluster/report` を送ります。room JWTと同じタブのsession JWT、room ID、認識したowner、最後のrevision、failureフラグを検証します。バックグラウンドでは応答監視を抑え、復帰後もサーバー側確認を必須にします。認証中には別の猶予を設けます。
 
-復元は署名された最新確定checkpointから行います。座席、表示名、game ID、爆弾ID/位置/段階/turn、選択済み問題、入力、推薦情報、イベント重複排除を引き継ぎます。移行中はタイマーを止め、参加者全員の再接続または20秒の復帰期限後に再開します。期限後の未復帰者には既存の通常退出処理を適用します。残り時間の再構成には保存時刻と最終確認時刻を使い、既に期限付近なら最小の復帰余裕を設けます。ホスト間の時計同期は必要ですが、時計を所有権の根拠にはしません。
+復元は最新確定checkpointから行います。座席、表示名、game ID、爆弾ID/位置/段階/turn、選択済み問題、入力、推薦情報、イベント重複排除を引き継ぎます。移行中はタイマーを止め、参加者全員の再接続または20秒の復帰期限後に再開します。期限後の未復帰者には既存の通常退出処理を適用します。残り時間の再構成には保存時刻と最終確認時刻を使い、既に期限付近なら最小の復帰余裕を設けます。ホスト間の時計同期は必要ですが、時計を所有権の根拠にはしません。
 
 全transport接続の復帰猶予が終了し、試合が動いていないことを確認してDELETEDのtombstoneを所有サーバーで確定し、下位へ非同期同期します。tombstoneは自動破棄しません。古いsnapshotは状態を上書きできず、再作成では新instanceと大きいepochを使います。ownerも必要な投票者も不在なら削除を推測で確定しません。
 
 ## デプロイとメンバー追加・削除
 
-1. 全ホストへ同じ `ETB_CLUSTER_CONFIG` を設定し、必要なホストでは `SERVER_PUBLIC_URL` を指定します。既存トークンを削除する手順は上記を参照してください。Nodeの永続ディスクとWorkerのCLUSTER/REPLICAS DO bindingを保持します。
-2. `/cluster/identity` のHTTPS GETと `/cluster/ws` のWSSをサーバー間で許可し、認証済み登録と初期checkpoint配送を確認してからゲームを開始します。Vercelにも同じJSONを設定します。session JWTは接続先変更で再発行しません。
-3. 追加・削除・順序・transportの変更は、旧構成のルームを終了してから全ホストを同じ構成へ切り替えます。自動証明書とpinも構成に固定されるため、旧状態をバックアップし、全ホストで新しい保存領域を使用します。既存ルームの固定投票者集合を自動変更しません。
+1. 全ホストへ同じ `ETB_CLUSTER_CONFIG` を設定し、必要なホストでは `SERVER_PUBLIC_URL` を指定します。旧トークンは不要です。Nodeの永続ディスクとWorkerのCLUSTER/REPLICAS DO bindingを保持します。
+2. `/cluster/identity` のHTTPS GETと `/cluster/ws` のWSSをサーバー間で許可し、設定と整合する登録と初期checkpoint配送を確認してからゲームを開始します。Vercelにも同じJSONを設定します。session JWTは接続先変更で再発行しません。
+3. 追加・削除・順序・transportの変更は、旧構成のルームを終了してから全ホストを同じ構成へ切り替えます。公開declarationも構成に固定されるため、旧状態をバックアップし、全ホストで新しい保存領域を使用します。既存ルームの固定投票者集合を自動変更しません。
 4. `CLUSTER_DRAINING=true` のownerは照会時に譲渡を承認します。通常は正常ownerへの虚偽報告で移行しません。
 
 PostgreSQL制御RPCと専用migrationはリポジトリから削除しました。旧PRのSQLをすでに手動適用した環境では、旧アプリの停止後に管理者が `public.etb_cluster(text,text,text,jsonb)` と `etb_private` schemaを撤去してください。この変更は本番DBへ接続して撤去作業を実行しません。通常のルーム設定テーブルには触れません。
@@ -106,7 +113,7 @@ PostgreSQL、DB資格情報、外部サービスへの接続はテストに不�
 
 ## 2026-10-20 障害の再現・修正検証
 
-実プロセスの検証は `npm run test:integration --prefix backend/cloudflare` で実行します。認証にはテスト用ES256鍵と実際の検証コードを使用し、ゲーム通信は実Socket.IO／workerd WebSocketです。Supabaseの設定取得だけはローカルHTTP fixtureです。本番サーバー・本番データを停止／更新しません。
+実プロセスの検証は `npm run test:integration --prefix backend/cloudflare` で実行します。プレイヤー認証にはテスト用ES256鍵と実際の検証コードを使用し、ゲーム通信は実Socket.IO／workerd WebSocketです。Supabaseの設定取得だけはローカルHTTP fixtureです。本番サーバー・本番データを停止／更新しません。
 
 - Primary停止→Worker単独で対戦と入力継続。
 - Primaryとworkerd停止→Render単独で同じgameId・instance・プレイヤーを復元。
@@ -114,9 +121,9 @@ PostgreSQL、DB資格情報、外部サービスへの接続はテストに不�
 - 全対戦プレイヤーと観戦者の実接続を切断し、Nodeの8秒ロビー猶予を超える9秒後に同じ対戦へ復帰（対戦復帰猶予は20秒）。全員切断時は期限を停止し、全員復帰時に停止時間を加算。
 - Primary再起動時にrouteはRenderを返し、旧ownerへのゲーム認証は拒否。Renderでの退出を他の接続にも配信。
 - Renderだけで新規JWT／ルーム設定から作成し、2プレイヤーが参加して対戦開始・カウントダウン完了。
-- RenderのSQLiteを削除→再起動→稼働中ownerから署名付きミラーを受信→ownerとWorkerを停止。`Ineligible voter or lost process memory` を実際に記録し、HTTP 409／`VOTER_STATE_LOST` を1回だけ通知して停止。DBから元のゲームを捏造しない。
+- RenderのSQLiteを削除→再起動→稼働中ownerからミラーを受信→ownerとWorkerを停止。`Ineligible voter or lost process memory` を実際に記録し、HTTP 409／`VOTER_STATE_LOST` を1回だけ通知して停止。DBから元のゲームを捏造しない。
 
-修正前に追加したテストでは、Render再起動後の `gameId` が `undefined`（元のgameId不一致）となり失敗しました。全員切断の単体再現では、9秒後の `isStart` が `false` となり失敗しました。boot検証を削除せず、保存と猶予処理を修正しています。また、古い確定tombstoneが新しい署名付きミラーより優先される `read/status` の失敗を再現し、epoch・revisionの新しい方を返すよう修正しました。ミラーを保存しても投票資格を付与しません。
+修正前に追加したテストでは、Render再起動後の `gameId` が `undefined`（元のgameId不一致）となり失敗しました。全員切断の単体再現では、9秒後の `isStart` が `false` となり失敗しました。boot検証を削除せず、保存と猶予処理を修正しています。また、古い確定tombstoneが新しいミラーより優先される `read/status` の失敗を再現し、epoch・revisionの新しい方を返すよう修正しました。ミラーを保存しても投票資格を付与しません。
 
 **未解決の方式上の制約：** 上記はクラッシュと再起動の検証です。ネットワーク分断中の厳密な単一owner保証は、この文書の「意図的な整合性上の制限」のとおりありません。可用性を保ったままそれを保証するには、全サーバーが確認する外部の排他的リース／fencing authorityなどへの方式変更が必要です。今回その保証を追加したとは扱いません。
 
@@ -145,7 +152,7 @@ PostgreSQL、DB資格情報、外部サービスへの接続はテストに不�
 
 修正前には手順3で、epochが3から4に進んだ後も旧名と `migrating: true` が元の期限を超えて残り、26秒以内の復帰テストが失敗しました。単体テストでも期限30000が復元後35000になること、待機中の退出後／移行した待機室で `migrating: true` が残ることを失敗として確認しています。通常のタブ相当の閉鎖・再参加（所有Nodeの再起動なし）は修正前にも通過しており、本番の全条件を特定できたとは扱いません。ブラウザーの代わりに本物のRoutedSocket・Socket.IO／WebSocketを用い、UIの待機表示の根拠であるsnapshotの `migrating` と、その後の実ゲームコマンドを検証します。
 
-Workerでも、全プレイヤー切断→一人復帰→明示的退出→待機解除→再参加を実workerdで検証します。認証署名、checkpointの投票資格・epoch・fencing検証には変更を加えません。
+Workerでも、全プレイヤー切断→一人復帰→明示的退出→待機解除→再参加を実workerdで検証します。この時点では認証署名、投票資格・epoch・fencing検証を維持しました。現在のサーバー署名廃止の仕様は冒頭を参照してください。
 
 CodexレビューのP1指摘（PR #391）では、待機だけを解除すると旧座席・旧セッションが残り、新規参加を妨げたり、新しい対戦を旧期限で終了させたりする問題が見つかりました。修正前に、満員の待機室を復元しても `old-a`・`old-b` が残る失敗を確認し、座席とセッションを片付けてから待機を解除する順序に修正しました。単体検証でも新しい2人だけで始めた対戦が21秒後に維持されることを確認します。
 
@@ -179,10 +186,10 @@ RoutedSocketは `beforeunload`／`pagehide` とゲーム画面のunmountで明�
 - 全員のタブを閉じてDELETEDを確認し、Nodeでは保存済みSQLiteを使って所有プロセスも再起動。
 - 同じルームURLを新規2ページで開き、新しいinstanceの対戦開始・カウントダウン・回答によるターン更新まで進む。旧instanceの遅延退出は拒否し、新しいゲームを維持。
 
-## トークン省略の回帰検証
+## サーバー秘密鍵認証の廃止に対する検証
 
-実通信テストは全Node子プロセスとworkerdに `CLUSTER_SERVER_TOKEN` を渡さずに実行します。変更前のmainにこのテストを適用すると、Nodeが `ETB_CLUSTER_CONFIG requires a per-server CLUSTER_SERVER_TOKEN` で起動できず失敗します。
+トークンと自己URLの両方を外した旧Nodeの実プロセスが `Set SERVER_PUBLIC_URL to select this server from ETB_CLUSTER_CONFIG` で起動に失敗することを再現しました。実通信テストのPrimaryは両方なしで起動し、Renderは自己URL環境変数なしの再起動も検証します。
 
-通常の移行・Render再起動・Fallback 5・Chromiumのタブ終了と再参加に加え、Workerの実workerdプロセスを再作成し、全peer停止中でもDOに保存した同じ公開鍵とcheckpointで復旧できることを検証します。署名鍵を残して投票記録を消す場合は `VOTER_STATE_LOST`、署名鍵も消して旧checkpointを検証できない場合は `CHECKPOINT_UNAVAILABLE` で停止し、どちらも対戦を新規作成せず、自動報告がループしないことを確認します。
+全Node・実workerd・Chromiumで移行・再起動・Fallback 5・タブ終了の即時反映・再参加を検証します。投票記録の消失とディスク全体の消失は、どちらもboot・投票資格を失った `VOTER_STATE_LOST` として停止し、無限報告やDBからの対戦再作成をしません。
 
-公開鍵取得の単体テストは実HTTP接続を使い、偽装証明書・リダイレクト・設定外のURL・構成不一致・pin保存失敗・鍵の無断交換を拒否します。HTTPSの初回信頼はホスティング先のDNS/TLSを前提とし、ローカル試験だけlocalhost HTTPを許可します。
+旧署名形式のcertificate/checkpointを持ち、秘密鍵を削除済みのSQLiteを作成する回帰テストでは、自己URL・boot・対戦instance・game ID・投票記録を保持して復元することを確認します。公開declarationが認証ではなく、同じURLを誰でも名乗れることもテストで明示します。

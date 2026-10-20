@@ -59,26 +59,14 @@ test("invalid shared topology is rejected", () => {
         '{"version":1,"servers":["https://a.test/?token=1"]}',
     ]) assert.throws(() => parseETBClusterConfig(config));
 });
-test("host position is derived from signed certificate subject instead of per-host URL variables", () => {
-    const servers = ["https://primary.test","https://worker.test/ws","https://render.test"];
-    const config = JSON.stringify({ version: 1, servers });
-    const subject = (sub: string) => {
-        const data = Buffer.from(JSON.stringify({sub})).toString("base64url");
-        return JSON.stringify({ certificate: "header."+data+".signature" });
-    };
-    assert.deepEqual(parseServerTopology({ETB_CLUSTER_CONFIG: config,
-        CLUSTER_SERVER_TOKEN: subject("https://worker.test")}), {
-        role: "replica", primaryUrl: "https://primary.test",
-        parentUrl: "https://primary.test", publicUrl: "https://worker.test",
-    });
-    assert.equal(parseServerTopology({ETB_CLUSTER_CONFIG: config,
-        CLUSTER_SERVER_TOKEN: subject("https://render.test")}).parentUrl,
-        "https://worker.test");
-    assert.throws(() => parseServerTopology({ETB_CLUSTER_CONFIG: config,
-        CLUSTER_SERVER_TOKEN: subject("https://not-in-roster.test")}));
+test("keyless topology selects local Primary, Render URL and Worker without a token", () => {
+    const ETB_CLUSTER_CONFIG = JSON.stringify({ version: 1, servers: [primary, worker, "https://render.test"] });
+    assert.equal(parseServerTopology({ETB_CLUSTER_CONFIG}, "socket.io").publicUrl, primary);
+    assert.equal(parseServerTopology({ETB_CLUSTER_CONFIG}, "websocket").publicUrl, new URL(worker).origin);
+    assert.equal(parseServerTopology({ETB_CLUSTER_CONFIG, RENDER_EXTERNAL_URL:"https://render.test"}, "socket.io").role, "replica");
 });
 
-test("signed credential roster cannot silently disagree with public config", async () => {
+test("public server roster cannot silently disagree with public config", async () => {
     const raw = JSON.stringify({ version: 1, servers: [
         "https://primary.test", "https://worker.test/ws"
     ] });

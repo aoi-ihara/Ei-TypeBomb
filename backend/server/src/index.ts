@@ -31,6 +31,7 @@ import {
     type EventHandlers,
 } from "../../shared/protocol";
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
+import { Identity } from "../../shared/distributed/identity";
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { parseServerTopology } from "../../shared/topology";
 
@@ -39,17 +40,17 @@ import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
 import { recoveryFailure } from "../../shared/distributed/recovery";
-import { persistentPeerIdentity } from "./lib/peerStorage";
+import { persistentPeerIdentity, nodeClusterEnv } from "./lib/peerStorage";
 import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
 import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
-const topology = parseServerTopology(process.env, "socket.io");
-const config = clusterConfig(process.env, "socket.io");
+const clusterEnv = nodeClusterEnv(process.env);
+const topology = parseServerTopology(clusterEnv, "socket.io");
+const config = clusterConfig(clusterEnv, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
-    ? persistentPeerIdentity(process.env.CLUSTER_SERVER_TOKEN,
-        process.env.CLUSTER_STATE_DIR ?? ".cluster-state",
-        process.env.ETB_CLUSTER_CONFIG ? { servers: parseETBClusterConfig(process.env.ETB_CLUSTER_CONFIG), id: config.id } : undefined).then(async ({ identity, storage }) => {
+    ? Identity.generate(parseETBClusterConfig(clusterEnv.ETB_CLUSTER_CONFIG!), config.id)
+        .then(declaration => persistentPeerIdentity(declaration, process.env.CLUSTER_STATE_DIR ?? ".cluster-state")).then(async ({ identity, storage }) => {
           assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
               const url = new URL("/cluster/ws", id);

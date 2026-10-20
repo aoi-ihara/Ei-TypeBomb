@@ -1,4 +1,4 @@
-import { Identity, digest, verify, type Member } from "./identity";
+import { Identity, digest, readStatement, type Member } from "./identity";
 import { attachLink, type ClusterSocket, type PeerLink } from "./link";
 import type { Control, ControlResult, Checkpoint, DurableRoom } from "./types";
 import { difference, applyDifference } from "./replication";
@@ -19,7 +19,8 @@ export type VoteRecord = {
 type Proposal = {
     checkpoint: VotedCheckpoint;
     mode: "init" | "commit" | "elect";
-    proof: string;
+    statement: string;
+    proof?: string; // Read-only compatibility for previously persisted proposals.
     base?: VotedCheckpoint;
     baseHash?: string;
     delta?: ReturnType<typeof difference>;
@@ -57,7 +58,7 @@ export class PeerControl implements Control {
             identity.member.transport !== config.transport ||
             (identity.member.depth === 0) !== (config.id === config.primary)
         )
-            throw new Error("Certificate/topology mismatch");
+            throw new Error("Declaration/topology mismatch");
         this.members.set(config.id, identity.member);
     }
     private async serial<T>(room: string, task: () => Promise<T>): Promise<T> {
@@ -158,7 +159,7 @@ export class PeerControl implements Control {
                 );
                 await this.merge(response.members);
             } catch {
-                /* A failed parent never erases the authenticated registry. */
+                /* A failed parent never erases the saved registry. */
             }
         }
         const entries = [...this.members.values()];
@@ -174,7 +175,7 @@ export class PeerControl implements Control {
             throw new Error("Invalid registry");
         for (const entry of entries) {
             const member = await this.identity.inspectPeer(
-                entry.certificate,
+                entry.declaration ?? entry.certificate!,
                 entry.boot,
             );
             if (member.roster[0] !== this.config.primary)
@@ -186,7 +187,7 @@ export class PeerControl implements Control {
                 (other) =>
                     other.depth === member.depth && other.id !== member.id,
             );
-            if (conflict) throw new Error("Conflicting priority certificate");
+            if (conflict) throw new Error("Conflicting priority declaration");
             this.members.set(member.id, { ...member, seen: Date.now() });
         }
         await this.storage?.registry?.([...this.members.values()]);
@@ -266,14 +267,14 @@ export class PeerControl implements Control {
         let previous: Member | undefined;
         for (const member of cp.voters) {
             const verified = await this.identity.inspectPeer(
-                member.certificate,
+                member.declaration ?? member.certificate!,
                 member.boot,
             );
             if (
                 verified.id !== member.id ||
                 verified.depth !== member.depth ||
-                JSON.stringify(verified.publicKey) !==
-                    JSON.stringify(member.publicKey) ||
+                verified.parent !== member.parent || verified.transport !== member.transport ||
+                JSON.stringify(verified.roster) !== JSON.stringify(member.roster) ||
                 (previous &&
                     (member.parent !== previous.id ||
                         member.depth !== previous.depth + 1))
@@ -285,22 +286,11 @@ export class PeerControl implements Control {
         if (hash !== (await digest(value)))
             throw new Error("Checkpoint digest mismatch");
         if (decided) {
-            const encoded = cp.decision?.split(".")[1];
-            if (!encoded) throw new Error("Missing quorum decision");
-            const claims = JSON.parse(new TextDecoder().decode(
-                Uint8Array.from(
-                    atob(encoded.replace(/-/g, "+").replace(/_/g, "/")),
-                    (char) => char.charCodeAt(0),
-                ),
-            ));
+            if (!cp.decision) throw new Error("Missing quorum decision");
+            const claims = readStatement(cp.decision, "etb-room-decision");
             const signer = cp.voters.find((v) => v.id === claims.iss);
-            if (!signer) throw new Error("Decision signer is not a voter");
-            const proof = await verify(
-                cp.decision!,
-                signer.publicKey,
-                "etb-room-decision",
-                signer.id,
-            );
+            if (!signer) throw new Error("Decision issuer is not a voter");
+            const proof = claims;
             const path = proof.voters;
             if (proof.hash !== cp.hash || proof.boot !== signer.boot ||
                 !Array.isArray(path) ||
@@ -581,11 +571,11 @@ export class PeerControl implements Control {
         base?: VotedCheckpoint,
         deltaBase?: VotedCheckpoint,
     ): Promise<VotedCheckpoint> {
-        const proof = await this.identity.proof("etb-room-proposal", {
+        const statement = await this.identity.statement("etb-room-proposal", {
             hash: cp.hash,
             mode,
         });
-        const full: Proposal = { checkpoint: cp, proof, mode, base };
+        const full: Proposal = { checkpoint: cp, statement, mode, base };
         await this.serial(cp.ownership.roomId, async () => {
             const record = await this.record(cp.ownership.roomId);
             await this.store(cp.ownership.roomId, { ...record, pending: full });
@@ -930,9 +920,8 @@ export class PeerControl implements Control {
             }
             await this.validate(cp, false);
             const owner = cp.voters.find((v) => v.id === cp.ownership.owner)!;
-            const proof = await verify(
-                proposal.proof,
-                owner.publicKey,
+            const proof = readStatement(
+                proposal.statement ?? proposal.proof!,
                 "etb-room-proposal",
                 owner.id,
             );
@@ -941,7 +930,7 @@ export class PeerControl implements Control {
                 proof.mode !== proposal.mode ||
                 proof.sub !== owner.boot
             )
-                throw new Error("Invalid owner proof");
+                throw new Error("Invalid owner statement");
             const index = cp.voters.findIndex((v) => v.id === this.config.id),
                 start = cp.voters.findIndex((v) => v.id === owner.id);
             if (index < start ||
@@ -1035,7 +1024,7 @@ export class PeerControl implements Control {
             if (accepted.length >= this.quorum(cp)) {
                 decided = {
                     ...cp,
-                    decision: await this.identity.proof(
+                    decision: await this.identity.statement(
                         "etb-room-decision",
                         {
                             hash: cp.hash,
