@@ -20,7 +20,7 @@ test("durable incarnation and promises survive reopen; a second SQLite connectio
     assert.equal((await second.load("room"))!.promised, 73);
     assert.equal(await second.load("unknown"), undefined);
     second.close();
-    assert.throws(() => new NodePeerStorage(dir, "https://different.test"), /URL changed/);
+    assert.throws(() => new NodePeerStorage(dir, "https://different.test"), /ID changed/);
 });
 
 test("restored sole owner recovers its certified game without changing boot or instance", async (t) => {
