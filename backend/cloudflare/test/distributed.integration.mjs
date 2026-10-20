@@ -609,6 +609,13 @@ test(
             "Mac mini + Worker commit a leave while Render is asleep",
         );
         freshSocket.disconnect();
+        // Explicit leave on the Worker uses the authenticated socket event,
+        // not a game:command ACK; it must cancel the active match immediately.
+        w1.send("room:leave");
+        await wait(
+            () => w1.room && !w1.room.isStart && w1.room.users.length === 0,
+            "direct Worker leave cancels active match",
+        );
         assert.ok(
             databaseReads > readsBeforeFailover,
             "creating a new room must load its settings",

@@ -4,7 +4,7 @@ export type ClientPayloads = {
     "cluster:ping": undefined;
     "auth:response": { jwtToken: string; displayName: string; sessionToken?: string };
     "room:join": undefined;
-    "room:leave": undefined;
+    "room:leave": { requestId: string } | undefined;
     "game:start": undefined;
     "word:success": undefined;
     "item:recommend": { itemId: string };
@@ -22,6 +22,7 @@ export type ServerPayloads = {
     connect: { id: string };
     "auth:request": undefined;
     "auth:session": { id: string };
+    "room:leave:ack": { requestId: string };
     "room:broadcast": WireRoom;
     "typing:input": {
         input: string;

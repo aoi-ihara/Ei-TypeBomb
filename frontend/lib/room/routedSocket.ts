@@ -99,6 +99,13 @@ export class RoutedSocket {
     // and users who explicitly left must not be auto-enrolled.
     private joinedRoom = false;
     private rejoinOnSnapshot = false;
+    // Explicit leave is a user intent, not a fenced gameplay command. Hold it
+    // across failover so stale snapshots and unacknowledged commands cannot
+    // silently undo it.
+    private leaveRequested = false;
+    private leaveRequestId?: string;
+    private authenticatedTransport?: Transport;
+    private leaveSentTo?: Transport;
     constructor(
         private readonly seeds: string[],
         private readonly open: (url: string) => Transport,
@@ -154,8 +161,22 @@ export class RoutedSocket {
     }
     emit(event: string, data?: unknown) {
         if (event === "room:leave") {
+            // Never discard an intentional exit because another game command
+            // is waiting for its ACK or the socket is between owners. Both
+            // runtimes accept this authenticated, session-bound event directly.
+            this.leaveRequested = true;
+            this.leaveRequestId ??= crypto.randomUUID();
             this.joinedRoom = false;
             this.rejoinOnSnapshot = false;
+            // No old join/start/answer should be replayed after opting out.
+            this.pending.clear();
+            this.sendLeaveIfAuthenticated();
+            return this;
+        }
+        if (event === "room:join") {
+            this.leaveRequested = false;
+            this.leaveRequestId = undefined;
+            this.leaveSentTo = undefined;
         }
         if (event === "auth:response") {
             const auth = data as { sessionToken?: string };
@@ -186,6 +207,14 @@ export class RoutedSocket {
         }
         this.transport?.emit(event, data);
         return this;
+    }
+    private sendLeaveIfAuthenticated() {
+        const socket = this.transport;
+        if (!this.leaveRequested || !this.leaveRequestId || !socket ||
+            this.authenticatedTransport !== socket ||
+            this.leaveSentTo === socket) return;
+        this.leaveSentTo = socket;
+        socket.emit("room:leave", { requestId: this.leaveRequestId });
     }
     private sendCommand(command: {
         id: string;
@@ -371,6 +400,7 @@ export class RoutedSocket {
                 }
                 this.transport?.disconnect();
                 this.transport = socket;
+                this.authenticatedTransport = undefined;
                 this.currentOwner = server.id;
                 let authenticating = true;
                 const authStartedAt = performance.now();
@@ -438,10 +468,27 @@ export class RoutedSocket {
                             this.recoveryDiagnostics.authenticationMs +=
                                 this.lastReply - authStartedAt;
                         this.playerId = value.id;
+                        this.authenticatedTransport = socket;
                         this.dispatch("auth:session", value);
+                        this.sendLeaveIfAuthenticated();
                         if (readySnapshotBeforeAuthAt !== undefined)
                             finishRecovery(this.lastReply, true);
                     }
+                });
+                socket.on("room:leave:ack", (message: unknown) => {
+                    if (!active() || !this.leaveRequested ||
+                        this.leaveSentTo !== socket ||
+                        !message || typeof message !== "object" ||
+                        !("requestId" in message) ||
+                        message.requestId !== this.leaveRequestId)
+                        return;
+                    // The owner has committed the explicit leave. Never
+                    // retransmit it after the next successful authentication.
+                    // Snapshot absence alone is not proof: old or reordered
+                    // broadcasts may precede the commit.
+                    this.leaveRequested = false;
+                    this.leaveRequestId = undefined;
+                    this.leaveSentTo = undefined;
                 });
                 socket.on("command:ack", ({ id, status }) => {
                     if (!active()) return;
@@ -488,7 +535,7 @@ export class RoutedSocket {
                     const inRoom = room.users.some(
                         (player: { id: string }) => player.id === this.playerId,
                     );
-                    if (inRoom) {
+                    if (inRoom && !this.leaveRequested) {
                         this.joinedRoom = true;
                         this.rejoinOnSnapshot = false;
                     }
@@ -503,7 +550,8 @@ export class RoutedSocket {
                             readySnapshotBeforeAuthAt = performance.now();
                         else finishRecovery(performance.now(), false);
                     }
-                    if (this.rejoinOnSnapshot && !inRoom && !room.isStart) {
+                    if (this.rejoinOnSnapshot && !this.leaveRequested &&
+                        !inRoom && !room.isStart) {
                         // The new owner has authenticated us but the old
                         // Socket.IO disconnect already removed our seat.
                         // Drop commands from the previous connection before
@@ -631,8 +679,9 @@ export class RoutedSocket {
             };
         this.attempt++;
         this.connected = false;
-        this.rejoinOnSnapshot = this.joinedRoom;
+        this.rejoinOnSnapshot = this.joinedRoom && !this.leaveRequested;
         clearInterval(this.heartbeat);
+        this.authenticatedTransport = undefined;
         this.transport?.disconnect();
         this.transport = undefined;
         this.dispatch("disconnect");
@@ -657,6 +706,10 @@ export class RoutedSocket {
         this.stopped = true;
         this.joinedRoom = false;
         this.rejoinOnSnapshot = false;
+        this.leaveRequested = false;
+        this.leaveRequestId = undefined;
+        this.leaveSentTo = undefined;
+        this.authenticatedTransport = undefined;
         this.recoveryStartedAt = undefined;
         this.recoveryDiagnostics = undefined;
         this.firstMigrationSnapshotAt = undefined;
