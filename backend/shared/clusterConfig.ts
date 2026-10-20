@@ -37,7 +37,7 @@ export function parseETBClusterConfig(raw: string): ClusterServer[] {
                         (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)));
                 } catch { return false; }
             })();
-            if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id) && !legacyOrigin)
+            if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id!) && !legacyOrigin)
                 throw new Error(`Invalid stable server id at position ${i}`);
         } else {
             if (typeof item !== "string") throw new Error(`Invalid cluster URL at position ${i}`);
