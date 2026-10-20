@@ -442,7 +442,7 @@ test("transient Node disconnect preserves an active game and player seat past lo
     assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), seats);
 });
 
-test("abandoned live-game seat is cleaned after the match, not during it", async () => {
+test("abandoned live-game seat is cleaned when reconnect grace expires", async () => {
     const f = fixture();
     await f.runtime.open(room);
     await f.runtime.connect("a");
@@ -451,17 +451,14 @@ test("abandoned live-game seat is cleaned after the match, not during it", async
     await f.runtime.command(f.command("b", "room:join"), "b");
     await f.runtime.command(f.command("a", "game:start"), "a");
     await f.runtime.disconnect("a", false, 8_000);
-    for (let round = 0; round < 8 && f.runtime.state.room.isStart; round++) {
-        f.advance(30_001);
-        await f.runtime.tick();
-        if (f.runtime.state.room.isStart)
-            assert.deepEqual(
-                f.runtime.state.room.users.map((player) => player.id), ["a", "b"],
-            );
-    }
+    f.advance(19_999);
+    await f.runtime.tick();
+    assert.deepEqual(f.runtime.state.room.users.map((player) => player.id), ["a", "b"]);
+    f.advance(2);
+    await f.runtime.tick();
     assert.equal(f.runtime.state.room.isStart, false);
     await f.runtime.tick();
-    // Game completion already empties every seat by design.
+    // A living player's expired reconnect grace has the usual leave semantics.
     assert.deepEqual(f.runtime.state.room.users, []);
     assert.equal(f.runtime.checkpoint.value?.sessions.a, undefined);
 });
@@ -553,4 +550,63 @@ test("all players disconnect: freeze deadlines and retain seats through recovery
     await f.runtime.connect("b");
     assert.equal(f.runtime.checkpoint.value!.resumeUntil, undefined);
     if (wordAt !== undefined) assert.equal(f.runtime.state.wordAt, wordAt + 9_000);
+});
+
+test("a closed game tab expires even while another player remains connected", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    f.advance(19_999);
+    await f.runtime.tick();
+    assert.equal(f.runtime.state.room.isStart, true);
+    assert.equal(f.runtime.state.room.users.some((p) => p.id === "a"), true);
+    f.advance(2);
+    await f.runtime.tick();
+    assert.equal(f.runtime.checkpoint.value!.sessions.a, undefined);
+    assert.equal(f.runtime.state.room.users.some((p) => p.id === "a"), false);
+    assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
+    assert.equal(f.runtime.deleted, false);
+});
+
+test("a new page session cannot keep the closed page's old name alive past grace", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["old-page", "opponent"]) {
+        await f.runtime.connect(id);
+        const join = f.command(id, "room:join");
+        join.event = { type: "room:join", player: { id, displayName: id === "old-page" ? "Previous name" : "Opponent" } };
+        await f.runtime.command(join, id);
+    }
+    await f.runtime.command(f.command("old-page", "game:start"), "old-page");
+    await f.runtime.disconnect("old-page", "lobby", 8_000);
+    // A new browser page gets a new session, rather than reviving old-page.
+    await f.runtime.connect("new-page");
+    f.advance(20_001);
+    await f.runtime.tick();
+    assert.equal(f.runtime.checkpoint.value!.sessions["old-page"], undefined);
+    const join = f.command("new-page", "room:join");
+    join.event = { type: "room:join", player: { id: "new-page", displayName: "New name" } };
+    await f.runtime.command(join, "new-page");
+    assert.deepEqual(f.runtime.snapshot().users.map((user) => user.displayName), ["New name"]);
+});
+
+test("an active match does not extend a closed spectator's shorter cleanup deadline", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.connect("spectator");
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("spectator", "lobby", 8_000);
+    f.advance(8_001);
+    await f.runtime.tick();
+    assert.equal(f.runtime.checkpoint.value!.sessions.spectator, undefined);
+    assert.equal(f.runtime.state.room.isStart, true);
 });

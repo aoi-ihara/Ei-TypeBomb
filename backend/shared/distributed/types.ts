@@ -65,8 +65,8 @@ export type Command = {
     event: GameEvent;
 };
 export const GRACE_MS = 20_000;
-// Keep abandoned lobby seats short-lived, but preserve active match seats until
-// the match ends so an incidental transport loss cannot cancel everybody's game.
+// Lobby expiry is short; active-match disconnects use at least GRACE_MS.
+// A transient loss keeps the seat, but an expired grace must remove it.
 export const NODE_DISCONNECT_GRACE_MS = 8_000;
 export const MAX_SNAPSHOT_BYTES = 512 * 1024;
 export const GAME_RULES = {

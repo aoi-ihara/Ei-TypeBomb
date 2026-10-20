@@ -391,7 +391,9 @@ export class DistributedRoom {
             value.sessions[id] = {
                 ...value.sessions[id],
                 connected: false,
-                expires: this.now() + graceMs,
+                expires: this.now() + (value.game.room.isStart &&
+                    value.game.room.users.some((player) => player.id === id)
+                    ? Math.max(graceMs, GRACE_MS) : graceMs),
             };
             if (value.game.room.isStart && !value.resumeUntil &&
                 value.game.room.users.every((player) => !value.sessions[player.id]?.connected)) {
@@ -442,22 +444,11 @@ export class DistributedRoom {
             const value = structuredClone(this.checkpoint.value!);
             const effects: GameResult["effects"] = [];
             let changed = false;
-            // Every authenticated socket counts, including spectators and
-            // players who explicitly left the game but kept the room open.
-            // If no socket remains, normal expiry can safely retire the room.
-            const hasConnectedSocket = Object.values(value.sessions).some(
-                (session) => session.connected,
-            );
+            // Keep active players only until the reconnect deadline. A
+            // remaining player/spectator must not turn that bounded grace
+            // into a reservation lasting the entire match.
             for (const [id, session] of Object.entries(value.sessions)) {
                 if (session.connected || session.expires > now) continue;
-                // Never convert a transient transport disconnect into a
-                // room:leave while a match is running: room:leave cancels the
-                // ENTIRE game. Keep this reserved seat reconnectable, and
-                // clear abandoned seats immediately after the match finishes.
-                // An explicit room:leave still cancels the game as intended.
-                if (value.game.room.isStart && hasConnectedSocket &&
-                    value.game.room.users.some((player) => player.id === id))
-                    continue;
                 delete value.sessions[id];
                 const result = this.reduce(value, {
                     type: "room:leave",
