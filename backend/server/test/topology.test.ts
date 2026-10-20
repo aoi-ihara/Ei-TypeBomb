@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseServerTopology } from "../../shared/topology";
-import { assertClusterIdentity } from "../../shared/distributed/control";
+import { assertClusterIdentity, clusterConfig } from "../../shared/distributed/control";
+import { Identity } from "../../shared/distributed/identity";
 
 const primary = "https://primary.example.test";
 const worker = "https://worker.example.test/ws";
@@ -96,13 +97,11 @@ test("v2 decouples durable identities from endpoint changes", async () => {
     const newServers = parseETBClusterConfig(rotated);
     assert.deepEqual(oldServers.map(s => s.id), newServers.map(s => s.id));
     assert.deepEqual(newServers.map(s => s.transport), ["socket.io", "websocket", "socket.io"]);
-    const { Identity } = await import("../../shared/distributed/identity");
     const before = await Identity.generate(oldServers, "worker");
     const after = await Identity.generate(newServers, "worker");
     assert.equal(JSON.parse(before).parent, "primary");
     Identity.assertDurableTopology(before, after, "same-boot");
 
-    const { clusterConfig } = await import("../../shared/distributed/control");
     const env = { ETB_CLUSTER_CONFIG: rotated, SERVER_NODE_ID: "render" };
     assert.equal(clusterConfig(env, "socket.io")!.id, "render");
     assert.equal(clusterConfig(env, "socket.io")!.parent, "worker");
