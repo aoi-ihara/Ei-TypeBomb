@@ -205,7 +205,9 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
         sessions[1].close();
         await waitFor(() => sessions.length >= 3);
         await new Promise((resolve) => setTimeout(resolve, 50));
-        assert.deepEqual(sessions[2].commands, []);
+        // Explicit leave is intentionally retransmitted to each newly
+        // authenticated owner; it must not resurrect room:join.
+        assert.deepEqual(sessions[2].commands, ["room:leave"]);
     } finally {
         socket.disconnect();
         globalThis.fetch = originalFetch;
