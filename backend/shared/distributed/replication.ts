@@ -33,7 +33,7 @@ export function applyDifference(
     return { ...delta.rest, game: { ...delta.game, room } };
 }
 export async function readLimitedBody(
-    request: Request,
+    request: Request | Response,
     limit: number,
 ): Promise<string> {
     if (Number(request.headers.get("Content-Length") ?? 0) > limit)

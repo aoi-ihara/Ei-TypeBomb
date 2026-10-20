@@ -141,9 +141,8 @@ export function attachLink(
                 ),
             });
         } else if (message.type === "hello") {
-            const member = await Identity.inspect(
+            const member = await identity.inspectPeer(
                 message.certificate,
-                identity.credential.authorityKey,
                 message.boot,
             );
             if (expected && member.id !== expected)

@@ -173,9 +173,8 @@ export class PeerControl implements Control {
         if (!Array.isArray(entries) || entries.length > 1000)
             throw new Error("Invalid registry");
         for (const entry of entries) {
-            const member = await Identity.inspect(
+            const member = await this.identity.inspectPeer(
                 entry.certificate,
-                this.identity.credential.authorityKey,
                 entry.boot,
             );
             if (member.roster[0] !== this.config.primary)
@@ -266,9 +265,8 @@ export class PeerControl implements Control {
             throw new Error("Missing voter configuration");
         let previous: Member | undefined;
         for (const member of cp.voters) {
-            const verified = await Identity.inspect(
+            const verified = await this.identity.inspectPeer(
                 member.certificate,
-                this.identity.credential.authorityKey,
                 member.boot,
             );
             if (

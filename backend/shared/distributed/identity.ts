@@ -1,3 +1,5 @@
+import type { ClusterServer } from "../clusterConfig";
+import { readLimitedBody } from "./replication";
 import type { ServerInfo } from "./types";
 const bytes = (value: unknown) =>
     new TextEncoder().encode(JSON.stringify(value));
@@ -85,7 +87,103 @@ export type Member = ServerInfo & {
     publicKey: JsonWebKey;
     roster: string[];
 };
+export type PublicIdentity = Pick<Credential, "certificate" | "authorityKey">;
+export type IdentityPins = Record<string, PublicIdentity>;
 export class Identity {
+    private discovery?: { servers: ClusterServer[]; pins: IdentityPins;
+        save: (pins: IdentityPins) => Promise<void> };
+    private pinning: Promise<void> = Promise.resolve();
+    private discovering = new Map<string, Promise<PublicIdentity>>();
+    static async generate(servers: ClusterServer[], id: string): Promise<string> {
+        const depth = servers.findIndex(server => server.origin === id);
+        if (depth < 0) throw new Error("Server absent from configured roster");
+        const keys = await crypto.subtle.generateKey(
+            { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+        if (!("publicKey" in keys)) throw new Error("Expected an asymmetric signing key pair");
+        const publicKey = await crypto.subtle.exportKey("jwk", keys.publicKey);
+        const certificate = await sign(keys.privateKey, {
+            iss: "etb-cluster", aud: "etb-cluster-server", sub: id,
+            depth, parent: servers[depth - 1]?.origin ?? null,
+            transport: servers[depth].transport, roster: servers.map(s => s.origin),
+            publicKey, exp: 253402300799,
+        });
+        return JSON.stringify({ certificate, authorityKey: publicKey,
+            privateKey: await crypto.subtle.exportKey("jwk", keys.privateKey) });
+    }
+    publicIdentity(): PublicIdentity {
+        const { kty, crv, x, y } = this.credential.authorityKey;
+        return { certificate: this.member.certificate, authorityKey: { kty, crv, x, y } };
+    }
+    enableDiscovery(servers: ClusterServer[], pins: IdentityPins,
+        save: (pins: IdentityPins) => Promise<void>) {
+        this.discovery = { servers, pins: { ...pins }, save };
+    }
+    async inspectPeer(certificate: string, boot: string): Promise<Member> {
+        if (!this.discovery)
+            return Identity.inspect(certificate, this.credential.authorityKey, boot);
+        if (typeof certificate !== "string" || certificate.length > 8192)
+            throw new Error("Invalid server certificate");
+        // Decode only to select an allowlisted HTTPS origin. No claim is trusted yet.
+        const claims = JSON.parse(new TextDecoder().decode(dec(certificate.split(".")[1])));
+        const { servers, pins, save } = this.discovery;
+        const index = servers.findIndex(server => server.origin === claims.sub);
+        if (index < 0) throw new Error("Unconfigured peer origin");
+        const id = servers[index].origin;
+        let document = id === this.member.id ? this.publicIdentity() : pins[id];
+        if (document && document.certificate !== certificate)
+            throw new Error("Pinned peer identity changed; drain rooms before replacing identity storage");
+        if (!document) {
+            // During migration the configured CA is already a trust anchor.
+            // It must remain usable when old peers are offline and no HTTPS
+            // pins have been written yet. Generated peers have distinct keys.
+            try {
+                await Identity.inspect(certificate, this.credential.authorityKey, boot);
+                document = { certificate, authorityKey: this.publicIdentity().authorityKey };
+            } catch { /* An unknown key must be discovered at its HTTPS origin. */ }
+        }
+        if (!document) {
+            let pending = this.discovering.get(id);
+            if (!pending) {
+                pending = (async () => {
+                    const response = await fetch(new URL("/cluster/identity", id), {
+                        redirect: "manual", signal: AbortSignal.timeout(1500),
+                        headers: { Accept: "application/json" },
+                    });
+                    if (!response.ok) {
+                        await response.body?.cancel();
+                        throw new Error("Peer identity discovery failed");
+                    }
+                    const value = JSON.parse(await readLimitedBody(response, 16384)) as PublicIdentity;
+                    return value;
+                })();
+                this.discovering.set(id, pending);
+            }
+            try { document = await pending; }
+            finally { if (this.discovering.get(id) === pending) this.discovering.delete(id); }
+        }
+        if (document.certificate !== certificate)
+            throw new Error("Peer certificate differs from its HTTPS origin");
+        const member = await Identity.inspect(certificate, document.authorityKey, boot);
+        if (member.id !== id || member.depth !== index ||
+            member.parent !== (servers[index - 1]?.origin ?? null) ||
+            member.transport !== servers[index].transport ||
+            JSON.stringify(member.roster) !== JSON.stringify(servers.map(s => s.origin)))
+            throw new Error("Peer identity differs from configured topology");
+        if (id !== this.member.id && !pins[id]) {
+            const trusted = document;
+            const write = this.pinning.then(async () => {
+                if (pins[id]) {
+                    if (pins[id].certificate !== certificate) throw new Error("Pinned peer identity changed");
+                    return;
+                }
+                await save({ ...pins, [id]: trusted });
+                pins[id] = trusted;
+            });
+            this.pinning = write.catch(() => {});
+            await write;
+        }
+        return member;
+    }
     private constructor(
         readonly credential: Credential,
         readonly member: Member,

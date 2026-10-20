@@ -20,7 +20,7 @@ export default {
     },
     async fetch(request: Request, env: Env): Promise<Response> {
         const url = new URL(request.url);
-        const topology = parseServerTopology(env);
+        const topology = parseServerTopology(env, "websocket");
         if (url.pathname === "/health") {
             if (request.method !== "GET")
                 return new Response(null, { status: 405 });
@@ -32,7 +32,7 @@ export default {
                 } },
             );
         }
-        if (url.pathname === "/cluster/ws")
+        if (url.pathname === "/cluster/ws" || url.pathname === "/cluster/identity")
             return env.CLUSTER.get(env.CLUSTER.idFromName("server")).fetch(
                 request,
             );

@@ -77,4 +77,4 @@ Set the **same** `ETB_CLUSTER_CONFIG` on Vercel and every game server:
 ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
 ```
 
-The array defines priority and `/ws` identifies Workers. Every game host additionally needs its **own** `CLUSTER_SERVER_TOKEN` secret; it contains an individual signing key and is deliberately not embedded in the shared JSON. The current server and parent are derived automatically from that signed identity. Legacy topology variables remain supported for migration. See [distributed setup](../DISTRIBUTED.md).
+The array defines priority and `/ws` identifies Workers. `CLUSTER_SERVER_TOKEN` is optional: hosts automatically create persistent signing keys and verify peers through their configured HTTPS `/cluster/identity` endpoints. Set `SERVER_PUBLIC_URL` on hosts whose identity is ambiguous; Render uses `RENDER_EXTERNAL_URL`, and a sole Worker entry is selected automatically. Keep `CLUSTER_STATE_DIR` on persistent storage. See [distributed setup](../DISTRIBUTED.md) for migration and trust rules.
