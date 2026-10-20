@@ -30,7 +30,7 @@ export function parseETBClusterConfig(raw: string): ClusterServer[] {
             endpoint = item.url;
             // Existing version-1 voters can migrate by retaining their original
             // origin as a stable ID. New installs should use short node IDs.
-            const legacyOrigin = /^https?:\/\//.test(id) && (() => {
+            const legacyOrigin = /^https?:\/\//.test(id!) && (() => {
                 try {
                     const url = new URL(id!);
                     return url.origin === id && (url.protocol === "https:" ||
