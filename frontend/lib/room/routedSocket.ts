@@ -4,6 +4,7 @@
 // HTTPS registry response at one of these URLs and are cached for this page.
 type Server = {
     id: string;
+    url?: string;
     depth: number;
     transport: "socket.io" | "websocket";
 };
@@ -255,7 +256,7 @@ export class RoutedSocket {
             const known = [
                 ...new Set([
                     ...this.seeds,
-                    ...this.servers.map((server) => server.id),
+                    ...this.servers.map((server) => server.url ?? server.id),
                 ]),
             ];
             let route:
@@ -274,7 +275,7 @@ export class RoutedSocket {
                     if (this.recoveryDiagnostics) this.recoveryDiagnostics.reportCalls++;
                     try {
                         const response = await fetch(
-                            `${server.id}/cluster/report`,
+                            `${server.url ?? server.id}/cluster/report`,
                             {
                                 method: "POST",
                                 redirect: "manual",
@@ -351,8 +352,8 @@ export class RoutedSocket {
                                 if (!Array.isArray(value.servers) ||
                                     !value.servers.every((server: Server) => {
                                         try {
-                                            const url = new URL(server.id);
-                                            return url.origin === server.id &&
+                                            const url = new URL(server.url ?? server.id);
+                                            return url.origin === (server.url ?? server.id) &&
                                                 (url.protocol === "https:" ||
                                                     ["localhost", "127.0.0.1"].includes(url.hostname));
                                         } catch {
@@ -412,8 +413,8 @@ export class RoutedSocket {
                 if (attempt !== this.attempt || this.stopped) return this;
                 const url =
                     server.transport === "websocket"
-                        ? `${server.id}/ws`
-                        : server.id;
+                        ? `${server.url ?? server.id}/ws`
+                        : (server.url ?? server.id);
                 const handshakeStartedAt = performance.now();
                 if (this.recoveryDiagnostics) this.recoveryDiagnostics.socketCalls++;
                 const socket = this.open(url);
