@@ -1,3 +1,4 @@
+import { parsePageExit } from "../../shared/distributed/pageExit";
 import { recoveryFailure } from "../../shared/distributed/recovery";
 import { readLimitedBody } from "../../shared/distributed/replication";
 import type { Env } from "./types";
@@ -37,7 +38,8 @@ export default {
             );
         if (
             url.pathname === "/cluster/route" ||
-            url.pathname === "/cluster/report"
+            url.pathname === "/cluster/report" ||
+            url.pathname === "/cluster/leave"
         ) {
             const cors = {
                 "Access-Control-Allow-Origin": "*",
@@ -60,6 +62,13 @@ export default {
                     return new Response(null, { status: 413, headers: cors });
                 const data = JSON.parse(body);
                 const roomId = await verifyRoomToken(data.jwtToken, env);
+                if (url.pathname.endsWith("leave")) {
+                    const exit = parsePageExit(data);
+                    const { verifyClientSessionToken } = await import("./lib/auth");
+                    const id = await verifyClientSessionToken(exit.sessionToken, roomId, env);
+                    await env.ROOMS.get(env.ROOMS.idFromName(roomId)).closePageSession(roomId, id, exit.expectedInstance, exit.connectionId);
+                    return new Response(null, { status: 204, headers: cors });
+                }
                 const report = url.pathname.endsWith("report");
                 if (data.roomId && data.roomId !== roomId)
                     throw new Error("Wrong room");
@@ -97,7 +106,7 @@ export default {
             } catch (error) {
                 // Diagnose failed promotion/peer lookups in Worker logs without
                 // exposing cluster internals or secrets to unauthenticated clients.
-                console.error("Cluster route/report failed:",
+                console.error(`Cluster ${url.pathname} failed:`,
                     error instanceof Error ? error.message : "Unknown error");
                 const failure = recoveryFailure(error);
                 return failure

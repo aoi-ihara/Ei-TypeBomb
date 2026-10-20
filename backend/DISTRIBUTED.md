@@ -173,3 +173,23 @@ CIの `render` シナリオでは、再起動したPrimaryへの最初のroute�
 challenge・helloを含む認証中のフレームを受信順に処理し、認証後のRPCは並行処理します。認証待ちフレーム数には上限を設け、切断後の非同期認証完了でリンクを公開しません。証明書・challenge・方向・bootの検証は維持します。RPCまで全て直列化すると、応答を待つRPCの後ろにその応答が詰まるため、認証後は直列化しません。
 
 署名生成を100ms遅延させるテストと実WebSocket上の最初のrouteテストを追加しました。修正前の隔離コピーで、最初のRPCが `Peer disconnected` となること、同じ条件のrouteが `https://primary.test` を返して `https://render.test` との比較に失敗することを確認しました。修正後は同じテストでRenderとそのepochを取得します。既存の実Node／workerd統合テストの「Primary再起動後もRender所有」検証は変更せず実行します。これは認証の競合修正であり、上記のネットワーク分断時の方式上の制約は残ります。
+
+## 実ブラウザーのタブ閉鎖と再参加（#391 追補）
+
+前の検証は実Socket.IO／workerdを使っていましたが、ブラウザーの終了イベントを実行せずにtransportだけを切っていました。対戦中のtransport切断には意図的に20秒の復帰猶予があるため、タブ閉鎖も通信断として残り、即時退出の期待を満たしていませんでした。ChromiumでPrimaryからRenderへ移行して対戦中のタブを閉じると、他方のページから3秒以内に座席が消える検証が修正前に失敗します。
+
+RoutedSocketは `beforeunload`／`pagehide` とゲーム画面のunmountで明示的退出を通知します。WebSocketの退出パケットは終了時に失われることがあるため、`sendBeacon`（送信キューに入らなければkeepalive fetch）で `/cluster/leave` にも通知します。受信側はルームJWT、ルームに束縛されたページJWT、instance、現在のconnectionIdを検証して、対象ページの退出を即時に確定します。生存プレイヤーの退出は既存ルールどおり対戦を終了します。実ソケットがまだ生きている場合は、ページ復帰時の再参加を壊さないよう認証セッションを切断時まで保持します。遅れた通知が新しい接続や別instanceの対戦を削除しないよう、接続世代の比較もruntimeの直列処理内で行います。退出の受信処理だけで新規ルームを作成することはありません。
+
+タブ閉鎖・ページ遷移・再読み込みはページを離れる明示的退出として扱います。表示を隠すだけの操作には退出通知を送りません。通信断やプロセス停止には終了イベントがないため、従来の復帰猶予と全員切断時の対戦保持を継続します。OSによる強制終了やネットワークが既に切れている状況では終了通知を配信できないため、その場合も切断検知と復帰猶予で後片付けします。
+
+また、routeが認証済みの `DELETED` tombstoneを返した場合にも、クライアントがその古いinstanceを次の認証の `expectedInstance` にコピーしていました。そのため、古いcheckpointを持たない新規接続先で `CHECKPOINT_UNAVAILABLE` に停止する経路をtransportテストで再現しました。tombstoneを確認した場合に限って、終了したinstanceへの要求・古いコマンド・自動再参加を解除します。稼働中の対戦のcheckpointが見つからない場合の安全停止は解除しません。本番で観測されたエラーがこの条件だけによるものかは、本番の状態を取得していないため未確定です。
+
+`npm exec --prefix backend/cloudflare -- playwright install chromium` の後、従来と同じ `npm run test:integration --prefix backend/cloudflare` で8シナリオを実行します。CIもChromiumをインストールします。追加の3シナリオは実Chromium・実Node・workerdを使い、Render／Worker／5段目のFallbackのそれぞれについて以下を連続して検証します。ブラウザーは製品のRoutedSocketを使うテストページで、Reactのゲーム画面全体のE2Eではありません。
+
+- Primaryで2ページが参加・対戦開始し、上位プロセスをSIGKILL／停止して同じ対戦を移行。
+- ページを閉じないtransport切断では同じgameIdで復帰し、終了通知が発生しない。
+- 偽造セッション、別用途のJWT、instance欠落・不一致、接続置換前の古いconnectionIdを拒否。
+- WebSocketの退出送信だけを意図的に破棄し、実タブを閉じてもbeaconで3秒以内に他方の画面から旧参加者が消える。
+- 別の署名付きセッションで再参加し、待機室でもタブ閉鎖が即時反映され、残った参加者の席は維持。
+- 全員のタブを閉じてDELETEDを確認し、Nodeでは保存済みSQLiteを使って所有プロセスも再起動。
+- 同じルームURLを新規2ページで開き、新しいinstanceの対戦開始・カウントダウン・回答によるターン更新まで進む。旧instanceの遅延退出は拒否し、新しいゲームを維持。

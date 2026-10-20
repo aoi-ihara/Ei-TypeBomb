@@ -36,6 +36,7 @@ import { parseServerTopology } from "../../shared/topology";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
+import { parsePageExit } from "../../shared/distributed/pageExit";
 import { recoveryFailure } from "../../shared/distributed/recovery";
 import { persistentPeerIdentity } from "./lib/peerStorage";
 import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
@@ -177,6 +178,42 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
         }
     });
 }
+// text/plain is CORS-safelisted: a closing page must not need a preflight.
+app.options("/cluster/leave", (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    res.setHeader("Access-Control-Allow-Methods", "POST");
+    res.status(204).end();
+});
+app.post("/cluster/leave", express.text({ type: "text/plain", limit: "8kb" }),
+    express.json({ limit: "8kb" }), async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    try {
+        if (!cluster) { res.status(404).end(); return; }
+        const data = parsePageExit(typeof req.body === "string" ? JSON.parse(req.body) : req.body);
+        const roomId = await verifyToken(data.jwtToken);
+        if (!roomId) { res.status(403).end(); return; }
+        const id = await verifyClientSessionToken(data.sessionToken, roomId);
+        const saved = await cluster.call("read", { roomId, expectedInstance: data.expectedInstance });
+        if (saved.ownership?.instance !== data.expectedInstance || saved.ownership.owner !== cluster.config.id) {
+            res.status(409).end(); return;
+        }
+        if (saved.ownership.lifecycle !== "DELETED") {
+            await createRoomIfNeeded(roomId, data.jwtToken, undefined, data.expectedInstance, false);
+            const game = games.get(roomId);
+            if (!(game instanceof DistributedRoom)) { res.status(409).end(); return; }
+            // A page cached by the browser may retain its live socket. Keep
+            // its authentication until actual disconnect, just like room:leave.
+            const socketId = liveSessions.get(sessionKey(roomId, id));
+            const live = socketId === data.connectionId && !!io.sockets.sockets.get(socketId)?.connected;
+            await game.closeSession(id, data.expectedInstance, data.connectionId, live);
+        }
+        res.status(204).end();
+    } catch (error) {
+        console.error("Page exit rejected:", error instanceof Error ? error.message : "Unknown error");
+        res.status(409).end();
+    }
+});
 const peerServer = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_CLUSTER_FRAME_BYTES,
@@ -228,6 +265,7 @@ const createRoomIfNeeded = async (
     jwtToken: string,
     timings?: Record<string, number>,
     expectedInstance?: string,
+    allowCreate = true,
 ): Promise<Room | null> => {
     const existingRoom = rooms.find((item) => item.id === roomId);
     if (existingRoom) return Promise.resolve(existingRoom);
@@ -247,6 +285,7 @@ const createRoomIfNeeded = async (
             }
             const fresh =
                 !saved.ownership || saved.ownership.lifecycle === "DELETED";
+            if (fresh && !allowCreate) return null;
             // Any surviving certified tier may initialize a genuinely fresh
             // room, using its own signed suffix voting cohort.
             const initial = fresh
@@ -612,7 +651,7 @@ io.on("connection", (socket) => {
                 if (game instanceof DistributedRoom) {
                     if (!response.sessionToken)
                         throw new ClientError("署名付きセッションが必要です。");
-                    await game.connect(stableId);
+                    await game.connect(stableId, socket.id);
                 }
                 socket.emit("auth:session", { id: stableId });
                 logEvent("ROOM", `authenticated ${roomId}`, {

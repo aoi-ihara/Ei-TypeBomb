@@ -19,7 +19,7 @@ export type DurableRoom = {
     // Connected spectators count too. A transport disconnect starts a grace period.
     sessions: Record<
         string,
-        { connected: boolean; expires: number; recommendation?: string }
+        { connected: boolean; expires: number; recommendation?: string; connectionId?: string }
     >;
     events: Record<string, number>;
     /** A player has joined this room at least once; used to clean up empty rooms. */

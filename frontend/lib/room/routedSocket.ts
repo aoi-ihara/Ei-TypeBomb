@@ -112,6 +112,8 @@ export class RoutedSocket {
     private leaveRequestId?: string;
     private authenticatedTransport?: Transport;
     private leaveSentTo?: Transport;
+    private pageExitSent = false;
+    private readonly pageHidden = () => this.closePage();
     constructor(
         private readonly seeds: string[],
         private readonly open: (url: string) => Transport,
@@ -120,6 +122,10 @@ export class RoutedSocket {
             document.visibilityState !== "hidden",
         private readonly getSession?: () => Promise<string | undefined>,
     ) {
+        if (typeof window !== "undefined") {
+            window.addEventListener("pagehide", this.pageHidden);
+            window.addEventListener("beforeunload", this.pageHidden);
+        }
         void this.connect();
     }
     on(event: string, listener: Listener) {
@@ -180,6 +186,7 @@ export class RoutedSocket {
             return this;
         }
         if (event === "room:join") {
+            this.pageExitSent = false;
             this.leaveRequested = false;
             this.leaveRequestId = undefined;
             this.leaveSentTo = undefined;
@@ -379,7 +386,17 @@ export class RoutedSocket {
             const ordered = [...route.servers].sort(
                 (a, b) => a.depth - b.depth,
             );
-            if (own) {
+            if (own?.lifecycle === "DELETED") {
+                // The certified tombstone ends the old incarnation. A new
+                // page must not demand its retired checkpoint from a fresh tier.
+                this.meta = undefined;
+                this.routedInstance = undefined;
+                this.routedRevision = undefined;
+                this.failure = undefined;
+                this.pending.clear();
+                this.joinedRoom = false;
+                this.rejoinOnSnapshot = false;
+            } else if (own) {
                 this.roomId = own.roomId;
                 this.routedRevision = own.revision;
                 this.routedInstance = own.instance;
@@ -753,7 +770,33 @@ export class RoutedSocket {
             void this.connect();
         }, delay);
     }
+    /** A page exit is intentional; a lost transport still keeps its recovery grace. */
+    closePage() {
+        if (this.pageExitSent) return this;
+        this.pageExitSent = true;
+        this.emit("room:leave");
+        const instance = this.meta?.roomInstanceId;
+        const connectionId = this.transport?.id ?? this.id;
+        if (this.currentOwner && this.token && this.sessionToken && instance && connectionId) {
+            const endpoint = new URL("/cluster/leave", this.currentOwner);
+            const body = JSON.stringify({ jwtToken: this.token, sessionToken: this.sessionToken,
+                expectedInstance: instance, connectionId });
+            // A normal WebSocket emit can be lost as the browser destroys the
+            // page. Beacon survives teardown; text/plain avoids a CORS preflight.
+            let queued = false;
+            try { queued = typeof navigator !== "undefined" &&
+                typeof navigator.sendBeacon === "function" && navigator.sendBeacon(endpoint, body); }
+            catch { /* Keepalive is the fallback when beacon cannot be queued. */ }
+            if (!queued) void fetch(endpoint, { method: "POST", body, keepalive: true,
+                headers: { "Content-Type": "text/plain;charset=UTF-8" }, redirect: "error" }).catch(() => {});
+        }
+        return this;
+    }
     disconnect() {
+        if (typeof window !== "undefined") {
+            window.removeEventListener("pagehide", this.pageHidden);
+            window.removeEventListener("beforeunload", this.pageHidden);
+        }
         this.stopped = true;
         this.joinedRoom = false;
         this.rejoinOnSnapshot = false;

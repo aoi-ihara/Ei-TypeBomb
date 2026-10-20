@@ -20,6 +20,7 @@ export interface Env {
 
 export type Session = {
     id: string;
+    connectionId?: string;
     roomId: string | null;
     targetRoomId: string;
     displayName?: string;
