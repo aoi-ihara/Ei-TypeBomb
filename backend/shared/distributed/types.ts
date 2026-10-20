@@ -9,6 +9,8 @@ export type Lifecycle =
     | "DELETED";
 export type ServerInfo = {
     id: string;
+    /** Reachable HTTPS origin; distinct from the durable voter ID in config v2. */
+    url?: string;
     parent: string | null;
     depth: number;
     transport: "socket.io" | "websocket";
