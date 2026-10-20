@@ -29,8 +29,8 @@ export class ClusterDO extends DurableObject<Env> {
             const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG!);
             const declaration = await Identity.generate(servers, config.id);
             const previousDeclaration = await ctx.storage.get<string>("declaration");
-            if (previousDeclaration && previousDeclaration !== declaration)
-                throw new Error("Cluster topology changed: drain rooms before replacing storage");
+            if (previousDeclaration)
+                Identity.assertDurableTopology(previousDeclaration, declaration, boot);
             const legacy = await ctx.storage.get<string>("certificate");
             if (legacy) Identity.assertLegacyTopology(legacy, declaration, boot);
             const identity = await Identity.create(declaration, boot);
@@ -45,7 +45,10 @@ export class ClusterDO extends DurableObject<Env> {
                 identity,
                 config,
                 async (id) => {
-                    const url = new URL("/cluster/ws", id);
+                    const destination = servers.find(server =>
+                        (server.id ?? server.origin) === id)?.origin;
+                    if (!destination) throw new Error("Unknown cluster peer ID");
+                    const url = new URL("/cluster/ws", destination);
                     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
                     const ws = new WebSocket(url.toString());
                     const buffered = bufferPeerSocket(ws);
