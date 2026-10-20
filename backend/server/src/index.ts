@@ -31,6 +31,7 @@ import {
     type EventHandlers,
 } from "../../shared/protocol";
 import { NodeGameAdapter, NODE_GAME_RULES } from "./lib/gameAdapter";
+import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { parseServerTopology } from "../../shared/topology";
 
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
@@ -42,12 +43,13 @@ import { persistentPeerIdentity } from "./lib/peerStorage";
 import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
 import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
-const topology = parseServerTopology(process.env);
+const topology = parseServerTopology(process.env, "socket.io");
 const config = clusterConfig(process.env, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
-    ? persistentPeerIdentity(process.env.CLUSTER_SERVER_TOKEN!,
-        process.env.CLUSTER_STATE_DIR ?? ".cluster-state").then(async ({ identity, storage }) => {
+    ? persistentPeerIdentity(process.env.CLUSTER_SERVER_TOKEN,
+        process.env.CLUSTER_STATE_DIR ?? ".cluster-state",
+        process.env.ETB_CLUSTER_CONFIG ? { servers: parseETBClusterConfig(process.env.ETB_CLUSTER_CONFIG), id: config.id } : undefined).then(async ({ identity, storage }) => {
           assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
               const url = new URL("/cluster/ws", id);
@@ -97,6 +99,14 @@ app.get("/health", (_req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "no-store");
     res.json({ ok: true });
+});
+app.get("/cluster/identity", async (_req, res) => {
+    try {
+        await clusterReady;
+        res.setHeader("Cache-Control", "no-store");
+        if (!cluster) { res.sendStatus(404); return; }
+        res.json(cluster.identity.publicIdentity());
+    } catch { res.sendStatus(503); }
 });
 app.use(["/cluster/route", "/cluster/report"], express.json({ limit: "8kb" }));
 for (const path of ["/cluster/route", "/cluster/report"]) {

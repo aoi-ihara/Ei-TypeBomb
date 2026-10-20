@@ -115,4 +115,4 @@ persisted and scheduled using Durable Object alarms. In distributed mode,
 the shared runtime migrates games from Node using the signed local checkpoints and best-effort voting replicas;
 replicas never advance a game before acquiring its fenced ownership.
 
-For deployment, use the same `ETB_CLUSTER_CONFIG` JSON on Worker, Node servers and Vercel. The `/ws` endpoint marks the Worker transport. Keep the Worker-specific `CLUSTER_SERVER_TOKEN` secret separate. See [distributed setup](../DISTRIBUTED.md).
+For deployment, use the same `ETB_CLUSTER_CONFIG` JSON on Worker, Node servers and Vercel. The `/ws` endpoint marks the Worker transport. A sole Worker entry is selected automatically; set `SERVER_PUBLIC_URL` if multiple Worker entries exist. Signing keys and verified peer keys persist in ClusterDO; `CLUSTER_SERVER_TOKEN` is optional. See [distributed setup](../DISTRIBUTED.md).

@@ -5,6 +5,7 @@ export type TopologyEnv = {
     PRIMARY_SERVER_URL?: string;
     PARENT_SERVER_URL?: string;
     SERVER_PUBLIC_URL?: string;
+    RENDER_EXTERNAL_URL?: string;
 };
 export type ServerTopology = {
     role: "standalone" | "primary" | "replica";
@@ -34,15 +35,17 @@ function certificateSubject(bundle: string): string {
         return claims.sub;
     } catch { throw new Error("Invalid CLUSTER_SERVER_TOKEN certificate"); }
 }
-export function parseServerTopology(env: TopologyEnv): ServerTopology {
+export function parseServerTopology(env: TopologyEnv, transport?: "socket.io" | "websocket"): ServerTopology {
     if (env.ETB_CLUSTER_CONFIG !== undefined) {
         const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG);
         const primaryUrl = servers[0].origin;
-        if (!env.CLUSTER_SERVER_TOKEN)
-            return { role: "standalone", primaryUrl, parentUrl: null, publicUrl: null };
-        const own = certificateSubject(env.CLUSTER_SERVER_TOKEN);
+        const candidates = servers.filter(server => server.transport === transport);
+        const own = serverUrl(env.SERVER_PUBLIC_URL ?? env.RENDER_EXTERNAL_URL, "SERVER_PUBLIC_URL")
+            ?? (env.CLUSTER_SERVER_TOKEN ? certificateSubject(env.CLUSTER_SERVER_TOKEN)
+                : candidates.length === 1 ? candidates[0].origin : null);
+        if (!own) return { role: "standalone", primaryUrl, parentUrl: null, publicUrl: null };
         const index = servers.findIndex(server => server.origin === own);
-        if (index < 0) throw new Error("Signed server identity is absent from ETB_CLUSTER_CONFIG");
+        if (index < 0) throw new Error("Server identity is absent from ETB_CLUSTER_CONFIG");
         return { role: index === 0 ? "primary" : "replica",
             primaryUrl, parentUrl: index ? servers[index - 1].origin : null, publicUrl: own };
     }

@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { PeerControl, type VoteRecord } from "../../shared/distributed/peers";
-import { Identity, type Member } from "../../shared/distributed/identity";
+import { Identity, type Member, type IdentityPins } from "../../shared/distributed/identity";
+import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { bufferPeerSocket, type ClusterSocket } from "../../shared/distributed/link";
 import type { Env } from "./types";
@@ -26,10 +27,21 @@ export class ClusterDO extends DurableObject<Env> {
             const boot =
                 (await ctx.storage.get<string>("boot")) ?? crypto.randomUUID();
             await ctx.storage.put("boot", boot);
-            const identity = await Identity.create(
-                env.CLUSTER_SERVER_TOKEN!,
-                boot,
-            );
+            const servers = env.ETB_CLUSTER_CONFIG ? parseETBClusterConfig(env.ETB_CLUSTER_CONFIG) : undefined;
+            const savedBundle = await ctx.storage.get<string>("credential");
+            const bundle = env.CLUSTER_SERVER_TOKEN ?? savedBundle
+                ?? await Identity.generate(servers!, config.id);
+            const identity = await Identity.create(bundle, boot);
+            const previousCertificate = await ctx.storage.get<string>("certificate");
+            if (previousCertificate && previousCertificate !== identity.member.certificate) {
+                if (!env.CLUSTER_SERVER_TOKEN && !savedBundle)
+                    throw new Error("Existing cluster state has no saved signing key: upgrade once with CLUSTER_SERVER_TOKEN before removing it");
+                throw new Error("Cluster identity changed: drain rooms before replacing identity storage");
+            }
+            await ctx.storage.put("credential", bundle);
+            if (servers) identity.enableDiscovery(servers,
+                await ctx.storage.get<IdentityPins>("identity-pins") ?? {},
+                pins => ctx.storage.put("identity-pins", pins));
             assertClusterIdentity(env, identity);
             const peer = new PeerControl(
                 identity,
@@ -66,8 +78,8 @@ export class ClusterDO extends DurableObject<Env> {
                 },
             );
             peer.draining = env.CLUSTER_DRAINING === "true";
-            // Credential/roster changes are only supported after old rooms drain.
-            // Keep votes and incarnation, but discard stale topology certificates.
+            // Registry entries are accepted only after their HTTPS identities
+            // have been verified and pinned; identity replacement is refused above.
             const previous = await ctx.storage.get<string>("certificate");
             await peer.restoreRegistry(
                 previous === identity.member.certificate
@@ -87,6 +99,11 @@ export class ClusterDO extends DurableObject<Env> {
         return (await this.ready).call(op, args);
     }
     async fetch(request: Request): Promise<Response> {
+        if (new URL(request.url).pathname === "/cluster/identity") {
+            if (request.method !== "GET") return new Response(null, { status: 405 });
+            return Response.json((await this.ready).identity.publicIdentity(),
+                { headers: { "Cache-Control": "no-store" } });
+        }
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
             return new Response(null, { status: 426 });
         const peer = await this.ready;

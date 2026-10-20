@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,7 +38,7 @@ const freePort = async () => {
     return port;
 };
 
-for (const scenario of ["worker", "render", "render-restart", "render-state-loss", "fallback5-reopen", "browser-close-render", "browser-close-worker", "browser-close-fallback5"]) test(
+for (const scenario of ["worker", "render", "render-restart", "render-state-loss", "render-identity-loss", "fallback5-reopen", "browser-close-render", "browser-close-worker", "browser-close-fallback5"]) test(
     `real Socket.IO → workerd → Socket.IO failover: ${scenario}`,
     { timeout: 180000 },
     async (t) => {
@@ -46,12 +47,6 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         const fallbackIndex = ["fallback5-reopen", "browser-close-fallback5"].includes(scenario) ? 6 : 2;
         const ports = await Promise.all(Array.from({ length: fallbackIndex + 1 }, () => freePort()));
         const urls = ports.map((port) => `http://127.0.0.1:${port}`);
-        const { credentials } = await import(
-            "../../server/test/clusterFixture.ts"
-        );
-        const tokens = (await credentials(urls)).map((bundle) =>
-            JSON.stringify(bundle),
-        );
         const roomId = randomUUID();
         const row = {
             id: roomId,
@@ -141,7 +136,8 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                     env: {
                         ...process.env,
                         ...common,
-                        CLUSTER_SERVER_TOKEN: tokens[i],
+                        CLUSTER_SERVER_TOKEN: undefined,
+                        SERVER_PUBLIC_URL: urls[i],
                         CLUSTER_STATE_DIR: resolve(temp, `node-${i}`),
                         PORT: String(ports[i]),
                         NEXT_PUBLIC_POSTHOG_KEY: "",
@@ -181,10 +177,10 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             outfile: resolve(temp, "worker.mjs"),
             external: ["cloudflare:workers"],
         });
-        const mf = new Miniflare(
-            convertV4MiniflareOptions({
+        const workerOptions = convertV4MiniflareOptions({
                 scriptPath: resolve(temp, "worker.mjs"),
                 modulesRoot: temp,
+                resourcePersistencePath: resolve(temp, "worker-state"),
                 modules: true,
                 compatibilityDate: "2026-10-16",
                 port: ports[1],
@@ -196,10 +192,10 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 },
                 bindings: {
                     ...common,
-                    CLUSTER_SERVER_TOKEN: tokens[1],
+                    SERVER_PUBLIC_URL: urls[1],
                 },
-            }),
-        );
+            });
+        let mf = new Miniflare(workerOptions);
         t.after(() => mf.dispose());
         await mf.ready;
         const primary = await startNode(0);
@@ -221,8 +217,14 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 return false;
             }
         }, "authenticated cluster registration");
+        // Public discovery exposes only the certificate and verification key.
         // Neither registration nor room reads are callable before peer auth.
         for (const url of urls) {
+            const document = await fetch(`${url}/cluster/identity`).then(r => r.json());
+            assert.deepEqual(Object.keys(document).sort(), ["authorityKey", "certificate"]);
+            assert.equal("d" in document.authorityKey, false);
+            const claims = JSON.parse(Buffer.from(document.certificate.split(".")[1], "base64url"));
+            assert.equal("d" in claims.publicKey, false);
             const socket = new WebSocket(
                 `${url.replace("http", "ws")}/cluster/ws`,
             );
@@ -652,10 +654,26 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 recoveryFailure = problem;
                 recoveryFailures++;
             });
-            if (scenario === "render-state-loss") {
+            if (["render-state-loss", "render-identity-loss"].includes(scenario)) {
                 render.kill("SIGKILL");
                 await new Promise((resolve) => render.once("exit", resolve));
-                await rm(resolve(temp, "node-2"), { recursive: true, force: true });
+                const stateDir = resolve(temp, "node-2");
+                // Losing voting memory while retaining the signing key is a
+                // different failure from losing the entire identity disk.
+                const retained = [];
+                if (scenario === "render-state-loss") {
+                    const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
+                    retained.push(...db.prepare("SELECT key, value FROM state WHERE key IN ('credential', 'identity-pins')").all());
+                    db.close();
+                }
+                await rm(stateDir, { recursive: true, force: true });
+                if (retained.length) {
+                    await mkdir(stateDir, { mode: 0o700 });
+                    const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
+                    db.exec("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+                    for (const row of retained) db.prepare("INSERT INTO state (key, value) VALUES (?, ?)").run(row.key, row.value);
+                    db.close();
+                }
                 render = await startNode(2);
                 // Keep the owner alive long enough to send a real signed
                 // mirror to the new incarnation. It must never become a vote.
@@ -668,10 +686,10 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             }
             primary.kill("SIGKILL");
             await new Promise((resolve) => primary.once("exit", resolve));
-            if (scenario === "render-state-loss") {
-                await wait(() => recoveryFailure, "lost voter memory is classified", 30000);
-                assert.equal(recoveryFailure.code, "VOTER_STATE_LOST");
-                assert.match(processLogs.map((read) => read()).join("\n"),
+            if (["render-state-loss", "render-identity-loss"].includes(scenario)) {
+                await wait(() => recoveryFailure, "lost persistent state is classified", 30000);
+                assert.equal(recoveryFailure.code, scenario === "render-state-loss" ? "VOTER_STATE_LOST" : "CHECKPOINT_UNAVAILABLE");
+                if (scenario === "render-state-loss") assert.match(processLogs.map((read) => read()).join("\n"),
                     /Cluster \/cluster\/report failed: Ineligible voter or lost process memory/);
                 assert.equal(recoveryFailure.retryable, false);
                 await delay(2_500);
@@ -980,10 +998,18 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             assert.deepEqual(unexpected, []);
             return;
         }
+        const workerIdentityBefore = await fetch(`${urls[1]}/cluster/identity`).then(r => r.json());
         render.kill("SIGKILL");
         await new Promise((resolve) => render.once("exit", resolve));
         primary.kill("SIGKILL");
         await new Promise((resolve) => primary.once("exit", resolve));
+        // Recreate the actual workerd process with persisted DO storage while
+        // every peer is offline: identity pins and checkpoints must survive.
+        await mf.dispose();
+        mf = new Miniflare(workerOptions);
+        await mf.ready;
+        const workerIdentityAfter = await fetch(`${urls[1]}/cluster/identity`).then(r => r.json());
+        assert.deepEqual(workerIdentityAfter, workerIdentityBefore);
         await wait(
             () => observed?.ownerServerId === urls[1],
             "client failure report promotes Worker",

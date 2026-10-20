@@ -4,7 +4,7 @@
 
 ゲーム状態・プレイヤー・トポロジー・所有権・確認状態にPostgreSQL/Supabaseを使いません。DBへのアクセスは担当Primaryが**新しいルームインスタンス**を作成するときの設定・問題取得だけです。移行時はレプリカの確定checkpointを使います。ルームが不明で必要なサーバーに接続できない場合、DBから作り直さず停止します。フロントエンドの既存のルーム編集・認証・オンライン記憶機能は変更しません。
 
-Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteにboot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・認証済みレジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
+Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteに署名秘密鍵・確認済み公開鍵・boot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・認証済みレジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
 環境変数のトポロジー設定は**全サーバーおよびVercelで同一**の `ETB_CLUSTER_CONFIG` へ統合します。配列の順序が優先順位、`/ws` の付いたURLがCloudflareのNative WebSocketを意味します。`/ws` はこの設定上の識別子であり、サーバー間のWSSは引き続き自動的に `/cluster/ws` を使います。
 
@@ -12,21 +12,19 @@ Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteにboot ID・�
 ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
 ```
 
-Mac mini・Worker・Render・Vercelにはこの**同じ値**を設定してください。各ゲームサーバーの自己URLと親URLは署名付きidentityのsubjectを配列から探して自動導出します。従来の `PRIMARY_SERVER_URL` / `PARENT_SERVER_URL` / `SERVER_PUBLIC_URL` と `NEXT_PUBLIC_PRIMARY_SERVER_URL` / `NEXT_PUBLIC_SECONDARY_SERVER_URL` / `NEXT_PUBLIC_FALLBACK_SERVER_URL` / `NEXT_PUBLIC_DISTRIBUTED_ROOMS` は、新構成では設定不要です。旧形式は移行のため互換性を維持しています。
+Mac mini・Worker・Render・Vercelにはこの**同じ値**を設定してください。Mac miniは `SERVER_PUBLIC_URL` で自身のHTTPS originを指定します。Renderはプラットフォームの `RENDER_EXTERNAL_URL` を自動使用します。Workerが配列に1台だけなら `/ws` エントリから自身を特定し、複数なら `SERVER_PUBLIC_URL` を設定します。親と優先順位は配列から導出します。判別できないNodeをPrimaryと推測せず、明確な設定エラーで起動を拒否します。
 
-**セキュリティに関する例外：** `CLUSTER_SERVER_TOKEN` は各サーバー固有の秘密鍵を含むため、全ノード共通の公開JSONにまとめません。各ゲームサーバーには従来どおり別の `CLUSTER_SERVER_TOKEN` Secretが1個必要です。Vercelのフロントエンドには設定せず、ブラウザへは公開URLの配列だけを渡します。既存のユーザーJWT公開鍵とSupabase Publishable設定も認証／ルーム取得のため継続して使用します。
+### トークン不要のサーバー検証
 
-証明書と配列が一致しない場合は起動を拒否します。証明書は次のように生成できます。
+`CLUSTER_SERVER_TOKEN` の新規発行・設定は不要です。各ホストはES256秘密鍵と自身の証明書を自動生成し、NodeのSQLiteまたはWorkerのClusterDOへ保存します。秘密鍵はHTTP・WebSocket・ブラウザへ公開しません。プレイヤーのJWT認証とSupabase設定は引き続き必要です。
 
-```sh
-cd backend/server
-node scripts/cluster-credentials.mjs /PRIVATE/NEW_DIRECTORY \
-  '{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
-```
+接続時は証明書のsubjectが `ETB_CLUSTER_CONFIG` のallowlistに含まれることを確認し、そのHTTPS originの `GET /cluster/identity` から証明書・公開鍵を取得します。リダイレクトは禁止し、取得時間と応答サイズを制限します。localhost以外のHTTPは許可しません。証明書の署名と設定中のURL・親・順位・transport・rosterを検証してから、その証明書と公開鍵を永続保存します。WebSocketでは従来どおりnonce・接続方向・bootの署名付きchallenge-responseを行います。
 
-`server-0.json` はMac mini、`server-1.json` はWorker、`server-2.json` はRenderのSecretへ設定し、`offline-authority.json` はオフライン保管してください。
+確認済みの相手が停止しても、保存した公開鍵でcheckpointを検証できます。未確認で停止中の相手は信頼できたことにせず、復旧までその署名の検証を拒否します。確認済みの鍵が変わった場合も自動で置換しません。URLのDNS/TLSと、そのURLを配信するアプリケーションが初回確認の信頼境界です。鍵交換を中継する公開エンドポイントに秘密情報を含めないでください。
 
-子は親の `/cluster/ws` にWSS接続して登録し、認証済みトポロジーを伝播します。既知の他サーバーにも直接接続でき、親停止でレジストリを捨てません。台数・Node/Workerの位置はコードに固定していません。登録できるidentityはオフラインCAが署名したURL・親・depth・transportに限定します。
+既存のトークンは移行互換のため読み込めます。**旧バージョンから移行するときは、最初は既存トークンを残して全ホストを新版で一度起動し、署名鍵が永続化された後にトークン設定を削除します。** 旧SQLiteは秘密鍵を保存していないため、初回更新と同時にトークンを消すと以前の署名鍵を再現できず、状態を上書きせず起動を拒否します。移行時は、既に手動設定済みのCAで署名検証できる旧証明書をオフラインでも確認・保存できるため、peer停止中の復旧を公開鍵取得待ちにしません。旧コードと自動生成鍵の混在はサポートしません。
+
+Nodeの永続ディスクやWorkerのDOストレージを失うと、秘密鍵・boot・投票履歴も失われます。残ったノードのpinを消すだけでは安全に復元できません。既存ルームを終了し、全ノードの旧状態を保存したうえで、新クラスタとして再構成してください。稼働中のルームを保ったまま鍵を自動交換する機能はありません。
 
 ## 所有権と確定方式：可用性最優先
 
@@ -79,23 +77,10 @@ NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを�
 
 ## デプロイとメンバー追加・削除
 
-1. identityを安全なディレクトリへ作成します。URLはHTTPS origin、順序・transportは引数で指定します。
-
-```sh
-cd backend/server
-node scripts/cluster-credentials.mjs /PRIVATE/NEW_DIRECTORY \
-  socket.io=https://PRIMARY_HOST websocket=https://WORKER_HOST socket.io=https://RENDER_HOST
-```
-
-`server-N.json` の内容を各サーバーの `CLUSTER_SERVER_TOKEN` secretへ設定します。`offline-authority.json` はオフライン保管し、どのゲームサーバーにも置かないでください。サーバーの署名秘密鍵はそのサーバーidentity専用で、ユーザーJWT署名やSupabase管理権限はありません。従来のランダムなDB capability文字列は新形式に自動変換しません。
-
-旧PostgreSQL版とのローリング混在はできません。旧版の進行中ルームを終了し、全旧サーバーを停止してからクラスタ全員を同じ新版へ切り替えてください。旧版のcheckpointの自動インポートは行いません。
-
-2. 3つのURL環境変数を証明書と一致させます。Nodeは `PORT` を利用できます。Workerには既存ROOMSに加えCLUSTER/REPLICASのDO bindingと `distributed-v2` migrationを設定します。`wrangler.jsonc` に定義済みです。previewにも必要です。Node/Worker間で `/cluster/ws` のWSSを許可し、プロキシのWebSocket idle timeoutを確認してください。
-3. サーバー間の認証済み接続と初期checkpoint配送を確認し、frontendを `NEXT_PUBLIC_DISTRIBUTED_ROOMS=true` とbootstrap URLで再ビルドします。台数はbootstrapの3変数に制限されず、登録情報から取得します。session JWTは接続先変更で再発行しません。
-4. 追加ノードは有効なCA証明書と親URLで登録でき、既存コード変更なしでバックアップを受信できます。ただし、**既存ルームの投票者集合は自動変更しません**。新規ルームの投票者はCA署名付きrosterのうち、登録済みの先頭から連続する認証済みメンバーで固定します。Primary単独でも新規ルームは作成できますが、未登録のレプリカは既存ルームの選出投票者になりません。
-5. 新しい投票者構成の有効化や削除・順序変更では、旧構成のルームを先に終了/削除し、同じオフラインCAで新rosterのidentityを発行して全員へ設定します。`--authority /PRIVATE/offline-authority.json` を生成コマンドの先頭に指定すれば同じCAを利用できます。既存ルームの投票者構成の変更には、新しい構成での再作成が必要です。動的登録と投票者の安全な変更は区別しています。稼働中の投票者の無条件除去や自動joint-consensus再構成は実装していません。
-6. `CLUSTER_DRAINING=true` のownerは照会時に譲渡を承認します。通常は正常ownerへの虚偽報告で移行しません。管理者CAは信頼境界なので、同じルームが生きたまま互いに独立したrosterを発行しないでください。
+1. 全ホストへ同じ `ETB_CLUSTER_CONFIG` を設定し、必要なホストでは `SERVER_PUBLIC_URL` を指定します。既存トークンを削除する手順は上記を参照してください。Nodeの永続ディスクとWorkerのCLUSTER/REPLICAS DO bindingを保持します。
+2. `/cluster/identity` のHTTPS GETと `/cluster/ws` のWSSをサーバー間で許可し、認証済み登録と初期checkpoint配送を確認してからゲームを開始します。Vercelにも同じJSONを設定します。session JWTは接続先変更で再発行しません。
+3. 追加・削除・順序・transportの変更は、旧構成のルームを終了してから全ホストを同じ構成へ切り替えます。自動証明書とpinも構成に固定されるため、旧状態をバックアップし、全ホストで新しい保存領域を使用します。既存ルームの固定投票者集合を自動変更しません。
+4. `CLUSTER_DRAINING=true` のownerは照会時に譲渡を承認します。通常は正常ownerへの虚偽報告で移行しません。
 
 PostgreSQL制御RPCと専用migrationはリポジトリから削除しました。旧PRのSQLをすでに手動適用した環境では、旧アプリの停止後に管理者が `public.etb_cluster(text,text,text,jsonb)` と `etb_private` schemaを撤去してください。この変更は本番DBへ接続して撤去作業を実行しません。通常のルーム設定テーブルには触れません。
 
@@ -193,3 +178,11 @@ RoutedSocketは `beforeunload`／`pagehide` とゲーム画面のunmountで明�
 - 別の署名付きセッションで再参加し、待機室でもタブ閉鎖が即時反映され、残った参加者の席は維持。
 - 全員のタブを閉じてDELETEDを確認し、Nodeでは保存済みSQLiteを使って所有プロセスも再起動。
 - 同じルームURLを新規2ページで開き、新しいinstanceの対戦開始・カウントダウン・回答によるターン更新まで進む。旧instanceの遅延退出は拒否し、新しいゲームを維持。
+
+## トークン省略の回帰検証
+
+実通信テストは全Node子プロセスとworkerdに `CLUSTER_SERVER_TOKEN` を渡さずに実行します。変更前のmainにこのテストを適用すると、Nodeが `ETB_CLUSTER_CONFIG requires a per-server CLUSTER_SERVER_TOKEN` で起動できず失敗します。
+
+通常の移行・Render再起動・Fallback 5・Chromiumのタブ終了と再参加に加え、Workerの実workerdプロセスを再作成し、全peer停止中でもDOに保存した同じ公開鍵とcheckpointで復旧できることを検証します。署名鍵を残して投票記録を消す場合は `VOTER_STATE_LOST`、署名鍵も消して旧checkpointを検証できない場合は `CHECKPOINT_UNAVAILABLE` で停止し、どちらも対戦を新規作成せず、自動報告がループしないことを確認します。
+
+公開鍵取得の単体テストは実HTTP接続を使い、偽装証明書・リダイレクト・設定外のURL・構成不一致・pin保存失敗・鍵の無断交換を拒否します。HTTPSの初回信頼はホスティング先のDNS/TLSを前提とし、ローカル試験だけlocalhost HTTPを許可します。
