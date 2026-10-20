@@ -103,6 +103,7 @@ export class RoutedSocket {
     // across failover so stale snapshots and unacknowledged commands cannot
     // silently undo it.
     private leaveRequested = false;
+    private leaveRequestId?: string;
     private authenticatedTransport?: Transport;
     private leaveSentTo?: Transport;
     constructor(
@@ -164,6 +165,7 @@ export class RoutedSocket {
             // is waiting for its ACK or the socket is between owners. Both
             // runtimes accept this authenticated, session-bound event directly.
             this.leaveRequested = true;
+            this.leaveRequestId ??= crypto.randomUUID();
             this.joinedRoom = false;
             this.rejoinOnSnapshot = false;
             // No old join/start/answer should be replayed after opting out.
@@ -173,6 +175,7 @@ export class RoutedSocket {
         }
         if (event === "room:join") {
             this.leaveRequested = false;
+            this.leaveRequestId = undefined;
             this.leaveSentTo = undefined;
         }
         if (event === "auth:response") {
@@ -207,11 +210,11 @@ export class RoutedSocket {
     }
     private sendLeaveIfAuthenticated() {
         const socket = this.transport;
-        if (!this.leaveRequested || !socket ||
+        if (!this.leaveRequested || !this.leaveRequestId || !socket ||
             this.authenticatedTransport !== socket ||
             this.leaveSentTo === socket) return;
         this.leaveSentTo = socket;
-        socket.emit("room:leave");
+        socket.emit("room:leave", { requestId: this.leaveRequestId });
     }
     private sendCommand(command: {
         id: string;
@@ -472,6 +475,21 @@ export class RoutedSocket {
                             finishRecovery(this.lastReply, true);
                     }
                 });
+                socket.on("room:leave:ack", (message: unknown) => {
+                    if (!active() || !this.leaveRequested ||
+                        this.leaveSentTo !== socket ||
+                        !message || typeof message !== "object" ||
+                        !("requestId" in message) ||
+                        message.requestId !== this.leaveRequestId)
+                        return;
+                    // The owner has committed the explicit leave. Never
+                    // retransmit it after the next successful authentication.
+                    // Snapshot absence alone is not proof: old or reordered
+                    // broadcasts may precede the commit.
+                    this.leaveRequested = false;
+                    this.leaveRequestId = undefined;
+                    this.leaveSentTo = undefined;
+                });
                 socket.on("command:ack", ({ id, status }) => {
                     if (!active()) return;
                     if (status === "accepted" || status === "rejected")
@@ -689,6 +707,7 @@ export class RoutedSocket {
         this.joinedRoom = false;
         this.rejoinOnSnapshot = false;
         this.leaveRequested = false;
+        this.leaveRequestId = undefined;
         this.leaveSentTo = undefined;
         this.authenticatedTransport = undefined;
         this.recoveryStartedAt = undefined;

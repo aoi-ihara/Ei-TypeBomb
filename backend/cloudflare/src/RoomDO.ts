@@ -480,6 +480,14 @@ export class RoomDO extends DurableObject<Env> {
             this.game = this.distributed.state;
             this.sendRoomInfo();
             await this.scheduleNextAlarm();
+            // Acknowledge only after the authoritative change is committed.
+            // An absent ACK means the client can safely retry on the next
+            // authenticated owner, using its stable intent ID.
+            const requestId = data && typeof data === "object" &&
+                "requestId" in data && isRequestId(data.requestId)
+                ? data.requestId : undefined;
+            if (requestId)
+                this.send(ws, "room:leave:ack", { requestId });
             return;
         }
         if (

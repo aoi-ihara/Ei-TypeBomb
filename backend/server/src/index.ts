@@ -516,8 +516,17 @@ io.on("connection", (socket) => {
         const result = game.apply({ type: "room:join", player: user });
         if (result.effects.length) socket.join(roomId);
     });
-    socket.on("room:leave", () => {
+    socket.on("room:leave", (payload: unknown) => {
         if (!roomId) return;
+        // The client chooses the correlation ID; only the server-controlled
+        // session identity determines which player can leave.
+        const requestId = payload && typeof payload === "object" &&
+            "requestId" in payload && isRequestId(payload.requestId)
+            ? payload.requestId : undefined;
+        const acknowledge = () => {
+            if (requestId && socket.connected)
+                socket.emit("room:leave:ack", { requestId });
+        };
         const key = sessionKey(roomId, user.id);
         if (liveSessions.get(key) !== socket.id) return;
         const distributed = getGame();
@@ -527,7 +536,7 @@ io.on("connection", (socket) => {
             // Leaving a match does not disconnect the authenticated socket.
             // Keep liveSessions so this exact socket can join again and
             // its eventual transport disconnect can retire the room.
-            void distributed.leave(user.id).catch((error) =>
+            void distributed.leave(user.id).then(acknowledge).catch((error) =>
                 logError("Distributed room leave failed", error, { roomId }),
             );
             return;
@@ -535,6 +544,7 @@ io.on("connection", (socket) => {
         // Standalone sockets also stay in their Socket.IO room after leave.
         // Only release their session mapping on actual socket disconnect.
         deleteUser(user.id, "room_leave");
+        acknowledge();
     });
 
     socket.on(

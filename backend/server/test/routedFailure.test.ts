@@ -164,6 +164,7 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
                     transport.commands.push("room:leave");
                     users = [];
                     publish();
+                    dispatch("room:leave:ack", { requestId: value.requestId });
                 }
                 if (event === "cluster:ping") dispatch("cluster:pong");
                 return transport;
@@ -205,9 +206,8 @@ test("routed participant rejoins after a disconnected Socket.IO owner, but a spe
         sessions[1].close();
         await waitFor(() => sessions.length >= 3);
         await new Promise((resolve) => setTimeout(resolve, 50));
-        // Explicit leave is intentionally retransmitted to each newly
-        // authenticated owner; it must not resurrect room:join.
-        assert.deepEqual(sessions[2].commands, ["room:leave"]);
+        // A confirmed exit is not retransmitted after reconnecting.
+        assert.deepEqual(sessions[2].commands, []);
     } finally {
         socket.disconnect();
         globalThis.fetch = originalFetch;
@@ -634,6 +634,93 @@ test("leaving while disconnected defers the exit until the next authenticated so
         assert.equal(sessions[1].leaveCount, 1);
     } finally {
         socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});
+
+
+test("leave confirmation requires the matching authoritative ACK, not a stale absent snapshot", async () => {
+    const originalFetch = globalThis.fetch;
+    const url = "https://owner.test";
+    const owner = {
+        owner: url, epoch: 1, revision: 10,
+        instance: "instance", lifecycle: "ACTIVE", roomId: "room",
+    };
+    globalThis.fetch = (async () => Response.json({
+        ownership: owner, servers: [{ id: url, depth: 0, transport: "socket.io" }],
+    })) as typeof fetch;
+    const sessions: Array<{
+        leaves: string[];
+        push(event: string, value?: any): void;
+        close(): void;
+    }> = [];
+    const open = () => {
+        const handlers = new Map<string, Array<(value?: any) => void>>();
+        const push = (event: string, value?: any) =>
+            handlers.get(event)?.forEach((listener) => listener(value));
+        const transport = {
+            connected: true,
+            leaves: [] as string[],
+            push,
+            on(event: string, handler: (value?: any) => void) {
+                handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+                return transport;
+            },
+            emit(event: string, value?: any) {
+                if (event === "auth:response") {
+                    push("auth:session", { id: "player" });
+                    push("room:broadcast", {
+                        id: "room", roomInstanceId: "instance",
+                        ownerServerId: url, epoch: 1, revision: 10,
+                        users: [{ id: "player" }], bombs: [], isStart: false,
+                    });
+                }
+                if (event === "room:leave")
+                    transport.leaves.push(value.requestId);
+                if (event === "cluster:ping") push("cluster:pong");
+            },
+            disconnect() { transport.connected = false; },
+            close() { transport.connected = false; push("disconnect"); },
+        };
+        sessions.push(transport);
+        setTimeout(() => push("auth:request"), 0);
+        return transport;
+    };
+    const routed = new RoutedSocket([url], open, async () => "jwt", () => true);
+    routed.on("auth:request", () =>
+        routed.emit("auth:response", { jwtToken: "jwt" }));
+    const until = async (predicate: () => boolean) => {
+        const deadline = Date.now() + 4000;
+        while (!predicate()) {
+            if (Date.now() > deadline) throw new Error("Timed out");
+            await new Promise((resolve) => setTimeout(resolve, 15));
+        }
+    };
+    try {
+        await until(() => sessions.length === 1 && routed.connected);
+        routed.emit("room:leave");
+        await until(() => sessions[0].leaves.length === 1);
+        const requestId = sessions[0].leaves[0];
+        // Not even an absent (but unconfirmed) snapshot should cancel the
+        // request: it may have raced an unacknowledged mutation.
+        sessions[0].push("room:broadcast", {
+            id: "room", roomInstanceId: "instance",
+            ownerServerId: url, epoch: 1, revision: 11,
+            users: [], bombs: [], isStart: false,
+        });
+        sessions[0].push("room:leave:ack", { requestId: crypto.randomUUID() });
+        sessions[0].close();
+        await until(() => sessions.length >= 2 && sessions[1].leaves.length === 1);
+        assert.equal(sessions[1].leaves[0], requestId,
+            "Unconfirmed intent must use the same ID after failover");
+        sessions[1].push("room:leave:ack", { requestId });
+        sessions[1].close();
+        await until(() => sessions.length >= 3);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        assert.deepEqual(sessions[2].leaves, [],
+            "Confirmed leave must not be sent again");
+    } finally {
+        routed.disconnect();
         globalThis.fetch = originalFetch;
     }
 });
