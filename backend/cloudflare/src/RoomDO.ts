@@ -25,7 +25,7 @@ import { encodeWireMessage, parseWireMessage } from "./lib/wire";
 import { clusterConfig } from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { WorkerControl } from "./lib/cluster";
-import type { Command } from "../../shared/distributed/types";
+import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
 
 const RULES: GameRules = {
     allowSpectatorStart: true,
@@ -663,10 +663,38 @@ export class RoomDO extends DurableObject<Env> {
         });
         if (replacement) return;
         if (this.distributed) {
-            await this.distributed.disconnect(session.id);
+            // Match Node's disconnect policy: lobby seats are released as
+            // soon as the socket is confirmed gone, while an active match
+            // keeps its seat during transient connectivity/failover losses.
+            await this.distributed.disconnect(
+                session.id, "lobby", NODE_DISCONNECT_GRACE_MS,
+            );
             await this.scheduleNextAlarm();
             return;
         }
+        if (this.game && !this.game.room.isStart) {
+            // Standalone Worker sessions previously lingered for 20 seconds
+            // even in the lobby. Remove the participant immediately, and
+            // keep the room only if a spectator or another socket remains.
+            delete this.pendingLeaves[session.id];
+            await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
+            await this.apply({
+                type: "room:leave", playerId: session.id, reason: "disconnect",
+            });
+            const anyOpen = this.ctx.getWebSockets().some(
+                (other) => other.readyState === WebSocket.OPEN,
+            );
+            if (!anyOpen && Object.keys(this.pendingLeaves).length === 0) {
+                this.game = null;
+                await this.ctx.storage.delete("state");
+                await this.ctx.storage.deleteAlarm();
+            } else {
+                await this.scheduleNextAlarm();
+            }
+            return;
+        }
+        // A disconnected player in a running match is allowed to recover
+        // before standalone Workers process a game-canceling room:leave.
         this.pendingLeaves[session.id] = Date.now() + 20_000;
         await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
         await this.scheduleNextAlarm();
