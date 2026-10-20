@@ -30,14 +30,14 @@ export function parseETBClusterConfig(raw: string): ClusterServer[] {
             endpoint = item.url;
             // Existing version-1 voters can migrate by retaining their original
             // origin as a stable ID. New installs should use short node IDs.
-            const legacyOrigin = /^https?:\/\//.test(id) && (() => {
+            const legacyOrigin = /^https?:\/\//.test(id!) && (() => {
                 try {
                     const url = new URL(id!);
                     return url.origin === id && (url.protocol === "https:" ||
                         (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)));
                 } catch { return false; }
             })();
-            if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id) && !legacyOrigin)
+            if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id!) && !legacyOrigin)
                 throw new Error(`Invalid stable server id at position ${i}`);
         } else {
             if (typeof item !== "string") throw new Error(`Invalid cluster URL at position ${i}`);
