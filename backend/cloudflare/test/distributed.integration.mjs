@@ -567,6 +567,44 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             returned.socket.emit("room:leave");
             await wait(() => returned2.room.users.length === 0 && !returned2.room.isStart,
                 "explicit Render leave is broadcast to the other player");
+            if (scenario === "render") {
+                // Reopening a browser page creates a NEW signed session. Do
+                // not accidentally test only a reconnect with the old token.
+                await command(returned, 0, "room:join");
+                await command(returned2, 1, "room:join");
+                await wait(() => returned.room.users.length === 2, "migrated Render lobby seats");
+                returned2.socket.disconnect();
+                await wait(() => !returned.room.users.some((user) => user.id === players[1]),
+                    "closed tab leaves the migrated Render lobby", 3000);
+                const reopenedId = randomUUID();
+                const reopenedSession = await new SignJWT({ role: "client_session", roomId, sessionId: reopenedId })
+                    .setProtectedHeader({ alg: "ES256", kid }).setIssuer("ei-typebomb")
+                    .setAudience("ei-typebomb:client-session").setIssuedAt().setExpirationTime("1h").sign(privateKey);
+                let reopenedRoom;
+                const reopened = new RoutedSocket(urls, nativeTransport, async () => roomToken,
+                    () => true, async () => reopenedSession);
+                t.after(() => reopened.disconnect());
+                reopened.on("auth:request", () => reopened.emit("auth:response", {
+                    jwtToken: roomToken, sessionToken: reopenedSession, displayName: "Reopened tab",
+                }));
+                reopened.on("room:broadcast", (room) => reopenedRoom = room);
+                await wait(() => reopenedRoom, "new page authenticates to migrated Render room");
+                assert.equal(reopenedRoom.users.some((user) => user.id === players[1]), false);
+                assert.equal(reopenedRoom.users.some((user) => user.displayName === "Player 1"), false);
+                reopened.emit("room:join");
+                await wait(() => reopenedRoom.users.some((user) => user.id === reopenedId && user.displayName === "Reopened tab"),
+                    "new page displays only its new name");
+                reopened.disconnect();
+                await wait(() => returned.room.users.length === 1, "reopened tab also leaves cleanly", 3000);
+                returned.socket.disconnect();
+                await wait(async () => {
+                    const response = await fetch(`${urls[2]}/cluster/route`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ jwtToken: roomToken }),
+                    });
+                    return response.ok && (await response.json()).ownership?.lifecycle === "DELETED";
+                }, "last closed tab retires migrated Render room", 3000);
+            }
             // Stop the recovered primary again, leaving Render to create a
             // completely new room from the normal JWT/settings path.
             const recoveredPrimary = processes.at(-1);
@@ -613,6 +651,34 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             fresh.emit("game:start");
             await wait(() => secondRoom.isStart && secondRoom.bombs?.[0]?.wordIndex !== undefined,
                 "new Render-only match is playable");
+            if (scenario === "render") {
+                // A tab disappearing has no room:leave packet. Close the
+                // actual transport and keep the other player watching.
+                second.disconnect();
+                await delay(1_000);
+                assert.equal(freshRoom.isStart, true, "match survives transient disconnect");
+                assert.equal(freshRoom.users.length, 2);
+                await wait(() => !freshRoom.isStart && freshRoom.users.length === 0,
+                    "closed Render game tab expires despite another connected player", 25000);
+                fresh.emit("room:join");
+                await wait(() => freshRoom.users.length === 1, "remaining player rejoins lobby");
+                const revision = secondRoom.revision;
+                await second.connect();
+                await wait(() => secondRoom.revision > revision, "second tab reauthenticates");
+                second.emit("room:join");
+                await wait(() => freshRoom.users.length === 2, "second lobby seat");
+                second.disconnect();
+                await wait(() => freshRoom.users.length === 1,
+                    "closed lobby tab is removed immediately", 3000);
+                fresh.disconnect();
+                await wait(async () => {
+                    const response = await fetch(`${urls[2]}/cluster/route`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ jwtToken: freshToken }),
+                    });
+                    return response.ok && (await response.json()).ownership?.lifecycle === "DELETED";
+                }, "closing last lobby tab retires Render room", 3000);
+            }
             assert.deepEqual(unexpected, []);
             return;
         }
@@ -758,6 +824,22 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             () => w1.room && !w1.room.isStart && w1.room.users.length === 0,
             "direct Worker leave cancels active match",
         );
+        await command(w1, 0, "room:join");
+        await command(w2, 1, "room:join");
+        await command(w1, 0, "game:start");
+        await wait(() => w2.room.bombs?.[0]?.wordIndex !== undefined, "Worker countdown before tab close");
+        workerClients[0].close();
+        await delay(1_000);
+        assert.equal(w2.room.isStart, true, "Worker preserves disconnect grace");
+        await wait(() => !w2.room.isStart && w2.room.users.length === 0,
+            "closed Worker game tab expires despite connected spectator/player", 25000);
+        await command(w2, 1, "room:join");
+        await wait(() => w2.room.users.length === 1, "Worker returns to lobby");
+        const replacement = await workerClient(0);
+        await command(replacement, 0, "room:join");
+        await wait(() => w2.room.users.length === 2, "Worker lobby has two players");
+        workerClients.at(-1).close();
+        await wait(() => w2.room.users.length === 1, "Worker removes closed lobby tab immediately", 3000);
         assert.ok(
             databaseReads > readsBeforeFailover,
             "creating a new room must load its settings",
