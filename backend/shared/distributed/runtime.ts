@@ -126,10 +126,15 @@ export class DistributedRoom {
         kind: string,
     ) {
         this.assertActive();
-        // Reconnect barriers protect a running match. A migrated lobby or a
-        // canceled match must remain joinable, even if old sessions still have
-        // a bounded cleanup deadline.
+        // Before reopening a lobby, retire disconnected seats and their
+        // session deadlines. Otherwise ghosts can fill the lobby or cancel a
+        // replacement match when their old disconnect grace expires.
         if (!value.game.room.isStart && value.resumeUntil !== undefined) {
+            value.game.room.users = value.game.room.users.filter((player) => {
+                if (value.sessions[player.id]?.connected) return true;
+                delete value.sessions[player.id];
+                return false;
+            });
             delete value.resumeUntil;
             delete value.pausedAt;
             this.pauseAt = undefined;

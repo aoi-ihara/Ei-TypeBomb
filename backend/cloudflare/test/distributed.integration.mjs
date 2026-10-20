@@ -54,7 +54,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         const roomId = randomUUID();
         const row = {
             id: roomId,
-            max_players: 6,
+            max_players: scenario === "fallback5-reopen" ? 2 : 6,
             game_duration: 120,
             items: [
                 {
@@ -599,20 +599,57 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                     !lastPages[0].room.isStart, "fallback 5 exit clears reconnect wait immediately", 8000);
                 lastPages[0].socket.emit("room:join");
                 await wait(() => lastPages[0].room.users.length === 1, "fallback 5 lobby accepts a new join");
-                const lobbyEpoch = lastPages[0].room.epoch;
-                render.kill("SIGKILL");
-                await new Promise((resolve) => render.once("exit", resolve));
-                render = await startNode(fallbackIndex);
-                await wait(() => lastPages[0].room.epoch > lobbyEpoch && !lastPages[0].room.migrating,
-                    "restored fallback 5 lobby does not wait for old participants", 10000);
                 await lastPages[1].socket.connect();
                 await wait(() => {
                     lastPages[1].socket.emit("room:join");
-                    return lastPages.every((page) => !page.room.migrating && page.room.users.length === 2);
-                }, "restored fallback 5 lobby allows both players to join", 8000);
-                lastPages[0].socket.emit("game:start");
-                await wait(() => lastPages.every((page) => page.room.isStart &&
+                    return lastPages[0].room.users.length === 2;
+                }, "fill the old lobby before restoring it", 8000);
+                const lobbyEpoch = lastPages[0].room.epoch;
+                render.kill("SIGKILL");
+                lastPages.forEach((page) => page.socket.disconnect());
+                await new Promise((resolve) => render.once("exit", resolve));
+                render = await startNode(fallbackIndex);
+                // All replacement pages have NEW identities: reusing the old
+                // sessions would hide ghost seats by reconnecting them.
+                const replacementIds = [randomUUID(), randomUUID()];
+                const replacements = await Promise.all(replacementIds.map(async (id, i) => {
+                    const session = await new SignJWT({ role: "client_session", roomId, sessionId: id })
+                        .setProtectedHeader({ alg: "ES256", kid }).setIssuer("ei-typebomb")
+                        .setAudience("ei-typebomb:client-session").setIssuedAt().setExpirationTime("1h").sign(privateKey);
+                    const socket = new RoutedSocket(urls, nativeTransport, async () => roomToken,
+                        () => true, async () => session);
+                    t.after(() => socket.disconnect());
+                    const page = { socket, room: null, authenticated: false };
+                    socket.on("auth:request", () => socket.emit("auth:response", {
+                        jwtToken: roomToken, sessionToken: session, displayName: `Replacement ${i}`,
+                    }));
+                    socket.on("auth:session", () => page.authenticated = true);
+                    socket.on("room:broadcast", (room) => page.room = room);
+                    return page;
+                }));
+                await wait(() => replacements.every((page) => page.authenticated && page.room &&
+                    page.room.epoch > lobbyEpoch && !page.room.migrating),
+                    "new identities authenticate to the restored full lobby", 10000);
+                replacements.forEach((page) => assert.deepEqual(page.room.users, [], "no old seats when wait clears"));
+                replacements.forEach((page) => page.socket.emit("room:join"));
+                await wait(() => replacements.every((page) => page.room.users.length === 2 &&
+                    page.room.users.every((user) => replacementIds.includes(user.id))),
+                    "both replacements join without waiting for ghost-seat expiry", 3000);
+                replacements[0].socket.emit("game:start");
+                await wait(() => replacements.every((page) => page.room.isStart &&
                     page.room.bombs?.[0]?.wordIndex !== undefined), "play a match after lobby restoration", 8000);
+                const replacementGameId = replacements[0].room.gameId;
+                await delay(21_000);
+                replacements.forEach((page) => {
+                    assert.equal(page.room.isStart, true, "old session expiry must not cancel replacement match");
+                    assert.equal(page.room.gameId, replacementGameId);
+                    assert.ok(page.room.users.every((user) => replacementIds.includes(user.id)));
+                });
+                const turn = replacements[0].room.bombs[0].turn;
+                const holder = replacements[0].room.users[replacements[0].room.bombs[0].holder].id;
+                replacements[replacementIds.indexOf(holder)].socket.emit("word:success");
+                await wait(() => replacements.every((page) => page.room.bombs[0].turn > turn),
+                    "replacement match still accepts answers after old expiry", 5000);
                 assert.deepEqual(unexpected, []);
                 return;
             }
