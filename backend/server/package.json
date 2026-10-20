@@ -5,6 +5,7 @@
     "main": "index.js",
     "scripts": {
         "test": "tsx --test test/*.test.ts",
+        "test:race": "node scripts/repeat-races.cjs",
         "dev": "tsx watch src/index.ts",
         "start": "tsx src/index.ts",
         "build": "tsc && node scripts/write-build-entry.cjs",

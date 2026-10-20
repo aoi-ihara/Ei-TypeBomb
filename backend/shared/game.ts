@@ -27,6 +27,11 @@ export type GameRules = {
     allowCountdownPass: boolean;
     clearInputOnStop: boolean;
 };
+export const DEFAULT_GAME_RULES: GameRules = {
+    allowSpectatorStart: true,
+    allowCountdownPass: true,
+    clearInputOnStop: false,
+};
 export type GameContext = {
     now: number;
     random: () => number;
