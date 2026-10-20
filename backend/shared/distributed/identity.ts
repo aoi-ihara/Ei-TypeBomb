@@ -77,7 +77,7 @@ export class Identity {
         if (old.id !== next.id || old.depth !== next.depth ||
             old.parent !== next.parent || old.transport !== next.transport ||
             JSON.stringify(old.roster) !== JSON.stringify(next.roster))
-            throw new Error("Cluster voter membership changed: drain rooms and use a new state directory");
+            throw new Error("Cluster topology changed (voter membership): drain rooms and use a new state directory");
     }
     static assertLegacyTopology(certificate: string, declaration: string, boot: string): void {
         Identity.assertDurableTopology(certificate, declaration, boot);
