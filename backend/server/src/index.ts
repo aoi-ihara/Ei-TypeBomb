@@ -38,7 +38,7 @@ import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { recoveryFailure } from "../../shared/distributed/recovery";
 import { persistentPeerIdentity } from "./lib/peerStorage";
-import { MAX_CLUSTER_FRAME_BYTES } from "../../shared/distributed/link";
+import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
 import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
 const topology = parseServerTopology(process.env);
@@ -54,6 +54,7 @@ const clusterReady = config
               const socket = new PeerSocket(url, {
                   maxPayload: MAX_CLUSTER_FRAME_BYTES,
               });
+              const buffered = bufferPeerSocket(socket as unknown as import("../../shared/distributed/link").ClusterSocket);
               await new Promise<void>((resolve, reject) => {
                   const timer = setTimeout(() => {
                       socket.close();
@@ -68,7 +69,7 @@ const clusterReady = config
                       reject(error);
                   });
               });
-              return socket as unknown as import("../../shared/distributed/link").ClusterSocket;
+              return buffered;
           }, storage);
           await cluster.restoreRegistry(storage.members());
           cluster.draining = process.env.CLUSTER_DRAINING === "true";
