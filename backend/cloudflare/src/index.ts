@@ -1,5 +1,5 @@
 import { parsePageExit } from "../../shared/distributed/pageExit";
-import { recoveryFailure } from "../../shared/distributed/recovery";
+import { recoveryFailure, transientRecoveryFailure } from "../../shared/distributed/recovery";
 import { readLimitedBody } from "../../shared/distributed/replication";
 import type { Env } from "./types";
 import { clusterConfig } from "../../shared/distributed/control";
@@ -128,9 +128,12 @@ export default {
                     error instanceof Error ? error.message : "Unknown error",
                 );
                 const failure = recoveryFailure(error);
+                const transient = transientRecoveryFailure(error);
                 return failure
                     ? Response.json(failure, { status: 409, headers: cors })
-                    : new Response(null, { status: 503, headers: cors });
+                    : transient
+                        ? Response.json(transient, { status: 503, headers: cors })
+                        : new Response(null, { status: 503, headers: cors });
             }
         }
         const match = /^\/ws\/([^/]+)$/.exec(url.pathname);
