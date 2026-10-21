@@ -45,6 +45,7 @@ import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
 import {
     authenticationFailure,
+    recoveryFailure,
     transientRecoveryFailure,
 } from "../../shared/distributed/recovery";
 import { persistentPeerIdentity, clusterStateRoot } from "./lib/peerStorage";
