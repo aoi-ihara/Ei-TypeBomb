@@ -88,6 +88,7 @@ export class RoutedSocket {
     private sessionToken?: string;
     private roomId?: string;
     private currentOwner?: string;
+    private currentOwnerUrl?: string;
     private routedRevision?: number;
     private routedInstance?: string;
     private failure?: { owner: string; revision: number };
@@ -511,6 +512,9 @@ export class RoutedSocket {
                 this.transport = socket;
                 this.authenticatedTransport = undefined;
                 this.currentOwner = server.id;
+                // Preserve the endpoint independently of the stable owner ID
+                // supplied by subsequent room snapshots.
+                this.currentOwnerUrl = url;
                 let authenticating = true;
                 const authStartedAt = performance.now();
                 let authenticatedAt: number | undefined;
@@ -866,13 +870,13 @@ export class RoutedSocket {
         const instance = this.meta?.roomInstanceId;
         const connectionId = this.transport?.id ?? this.id;
         if (
-            this.currentOwner &&
+            this.currentOwnerUrl &&
             this.token &&
             this.sessionToken &&
             instance &&
             connectionId
         ) {
-            const endpoint = new URL("/cluster/leave", this.currentOwner);
+            const endpoint = new URL("/cluster/leave", this.currentOwnerUrl);
             const body = JSON.stringify({
                 jwtToken: this.token,
                 sessionToken: this.sessionToken,
