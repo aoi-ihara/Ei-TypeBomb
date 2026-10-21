@@ -9,6 +9,7 @@ export function recoveryFailure(error: unknown) {
                 message: "以前の対戦のチェックポイントを取得できません。保存済みのサーバーを復旧してから再接続してください。" };
         case "Ineligible voter or lost process memory":
         case "Voter incarnation changed":
+        case "Voter lost state; cannot vote":
             return { code: "VOTER_STATE_LOST", retryable: false,
                 message: "このサーバーには以前の対戦を安全に引き継ぐ投票状態がありません。元のサーバーまたは永続ディスクを復旧してから再接続してください。" };
         case "Server is not in the room voting cohort":

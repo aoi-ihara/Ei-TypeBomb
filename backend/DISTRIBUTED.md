@@ -8,7 +8,7 @@
 
 ゲーム状態・プレイヤー・トポロジー・所有権・確認状態にPostgreSQL/Supabaseを使いません。DBへのアクセスは担当Primaryが**新しいルームインスタンス**を作成するときの設定・問題取得だけです。移行時はレプリカの確定checkpointを使います。ルームが不明で必要なサーバーに接続できない場合、DBから作り直さず停止します。フロントエンドの既存のルーム編集・認証・オンライン記憶機能は変更しません。
 
-Nodeは `CLUSTER_STATE_DIR`（既定 `.cluster-state`）のSQLiteにboot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・レジストリを保存し、Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
+Nodeはリポジトリ外の `CLUSTER_STATE_DIR` に、現在のクラスタ構成に紐づくSQLiteを作り、boot ID・投票記録・promise・checkpoint・非投票ミラー・tombstone・レジストリを保存します。指定がなければ `~/.local/state/ei-typebomb/cluster`（絶対パスの `XDG_STATE_HOME` 指定時はその配下）です。Mac miniとRenderで同じプログラムを動かします。Node.js 22.13以降が必要です。Workerは `ClusterDO` が接続とトポロジー、ルーム別 `ReplicaDO` が投票状態・checkpoint・tombstoneを保持します。既存 `GameRoom` はゲーム通信/タイマーのアダプターです。ゲームルールは `shared/game.ts`、複製・所有権確認は `shared/distributed/` に共通化しています。
 
 環境変数のトポロジー設定は**全サーバーおよびVercelで同一**の `ETB_CLUSTER_CONFIG` へ統合します。配列の順序が優先順位、`/ws` の付いたURLがCloudflareのNative WebSocketを意味します。`/ws` はこの設定上の識別子であり、サーバー間のWSSは引き続き自動的に `/cluster/ws` を使います。
 
@@ -21,8 +21,8 @@ Mac mini・Worker・Render・Vercelにはこの同じ値を設定します。`CL
 ### 自己URLと再起動
 
 - `SERVER_PUBLIC_URL` の明示設定を最優先し、Renderでは `RENDER_EXTERNAL_URL` を使用します。
-- Nodeでは、URL環境変数がなくても `CLUSTER_STATE_DIR/cluster.sqlite` の公開メタデータから以前の自己URLを復元します。旧証明書しかないDBでもsubjectだけを読み、秘密鍵を要求しません。
-- 保存状態のないNodeでは、唯一のNodeエントリ、または配列先頭のNodeを選びます。したがって通常のMac mini Primaryは追加設定不要です。Render以外に新規Nodeレプリカを追加するときは `SERVER_PUBLIC_URL` を明示してください。URLから稼働マシンそのものを自動識別する機能はありません。
+- Nodeは **現在の環境変数だけで** 自己URLを決定します。旧SQLiteの自己URL・証明書・declarationから復元する処理はありません。
+- `SERVER_PUBLIC_URL` も `RENDER_EXTERNAL_URL` もないNodeは、唯一のNodeエントリ、または配列先頭のNodeを選びます。通常のMac mini Primaryは追加設定不要です。Render以外のNodeレプリカは `SERVER_PUBLIC_URL` を明示してください。URLからマシンを自動識別する機能はありません。
 - Workerが1台なら `/ws` エントリを選び、複数なら `SERVER_PUBLIC_URL` が必要です。
 
 ### 認証を行わないサーバー間通信
@@ -31,11 +31,17 @@ Mac mini・Worker・Render・Vercelにはこの同じ値を設定します。`CL
 
 **`/cluster/ws` へ到達できる相手を信頼する構成です。** ネットワークへ到達できる第三者は、公開構成を使ってpeerを名乗り、checkpointや所有権情報を偽造できます。HTTP/WSSのTLSは使用しますが、受信したpeerの身元をこのアプリは認証しません。hashは偶発的なデータ不整合の検出用であり、改ざんの認証にはなりません。ユーザーの明示指示により、以前のサーバー署名による保護を廃止しています。
 
-### 旧データの移行
+### クラスタ構成変更・旧データとの分離
 
-全サーバーを停止し、同じ新版へ更新して再起動してください。通信プロトコルはversion 3で、旧署名版との稼働中混在はサポートしません。旧トークンは削除済みのまま起動できます。SQLite/DO内の旧秘密鍵・pinは初期化時に削除し、自己URL・boot・投票状態・checkpoint・tombstoneは維持します。旧certificateのURL・depth・parent・transport・rosterが現在の構成と一致することを、保存内容の更新前に検査します。不一致なら旧メタデータ・鍵・pin・投票状態を保持したまま停止するため、元の構成へ戻して再起動できます。旧checkpointのJWT形式は公開payloadとして読み、署名は検証しません。整合性、構成、instance、boot、epoch、revision、投票者集合の検査は維持します。
+すべてのホストで**現在の** `ETB_CLUSTER_CONFIG` を一致させます。旧構成をSQLite/DOから読み込みません。Nodeは現在のdeclarationのSHA-256に基づく `CLUSTER_STATE_DIR/v2-<hash>/cluster.sqlite` を使用し、Workerの `ClusterDO`・`ReplicaDO`・分散 `RoomDO` は現在のendpoint配列から生成した別々のDurable Object IDを使用します。スタンドアロンWorkerのRoomDO IDは従来通りです。
 
-永続ディスク/DOの投票状態が失われた場合、bootを推測で使い回して復旧しません。既存ルームの資格がないノードの昇格は拒否し、復旧不能な状態は既存の分類エラーで停止します。新しい保存領域にして同じbootだけをコピーする運用は避けてください。
+- **同じ構成で再起動**：同じ名前空間に保存したboot・投票・checkpoint・tombstoneを再利用します。
+- **構成変更**（URL・順番・transport・サーバー数）：**新しい名前空間に切り替わり、旧構成の保存状態は読みません**。旧状態は消しませんが、新構成のルームへ自動移行もしません。
+- **既存ルームがある状態での切替は不可**：停止・全ルーム終了を確認し、メンテナンス期間中に全Node・Worker・Vercelを同じ新設定へ切り替えます。古い投票記録を新クラスタに流用して復旧しないでください。
+- **本番Nodeの書き込み先**：ログ以外はソースツリー・サーバーディレクトリへの書き込みを行いません。 `CLUSTER_STATE_DIR` は**絶対パス**かつソースツリーの外である必要があり、内側なら起動に失敗します。Renderでは再起動で消えない永続ディスクを必ずマウントしてください。
+- 以前の `.cluster-state/cluster.sqlite` や旧Durable Object IDのデータは参照せず、削除もせず、そのまま残ります。移行が必要な場合は稼働停止後に別途計画してください。
+
+前のシステムからの稼働中checkpoint引継ぎや、構成を変えながら進行中のゲームを維持する機能は提供しません。
 
 ## 所有権と確定方式：可用性最優先
 
@@ -66,9 +72,9 @@ Mac mini・Worker・Render・Vercelにはこの同じ値を設定します。`CL
 | Renderのみ | Renderが同ルームの投票資格と有効なcheckpointを保持していれば継続。再起動後は同じ永続ディスクを利用すること |
 | どのサーバーにも対象ルームのcheckpointがない | 復元不可能。推測でDBからゲームを再構築しない |
 
-NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを使うプロセスの同時起動はSQLiteの排他ロックで拒否され、SIGKILLでもOSがロックを解除します。自己URL・構成の変更やDB破損は新しい投票状態に置換せず起動を拒否します。boot IDだけを設定・コピーして使い回さないでください。
+NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを使うプロセスの同時起動はSQLiteの排他ロックで拒否され、SIGKILLでもOSがロックを解除します。同じ構成でDBが破損している場合は起動を拒否します。構成の変更時は新しい投票領域へ切り替えるので、旧データからゲームは復旧しません。boot IDだけを設定・コピーして使い回さないでください。
 
-**Renderでは永続ディスクをマウントし、`CLUSTER_STATE_DIR=/var/data/ei-typebomb-cluster` などを設定してください。** Mac miniにも再起動後に維持されるディレクトリを指定します。既定のローカルディレクトリは、Renderの一時ファイルシステムを永続化しません。ディスクの追加・プラン変更・本番デプロイはこのコード変更では実施しません。同一identityを別々のディスクで同時起動する構成はサポートしません。
+**Renderでは永続ディスクをマウントし、`CLUSTER_STATE_DIR=/var/data/ei-typebomb-cluster` などの絶対パスを設定してください。** Mac miniにも再起動後に維持されるソースツリー外のディレクトリを指定します。既定のホームディレクトリは、Renderの一時ファイルシステムを永続化しません。ディスクの追加・プラン変更・本番デプロイはこのコード変更では実施しません。同一identityを別々のディスクで同時起動する構成はサポートしません。
 
 この変更以前にメモリから失われた投票記録は復活しません。旧bootのミラーしか残っていない場合は安全に選出できず、`VOTER_STATE_LOST` として自動再試行を停止します。未登録の固定投票者は `VOTER_NOT_IN_COHORT`、既知の対戦のcheckpointが見つからない場合は `CHECKPOINT_UNAVAILABLE` です。サーバー／永続ディスクを復旧してから利用者がページを再読み込みして再接続できます。一時障害は最大60回再試行し、成功snapshotが得られなければ `RECOVERY_TIMEOUT` として停止します。
 
@@ -88,9 +94,9 @@ NodeはSQLiteのFULL同期で確定前に状態を保存します。同じDBを�
 
 ## デプロイとメンバー追加・削除
 
-1. 全ホストへ同じ `ETB_CLUSTER_CONFIG` を設定し、必要なホストでは `SERVER_PUBLIC_URL` を指定します。旧トークンは不要です。Nodeの永続ディスクとWorkerのCLUSTER/REPLICAS DO bindingを保持します。
+1. 既存ルームを終了してから全ホストへ同じ `ETB_CLUSTER_CONFIG` を設定し、必要なホストでは `SERVER_PUBLIC_URL` を指定します。Nodeの外部永続ディスクとWorkerのCLUSTER/REPLICAS/ROOMS DO bindingを保持します。構成変更時は旧保存状態と別の名前空間を使います。
 2. `/cluster/identity` のHTTPS GETと `/cluster/ws` のWSSをサーバー間で許可し、設定と整合する登録と初期checkpoint配送を確認してからゲームを開始します。Vercelにも同じJSONを設定します。session JWTは接続先変更で再発行しません。
-3. 追加・削除・順序・transportの変更は、旧構成のルームを終了してから全ホストを同じ構成へ切り替えます。公開declarationも構成に固定されるため、旧状態をバックアップし、全ホストで新しい保存領域を使用します。既存ルームの固定投票者集合を自動変更しません。
+3. 追加・削除・順序・transportの変更は、旧構成のルームを終了してから全ホストを同じ構成へ切り替えます。自動で新しい保存領域へ切り替わりますが、旧状態は読み取りません。既存ルームの固定投票者集合を自動変更しません。
 4. `CLUSTER_DRAINING=true` のownerは照会時に譲渡を承認します。通常は正常ownerへの虚偽報告で移行しません。
 
 PostgreSQL制御RPCと専用migrationはリポジトリから削除しました。旧PRのSQLをすでに手動適用した環境では、旧アプリの停止後に管理者が `public.etb_cluster(text,text,text,jsonb)` と `etb_private` schemaを撤去してください。この変更は本番DBへ接続して撤去作業を実行しません。通常のルーム設定テーブルには触れません。
