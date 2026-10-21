@@ -59,9 +59,9 @@ export class ClusterDO extends DurableObject<Env> {
                     return buffered;
                 },
                 {
-                    load: (room) =>
+                    load: async (room) =>
                         env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).load(),
-                    save: (room, state) =>
+                    save: async (room, state) =>
                         env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).save(
                             state,
                         ),
