@@ -31,3 +31,11 @@ export function recoveryFailure(error: unknown) {
             return undefined;
     }
 }
+
+/** An authenticated routing request may fail without making the room unusable.
+ * Expose only specific, known safe reasons as machine-readable diagnostics. */
+export function transientRecoveryFailure(error: unknown) {
+    if (error instanceof Error && error.message === "Owner has not approved transfer")
+        return { code: "OWNER_TRANSFER_NOT_APPROVED", retryable: true };
+    return undefined;
+}
