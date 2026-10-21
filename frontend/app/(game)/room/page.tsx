@@ -197,7 +197,7 @@ export default function Loading() {
                     </Button>
                 </div>
             ) : (
-                <div className="grid grid-cols-2 gap-4 w-full">
+                <div className="grid grid-cols-2 animate-appear gap-4 w-full">
                     <Button
                         onClick={() => handleMode("online")}
                         className="w-full"

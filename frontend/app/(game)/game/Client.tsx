@@ -47,7 +47,8 @@ type Props = {
 
 // Connection internals belong in DevTools, never in student-facing UI.
 const CONNECTING_MESSAGE = "接続中…";
-const UNAVAILABLE_MESSAGE = "現在はプレイできません。時間をおいて再度お試しください。";
+const UNAVAILABLE_MESSAGE =
+    "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 const MAX_CURRENT_INPUT_LENGTH = 32;
 
@@ -321,21 +322,31 @@ export default function Clinet({
                 ]);
             } catch (error) {
                 if (disposed || socketRef.current !== socket) return;
-                connectionError("AUTH", "Unable to retrieve authentication credentials", {
-                    server: candidate.url,
-                    tier: candidate.tier,
-                    ...connectionErrorDetails(error),
-                });
+                connectionError(
+                    "AUTH",
+                    "Unable to retrieve authentication credentials",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        ...connectionErrorDetails(error),
+                    },
+                );
                 setServerError(UNAVAILABLE_MESSAGE);
                 return;
             }
             if (!selected || socketRef.current !== socket || disposed) return;
             if (!authToken || !sessionToken) {
-                connectionError("AUTH", "Authentication credentials are unavailable", {
-                    server: candidate.url,
-                    tier: candidate.tier,
-                    reason: !authToken ? "room_token_missing" : "session_token_missing",
-                });
+                connectionError(
+                    "AUTH",
+                    "Authentication credentials are unavailable",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        reason: !authToken
+                            ? "room_token_missing"
+                            : "session_token_missing",
+                    },
+                );
                 setServerError(UNAVAILABLE_MESSAGE);
                 return;
             }
@@ -348,10 +359,14 @@ export default function Clinet({
                     configuredServers,
                 )
             ) {
-                connectionError("AUTH", "Untrusted authentication destination blocked", {
-                    server: candidate.url,
-                    tier: candidate.tier,
-                });
+                connectionError(
+                    "AUTH",
+                    "Untrusted authentication destination blocked",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                    },
+                );
                 setServerError(UNAVAILABLE_MESSAGE);
                 return;
             }
@@ -550,14 +565,22 @@ export default function Clinet({
 
             socket.on(
                 "error",
-                (error: { message?: unknown; retryable?: boolean; code?: string } | null) => {
+                (
+                    error: {
+                        message?: unknown;
+                        retryable?: boolean;
+                        code?: string;
+                    } | null,
+                ) => {
                     if (!selected || socketRef.current !== socket) return;
                     const authFailed = error?.code === "AUTH_FAILED";
                     const terminal = isTerminalConnectionError(error);
                     if (!distributed)
                         connectionError(
                             authFailed ? "AUTH" : "CONNECTION",
-                            authFailed ? "Authentication failed" : "Server returned an error",
+                            authFailed
+                                ? "Authentication failed"
+                                : "Server returned an error",
                             {
                                 server: candidate.url,
                                 tier: candidate.tier,
@@ -565,7 +588,9 @@ export default function Clinet({
                             },
                         );
                     if (terminal) cancelDisconnectNotice();
-                    setServerError(terminal ? UNAVAILABLE_MESSAGE : CONNECTING_MESSAGE);
+                    setServerError(
+                        terminal ? UNAVAILABLE_MESSAGE : CONNECTING_MESSAGE,
+                    );
                 },
             );
 
@@ -584,7 +609,9 @@ export default function Clinet({
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
                     cancelDisconnectNotice();
-                    setServerError(newRoom.migrating ? CONNECTING_MESSAGE : null);
+                    setServerError(
+                        newRoom.migrating ? CONNECTING_MESSAGE : null,
+                    );
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
                     const normalizedRoom: Room = {
@@ -696,7 +723,7 @@ export default function Clinet({
                         from_depth: fromDepth,
                         detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
                     });
-                 },
+                },
             );
 
             socket.on(
@@ -743,7 +770,7 @@ export default function Clinet({
                         snapshot_recovery_time_ms: snapshotRecoveryMs,
                         ...timingProperties,
                     });
-                 },
+                },
             );
 
             socket.on("auth:session", ({ id }: { id: string }) => {
@@ -752,7 +779,9 @@ export default function Clinet({
                     connectionLog("AUTH", "Authentication succeeded", {
                         server: candidate.url,
                         tier: candidate.tier,
-                        durationMs: Math.round(performance.now() - candidate.startedAt),
+                        durationMs: Math.round(
+                            performance.now() - candidate.startedAt,
+                        ),
                     });
                 setServerError(null);
                 setUserId(id);
