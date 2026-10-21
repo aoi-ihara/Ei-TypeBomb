@@ -312,7 +312,8 @@ function TypingAttempt({
     // Explicit failures avoid confusing Backspace corrections with wrong answers.
     const previousFailureCountRef = useRef(failureCount);
     useEffect(() => {
-        if (!isReadonly || previousFailureCountRef.current === failureCount) return;
+        if (!isReadonly || previousFailureCountRef.current === failureCount)
+            return;
         previousFailureCountRef.current = failureCount;
         inputFrameRef.current?.getAnimations().forEach((animation) => {
             animation.currentTime = 0;
@@ -351,9 +352,10 @@ function TypingAttempt({
             : 0
         : revealedHintLength;
 
-    const hintLength = isReadonly && remoteHintLength !== undefined
-        ? Math.max(0, Math.min(english?.length ?? 0, remoteHintLength))
-        : localHintLength;
+    const hintLength =
+        isReadonly && remoteHintLength !== undefined
+            ? Math.max(0, Math.min(english?.length ?? 0, remoteHintLength))
+            : localHintLength;
 
     const requestHint = () => {
         if (!manualHints || !english || answerRevealed || completedRef.current)
@@ -426,7 +428,10 @@ function TypingAttempt({
         if (completedRef.current) return;
         // Kana combinations such as ちゃ may confirm two cells at once.
         for (let offset = 0; offset < advance; offset++) {
-            if (next[currentSelection + offset] !== english[currentSelection + offset])
+            if (
+                next[currentSelection + offset] !==
+                english[currentSelection + offset]
+            )
                 incorrectInputCountRef.current += 1;
         }
         const nextIndex = currentSelection + advance;
@@ -435,8 +440,10 @@ function TypingAttempt({
             maxCorrectPrefixRef.current = nextCorrectPrefixLength;
             lastCorrectProgressAtRef.current = performance.now();
         }
-        const typedInsideHint = Array.from({ length: advance }, (_, offset) => currentSelection + offset)
-            .some((index) => index < hintLength && next[index] !== english[index]);
+        const typedInsideHint = Array.from(
+            { length: advance },
+            (_, offset) => currentSelection + offset,
+        ).some((index) => index < hintLength && next[index] !== english[index]);
 
         // Romanized kana answers are editable at any position, including
         // positions that have subsequently received an automatic hint.
@@ -444,9 +451,12 @@ function TypingAttempt({
         // Once the full answer is revealed, any incorrect committed
         // character should immediately clear the input (as in Playground),
         // even when it is outside the previously hinted prefix.
-        const incorrectAfterReveal = answerRevealed &&
-            Array.from({ length: advance }, (_, offset) => currentSelection + offset)
-                .some((index) => next[index] !== english[index]);
+        const incorrectAfterReveal =
+            answerRevealed &&
+            Array.from(
+                { length: advance },
+                (_, offset) => currentSelection + offset,
+            ).some((index) => next[index] !== english[index]);
         if (incorrectAfterReveal || (typedInsideHint && !manualHints)) {
             resetInput();
             return;
@@ -564,9 +574,10 @@ function TypingAttempt({
             : currentInput
         : input.join("");
     const displayChars = isReadonly ? [...displayInput] : input;
-    const remoteKanaProgress = isKanaAnswer && isReadonly
-        ? decodeKanaProgress(english, displayInput)
-        : null;
+    const remoteKanaProgress =
+        isKanaAnswer && isReadonly
+            ? decodeKanaProgress(english, displayInput)
+            : null;
     const confirmedKana = remoteKanaProgress?.committed ?? input.join("");
     const composingKana = remoteKanaProgress?.composing ?? kanaComposing;
 
@@ -608,11 +619,19 @@ function TypingAttempt({
                     }}
                     onKeyDown={(e) => {
                         if (isKanaAnswer) {
-                            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                            if (
+                                e.key === "ArrowLeft" ||
+                                e.key === "ArrowRight"
+                            ) {
                                 e.preventDefault();
-                                const direction = e.key === "ArrowLeft" ? -1 : 1;
+                                const direction =
+                                    e.key === "ArrowLeft" ? -1 : 1;
                                 selectKanaIndex(
-                                    nextKanaCursor(currentSelection, direction, english.length),
+                                    nextKanaCursor(
+                                        currentSelection,
+                                        direction,
+                                        english.length,
+                                    ),
                                 );
                                 return;
                             }
@@ -623,9 +642,10 @@ function TypingAttempt({
                                     setKanaComposing(pending);
                                     onChangeInput(input.join("") + pending);
                                 } else {
-                                    const target = input[currentSelection] !== ""
-                                        ? currentSelection
-                                        : Math.max(0, currentSelection - 1);
+                                    const target =
+                                        input[currentSelection] !== ""
+                                            ? currentSelection
+                                            : Math.max(0, currentSelection - 1);
                                     const next = [...input];
                                     next[target] = "";
                                     setInput(next);
@@ -680,14 +700,33 @@ function TypingAttempt({
                             readonly={isReadonly}
                             onSelect={selectKanaIndex}
                         />
-                    ) : [...english].map((char, index) => {
-                        const isSelected =
-                            !isReadonly && index === currentSelection;
-                        if (char === " ")
+                    ) : (
+                        [...english].map((char, index) => {
+                            const isSelected =
+                                !isReadonly && index === currentSelection;
+                            if (char === " ")
+                                return (
+                                    <button
+                                        key={index}
+                                        className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (currentInput === null)
+                                                setCurrentSelection(index);
+                                            inputRef.current?.focus();
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-center h-full w-full" />
+                                    </button>
+                                );
                             return (
                                 <button
                                     key={index}
-                                    className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
+                                    className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                    data-cursor="button"
+                                    data-cursor-shape={
+                                        currentInput === null ? "1" : "2"
+                                    }
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (currentInput === null)
@@ -695,37 +734,22 @@ function TypingAttempt({
                                         inputRef.current?.focus();
                                     }}
                                 >
-                                    <div className="flex items-center justify-center h-full w-full" />
+                                    {(manualHints
+                                        ? answerRevealed
+                                        : index < hintLength) && (
+                                        <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
+                                            {displayTypingCharacter(char)}
+                                        </div>
+                                    )}
+                                    <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
+                                        {displayTypingCharacter(
+                                            displayChars?.[index] ?? "",
+                                        )}
+                                    </div>
                                 </button>
                             );
-                        return (
-                            <button
-                                key={index}
-                                className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
-                                data-cursor="button"
-                                data-cursor-shape={
-                                    currentInput === null ? "1" : "2"
-                                }
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (currentInput === null)
-                                        setCurrentSelection(index);
-                                    inputRef.current?.focus();
-                                }}
-                            >
-                                {(manualHints
-                                    ? answerRevealed
-                                    : index < hintLength) && (
-                                    <div className="absolute inset-1 pointer-events-none opacity-25 border-b border-(--color-border) flex items-center justify-center">
-                                        {displayTypingCharacter(char)}
-                                    </div>
-                                )}
-                                <div className="relative border-b border-(--color-border) flex items-center justify-center h-full w-full">
-                                    {displayTypingCharacter(displayChars?.[index] ?? "")}
-                                </div>
-                            </button>
-                        );
-                    })}
+                        })
+                    )}
                     {!isReadonly && (
                         <input
                             ref={inputRef}
@@ -734,7 +758,13 @@ function TypingAttempt({
                                 const value = e.target.value;
                                 if (!value) return;
                                 const char = value.slice(-1);
-                                if (shouldIgnoreNonSpaceAtSpace(english, currentSelection, char)) {
+                                if (
+                                    shouldIgnoreNonSpaceAtSpace(
+                                        english,
+                                        currentSelection,
+                                        char,
+                                    )
+                                ) {
                                     // The narrow w-4 space cell accepts only a space.
                                     // Wrong keys do not reset, shake, or advance.
                                     setCharInput("");
@@ -752,7 +782,10 @@ function TypingAttempt({
                                         // double-Space hint shortcut must not be
                                         // passed to the roman parser as an error.
                                         // A real space in the answer still works.
-                                        if (isKanaAnswer && english[currentSelection] !== " ") {
+                                        if (
+                                            isKanaAnswer &&
+                                            english[currentSelection] !== " "
+                                        ) {
                                             setCharInput("");
                                             return;
                                         }
@@ -777,11 +810,20 @@ function TypingAttempt({
                                         resetInput();
                                         return;
                                     }
-                                    if ((answerRevealed || (!manualHints && currentSelection < hintLength)) && !advanceKanaInput(
-                                        english.slice(currentSelection),
-                                        { committed: "", composing: kanaComposing },
-                                        char,
-                                    ).accepted) {
+                                    if (
+                                        (answerRevealed ||
+                                            (!manualHints &&
+                                                currentSelection <
+                                                    hintLength)) &&
+                                        !advanceKanaInput(
+                                            english.slice(currentSelection),
+                                            {
+                                                committed: "",
+                                                composing: kanaComposing,
+                                            },
+                                            char,
+                                        ).accepted
+                                    ) {
                                         // During a full hint, reject the first
                                         // incorrect roman key without waiting.
                                         resetInput();
@@ -792,11 +834,18 @@ function TypingAttempt({
                                         setKanaComposing(edit.composing);
                                         if (edit.advance > 0) {
                                             setInput(edit.cells);
-                                            moveToNext(edit.cells, edit.advance, edit.composing);
+                                            moveToNext(
+                                                edit.cells,
+                                                edit.advance,
+                                                edit.composing,
+                                            );
                                         } else {
                                             // Invalid or incomplete roman prefixes stay visible
                                             // for Backspace correction; no premature failure.
-                                            onChangeInput(edit.cells.join("") + edit.composing);
+                                            onChangeInput(
+                                                edit.cells.join("") +
+                                                    edit.composing,
+                                            );
                                         }
                                     }
                                     setCharInput("");
@@ -815,7 +864,8 @@ function TypingAttempt({
                                 }
                                 if (char !== " ") {
                                     const next = [...input];
-                                    next[currentSelection] = normalizeHyphenInput(targetChar, char);
+                                    next[currentSelection] =
+                                        normalizeHyphenInput(targetChar, char);
                                     setInput(next);
                                     moveToNext(next);
                                 }
@@ -830,7 +880,9 @@ function TypingAttempt({
                                 }, 300);
                             }}
                             className="absolute inset-0 w-full h-full opacity-[0.01] z-10"
-                            aria-label={isKanaAnswer ? "日本語の回答" : "英語の回答"}
+                            aria-label={
+                                isKanaAnswer ? "日本語の回答" : "英語の回答"
+                            }
                             autoComplete="off"
                             autoCapitalize="off"
                             autoCorrect="off"
