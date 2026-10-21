@@ -86,6 +86,27 @@ export class RoutedSocket {
     private recoveryDiagnostics?: RecoveryDiagnostics;
     private firstMigrationSnapshotAt?: number;
     private wasBackgrounded = false;
+    private backgroundStartedAt?: number;
+    private readonly onVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+            this.backgroundStartedAt = performance.now();
+            connectionLog("CONNECTION", "Tab moved to background", {
+                visibility: "hidden",
+                socketConnected: this.transport?.connected ?? false,
+                owner: this.currentOwner,
+            });
+            return;
+        }
+        connectionLog("CONNECTION", "Tab returned to foreground", {
+            visibility: "visible",
+            durationMs: this.backgroundStartedAt === undefined
+                ? undefined : Math.round(performance.now() - this.backgroundStartedAt),
+            socketConnected: this.transport?.connected ?? false,
+            owner: this.currentOwner,
+            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+        });
+        this.backgroundStartedAt = undefined;
+    };
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
     private meta?: Meta;
@@ -137,6 +158,7 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.addEventListener("pagehide", this.pageHidden);
             window.addEventListener("beforeunload", this.pageHidden);
+            document.addEventListener("visibilitychange", this.onVisibilityChange);
         }
         void this.connect();
     }
@@ -1076,6 +1098,7 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.removeEventListener("pagehide", this.pageHidden);
             window.removeEventListener("beforeunload", this.pageHidden);
+            document.removeEventListener("visibilitychange", this.onVisibilityChange);
         }
         this.stopped = true;
         this.joinedRoom = false;
