@@ -41,17 +41,17 @@ import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
 import { recoveryFailure } from "../../shared/distributed/recovery";
-import { persistentPeerIdentity, nodeClusterEnv } from "./lib/peerStorage";
+import { persistentPeerIdentity, clusterStateRoot } from "./lib/peerStorage";
 import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
 import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
-const clusterEnv = nodeClusterEnv(process.env);
+const clusterEnv = process.env;
 const topology = parseServerTopology(clusterEnv, "socket.io");
 const config = clusterConfig(clusterEnv, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
     ? Identity.generate(parseETBClusterConfig(clusterEnv.ETB_CLUSTER_CONFIG!), config.id)
-        .then(declaration => persistentPeerIdentity(declaration, process.env.CLUSTER_STATE_DIR ?? ".cluster-state")).then(async ({ identity, storage }) => {
+        .then(declaration => persistentPeerIdentity(declaration, clusterStateRoot(process.env))).then(async ({ identity, storage }) => {
           assertClusterIdentity(process.env, identity);
           cluster = new PeerControl(identity, config, async (id) => {
               const url = new URL("/cluster/ws", id);
