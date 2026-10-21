@@ -211,6 +211,10 @@ export class RoutedSocket {
         if (event === "auth:response") {
             const auth = data as { sessionToken?: string };
             this.sessionToken = auth.sessionToken ?? this.sessionToken;
+            connectionLog("AUTH", "Sending authentication request", {
+                server: this.currentOwner,
+                attempt: this.attempt,
+            });
             this.transport?.emit(event, {
                 ...(data as Record<string, unknown>),
                 ...((this.meta?.roomInstanceId ?? this.routedInstance)
@@ -606,6 +610,15 @@ export class RoutedSocket {
                         };
                     continue;
                 }
+                const previousOwner = this.currentOwner;
+                if (previousOwner && previousOwner !== server.id)
+                    connectionLog("FALLBACK", `Switching to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`, {
+                        previousOwner,
+                        server: server.id,
+                        tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                        attempt,
+                        recoveryId: this.recoveryDiagnostics?.recoveryId,
+                    });
                 this.transport?.disconnect();
                 this.transport = socket;
                 this.authenticatedTransport = undefined;
@@ -917,15 +930,6 @@ export class RoutedSocket {
     }
     private recover(reason = "connection_lost") {
         if (this.stopped || this.retry) return;
-        connectionLog("FALLBACK", "Starting connection recovery", {
-            reason,
-            previousOwner: this.currentOwner,
-            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
-            socketConnected: this.transport?.connected ?? false,
-            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
-            retryCount: this.recoveryFailures,
-            recoveryId: this.recoveryDiagnostics?.recoveryId,
-        });
         if (this.recoveryFailures >= 60) {
             this.stopRecovery({
                 code: "RECOVERY_TIMEOUT",
@@ -976,6 +980,15 @@ export class RoutedSocket {
                     this.recoveryDiagnostics.detectionHeartbeatAgeMs,
             });
         }
+        connectionLog("FALLBACK", "Starting connection recovery", {
+            reason,
+            previousOwner: this.currentOwner,
+            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+            socketConnected: this.transport?.connected ?? false,
+            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+            retryCount: this.recoveryFailures,
+            recoveryId: this.recoveryDiagnostics?.recoveryId,
+        });
         if (
             this.currentOwner &&
             (this.meta || this.routedRevision !== undefined)
