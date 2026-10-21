@@ -43,7 +43,7 @@ import {
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
-import { recoveryFailure } from "../../shared/distributed/recovery";
+import { recoveryFailure, transientRecoveryFailure } from "../../shared/distributed/recovery";
 import { persistentPeerIdentity, clusterStateRoot } from "./lib/peerStorage";
 import {
     MAX_CLUSTER_FRAME_BYTES,
@@ -231,7 +231,9 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             console.error(`Cluster ${path} failed:`, message);
             exposeTimings();
             const failure = recoveryFailure(error);
+            const transient = transientRecoveryFailure(error);
             if (failure) res.status(409).json(failure);
+            else if (transient) res.status(503).json(transient);
             else res.status(503).end();
         }
     });
