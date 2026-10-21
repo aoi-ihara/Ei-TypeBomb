@@ -50,3 +50,22 @@ ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https
 ```
 
 The array defines priority and `/ws` identifies Workers. Server-specific keys and `CLUSTER_SERVER_TOKEN` authentication have been removed. Node restores its URL from `CLUSTER_STATE_DIR`; a fresh local Node defaults to Primary, Render uses `RENDER_EXTERNAL_URL`, and a sole Worker entry is selected automatically. Set `SERVER_PUBLIC_URL` for other replicas or multiple Workers. Keep voting state on persistent storage. Peer access is trusted: public declarations do not prevent impersonation. Player JWT authentication remains required. See [distributed setup](../DISTRIBUTED.md).
+
+## Production runtime storage
+
+Node never uses an earlier cluster's saved self URL/topology. It selects its
+identity from the CURRENT `ETB_CLUSTER_CONFIG`, `SERVER_PUBLIC_URL`, and
+`RENDER_EXTERNAL_URL`. Its SQLite recovery state must be outside the repo:
+
+```dotenv
+ETB_CLUSTER_CONFIG='{"version":1,"servers":["https://primary.example.com","https://worker.example.com/ws","https://render.example.com"]}'
+CLUSTER_STATE_DIR=/var/data/ei-typebomb-cluster
+```
+
+`CLUSTER_STATE_DIR` must be an absolute path outside the checkout. If omitted,
+the default is `~/.local/state/ei-typebomb/cluster` (or under absolute
+`XDG_STATE_HOME`). Render **requires a durable mounted disk** at the configured
+path to recover after a restart. A different topology gets a separate
+`v2-<sha256>` subdirectory; old SQLite is never read or auto-migrated.
+Only log files may be written under the server source tree at runtime.
+Do not change the topology while rooms are active.
