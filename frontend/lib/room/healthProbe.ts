@@ -29,7 +29,6 @@ function boundedProbe(
     return new Promise((resolve) => {
         const controller = new AbortController();
         let finished = false;
-        let timer: ReturnType<typeof setTimeout>;
         const finish = (result: HealthProbeResult) => {
             if (finished) return;
             finished = true;
@@ -40,7 +39,7 @@ function boundedProbe(
         };
         const cancel = () => finish(unhealthy());
         externalSignal?.addEventListener("abort", cancel, { once: true });
-        timer = setTimeout(cancel, timeoutMs);
+        const timer = setTimeout(cancel, timeoutMs);
         // Start only after setting the timeout/cancellation handlers.
         void Promise.resolve()
             .then(() => {
