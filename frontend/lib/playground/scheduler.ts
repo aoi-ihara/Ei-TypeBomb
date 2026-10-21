@@ -143,15 +143,14 @@ export const chooseNextUserItem = (
     if (state.current) return state.current; // Idempotent until the answer is recorded.
     if (state.cycleQueue.length === 0) {
         state.cycle++;
-        // All items return; long-term information only changes the order after cycle 1.
+        // Stable sort preserves shuffled ties; all items remain in each cycle.
+        // Smaller predicted recall comes first, with difficulty breaking ties.
         state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) => {
-            const rank = (id: string) =>
-                getRetrievability(memories[id], now) < 0.8
-                    ? 0
-                    : (memories[id]?.difficulty ?? 5) >= 7
-                      ? 1
-                      : 2;
-            return rank(a) - rank(b);
+            const difference =
+                getRetrievability(memories[a], now) -
+                getRetrievability(memories[b], now);
+            if (difference !== 0) return difference;
+            return (memories[b]?.difficulty ?? 5) - (memories[a]?.difficulty ?? 5);
         });
     }
     const turn = state.turn + 1;
