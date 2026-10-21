@@ -8,6 +8,7 @@ import {
     connectionError,
     connectionErrorDetails,
     connectionLog,
+    isTerminalConnectionError,
 } from "@/lib/room/connectionLogger";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
@@ -551,15 +552,20 @@ export default function Clinet({
                 "error",
                 (error: { message?: unknown; retryable?: boolean; code?: string } | null) => {
                     if (!selected || socketRef.current !== socket) return;
+                    const authFailed = error?.code === "AUTH_FAILED";
+                    const terminal = isTerminalConnectionError(error);
                     if (!distributed)
-                        connectionError("CONNECTION", "Server returned an error", {
-                            server: candidate.url,
-                            tier: candidate.tier,
-                            ...connectionErrorDetails(error),
-                        });
-                    if (error?.retryable === false) cancelDisconnectNotice();
-                    setServerError(error?.retryable === false
-                        ? UNAVAILABLE_MESSAGE : CONNECTING_MESSAGE);
+                        connectionError(
+                            authFailed ? "AUTH" : "CONNECTION",
+                            authFailed ? "Authentication failed" : "Server returned an error",
+                            {
+                                server: candidate.url,
+                                tier: candidate.tier,
+                                ...connectionErrorDetails(error),
+                            },
+                        );
+                    if (terminal) cancelDisconnectNotice();
+                    setServerError(terminal ? UNAVAILABLE_MESSAGE : CONNECTING_MESSAGE);
                 },
             );
 
