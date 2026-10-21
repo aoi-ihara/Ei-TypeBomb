@@ -116,3 +116,16 @@ the shared runtime migrates games from Node using the local checkpoints and best
 replicas never advance a game before acquiring its fenced ownership.
 
 For deployment, use the same `ETB_CLUSTER_CONFIG` JSON on Worker, Node servers and Vercel. The `/ws` endpoint marks the Worker transport. A sole Worker entry is selected automatically; set `SERVER_PUBLIC_URL` if multiple Worker entries exist. Server-specific signing keys and `CLUSTER_SERVER_TOKEN` authentication are removed; public declarations do not authenticate peers. Retain ClusterDO voting state. Player JWT authentication remains required. See [distributed setup](../DISTRIBUTED.md).
+
+## Config-scoped Durable Objects
+
+The CURRENT `ETB_CLUSTER_CONFIG` defines the namespace for the distributed
+`CLUSTER`, `REPLICAS` and `ROOMS` Durable Object IDs. Changing the server
+list/order creates fresh IDs instead of reading the former stored declaration,
+boot or votes. A repeated deploy of the same list retains those records.
+Standalone `ROOMS` names are unchanged. Old namespaces are not deleted.
+
+**Finish active rooms and coordinate the config change across all nodes and
+Vercel before deploying**: a different topology is not an in-place migration
+for running games. To verify the startup, check both `/health` and
+`/cluster/identity` (the latter initializes `ClusterDO`).

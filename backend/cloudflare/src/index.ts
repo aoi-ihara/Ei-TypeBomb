@@ -9,6 +9,7 @@ import { parseServerTopology } from "../../shared/topology";
 export { RoomDO, RoomDO as GameRoom } from "./RoomDO";
 export { ClusterDO, ReplicaDO } from "./ClusterDO";
 import { WorkerControl } from "./lib/cluster";
+import { clusterObjectName, roomObjectName } from "./lib/namespace";
 
 const ROOM_ID =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -33,7 +34,7 @@ export default {
             );
         }
         if (url.pathname === "/cluster/ws" || url.pathname === "/cluster/identity")
-            return env.CLUSTER.get(env.CLUSTER.idFromName("server")).fetch(
+            return env.CLUSTER.get(env.CLUSTER.idFromName(await clusterObjectName(env))).fetch(
                 request,
             );
         if (
@@ -66,7 +67,7 @@ export default {
                     const exit = parsePageExit(data);
                     const { verifyClientSessionToken } = await import("./lib/auth");
                     const id = await verifyClientSessionToken(exit.sessionToken, roomId, env);
-                    await env.ROOMS.get(env.ROOMS.idFromName(roomId)).closePageSession(roomId, id, exit.expectedInstance, exit.connectionId);
+                    await env.ROOMS.get(env.ROOMS.idFromName(await roomObjectName(env, roomId))).closePageSession(roomId, id, exit.expectedInstance, exit.connectionId);
                     return new Response(null, { status: 204, headers: cors });
                 }
                 const report = url.pathname.endsWith("report");
@@ -97,7 +98,7 @@ export default {
                     result.ownership.lifecycle === "MIGRATING"
                 )
                     await env.ROOMS.get(
-                        env.ROOMS.idFromName(roomId),
+                        env.ROOMS.idFromName(await roomObjectName(env, roomId)),
                     ).resumeMigration(roomId);
                 return Response.json(
                     { ownership: result.ownership, servers: result.servers },
@@ -133,7 +134,7 @@ export default {
                 return new Response("Origin not allowed", { status: 403 });
             }
         }
-        const id = env.ROOMS.idFromName(match[1].toLowerCase());
+        const id = env.ROOMS.idFromName(await roomObjectName(env, match[1].toLowerCase()));
         return env.ROOMS.get(id).fetch(request);
     },
 };

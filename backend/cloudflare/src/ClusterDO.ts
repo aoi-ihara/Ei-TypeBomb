@@ -5,6 +5,7 @@ import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
 import { bufferPeerSocket, type ClusterSocket } from "../../shared/distributed/link";
 import type { Env } from "./types";
+import { replicaObjectName } from "./lib/namespace";
 /** A per-room storage atom. It never advances games or initiates ownership. */
 export class ReplicaDO extends DurableObject<Env> {
     async load(): Promise<VoteRecord | undefined> {
@@ -28,19 +29,11 @@ export class ClusterDO extends DurableObject<Env> {
                 (await ctx.storage.get<string>("boot")) ?? crypto.randomUUID();
             const servers = parseETBClusterConfig(env.ETB_CLUSTER_CONFIG!);
             const declaration = await Identity.generate(servers, config.id);
-            const previousDeclaration = await ctx.storage.get<string>("declaration");
-            if (previousDeclaration && previousDeclaration !== declaration)
-                throw new Error("Cluster topology changed: drain rooms before replacing storage");
-            const legacy = await ctx.storage.get<string>("certificate");
-            if (legacy) Identity.assertLegacyTopology(legacy, declaration, boot);
             const identity = await Identity.create(declaration, boot);
             assertClusterIdentity(env, identity);
-            // Keep every legacy value intact if validation fails; commit all
-            // metadata replacement/removal together only after it succeeds.
-            await ctx.storage.transaction(async storage => {
-                await storage.put({ boot, declaration });
-                await storage.delete(["credential", "identity-pins", "certificate"]);
-            });
+            // This Durable Object is already scoped to the current topology.
+            // Keep only the incarnation; never store or inspect old config.
+            await ctx.storage.put("boot", boot);
             const peer = new PeerControl(
                 identity,
                 config,
@@ -66,10 +59,10 @@ export class ClusterDO extends DurableObject<Env> {
                     return buffered;
                 },
                 {
-                    load: (room) =>
-                        env.REPLICAS.get(env.REPLICAS.idFromName(room)).load(),
-                    save: (room, state) =>
-                        env.REPLICAS.get(env.REPLICAS.idFromName(room)).save(
+                    load: async (room) =>
+                        env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).load(),
+                    save: async (room, state) =>
+                        env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).save(
                             state,
                         ),
                     registry: (members) => ctx.storage.put("registry", members),

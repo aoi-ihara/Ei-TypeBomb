@@ -6,36 +6,41 @@ import { assertClusterIdentity } from "../../shared/distributed/control";
 const primary = "https://primary.example.test";
 const worker = "https://worker.example.test/ws";
 
-test("topology supports standalone and primary server deployments", () => {
-    assert.equal(parseServerTopology({}).role, "standalone");
-    assert.deepEqual(parseServerTopology({
+const current = JSON.stringify({version:1, servers:[
+    primary, worker, "https://render.example.test",
+]});
+
+test("without ETB_CLUSTER_CONFIG even former topology variables are ignored", () => {
+    assert.deepEqual(parseServerTopology({}), {
+        role: "standalone", primaryUrl: null, parentUrl: null, publicUrl: null,
+    });
+    const legacy = {
+        ETB_CLUSTER_CONFIG: undefined,
         PRIMARY_SERVER_URL: primary,
-        SERVER_PUBLIC_URL: primary,
-    }), {
+        PARENT_SERVER_URL: worker,
+    };
+    assert.equal(parseServerTopology(legacy).role, "standalone");
+});
+
+test("current JSON selects primary and replica parent by order", () => {
+    assert.deepEqual(parseServerTopology({ ETB_CLUSTER_CONFIG: current }, "socket.io"), {
         role: "primary", primaryUrl: primary, parentUrl: null, publicUrl: primary,
+    });
+    assert.deepEqual(parseServerTopology({
+        ETB_CLUSTER_CONFIG: current,
+        SERVER_PUBLIC_URL: "https://render.example.test",
+    }, "socket.io"), {
+        role: "replica", primaryUrl: primary,
+        parentUrl: new URL(worker).origin,
+        publicUrl: "https://render.example.test",
     });
 });
 
-test("replicas can discover their parent without a fixed tier number", () => {
-    assert.deepEqual(parseServerTopology({
-        PRIMARY_SERVER_URL: primary, PARENT_SERVER_URL: primary,
-        SERVER_PUBLIC_URL: worker,
-    }), { role: "replica", primaryUrl: primary, parentUrl: primary, publicUrl: worker });
-    assert.equal(parseServerTopology({
-        PRIMARY_SERVER_URL: primary, PARENT_SERVER_URL: worker,
-        SERVER_PUBLIC_URL: "https://render.example.test",
-    }).role, "replica");
-});
-
-test("invalid or cyclic server configurations are rejected", () => {
-    for (const config of [
-        { PARENT_SERVER_URL: primary },
-        { PRIMARY_SERVER_URL: primary, PARENT_SERVER_URL: primary, SERVER_PUBLIC_URL: primary },
-        { PRIMARY_SERVER_URL: primary, SERVER_PUBLIC_URL: worker },
-        { PRIMARY_SERVER_URL: "javascript:evil" },
-        { PRIMARY_SERVER_URL: "https://user:pass@example.test" },
-        { PRIMARY_SERVER_URL: "https://example.test?token=123" },
-    ]) assert.throws(() => parseServerTopology(config));
+test("obsolete variables cannot override the current JSON", () => {
+    const env = { ETB_CLUSTER_CONFIG: current, SERVER_PUBLIC_URL: primary,
+        PRIMARY_SERVER_URL: "https://obsolete.example.test",
+        PARENT_SERVER_URL: "https://other.example.test" };
+    assert.equal(parseServerTopology(env, "socket.io").role, "primary");
 });
 
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
