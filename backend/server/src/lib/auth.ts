@@ -35,6 +35,10 @@ export const verifyClientSessionToken = async (
     token: string,
     roomId: string,
 ): Promise<string> => {
-    const { payload, protectedHeader } = await jwtVerify(token, await publicKeyPromise, SESSION_JWT_POLICY);
+    const { payload, protectedHeader } = await jwtVerify(
+        token,
+        await publicKeyPromise,
+        SESSION_JWT_POLICY,
+    );
     return getVerifiedSessionId(payload, protectedHeader.kid, KEY_ID!, roomId);
 };

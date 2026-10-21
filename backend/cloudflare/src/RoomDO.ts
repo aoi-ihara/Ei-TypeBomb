@@ -105,16 +105,21 @@ export class RoomDO extends DurableObject<Env> {
             try {
                 await this.handle(ws, session, packet.event, packet.data);
             } catch (error) {
-                console.error(
-                    "Worker room event failed",
-                    { roomId: session.roomId, playerId: session.id, event: packet.event,
-                        error: error instanceof Error ? error.message : String(error) },
-                );
+                console.error("Worker room event failed", {
+                    roomId: session.roomId,
+                    playerId: session.id,
+                    event: packet.event,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
                 const text =
                     error instanceof ClientError
                         ? error.message
                         : "認証またはルーム処理に失敗しました。再度お試しください。";
-                this.send(ws, "error", { message: text, ...recoveryFailure(error) });
+                this.send(ws, "error", {
+                    message: text,
+                    ...recoveryFailure(error),
+                });
             }
         });
     }
@@ -138,8 +143,12 @@ export class RoomDO extends DurableObject<Env> {
                 if (!this.distributed) {
                     // DO isolates can be evicted independently of their persisted
                     // alarms. Restore ownership/game state before advancing deadlines.
-                    const roomId = (await this.ctx.storage.get<string>("distributedRoomId")) ??
-                        this.ctx.getWebSockets()
+                    const roomId =
+                        (await this.ctx.storage.get<string>(
+                            "distributedRoomId",
+                        )) ??
+                        this.ctx
+                            .getWebSockets()
                             .map((ws) => this.session(ws))
                             .find((session) => session?.roomId)?.roomId;
                     if (roomId) {
@@ -149,8 +158,13 @@ export class RoomDO extends DurableObject<Env> {
                             // Do not discard a persisted deadline on transient
                             // peer unavailability; retry restoration later.
                             await this.ctx.storage.setAlarm(Date.now() + 1_000);
-                            console.error("Worker room restore failed", { roomId,
-                                error: error instanceof Error ? error.message : String(error) });
+                            console.error("Worker room restore failed", {
+                                roomId,
+                                error:
+                                    error instanceof Error
+                                        ? error.message
+                                        : String(error),
+                            });
                             return;
                         }
                     }
@@ -159,8 +173,13 @@ export class RoomDO extends DurableObject<Env> {
                     try {
                         await this.distributed.tick();
                     } catch (error) {
-                        console.error("Worker room maintenance failed", { roomId: this.game?.room.id,
-                            error: error instanceof Error ? error.message : String(error) });
+                        console.error("Worker room maintenance failed", {
+                            roomId: this.game?.room.id,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        });
                         this.distributed.dispose();
                     }
                     if (this.distributed.halted || this.distributed.deleted) {
@@ -206,10 +225,20 @@ export class RoomDO extends DurableObject<Env> {
                 }
             }
             await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
-            const openSessions = this.ctx.getWebSockets().filter(ws =>
-                ws.readyState === WebSocket.OPEN && this.session(ws)?.roomId).length;
-            if (this.game && canDeleteRoom(this.game.room,
-                openSessions + Object.keys(this.pendingLeaves).length)) {
+            const openSessions = this.ctx
+                .getWebSockets()
+                .filter(
+                    (ws) =>
+                        ws.readyState === WebSocket.OPEN &&
+                        this.session(ws)?.roomId,
+                ).length;
+            if (
+                this.game &&
+                canDeleteRoom(
+                    this.game.room,
+                    openSessions + Object.keys(this.pendingLeaves).length,
+                )
+            ) {
                 this.game = null;
                 await this.ctx.storage.delete("state");
                 await this.ctx.storage.deleteAlarm();
@@ -350,19 +379,39 @@ export class RoomDO extends DurableObject<Env> {
     }
 
     /** Called only after the HTTP handler verifies both room and page JWTs. */
-    async closePageSession(roomId: string, id: string, instance: string, connectionId: string): Promise<void> {
+    async closePageSession(
+        roomId: string,
+        id: string,
+        instance: string,
+        connectionId: string,
+    ): Promise<void> {
         await this.enqueue(async () => {
             if (!this.control) throw new Error("Cluster disabled");
-            const saved = await this.control.call("read", { roomId, expectedInstance: instance });
-            if (saved.ownership?.instance !== instance || saved.ownership.owner !== this.control.config.id)
+            const saved = await this.control.call("read", {
+                roomId,
+                expectedInstance: instance,
+            });
+            if (
+                saved.ownership?.instance !== instance ||
+                saved.ownership.owner !== this.control.config.id
+            )
                 throw new Error("Room instance changed");
             if (saved.ownership.lifecycle === "DELETED") return;
             await this.ensureDistributed(roomId, undefined, instance);
-            const live = this.ctx.getWebSockets().some(ws => {
+            const live = this.ctx.getWebSockets().some((ws) => {
                 const active = this.session(ws);
-                return ws.readyState === WebSocket.OPEN && active?.id === id && active.connectionId === connectionId;
+                return (
+                    ws.readyState === WebSocket.OPEN &&
+                    active?.id === id &&
+                    active.connectionId === connectionId
+                );
             });
-            await this.distributed!.closeSession(id, instance, connectionId, live);
+            await this.distributed!.closeSession(
+                id,
+                instance,
+                connectionId,
+                live,
+            );
             await this.scheduleNextAlarm();
         });
     }
@@ -399,10 +448,16 @@ export class RoomDO extends DurableObject<Env> {
                 );
             }
             const stableId = response.sessionToken
-                ? await verifyClientSessionToken(response.sessionToken, authenticatedRoomId, this.env)
+                ? await verifyClientSessionToken(
+                      response.sessionToken,
+                      authenticatedRoomId,
+                      this.env,
+                  )
                 : session.id;
             if (session.roomId && session.id !== stableId)
-                throw new ClientError("接続済みセッションの認証情報は変更できません。");
+                throw new ClientError(
+                    "接続済みセッションの認証情報は変更できません。",
+                );
             if (this.control) {
                 if (!response.sessionToken)
                     throw new ClientError("署名付きセッションが必要です。");
@@ -477,8 +532,12 @@ export class RoomDO extends DurableObject<Env> {
                 this.sendRoomInfo();
                 this.send(ws, "command:ack", { id: command.id, status });
             } catch (error) {
-                console.error("Worker command failed", { roomId: session.roomId, playerId: session.id,
-                    error: error instanceof Error ? error.message : String(error) });
+                console.error("Worker command failed", {
+                    roomId: session.roomId,
+                    playerId: session.id,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
                 if (this.distributed.halted) this.send(ws, "cluster:paused");
                 else
                     this.send(ws, "command:ack", {
@@ -497,18 +556,25 @@ export class RoomDO extends DurableObject<Env> {
                 await this.distributed.leave(session.id);
                 this.game = this.distributed.state;
             } else {
-                await this.apply({ type: "room:leave", playerId: session.id, reason: "room_leave" });
+                await this.apply({
+                    type: "room:leave",
+                    playerId: session.id,
+                    reason: "room_leave",
+                });
             }
             this.sendRoomInfo();
             await this.scheduleNextAlarm();
             // Acknowledge only after the authoritative change is committed.
             // An absent ACK means the client can safely retry on the next
             // authenticated owner, using its stable intent ID.
-            const requestId = data && typeof data === "object" &&
-                "requestId" in data && isRequestId(data.requestId)
-                ? data.requestId : undefined;
-            if (requestId)
-                this.send(ws, "room:leave:ack", { requestId });
+            const requestId =
+                data &&
+                typeof data === "object" &&
+                "requestId" in data &&
+                isRequestId(data.requestId)
+                    ? data.requestId
+                    : undefined;
+            if (requestId) this.send(ws, "room:leave:ack", { requestId });
             return;
         }
         if (
@@ -679,7 +745,13 @@ export class RoomDO extends DurableObject<Env> {
         if (this.distributed) {
             // Remove lobby seats immediately, but preserve Workers' default
             // 20-second reconnect grace during active matches.
-            await this.distributed.disconnect(session.id, "lobby", undefined, undefined, session.connectionId);
+            await this.distributed.disconnect(
+                session.id,
+                "lobby",
+                undefined,
+                undefined,
+                session.connectionId,
+            );
             await this.scheduleNextAlarm();
             return;
         }
@@ -690,11 +762,24 @@ export class RoomDO extends DurableObject<Env> {
             delete this.pendingLeaves[session.id];
             await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
             await this.apply({
-                type: "room:leave", playerId: session.id, reason: "disconnect",
+                type: "room:leave",
+                playerId: session.id,
+                reason: "disconnect",
             });
-            const openSessions = this.ctx.getWebSockets().filter(other =>
-                other !== ws && other.readyState === WebSocket.OPEN && this.session(other)?.roomId).length;
-            if (canDeleteRoom(this.game!.room, openSessions + Object.keys(this.pendingLeaves).length)) {
+            const openSessions = this.ctx
+                .getWebSockets()
+                .filter(
+                    (other) =>
+                        other !== ws &&
+                        other.readyState === WebSocket.OPEN &&
+                        this.session(other)?.roomId,
+                ).length;
+            if (
+                canDeleteRoom(
+                    this.game!.room,
+                    openSessions + Object.keys(this.pendingLeaves).length,
+                )
+            ) {
                 this.game = null;
                 await this.ctx.storage.delete("state");
                 await this.ctx.storage.deleteAlarm();
@@ -707,7 +792,11 @@ export class RoomDO extends DurableObject<Env> {
         // before standalone Workers process a game-canceling room:leave.
         if (!this.game) return;
         this.pendingLeaves[session.id] = disconnectDeadline(
-            this.game.room, session.id, Date.now(), undefined, this.pendingLeaves[session.id],
+            this.game.room,
+            session.id,
+            Date.now(),
+            undefined,
+            this.pendingLeaves[session.id],
         );
         await this.ctx.storage.put("pendingLeaves", this.pendingLeaves);
         await this.scheduleNextAlarm();

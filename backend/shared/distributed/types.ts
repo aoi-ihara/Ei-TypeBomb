@@ -1,14 +1,13 @@
 import type { GameState } from "../types";
 import type { GameEvent } from "../game";
 import type { PlayerSession } from "../session";
-export { RECONNECT_GRACE_MS as GRACE_MS, NODE_SESSION_GRACE_MS as NODE_DISCONNECT_GRACE_MS } from "../session";
+export {
+    RECONNECT_GRACE_MS as GRACE_MS,
+    NODE_SESSION_GRACE_MS as NODE_DISCONNECT_GRACE_MS,
+} from "../session";
 
 export type Lifecycle =
-    | "CREATING"
-    | "ACTIVE"
-    | "MIGRATING"
-    | "DELETING"
-    | "DELETED";
+    "CREATING" | "ACTIVE" | "MIGRATING" | "DELETING" | "DELETED";
 export type ServerInfo = {
     id: string;
     parent: string | null;

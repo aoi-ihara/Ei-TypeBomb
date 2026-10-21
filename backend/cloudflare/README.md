@@ -59,10 +59,10 @@ to a native `wss://<worker-host>/ws/<roomId>` connection and send
 `{ "event": "...", "data": ... }` packets.
 
 Routes:
+
 - `GET /health`: basic HTTP process health.
 - `GET /ws/health`: WebSocket health session; `health:ping` / `health:pong`.
 - `GET /ws/:roomId`: native WebSocket game session.
-
 
 ## Cloudflare Worker Previews
 

@@ -36,49 +36,74 @@ import { Identity } from "../../shared/distributed/identity";
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
 import { parseServerTopology } from "../../shared/topology";
 
-import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
+import {
+    clusterConfig,
+    assertClusterIdentity,
+} from "../../shared/distributed/control";
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
 import { recoveryFailure } from "../../shared/distributed/recovery";
 import { persistentPeerIdentity, clusterStateRoot } from "./lib/peerStorage";
-import { MAX_CLUSTER_FRAME_BYTES, bufferPeerSocket } from "../../shared/distributed/link";
+import {
+    MAX_CLUSTER_FRAME_BYTES,
+    bufferPeerSocket,
+} from "../../shared/distributed/link";
 import { WebSocket as PeerSocket, WebSocketServer } from "ws";
-import { NODE_DISCONNECT_GRACE_MS, type Command } from "../../shared/distributed/types";
+import {
+    NODE_DISCONNECT_GRACE_MS,
+    type Command,
+} from "../../shared/distributed/types";
 const clusterEnv = process.env;
 const topology = parseServerTopology(clusterEnv, "socket.io");
 const config = clusterConfig(clusterEnv, "socket.io");
 let cluster: PeerControl | null = null;
 const clusterReady = config
-    ? Identity.generate(parseETBClusterConfig(clusterEnv.ETB_CLUSTER_CONFIG!), config.id)
-        .then(declaration => persistentPeerIdentity(declaration, clusterStateRoot(process.env))).then(async ({ identity, storage }) => {
-          assertClusterIdentity(process.env, identity);
-          cluster = new PeerControl(identity, config, async (id) => {
-              const url = new URL("/cluster/ws", id);
-              url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-              const socket = new PeerSocket(url, {
-                  maxPayload: MAX_CLUSTER_FRAME_BYTES,
-              });
-              const buffered = bufferPeerSocket(socket as unknown as import("../../shared/distributed/link").ClusterSocket);
-              await new Promise<void>((resolve, reject) => {
-                  const timer = setTimeout(() => {
-                      socket.close();
-                      reject(new Error("Peer connection timeout"));
-                  }, 1500);
-                  socket.once("open", () => {
-                      clearTimeout(timer);
-                      resolve();
-                  });
-                  socket.once("error", (error) => {
-                      clearTimeout(timer);
-                      reject(error);
-                  });
-              });
-              return buffered;
-          }, storage);
-          await cluster.restoreRegistry(storage.members());
-          cluster.draining = process.env.CLUSTER_DRAINING === "true";
-      })
+    ? Identity.generate(
+          parseETBClusterConfig(clusterEnv.ETB_CLUSTER_CONFIG!),
+          config.id,
+      )
+          .then((declaration) =>
+              persistentPeerIdentity(
+                  declaration,
+                  clusterStateRoot(process.env),
+              ),
+          )
+          .then(async ({ identity, storage }) => {
+              assertClusterIdentity(process.env, identity);
+              cluster = new PeerControl(
+                  identity,
+                  config,
+                  async (id) => {
+                      const url = new URL("/cluster/ws", id);
+                      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+                      const socket = new PeerSocket(url, {
+                          maxPayload: MAX_CLUSTER_FRAME_BYTES,
+                      });
+                      const buffered = bufferPeerSocket(
+                          socket as unknown as import("../../shared/distributed/link").ClusterSocket,
+                      );
+                      await new Promise<void>((resolve, reject) => {
+                          const timer = setTimeout(() => {
+                              socket.close();
+                              reject(new Error("Peer connection timeout"));
+                          }, 1500);
+                          socket.once("open", () => {
+                              clearTimeout(timer);
+                              resolve();
+                          });
+                          socket.once("error", (error) => {
+                              clearTimeout(timer);
+                              reject(error);
+                          });
+                      });
+                      return buffered;
+                  },
+                  storage,
+              );
+              await cluster.restoreRegistry(storage.members());
+              cluster.draining = process.env.CLUSTER_DRAINING === "true";
+          })
     : Promise.resolve();
 
 const games = new Map<string, NodeGameAdapter | DistributedRoom>();
@@ -105,9 +130,14 @@ app.get("/cluster/identity", async (_req, res) => {
     try {
         await clusterReady;
         res.setHeader("Cache-Control", "no-store");
-        if (!cluster) { res.sendStatus(404); return; }
+        if (!cluster) {
+            res.sendStatus(404);
+            return;
+        }
         res.json(cluster.identity.publicIdentity());
-    } catch { res.sendStatus(503); }
+    } catch {
+        res.sendStatus(503);
+    }
 });
 app.use(["/cluster/route", "/cluster/report"], express.json({ limit: "8kb" }));
 for (const path of ["/cluster/route", "/cluster/report"]) {
@@ -134,12 +164,19 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
                 resumeOpenMs: "resumeOpen",
             };
             timings.totalMs = performance.now() - requestStartedAt;
-            res.setHeader("Server-Timing", Object.entries(timings)
-                .filter(([key, value]) => labels[key] &&
-                    Number.isFinite(value) && value >= 0)
-                .map(([key, value]) =>
-                    `${labels[key]};dur=${value.toFixed(2)}`)
-                .join(", "));
+            res.setHeader(
+                "Server-Timing",
+                Object.entries(timings)
+                    .filter(
+                        ([key, value]) =>
+                            labels[key] && Number.isFinite(value) && value >= 0,
+                    )
+                    .map(
+                        ([key, value]) =>
+                            `${labels[key]};dur=${value.toFixed(2)}`,
+                    )
+                    .join(", "),
+            );
         };
         try {
             if (!cluster) {
@@ -159,8 +196,13 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             timings.authMs = performance.now() - requestStartedAt;
             const result = await cluster.call(
                 path.endsWith("report") ? "report" : "read",
-                { roomId, expectedInstance: req.body.expectedInstance, owner: req.body.owner, revision: req.body.revision,
-                    diagnosticTimings: timings },
+                {
+                    roomId,
+                    expectedInstance: req.body.expectedInstance,
+                    owner: req.body.owner,
+                    revision: req.body.revision,
+                    diagnosticTimings: timings,
+                },
             );
             if (
                 path.endsWith("report") &&
@@ -169,7 +211,11 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             ) {
                 const resumeStartedAt = performance.now();
                 try {
-                    await createRoomIfNeeded(roomId, req.body.jwtToken, timings);
+                    await createRoomIfNeeded(
+                        roomId,
+                        req.body.jwtToken,
+                        timings,
+                    );
                 } finally {
                     timings.resumeMs = performance.now() - resumeStartedAt;
                 }
@@ -180,7 +226,8 @@ for (const path of ["/cluster/route", "/cluster/report"]) {
             // Keep authentication errors and peer secrets out of HTTP responses.
             // Server-side diagnostics distinguish identity, connectivity and
             // missing certified checkpoints during failover experiments.
-            const message = error instanceof Error ? error.message : "Unknown error";
+            const message =
+                error instanceof Error ? error.message : "Unknown error";
             console.error(`Cluster ${path} failed:`, message);
             exposeTimings();
             const failure = recoveryFailure(error);
@@ -196,35 +243,76 @@ app.options("/cluster/leave", (_req, res) => {
     res.setHeader("Access-Control-Allow-Methods", "POST");
     res.status(204).end();
 });
-app.post("/cluster/leave", express.text({ type: "text/plain", limit: "8kb" }),
-    express.json({ limit: "8kb" }), async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    try {
-        if (!cluster) { res.status(404).end(); return; }
-        const data = parsePageExit(typeof req.body === "string" ? JSON.parse(req.body) : req.body);
-        const roomId = await verifyToken(data.jwtToken);
-        if (!roomId) { res.status(403).end(); return; }
-        const id = await verifyClientSessionToken(data.sessionToken, roomId);
-        const saved = await cluster.call("read", { roomId, expectedInstance: data.expectedInstance });
-        if (saved.ownership?.instance !== data.expectedInstance || saved.ownership.owner !== cluster.config.id) {
-            res.status(409).end(); return;
+app.post(
+    "/cluster/leave",
+    express.text({ type: "text/plain", limit: "8kb" }),
+    express.json({ limit: "8kb" }),
+    async (req, res) => {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        try {
+            if (!cluster) {
+                res.status(404).end();
+                return;
+            }
+            const data = parsePageExit(
+                typeof req.body === "string" ? JSON.parse(req.body) : req.body,
+            );
+            const roomId = await verifyToken(data.jwtToken);
+            if (!roomId) {
+                res.status(403).end();
+                return;
+            }
+            const id = await verifyClientSessionToken(
+                data.sessionToken,
+                roomId,
+            );
+            const saved = await cluster.call("read", {
+                roomId,
+                expectedInstance: data.expectedInstance,
+            });
+            if (
+                saved.ownership?.instance !== data.expectedInstance ||
+                saved.ownership.owner !== cluster.config.id
+            ) {
+                res.status(409).end();
+                return;
+            }
+            if (saved.ownership.lifecycle !== "DELETED") {
+                await createRoomIfNeeded(
+                    roomId,
+                    data.jwtToken,
+                    undefined,
+                    data.expectedInstance,
+                    false,
+                );
+                const game = games.get(roomId);
+                if (!(game instanceof DistributedRoom)) {
+                    res.status(409).end();
+                    return;
+                }
+                // A page cached by the browser may retain its live socket. Keep
+                // its authentication until actual disconnect, just like room:leave.
+                const socketId = liveSessions.get(sessionKey(roomId, id));
+                const live =
+                    socketId === data.connectionId &&
+                    !!io.sockets.sockets.get(socketId)?.connected;
+                await game.closeSession(
+                    id,
+                    data.expectedInstance,
+                    data.connectionId,
+                    live,
+                );
+            }
+            res.status(204).end();
+        } catch (error) {
+            console.error(
+                "Page exit rejected:",
+                error instanceof Error ? error.message : "Unknown error",
+            );
+            res.status(409).end();
         }
-        if (saved.ownership.lifecycle !== "DELETED") {
-            await createRoomIfNeeded(roomId, data.jwtToken, undefined, data.expectedInstance, false);
-            const game = games.get(roomId);
-            if (!(game instanceof DistributedRoom)) { res.status(409).end(); return; }
-            // A page cached by the browser may retain its live socket. Keep
-            // its authentication until actual disconnect, just like room:leave.
-            const socketId = liveSessions.get(sessionKey(roomId, id));
-            const live = socketId === data.connectionId && !!io.sockets.sockets.get(socketId)?.connected;
-            await game.closeSession(id, data.expectedInstance, data.connectionId, live);
-        }
-        res.status(204).end();
-    } catch (error) {
-        console.error("Page exit rejected:", error instanceof Error ? error.message : "Unknown error");
-        res.status(409).end();
-    }
-});
+    },
+);
 const peerServer = new WebSocketServer({
     noServer: true,
     maxPayload: MAX_CLUSTER_FRAME_BYTES,
@@ -289,10 +377,13 @@ const createRoomIfNeeded = async (
             const readStartedAt = performance.now();
             let saved: Awaited<ReturnType<typeof cluster.call>>;
             try {
-                saved = await cluster.call("read", { roomId, expectedInstance });
+                saved = await cluster.call("read", {
+                    roomId,
+                    expectedInstance,
+                });
             } finally {
-                if (timings) timings.resumeReadMs =
-                    performance.now() - readStartedAt;
+                if (timings)
+                    timings.resumeReadMs = performance.now() - readStartedAt;
             }
             const fresh =
                 !saved.ownership || saved.ownership.lifecycle === "DELETED";
@@ -317,7 +408,9 @@ const createRoomIfNeeded = async (
                 // state/activity callbacks. Keep the server console in sync
                 // without refreshing on every typing/input checkpoint.
                 const oldPlayers = previous?.users.map((user) => user.id) ?? [];
-                const newPlayers = result.state.room.users.map((user) => user.id);
+                const newPlayers = result.state.room.users.map(
+                    (user) => user.id,
+                );
                 const membershipChanged =
                     oldPlayers.length !== newPlayers.length ||
                     oldPlayers.some((id, i) => id !== newPlayers[i]);
@@ -326,14 +419,35 @@ const createRoomIfNeeded = async (
                     previous?.gameId !== result.state.room.gameId;
                 const bombChanged =
                     previous?.bombHolder !== result.state.room.bombHolder ||
-                    JSON.stringify(previous?.bombs?.map((bomb) => bomb.holder) ?? []) !==
-                        JSON.stringify(result.state.room.bombs?.map((bomb) => bomb.holder) ?? []);
-                if (membershipChanged || gameChanged || bombChanged || index < 0) {
+                    JSON.stringify(
+                        previous?.bombs?.map((bomb) => bomb.holder) ?? [],
+                    ) !==
+                        JSON.stringify(
+                            result.state.room.bombs?.map(
+                                (bomb) => bomb.holder,
+                            ) ?? [],
+                        );
+                if (
+                    membershipChanged ||
+                    gameChanged ||
+                    bombChanged ||
+                    index < 0
+                ) {
                     refreshServerState();
-                    for (const id of newPlayers.filter((id) => !oldPlayers.includes(id)))
-                        logEvent("ROOM", `joined ${roomId}`, { roomId, playerId: id });
-                    for (const id of oldPlayers.filter((id) => !newPlayers.includes(id)))
-                        logEvent("ROOM", `left ${roomId}`, { roomId, playerId: id });
+                    for (const id of newPlayers.filter(
+                        (id) => !oldPlayers.includes(id),
+                    ))
+                        logEvent("ROOM", `joined ${roomId}`, {
+                            roomId,
+                            playerId: id,
+                        });
+                    for (const id of oldPlayers.filter(
+                        (id) => !newPlayers.includes(id),
+                    ))
+                        logEvent("ROOM", `left ${roomId}`, {
+                            roomId,
+                            playerId: id,
+                        });
                     if (gameChanged && previous)
                         logEvent("GAME", `state changed ${roomId}`, {
                             roomId,
@@ -357,8 +471,8 @@ const createRoomIfNeeded = async (
             try {
                 await game.open(initial ?? undefined);
             } finally {
-                if (timings) timings.resumeOpenMs =
-                    performance.now() - openStartedAt;
+                if (timings)
+                    timings.resumeOpenMs = performance.now() - openStartedAt;
             }
             games.set(roomId, game);
             if (!rooms.some((room) => room.id === roomId))
@@ -505,13 +619,19 @@ io.on("connection", (socket) => {
     let user: User = { id: socket.id };
     let roomId: null | string = null;
     const getGame = () => (roomId ? games.get(roomId) : undefined);
-    const isCurrentSession = () => !!roomId &&
-        liveSessions.get(sessionKey(roomId, user.id)) === socket.id;
+    const isCurrentSession = () =>
+        !!roomId && liveSessions.get(sessionKey(roomId, user.id)) === socket.id;
     const applyEvent = (event: GameEvent) => {
         if (!isCurrentSession()) return;
         const game = getGame();
-        if (game) void Promise.resolve(game.apply(event)).catch(error =>
-            logError("Room event failed", error, { roomId, userId: user.id, event: event.type }));
+        if (game)
+            void Promise.resolve(game.apply(event)).catch((error) =>
+                logError("Room event failed", error, {
+                    roomId,
+                    userId: user.id,
+                    event: event.type,
+                }),
+            );
     };
     logEvent("SERVER", "client connected", { socketId: socket.id });
     socket.emit("auth:request");
@@ -566,7 +686,10 @@ io.on("connection", (socket) => {
             sendRoomInfo(roomId);
             emitRaw("command:ack", { id: command.id, status });
         } catch (error) {
-            logError("Distributed command failed", error, { roomId, userId: user.id });
+            logError("Distributed command failed", error, {
+                roomId,
+                userId: user.id,
+            });
             if (game.halted) emitRaw("cluster:paused");
             else
                 emitRaw("command:ack", {
@@ -586,9 +709,13 @@ io.on("connection", (socket) => {
         if (!roomId) return;
         // The client chooses the correlation ID; only the server-controlled
         // session identity determines which player can leave.
-        const requestId = payload && typeof payload === "object" &&
-            "requestId" in payload && isRequestId(payload.requestId)
-            ? payload.requestId : undefined;
+        const requestId =
+            payload &&
+            typeof payload === "object" &&
+            "requestId" in payload &&
+            isRequestId(payload.requestId)
+                ? payload.requestId
+                : undefined;
         const acknowledge = () => {
             if (requestId && socket.connected)
                 socket.emit("room:leave:ack", { requestId });
@@ -602,9 +729,14 @@ io.on("connection", (socket) => {
             // Leaving a match does not disconnect the authenticated socket.
             // Keep liveSessions so this exact socket can join again and
             // its eventual transport disconnect can retire the room.
-            void distributed.leave(user.id).then(acknowledge).catch((error) =>
-                logError("Distributed room leave failed", error, { roomId }),
-            );
+            void distributed
+                .leave(user.id)
+                .then(acknowledge)
+                .catch((error) =>
+                    logError("Distributed room leave failed", error, {
+                        roomId,
+                    }),
+                );
             return;
         }
         // Standalone sockets also stay in their Socket.IO room after leave.
@@ -627,10 +759,15 @@ io.on("connection", (socket) => {
             if (cluster && !response.sessionToken)
                 throw new ClientError("署名付きセッションが必要です。");
             const stableId = response.sessionToken
-                ? await verifyClientSessionToken(response.sessionToken, jwtResult)
+                ? await verifyClientSessionToken(
+                      response.sessionToken,
+                      jwtResult,
+                  )
                 : socket.id;
             if (roomId && (roomId !== jwtResult || user.id !== stableId))
-                throw new ClientError("接続済みセッションの認証情報は変更できません。");
+                throw new ClientError(
+                    "接続済みセッションの認証情報は変更できません。",
+                );
             if (!socket.connected) return;
             const room = await createRoomIfNeeded(
                 jwtResult,
@@ -688,7 +825,7 @@ io.on("connection", (socket) => {
     // A transport may resend auth while a database/peer read is in flight.
     // Serialize it so completion order cannot rebind its room or identity.
     let authentication = Promise.resolve();
-    socket.on("auth:response", response => {
+    socket.on("auth:response", (response) => {
         authentication = authentication.then(() => authenticate(response));
     });
 
@@ -707,7 +844,13 @@ io.on("connection", (socket) => {
     socket.on("item:recommend", (payload: unknown) => {
         const game = getGame();
         const parsed = parseClientEvent("item:recommend", payload);
-        if (!game || !roomId || !isCurrentSession() || !parsed || parsed.event !== "item:recommend")
+        if (
+            !game ||
+            !roomId ||
+            !isCurrentSession() ||
+            !parsed ||
+            parsed.event !== "item:recommend"
+        )
             return;
         // Only an authenticated room participant may influence their own
         // next question; unknown item IDs are ignored.
@@ -732,7 +875,8 @@ io.on("connection", (socket) => {
         const game = getGame();
 
         if (
-            !game || !isCurrentSession() ||
+            !game ||
+            !isCurrentSession() ||
             game instanceof DistributedRoom ||
             !canStart(game.state, user.id, NODE_GAME_RULES)
         ) {
@@ -758,9 +902,14 @@ io.on("connection", (socket) => {
         game.apply({ type: "room:leave", playerId, reason });
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
         const pendingCount = [...pendingLeaves.keys()].filter((key) =>
-                key.startsWith(`${roomId}:`),
-            ).length;
-        if (canDeleteRoom(game.state.room, (socketRoom?.size ?? 0) + pendingCount)) {
+            key.startsWith(`${roomId}:`),
+        ).length;
+        if (
+            canDeleteRoom(
+                game.state.room,
+                (socketRoom?.size ?? 0) + pendingCount,
+            )
+        ) {
             game.dispose();
             games.delete(roomId);
             rooms = rooms.filter((item) => item.id !== roomId);
@@ -790,26 +939,55 @@ io.on("connection", (socket) => {
             // immediately. During an active match preserve the seat for
             // recovery: killing a game because of transient failover would
             // otherwise affect every remaining player.
-            void distributed.disconnect(user.id, "lobby", NODE_DISCONNECT_GRACE_MS, undefined, socket.id).catch((error) =>
-                logError("Distributed socket disconnect cleanup failed", error, {
-                    roomId,
-                    userId: user.id,
-                }),
-            );
+            void distributed
+                .disconnect(
+                    user.id,
+                    "lobby",
+                    NODE_DISCONNECT_GRACE_MS,
+                    undefined,
+                    socket.id,
+                )
+                .catch((error) =>
+                    logError(
+                        "Distributed socket disconnect cleanup failed",
+                        error,
+                        {
+                            roomId,
+                            userId: user.id,
+                        },
+                    ),
+                );
             return;
         }
         // Lobby loss is immediate. An active player's transport loss has the
         // same 20s recovery window as distributed rooms and Workers.
         const game = getGame();
-        if (game?.state.room.isStart &&
-            game.state.room.users.some(player => player.id === user.id)) {
+        if (
+            game?.state.room.isStart &&
+            game.state.room.users.some((player) => player.id === user.id)
+        ) {
             if (pendingLeaves.has(key)) return;
-            const deadline = disconnectDeadline(game.state.room, user.id, Date.now());
-            pendingLeaves.set(key, setTimeout(() => {
-                pendingLeaves.delete(key);
-                if (!liveSessions.has(key)) deleteUser(user.id, "disconnect");
-            }, Math.max(1, deadline - Date.now())));
-            logEvent("ROOM", `reconnect pending ${roomId}`, { roomId, userId: user.id, deadline });
+            const deadline = disconnectDeadline(
+                game.state.room,
+                user.id,
+                Date.now(),
+            );
+            pendingLeaves.set(
+                key,
+                setTimeout(
+                    () => {
+                        pendingLeaves.delete(key);
+                        if (!liveSessions.has(key))
+                            deleteUser(user.id, "disconnect");
+                    },
+                    Math.max(1, deadline - Date.now()),
+                ),
+            );
+            logEvent("ROOM", `reconnect pending ${roomId}`, {
+                roomId,
+                userId: user.id,
+                deadline,
+            });
             return;
         }
         deleteUser(user.id, "disconnect");
@@ -837,7 +1015,11 @@ if (config) {
                             games.delete(id);
                             rooms = rooms.filter((room) => room.id !== id);
                             refreshServerState();
-                            logEvent("ROOM", `${game.deleted ? "deleted" : "unavailable"} ${id}`, { roomId: id });
+                            logEvent(
+                                "ROOM",
+                                `${game.deleted ? "deleted" : "unavailable"} ${id}`,
+                                { roomId: id },
+                            );
                             io.to(id).emit("error", {
                                 message:
                                     "所有権の確認のため接続先を再確認しています。",
@@ -846,7 +1028,9 @@ if (config) {
                         }
                     })
                     .catch((error) => {
-                        logError("Distributed room maintenance failed", error, { roomId: id });
+                        logError("Distributed room maintenance failed", error, {
+                            roomId: id,
+                        });
                         io.in(id).disconnectSockets(true);
                         games.delete(id);
                         rooms = rooms.filter((room) => room.id !== id);

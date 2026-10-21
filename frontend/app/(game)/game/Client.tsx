@@ -242,7 +242,8 @@ export default function Clinet({
         const fallbackUrl = configuredServers.length
             ? configuredServers[2]
             : process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
-        const distributed = configuredServers.length > 0 ||
+        const distributed =
+            configuredServers.length > 0 ||
             process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
@@ -308,12 +309,21 @@ export default function Clinet({
             ]);
             if (!selected || socketRef.current !== socket || disposed) return;
             if (!authToken || !sessionToken) {
-                setServerError("認証情報を取得できませんでした。ルームに入り直してください。");
+                setServerError(
+                    "認証情報を取得できませんでした。ルームに入り直してください。",
+                );
                 return;
             }
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url, primaryUrl, configuredServers)) return;
+            if (
+                !isTrustedServerUrl(
+                    candidate.url,
+                    primaryUrl,
+                    configuredServers,
+                )
+            )
+                return;
 
             socket.emit("auth:response", {
                 jwtToken: authToken,
@@ -423,27 +433,47 @@ export default function Clinet({
             const { socket } = candidate;
             const retrySelectedConnection = () => {
                 if (distributed) return;
-                if (disposed || !selected || socketRef.current !== socket || reconnectTimer) return;
+                if (
+                    disposed ||
+                    !selected ||
+                    socketRef.current !== socket ||
+                    reconnectTimer
+                )
+                    return;
                 reconnectTimer = setTimeout(() => {
                     reconnectTimer = null;
-                    if (!disposed && socketRef.current === socket && !socket.connected) {
+                    if (
+                        !disposed &&
+                        socketRef.current === socket &&
+                        !socket.connected
+                    ) {
                         socket.connect();
                     }
                 }, 1_000);
             };
 
             socket.on("disconnect", () => {
-                if (!selected || socketRef.current !== socket || disposed) return;
+                if (!selected || socketRef.current !== socket || disposed)
+                    return;
                 cancelDisconnectNotice();
                 // Sleeping tabs may suspend the heartbeat and transport. Keep
                 // transient background recovery silent; show errors only if a
                 // foreground reconnection remains unsuccessful.
-                disconnectNoticeTimer = setTimeout(() => {
-                    disconnectNoticeTimer = null;
-                    if (!disposed && socketRef.current === socket &&
-                        !socket.connected && document.visibilityState === "visible")
-                        setServerError("接続が切れました。再接続しています…");
-                }, document.visibilityState === "hidden" ? 6000 : 3000);
+                disconnectNoticeTimer = setTimeout(
+                    () => {
+                        disconnectNoticeTimer = null;
+                        if (
+                            !disposed &&
+                            socketRef.current === socket &&
+                            !socket.connected &&
+                            document.visibilityState === "visible"
+                        )
+                            setServerError(
+                                "接続が切れました。再接続しています…",
+                            );
+                    },
+                    document.visibilityState === "hidden" ? 6000 : 3000,
+                );
                 retrySelectedConnection();
             });
             socket.on("connect_error", () => {
@@ -459,13 +489,19 @@ export default function Clinet({
                 }
             });
 
-            socket.on("error", (error: { message?: unknown; retryable?: boolean } | null) => {
-                if (!selected || socketRef.current !== socket) return;
-                if (typeof error?.message !== "string" || !error.message.trim())
-                    return;
-                if (error.retryable === false) cancelDisconnectNotice();
-                setServerError(error.message);
-            });
+            socket.on(
+                "error",
+                (error: { message?: unknown; retryable?: boolean } | null) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    if (
+                        typeof error?.message !== "string" ||
+                        !error.message.trim()
+                    )
+                        return;
+                    if (error.retryable === false) cancelDisconnectNotice();
+                    setServerError(error.message);
+                },
+            );
 
             socket.on(
                 "room:broadcast",
@@ -482,7 +518,11 @@ export default function Clinet({
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
                     cancelDisconnectNotice();
-                    setServerError(newRoom.migrating ? "サーバーを切り替えています。参加者の再接続を待っています…" : null);
+                    setServerError(
+                        newRoom.migrating
+                            ? "サーバーを切り替えています。参加者の再接続を待っています…"
+                            : null,
+                    );
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
                     const normalizedRoom: Room = {
@@ -575,66 +615,78 @@ export default function Clinet({
                 posthog.capture("game_quited");
             });
 
-            socket.on("cluster:recovery-started", ({
-                recoveryId, fromDepth, detectionHeartbeatAgeMs,
-            }: {
-                recoveryId: string;
-                fromDepth: number;
-                detectionHeartbeatAgeMs: number;
-            }) => {
-                if (!selected || socketRef.current !== socket) return;
-                posthog.capture("game_connection_recovery_started", {
-                    recovery_id: recoveryId,
-                    from_depth: fromDepth,
-                    detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
-                });
-                console.info("[ETB failover started]", {
-                    recoveryId, fromDepth, detectionHeartbeatAgeMs,
-                });
-            });
+            socket.on(
+                "cluster:recovery-started",
+                ({
+                    recoveryId,
+                    fromDepth,
+                    detectionHeartbeatAgeMs,
+                }: {
+                    recoveryId: string;
+                    fromDepth: number;
+                    detectionHeartbeatAgeMs: number;
+                }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    posthog.capture("game_connection_recovery_started", {
+                        recovery_id: recoveryId,
+                        from_depth: fromDepth,
+                        detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
+                    });
+                    console.info("[ETB failover started]", {
+                        recoveryId,
+                        fromDepth,
+                        detectionHeartbeatAgeMs,
+                    });
+                },
+            );
 
-            socket.on("cluster:recovered", (diagnostics: {
-                snapshotRecoveryMs: number;
-                recoveryId?: string;
-                snapshotBeforeAuth?: boolean;
-                detectionHeartbeatAgeMs?: number;
-                fromDepth?: number;
-                toDepth?: number;
-                retryWaitMs?: number;
-                routeMs?: number;
-                routeCalls?: number;
-                reportMs?: number;
-                reportCalls?: number;
-                serverReadMs?: number;
-                serverProbeMs?: number;
-                serverPromoteMs?: number;
-                serverResumeMs?: number;
-                serverAuthMs?: number;
-                serverTotalMs?: number;
-                serverResumeReadMs?: number;
-                serverResumeOpenMs?: number;
-                socketHandshakeMs?: number;
-                socketCalls?: number;
-                authenticationMs?: number;
-                snapshotAfterAuthMs?: number;
-                migrationWaitMs?: number;
-            }) => {
-                if (!selected || socketRef.current !== socket) return;
-                const { snapshotRecoveryMs, ...phases } = diagnostics;
-                const timingProperties = Object.fromEntries(
-                    Object.entries(phases).map(([key, value]) => [
-                        // Keep the existing event name for backwards
-                        // compatibility; new phase properties are additive.
-                        key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase()),
-                        typeof value === "number" ? Math.round(value) : value,
-                    ]),
-                );
-                posthog.capture("game_connection_snapshot_recovered", {
-                    snapshot_recovery_time_ms: snapshotRecoveryMs,
-                    ...timingProperties,
-                });
-                console.info("[ETB failover timings]", diagnostics);
-            });
+            socket.on(
+                "cluster:recovered",
+                (diagnostics: {
+                    snapshotRecoveryMs: number;
+                    recoveryId?: string;
+                    snapshotBeforeAuth?: boolean;
+                    detectionHeartbeatAgeMs?: number;
+                    fromDepth?: number;
+                    toDepth?: number;
+                    retryWaitMs?: number;
+                    routeMs?: number;
+                    routeCalls?: number;
+                    reportMs?: number;
+                    reportCalls?: number;
+                    serverReadMs?: number;
+                    serverProbeMs?: number;
+                    serverPromoteMs?: number;
+                    serverResumeMs?: number;
+                    serverAuthMs?: number;
+                    serverTotalMs?: number;
+                    serverResumeReadMs?: number;
+                    serverResumeOpenMs?: number;
+                    socketHandshakeMs?: number;
+                    socketCalls?: number;
+                    authenticationMs?: number;
+                    snapshotAfterAuthMs?: number;
+                    migrationWaitMs?: number;
+                }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    const { snapshotRecoveryMs, ...phases } = diagnostics;
+                    const timingProperties = Object.fromEntries(
+                        Object.entries(phases).map(([key, value]) => [
+                            // Keep the existing event name for backwards
+                            // compatibility; new phase properties are additive.
+                            key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase()),
+                            typeof value === "number"
+                                ? Math.round(value)
+                                : value,
+                        ]),
+                    );
+                    posthog.capture("game_connection_snapshot_recovered", {
+                        snapshot_recovery_time_ms: snapshotRecoveryMs,
+                        ...timingProperties,
+                    });
+                    console.info("[ETB failover timings]", diagnostics);
+                },
+            );
 
             socket.on("auth:session", ({ id }: { id: string }) => {
                 if (!selected || socketRef.current !== socket) return;
@@ -755,7 +807,10 @@ export default function Clinet({
 
         attachSocketListeners(primaryCandidate);
         if (!distributed)
-            primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
+            primaryTimer = setTimeout(
+                startFailover,
+                SERVER_FAILOVER_TIMEOUT_MS,
+            );
 
         return () => {
             disposed = true;
@@ -766,7 +821,8 @@ export default function Clinet({
             cancelDisconnectNotice();
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
-            if ("closePage" in primaryCandidate.socket) primaryCandidate.socket.closePage();
+            if ("closePage" in primaryCandidate.socket)
+                primaryCandidate.socket.closePage();
             primaryCandidate.socket.disconnect();
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();

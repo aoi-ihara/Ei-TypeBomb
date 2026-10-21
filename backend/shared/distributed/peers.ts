@@ -229,8 +229,11 @@ export class PeerControl implements Control {
                 throw new Error("Invalid local quorum path");
             return;
         }
-        if (!path.length || path[0] !== cp.voters[origin].id ||
-            path[path.length - 1] !== sender)
+        if (
+            !path.length ||
+            path[0] !== cp.voters[origin].id ||
+            path[path.length - 1] !== sender
+        )
             throw new Error("Invalid quorum predecessor");
         let previous = origin - 1;
         for (const id of path) {
@@ -275,8 +278,10 @@ export class PeerControl implements Control {
             if (
                 verified.id !== member.id ||
                 verified.depth !== member.depth ||
-                verified.parent !== member.parent || verified.transport !== member.transport ||
-                JSON.stringify(verified.roster) !== JSON.stringify(member.roster) ||
+                verified.parent !== member.parent ||
+                verified.transport !== member.transport ||
+                JSON.stringify(verified.roster) !==
+                    JSON.stringify(member.roster) ||
                 (previous &&
                     (member.parent !== previous.id ||
                         member.depth !== previous.depth + 1))
@@ -294,17 +299,21 @@ export class PeerControl implements Control {
             if (!signer) throw new Error("Decision issuer is not a voter");
             const proof = claims;
             const path = proof.voters;
-            if (proof.hash !== cp.hash || proof.boot !== signer.boot ||
+            if (
+                proof.hash !== cp.hash ||
+                proof.boot !== signer.boot ||
                 !Array.isArray(path) ||
                 path.length < this.quorum(cp) ||
                 path[0] !== cp.ownership.owner ||
-                path[path.length - 1] !== signer.id)
+                path[path.length - 1] !== signer.id
+            )
                 throw new Error("Invalid quorum decision");
             let previous =
                 cp.voters.findIndex((v) => v.id === cp.ownership.owner) - 1;
             for (const id of path) {
                 const index = cp.voters.findIndex((v) => v.id === id);
-                if (index <= previous) throw new Error("Invalid decision vote order");
+                if (index <= previous)
+                    throw new Error("Invalid decision vote order");
                 previous = index;
             }
         }
@@ -328,13 +337,16 @@ export class PeerControl implements Control {
             servers: this.servers(),
         }) as ControlResult;
     }
-    private async latestLocal(roomId: string): Promise<VotedCheckpoint | undefined> {
+    private async latestLocal(
+        roomId: string,
+    ): Promise<VotedCheckpoint | undefined> {
         const committed = (await this.record(roomId)).committed;
         const mirror = this.mirrors.get(roomId);
         if (!committed) return mirror;
         if (!mirror) return committed;
         return compareRoomVersion(mirror.ownership, committed.ownership) > 0
-            ? mirror : committed;
+            ? mirror
+            : committed;
     }
     async read(roomId: string): Promise<VotedCheckpoint | undefined> {
         const candidates: VotedCheckpoint[] = [];
@@ -409,23 +421,30 @@ export class PeerControl implements Control {
             // room when all earlier tiers are unavailable. Its signed cohort
             // is a contiguous suffix, so no unreachable primary is required.
             const voters: Member[] = [];
-            for (const id of this.identity.member.roster.slice(this.identity.member.depth)) {
+            for (const id of this.identity.member.roster.slice(
+                this.identity.member.depth,
+            )) {
                 const member = this.members.get(id);
                 if (!member) break;
                 voters.push(member);
             }
-            if (!voters.length || voters[0].id !== this.config.id ||
-                voters[0].boot !== this.identity.member.boot)
+            if (
+                !voters.length ||
+                voters[0].id !== this.config.id ||
+                voters[0].boot !== this.identity.member.boot
+            )
                 throw new Error("Creator identity is missing");
             let reachableVoters = 1;
-            await Promise.all(voters.slice(1).map(async (voter) => {
-                try {
-                    const link = await this.connect(voter.id);
-                    if (link.member.boot === voter.boot) reachableVoters++;
-                } catch {
-                    // Offline voters retain their fixed room slot.
-                }
-            }));
+            await Promise.all(
+                voters.slice(1).map(async (voter) => {
+                    try {
+                        const link = await this.connect(voter.id);
+                        if (link.member.boot === voter.boot) reachableVoters++;
+                    } catch {
+                        // Offline voters retain their fixed room slot.
+                    }
+                }),
+            );
             // Offline lower-priority servers cannot block a new game.
             // Voters are fixed for this room; standby catch-up is best-effort.
             const initial = args.initial as DurableRoom;
@@ -479,27 +498,34 @@ export class PeerControl implements Control {
             const observations: VotedCheckpoint[] = [];
             const mirror = this.mirrors.get(roomId);
             if (mirror) observations.push(mirror);
-            await Promise.allSettled([...this.links.values()].map(async (link) => {
-                let timer: ReturnType<typeof setTimeout> | undefined;
-                try {
-                    const remote = await Promise.race<VotedCheckpoint | null>([
-                        link.call("status", { roomId }),
-                        new Promise<null>((resolve) => {
-                            timer = setTimeout(() => resolve(null), 80);
-                        }),
-                    ]);
-                    if (remote) {
-                        await this.validate(remote);
-                        observations.push(remote);
+            await Promise.allSettled(
+                [...this.links.values()].map(async (link) => {
+                    let timer: ReturnType<typeof setTimeout> | undefined;
+                    try {
+                        const remote =
+                            await Promise.race<VotedCheckpoint | null>([
+                                link.call("status", { roomId }),
+                                new Promise<null>((resolve) => {
+                                    timer = setTimeout(() => resolve(null), 80);
+                                }),
+                            ]);
+                        if (remote) {
+                            await this.validate(remote);
+                            observations.push(remote);
+                        }
+                    } finally {
+                        if (timer) clearTimeout(timer);
                     }
-                } finally {
-                    if (timer) clearTimeout(timer);
-                }
-            }));
-            if (observations.some((remote) =>
-                remote.ownership.epoch > current.ownership.epoch ||
-                (remote.ownership.epoch === current.ownership.epoch &&
-                    remote.ownership.owner !== this.config.id)))
+                }),
+            );
+            if (
+                observations.some(
+                    (remote) =>
+                        remote.ownership.epoch > current.ownership.epoch ||
+                        (remote.ownership.epoch === current.ownership.epoch &&
+                            remote.ownership.owner !== this.config.id),
+                )
+            )
                 throw new Error("Fenced by a newer remote owner");
             await this.rpc(this.config.id, "fence", {
                 roomId,
@@ -521,9 +547,13 @@ export class PeerControl implements Control {
         )
             throw new Error("Revision conflict");
         const value = op === "delete" ? null : (args.value as DurableRoom);
-        if (op === "delete" && !canDeleteRoom(
-            current.value!.game.room, Object.keys(current.value!.sessions).length,
-        ))
+        if (
+            op === "delete" &&
+            !canDeleteRoom(
+                current.value!.game.room,
+                Object.keys(current.value!.sessions).length,
+            )
+        )
             throw new Error("Room still in use");
         if (
             value &&
@@ -594,8 +624,10 @@ export class PeerControl implements Control {
                     const voter = cp.voters.find((v) => v.id === member.id);
                     // A caught-up voter is eligible for a later election.
                     // Non-voting mirrors are best-effort and cannot certify events.
-                    const op = voter && voter.boot === member.boot
-                        ? "install" : "mirror";
+                    const op =
+                        voter && voter.boot === member.boot
+                            ? "install"
+                            : "mirror";
                     return this.rpc(member.id, op, { checkpoint: cp });
                 }),
         );
@@ -607,8 +639,7 @@ export class PeerControl implements Control {
         // Diagnostic timings never affect votes, checkpoint contents, or
         // failover decisions. The HTTP handler owns this ephemeral object.
         const timings = args.diagnosticTimings as
-            | Record<string, number>
-            | undefined;
+            Record<string, number> | undefined;
         const readStartedAt = performance.now();
         const cp = await this.read(roomId);
         if (timings) timings.readMs = performance.now() - readStartedAt;
@@ -641,15 +672,15 @@ export class PeerControl implements Control {
             )
                 throw error;
         } finally {
-            if (timings) timings.ownerProbeMs =
-                performance.now() - probeStartedAt;
+            if (timings)
+                timings.ownerProbeMs = performance.now() - probeStartedAt;
         }
         const promotionStartedAt = performance.now();
         try {
             return this.result(await this.promote(cp));
         } finally {
-            if (timings) timings.promoteMs =
-                performance.now() - promotionStartedAt;
+            if (timings)
+                timings.promoteMs = performance.now() - promotionStartedAt;
         }
     }
     private async promote(
@@ -674,8 +705,9 @@ export class PeerControl implements Control {
             suffix.map(async (v) => {
                 // If a voter has a higher uncommitted promise, installing an
                 // older checkpoint must fail, but its ballot still counts.
-                await this.rpc(v.id, "install", { checkpoint: cp })
-                    .catch(() => {});
+                await this.rpc(v.id, "install", { checkpoint: cp }).catch(
+                    () => {},
+                );
                 return this.rpc(v.id, "ballot", {
                     roomId: cp.ownership.roomId,
                 }) as Promise<number>;
@@ -687,9 +719,8 @@ export class PeerControl implements Control {
         );
         if (reachable.length < this.quorum(cp))
             throw new Error("No surviving voting checkpoint");
-        const epoch = Math.max(
-            cp.ownership.epoch, ...reachable.map((b) => b.value),
-        ) + 1;
+        const epoch =
+            Math.max(cp.ownership.epoch, ...reachable.map((b) => b.value)) + 1;
         const state = await this.rpc(this.config.id, "promise", {
             roomId: cp.ownership.roomId,
             candidate: this.config.id,
@@ -743,7 +774,8 @@ export class PeerControl implements Control {
             op !== "install"
         )
             throw new Error("Missing room ID");
-        if (op === "status") return (await this.latestLocal(args.roomId)) ?? null;
+        if (op === "status")
+            return (await this.latestLocal(args.roomId)) ?? null;
         if (op === "ballot") return (await this.record(args.roomId)).promised;
         if (op === "prepared") return (await this.record(args.roomId)).pending;
         if (op === "probe") {
@@ -769,9 +801,15 @@ export class PeerControl implements Control {
             return this.serial(cp.ownership.roomId, async () => {
                 const record = await this.record(cp.ownership.roomId);
                 const latest = await this.latestLocal(cp.ownership.roomId);
-                if (latest && compareRoomVersion(latest.ownership, cp.ownership) >= 0)
+                if (
+                    latest &&
+                    compareRoomVersion(latest.ownership, cp.ownership) >= 0
+                )
                     return false;
-                await this.store(cp.ownership.roomId, { ...record, mirror: cp });
+                await this.store(cp.ownership.roomId, {
+                    ...record,
+                    mirror: cp,
+                });
                 this.mirrors.set(cp.ownership.roomId, cp);
                 return true;
             });
@@ -796,12 +834,17 @@ export class PeerControl implements Control {
                 if (record.promised > cp.ownership.epoch)
                     throw new Error("Newer epoch already promised");
                 const previous = record.committed;
-                if (previous &&
+                if (
+                    previous &&
                     previous.ownership.instance !== cp.ownership.instance &&
                     (previous.ownership.lifecycle !== "DELETED" ||
-                        cp.ownership.epoch <= previous.ownership.epoch))
+                        cp.ownership.epoch <= previous.ownership.epoch)
+                )
                     throw new Error("Instance replacement lacks tombstone");
-                if (previous && compareRoomVersion(previous.ownership, cp.ownership) >= 0)
+                if (
+                    previous &&
+                    compareRoomVersion(previous.ownership, cp.ownership) >= 0
+                )
                     return previous;
                 await this.store(roomId, {
                     committed: cp,
@@ -871,12 +914,18 @@ export class PeerControl implements Control {
                         });
                 }
                 const accepted = [...path, this.config.id];
-                return (await this.forwardQuorum(
-                    cp, op, args, index, accepted,
-                )) ?? {
-                    checkpoint: cp,
-                    contact: record.contact || cp.ownership.savedAt,
-                };
+                return (
+                    (await this.forwardQuorum(
+                        cp,
+                        op,
+                        args,
+                        index,
+                        accepted,
+                    )) ?? {
+                        checkpoint: cp,
+                        contact: record.contact || cp.ownership.savedAt,
+                    }
+                );
             }
             if (op !== "stage") throw new Error("Unsupported RPC");
             let proposal = args.proposal as Proposal,
@@ -922,8 +971,10 @@ export class PeerControl implements Control {
                 throw new Error("Invalid owner statement");
             const index = cp.voters.findIndex((v) => v.id === this.config.id),
                 start = cp.voters.findIndex((v) => v.id === owner.id);
-            if (index < start ||
-                cp.voters[index]?.boot !== this.identity.member.boot)
+            if (
+                index < start ||
+                cp.voters[index]?.boot !== this.identity.member.boot
+            )
                 throw new Error("Wrong replication path/incarnation");
             this.verifyPath(cp, path, index, start, peer.id);
             const old = record.committed;
@@ -965,9 +1016,12 @@ export class PeerControl implements Control {
                 }
                 if (
                     JSON.stringify(cp.voters.map((v) => v.id)) !==
-                        JSON.stringify(this.identity.member.roster.slice(
-                            owner.depth, owner.depth + cp.voters.length,
-                        )) ||
+                        JSON.stringify(
+                            this.identity.member.roster.slice(
+                                owner.depth,
+                                owner.depth + cp.voters.length,
+                            ),
+                        ) ||
                     start !== 0 ||
                     !released ||
                     (old &&

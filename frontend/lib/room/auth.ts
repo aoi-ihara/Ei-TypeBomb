@@ -138,21 +138,36 @@ export const getClientSessionToken = async (): Promise<string> => {
     const pem = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, "\n");
     const kid = process.env.JWT_KEY_ID;
     if (!pem || !kid) throw new Error("JWT signing configuration is missing");
-    const publicPem = createPublicKey(pem).export({ type: "spki", format: "pem" }).toString();
+    const publicPem = createPublicKey(pem)
+        .export({ type: "spki", format: "pem" })
+        .toString();
     const key = await importSPKI(publicPem, "ES256");
-    const { payload, protectedHeader } = await jwtVerify(roomJwt, key, { algorithms: ["ES256"], issuer: "ei-typebomb", audience: "authenticated", requiredClaims: ["exp", "iat"] });
-    if (protectedHeader.kid !== kid || payload.role !== "authenticated" ||
+    const { payload, protectedHeader } = await jwtVerify(roomJwt, key, {
+        algorithms: ["ES256"],
+        issuer: "ei-typebomb",
+        audience: "authenticated",
+        requiredClaims: ["exp", "iat"],
+    });
+    if (
+        protectedHeader.kid !== kid ||
+        payload.role !== "authenticated" ||
         typeof payload.id !== "string" ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.id)) {
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            payload.id,
+        )
+    ) {
         throw new Error("Room authorization is invalid");
     }
     return new SignJWT({
         role: "client_session",
         roomId: payload.id,
         sessionId: randomUUID(),
-    }).setProtectedHeader({ alg: "ES256", kid, typ: "JWT" })
-        .setIssuer("ei-typebomb").setAudience("ei-typebomb:client-session")
-        .setIssuedAt().setExpirationTime("4h")
+    })
+        .setProtectedHeader({ alg: "ES256", kid, typ: "JWT" })
+        .setIssuer("ei-typebomb")
+        .setAudience("ei-typebomb:client-session")
+        .setIssuedAt()
+        .setExpirationTime("4h")
         .sign(await getSigningKey());
 };
 

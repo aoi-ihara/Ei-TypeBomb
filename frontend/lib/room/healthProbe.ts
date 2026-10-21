@@ -61,31 +61,40 @@ export function probeServerHealth(
     timeoutMs: number = HEALTH_PROBE_TIMEOUT_MS,
 ): Promise<HealthProbeResult> {
     const startedAt = now();
-    return boundedProbe(async (signal) => {
-        const url = new URL("/health", endpoint);
-        const response = await request(url.toString(), {
-            method: "GET",
-            credentials: "omit",
-            cache: "no-store",
-            redirect: "error",
-            headers: { Accept: "application/json" },
-            signal,
-        });
-        if (!response.ok) return unhealthy();
-        const body: unknown = await response.json();
-        if (!body || typeof body !== "object" ||
-            (body as { ok?: unknown }).ok !== true)
-            return unhealthy();
-        return {
-            healthy: true,
-            latencyMs: Math.max(0, Math.round(now() - startedAt)),
-        };
-    }, externalSignal, timeoutMs);
+    return boundedProbe(
+        async (signal) => {
+            const url = new URL("/health", endpoint);
+            const response = await request(url.toString(), {
+                method: "GET",
+                credentials: "omit",
+                cache: "no-store",
+                redirect: "error",
+                headers: { Accept: "application/json" },
+                signal,
+            });
+            if (!response.ok) return unhealthy();
+            const body: unknown = await response.json();
+            if (
+                !body ||
+                typeof body !== "object" ||
+                (body as { ok?: unknown }).ok !== true
+            )
+                return unhealthy();
+            return {
+                healthy: true,
+                latencyMs: Math.max(0, Math.round(now() - startedAt)),
+            };
+        },
+        externalSignal,
+        timeoutMs,
+    );
 }
 
 export type HealthTransport = {
-    on(event: "connect" | "connect_error" | "disconnect" | "error",
-        listener: () => void): unknown;
+    on(
+        event: "connect" | "connect_error" | "disconnect" | "error",
+        listener: () => void,
+    ): unknown;
     connect(): unknown;
     disconnect(): unknown;
 };
@@ -101,40 +110,58 @@ export function probeServerTransport(
     timeoutMs: number = HEALTH_PROBE_TIMEOUT_MS,
 ): Promise<HealthProbeResult> {
     const startedAt = now();
-    return boundedProbe((signal) => new Promise((resolve) => {
-        // Defensive guard for callers that deliver an already-aborted signal.
-        if (signal.aborted) {
-            resolve(unhealthy());
-            return;
-        }
-        const socket = open();
-        let finished = false;
-        const finish = (healthy: boolean) => {
-            if (finished) return;
-            finished = true;
-            signal.removeEventListener("abort", canceled);
-            try { socket.disconnect(); } catch { /* best effort */ }
-            resolve(healthy ? {
-                healthy: true,
-                latencyMs: Math.max(0, Math.round(now() - startedAt)),
-            } : unhealthy());
-        };
-        const canceled = () => finish(false);
-        signal.addEventListener("abort", canceled, { once: true });
-        socket.on("connect", () => finish(true));
-        socket.on("connect_error", () => finish(false));
-        socket.on("disconnect", () => finish(false));
-        socket.on("error", () => finish(false));
-        // WorkerSocket.connect() is async. Treat an unexpected rejection as
-        // a failed probe, without leaving an unhandled promise rejection.
-        if (!finished && !signal.aborted) {
-            try {
-                void Promise.resolve(socket.connect()).catch(() => finish(false));
-            } catch {
-                finish(false);
-            }
-        }
-    }), externalSignal, timeoutMs);
+    return boundedProbe(
+        (signal) =>
+            new Promise((resolve) => {
+                // Defensive guard for callers that deliver an already-aborted signal.
+                if (signal.aborted) {
+                    resolve(unhealthy());
+                    return;
+                }
+                const socket = open();
+                let finished = false;
+                const finish = (healthy: boolean) => {
+                    if (finished) return;
+                    finished = true;
+                    signal.removeEventListener("abort", canceled);
+                    try {
+                        socket.disconnect();
+                    } catch {
+                        /* best effort */
+                    }
+                    resolve(
+                        healthy
+                            ? {
+                                  healthy: true,
+                                  latencyMs: Math.max(
+                                      0,
+                                      Math.round(now() - startedAt),
+                                  ),
+                              }
+                            : unhealthy(),
+                    );
+                };
+                const canceled = () => finish(false);
+                signal.addEventListener("abort", canceled, { once: true });
+                socket.on("connect", () => finish(true));
+                socket.on("connect_error", () => finish(false));
+                socket.on("disconnect", () => finish(false));
+                socket.on("error", () => finish(false));
+                // WorkerSocket.connect() is async. Treat an unexpected rejection as
+                // a failed probe, without leaving an unhandled promise rejection.
+                if (!finished && !signal.aborted) {
+                    try {
+                        void Promise.resolve(socket.connect()).catch(() =>
+                            finish(false),
+                        );
+                    } catch {
+                        finish(false);
+                    }
+                }
+            }),
+        externalSignal,
+        timeoutMs,
+    );
 }
 
 /** A row is a position *and* a URL; moving a server resets its old status. */
