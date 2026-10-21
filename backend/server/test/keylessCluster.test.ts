@@ -41,7 +41,7 @@ test("Node chooses its server only from current environment, not old SQLite", as
 
     const db = new DatabaseSync(join(topologyStateDirectory(dir, declaration), "cluster.sqlite"), { readOnly: true });
     assert.deepEqual(JSON.parse(db.prepare("SELECT value FROM state WHERE key = 'identity'").get()!.value as string),
-        { boot }, "the disk must contain the incarnation, not a previous server configuration");
+        { boot, rooms: [] }, "the disk must contain the incarnation and voter room IDs, not a previous server configuration");
     db.close();
     const second = await persistentPeerIdentity(declaration, dir);
     assert.equal(second.identity.member.boot, boot, "same topology keeps recovery identity");
