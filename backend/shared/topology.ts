@@ -1,8 +1,6 @@
 import { parseETBClusterConfig } from "./clusterConfig";
 export type TopologyEnv = {
     ETB_CLUSTER_CONFIG?: string;
-    PRIMARY_SERVER_URL?: string;
-    PARENT_SERVER_URL?: string;
     SERVER_PUBLIC_URL?: string;
     RENDER_EXTERNAL_URL?: string;
 };
@@ -37,15 +35,7 @@ export function parseServerTopology(env: TopologyEnv, transport?: "socket.io" | 
         return { role: index === 0 ? "primary" : "replica",
             primaryUrl, parentUrl: index ? servers[index - 1].origin : null, publicUrl: own };
     }
-    // Compatibility for existing deployments until all nodes migrate together.
-    const primaryUrl = serverUrl(env.PRIMARY_SERVER_URL, "PRIMARY_SERVER_URL");
-    const parentUrl = serverUrl(env.PARENT_SERVER_URL, "PARENT_SERVER_URL");
-    const publicUrl = serverUrl(env.SERVER_PUBLIC_URL, "SERVER_PUBLIC_URL");
-    if (parentUrl && !primaryUrl) throw new Error("PARENT_SERVER_URL requires PRIMARY_SERVER_URL");
-    if (parentUrl && publicUrl === parentUrl) throw new Error("Server cannot be its own parent");
-    if (parentUrl && publicUrl === primaryUrl) throw new Error("Primary cannot declare a parent");
-    if (primaryUrl && !parentUrl && publicUrl && primaryUrl !== publicUrl)
-        throw new Error("Only the primary server can omit PARENT_SERVER_URL");
-    return { role: !primaryUrl ? "standalone" : parentUrl ? "replica" : "primary",
-        primaryUrl, parentUrl, publicUrl };
+    // No implicit legacy PRIMARY_SERVER_URL/PARENT_SERVER_URL topology.
+    // Without the current cluster JSON this process runs standalone.
+    return { role: "standalone", primaryUrl: null, parentUrl: null, publicUrl: null };
 }
