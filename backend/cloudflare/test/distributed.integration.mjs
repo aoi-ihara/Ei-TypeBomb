@@ -14,6 +14,9 @@ import { chromium } from "playwright";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { build } from "esbuild";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { Identity } from "../../shared/distributed/identity.ts";
+import { parseETBClusterConfig } from "../../shared/clusterConfig.ts";
+import { topologyStateDirectory } from "../../server/src/lib/peerStorage.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const requireServer = createRequire(
@@ -103,6 +106,10 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 servers: urls.map((url, i) => i === 1 ? url + "/ws" : url),
             }),
         };
+        const stateFile = async (i) => resolve(topologyStateDirectory(
+            resolve(temp, `node-${i}`),
+            await Identity.generate(parseETBClusterConfig(common.ETB_CLUSTER_CONFIG), urls[i]),
+        ), "cluster.sqlite");
         const roomToken = await new SignJWT({
             id: roomId,
             role: "authenticated",
@@ -127,7 +134,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
         );
         const processes = [];
         const processLogs = [];
-        const startNode = async (i, restoredWithoutUrl = false) => {
+        const startNode = async (i) => {
             const child = spawn(
                 process.execPath,
                 ["--import", "tsx", "src/index.ts"],
@@ -138,7 +145,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                         ...common,
                         CLUSTER_SERVER_TOKEN: undefined,
                         SERVER_PUBLIC_URL: i === 0 || i === fallbackIndex ? undefined : urls[i],
-                        RENDER_EXTERNAL_URL: i === fallbackIndex && !restoredWithoutUrl ? urls[i] : undefined,
+                        RENDER_EXTERNAL_URL: i === fallbackIndex ? urls[i] : undefined,
                         CLUSTER_STATE_DIR: resolve(temp, `node-${i}`),
                         PORT: String(ports[i]),
                         NEXT_PUBLIC_POSTHOG_KEY: "",
@@ -662,16 +669,16 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 // different failure from losing the entire identity disk.
                 const retained = [];
                 if (scenario === "render-state-loss") {
-                    const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
+                    const db = new DatabaseSync(await stateFile(2));
                     retained.push(...db.prepare("SELECT key, value FROM state WHERE key = 'identity'").all());
                     db.close();
                 }
                 await rm(stateDir, { recursive: true, force: true });
                 if (retained.length) {
-                    await mkdir(stateDir, { mode: 0o700 });
-                    const db = new DatabaseSync(resolve(stateDir, "cluster.sqlite"));
+                    await mkdir(dirname(await stateFile(2)), { recursive: true, mode: 0o700 });
+                    const db = new DatabaseSync(await stateFile(2));
                     db.exec("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-                    for (const row of retained) { const meta = JSON.parse(row.value); delete meta.boot; db.prepare("INSERT INTO state (key, value) VALUES (?, ?)").run(row.key, JSON.stringify(meta)); }
+                    for (const row of retained) { db.prepare("INSERT INTO state (key, value) VALUES (?, ?)").run(row.key, row.value); }
                     db.close();
                 }
                 render = await startNode(2);
@@ -701,17 +708,9 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
             if (scenario === "render-restart") {
                 render.kill("SIGKILL");
                 await new Promise((resolve) => render.once("exit", resolve));
-                // Reproduce the reported upgrade: the old disk has only a
-                // certificate subject, with no token or self-URL environment.
-                const oldDb = new DatabaseSync(resolve(temp, "node-2/cluster.sqlite"));
-                const metadata = JSON.parse(oldDb.prepare("SELECT value FROM state WHERE key = 'identity'").get().value);
-                const oldClaims = { ...JSON.parse(metadata.declaration), sub: urls[2] };
-                delete oldClaims.id;
-                const certificate = `legacy.${Buffer.from(JSON.stringify(oldClaims)).toString("base64url")}.unused`;
-                oldDb.prepare("UPDATE state SET value = ? WHERE key = 'identity'")
-                    .run(JSON.stringify({ certificate, boot: metadata.boot }));
-                oldDb.close();
-                await startNode(2, true);
+                // Same current topology and external disk restore the voter.
+                // Neither self-URL nor legacy metadata is read from SQLite.
+                render = await startNode(2);
             }
             await wait(() => observed?.ownerServerId === urls[fallbackIndex],
                 "routed client reaches sole surviving Render", 30000);
