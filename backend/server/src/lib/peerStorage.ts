@@ -1,38 +1,62 @@
-import { mkdirSync, chmodSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, chmodSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
-import { Identity, readRecord, type Member } from "../../../shared/distributed/identity";
-import type { ClusterEnv } from "../../../shared/distributed/control";
+import { Identity } from "../../../shared/distributed/identity";
 import type { PeerStorage, VoteRecord } from "../../../shared/distributed/peers";
 
-/** One disk and one process per identity. SQLite's exclusive OS lock is released
- * even on SIGKILL. Never reuse an incarnation without its votes/promises. */
+/** Never write runtime state into the checked-out server or repository directory.
+ * A mounted, durable CLUSTER_STATE_DIR is strongly recommended for Render. */
+export function clusterStateRoot(
+    env: Pick<NodeJS.ProcessEnv, "CLUSTER_STATE_DIR" | "XDG_STATE_HOME">,
+    workingDirectory = process.cwd(),
+): string {
+    const fallback = env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
+        ? join(env.XDG_STATE_HOME, "ei-typebomb", "cluster")
+        : join(homedir(), ".local", "state", "ei-typebomb", "cluster");
+    const configured = env.CLUSTER_STATE_DIR ?? fallback;
+    if (!isAbsolute(configured))
+        throw new Error("CLUSTER_STATE_DIR must be absolute and outside the repository");
+    const location = resolve(configured);
+    const cwd = resolve(workingDirectory);
+    const repository = basename(cwd) === "server" && basename(dirname(cwd)) === "backend"
+        ? resolve(cwd, "../..") : cwd;
+    if (location === repository || location.startsWith(repository + sep))
+        throw new Error("CLUSTER_STATE_DIR must be outside the repository; only logs may be written there");
+    return location;
+}
+
+/** The CURRENT declaration selects a new namespace. No former server URL or
+ * former topology is loaded from disk, even if old unscoped SQLite exists. */
+export function topologyStateDirectory(root: string, declaration: string): string {
+    return join(root, "v2-" + createHash("sha256").update(declaration).digest("hex"));
+}
+
+/** One persistent voter per scoped directory. SQLite's exclusive OS lock is
+ * released after SIGKILL; boot and votes must survive ordinary restarts. */
 export class NodePeerStorage implements PeerStorage {
     private readonly db: DatabaseSync;
     readonly boot: string;
-    constructor(directory: string, declaration: string) {
+    constructor(directory: string) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
-        this.db = new DatabaseSync(resolve(directory, "cluster.sqlite"));
+        const path = resolve(directory, "cluster.sqlite");
+        this.db = new DatabaseSync(path);
         try {
-            chmodSync(resolve(directory, "cluster.sqlite"), 0o600);
+            chmodSync(path, 0o600);
             this.db.exec(`PRAGMA locking_mode=EXCLUSIVE;
                 PRAGMA synchronous=FULL;
                 BEGIN EXCLUSIVE;
                 CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 COMMIT;`);
             this.db.exec("BEGIN IMMEDIATE");
-            const nextId = declaration.startsWith("{") ? readRecord(declaration).id : declaration;
-            const previous = this.get<{ id?: string; declaration?: string; certificate?: string; boot: string }>("identity");
-            const previousId = previous?.id ?? (previous?.certificate ? readRecord(previous.certificate).sub : undefined);
-            if (previousId && previousId !== nextId) throw new Error("Cluster server URL changed: use a new state directory");
-            if (previous?.declaration && previous.declaration !== declaration)
-                throw new Error("Cluster topology changed: drain rooms and use a new state directory");
-            if (previous?.certificate && !previous.declaration)
-                Identity.assertLegacyTopology(previous.certificate, declaration, previous.boot);
-            this.boot = previous?.boot ?? randomUUID();
-            this.put("identity", { id: nextId, declaration, boot: this.boot });
-            this.db.prepare("DELETE FROM state WHERE key IN ('credential', 'identity-pins')").run();
+            // Persist only the voter incarnation, not a server URL, parent,
+            // roster or a previously configured topology.
+            const previous = this.get<{ boot?: unknown }>("identity");
+            if (previous && (typeof previous.boot !== "string" || !previous.boot.length))
+                throw new Error("Invalid persisted voter incarnation");
+            this.boot = previous?.boot as string | undefined ?? randomUUID();
+            this.put("identity", { boot: this.boot });
             this.db.exec("COMMIT");
         } catch (error) {
             this.db.close();
@@ -49,33 +73,19 @@ export class NodePeerStorage implements PeerStorage {
     }
     async load(room: string) { return this.get<VoteRecord>(`room:${room}`); }
     async save(room: string, value: VoteRecord) { this.put(`room:${room}`, value); }
-    async registry(members: Member[]) { this.put("registry", members); }
-    members() { return this.get<Member[]>("registry") ?? []; }
+    async registry(members: import("../../../shared/distributed/identity").Member[]) {
+        this.put("registry", members);
+    }
+    members() {
+        return this.get<import("../../../shared/distributed/identity").Member[]>("registry") ?? [];
+    }
     close() { this.db.close(); }
 }
 
-export async function persistentPeerIdentity(declaration: string, directory: string) {
+export async function persistentPeerIdentity(declaration: string, root: string) {
     await Identity.create(declaration);
-    const storage = new NodePeerStorage(directory, declaration);
+    const storage = new NodePeerStorage(topologyStateDirectory(root, declaration));
     try {
         return { identity: await Identity.create(declaration, storage.boot), storage };
     } catch (error) { storage.close(); throw error; }
-}
-
-/** Read only the public URL from existing disk metadata before topology is
- * selected. Never require or recreate an old secret key to boot the server. */
-export function nodeClusterEnv<T extends ClusterEnv & { CLUSTER_STATE_DIR?: string }>(env: T): T & { SERVER_PUBLIC_URL?: string } {
-    if (env.SERVER_PUBLIC_URL || env.RENDER_EXTERNAL_URL || !env.ETB_CLUSTER_CONFIG) return env;
-    const path = resolve(env.CLUSTER_STATE_DIR ?? ".cluster-state", "cluster.sqlite");
-    if (!existsSync(path)) return env;
-    const db = new DatabaseSync(path, { readOnly: true });
-    try {
-        if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'state'").get()) return env;
-        const row = db.prepare("SELECT value FROM state WHERE key = 'identity'").get();
-        if (!row) return env;
-        const previous = JSON.parse(row.value as string);
-        const id = previous.id ?? (previous.certificate ? readRecord(previous.certificate).sub : undefined);
-        if (typeof id !== "string") throw new Error("Invalid persisted cluster URL");
-        return { ...env, SERVER_PUBLIC_URL: id };
-    } finally { db.close(); }
 }
