@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { NodePeerStorage, persistentPeerIdentity } from "../src/lib/peerStorage";
+import { NodePeerStorage, persistentPeerIdentity, topologyStateDirectory } from "../src/lib/peerStorage";
 import { credentials, freshRoom } from "./clusterFixture";
 import { PeerControl } from "../../shared/distributed/peers";
 
@@ -83,7 +83,6 @@ test("missing voting rows cannot be restored under an unchanged boot ID", async 
     const boot = first.identity.member.boot;
     await first.storage.save("room", { promised: 42, candidate: "owner", contact: 3 });
     first.storage.close();
-    const { topologyStateDirectory } = await import("../src/lib/peerStorage");
     const db = new DatabaseSync(join(topologyStateDirectory(root, declaration), "cluster.sqlite"));
     db.prepare("DELETE FROM state WHERE key = ?").run("room:room");
     db.close();
