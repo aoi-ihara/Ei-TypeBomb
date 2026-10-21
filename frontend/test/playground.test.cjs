@@ -968,3 +968,32 @@ test("correcting an interior letter completes a retained learning answer", () =>
     assert.equal(observations[0].revealedHintChars, 1);
     assert.equal(observations[0].firstAttemptCorrect, false);
 });
+
+// Regression tests for continuous priority and first-review encoding.
+test("second cycle prioritizes lower retrievability even within the old <0.8 bucket", () => {
+    const state = scheduler.createScheduler(["low", "mid", "high"], () => 0.5);
+    state.cycleQueue = [];
+    const base = initial();
+    const histories = Object.fromEntries(
+        [["low", 1], ["mid", 2], ["high", 4]].map(([id, stability]) => [
+            id,
+            { ...base, itemId: id, stability, reviewCount: 2,
+              lastReviewedAt: "2026-10-06T00:00:00Z" },
+        ]),
+    );
+    const actual = [];
+    for (let i = 0; i < 3; i++) {
+        const next = scheduler.chooseNextUserItem(state, histories, () => 0.5, now.getTime());
+        actual.push(next.itemId);
+        scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    }
+    assert.deepEqual(actual, ["low", "mid", "high"]);
+});
+test("first independent recall increases stability without crediting recent exposure", () => {
+    const original = memory.createInitialMemory("u", "r", "w");
+    assert.equal(apply(original, observation()).stability, memory.INITIAL_CLEAR_RECALL_STABILITY);
+    assert.equal(apply(original, observation({ additionalHintCount: 1 })).stability,
+        memory.INITIAL_WEAK_RECALL_STABILITY);
+    assert.equal(apply(original, observation({ elapsedSincePresentationMs: 100 })).stability,
+        original.stability);
+});
