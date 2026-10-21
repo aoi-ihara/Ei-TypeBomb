@@ -1,10 +1,15 @@
-import { transientRecoveryFailure } from "../../shared/distributed/recovery";
+import {
+    authenticationFailure,
+    transientRecoveryFailure,
+} from "../../shared/distributed/recovery";
+import { ClientError } from "../../shared/validation";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
     connectionError,
     connectionErrorDetails,
     connectionLog,
+    isTerminalConnectionError,
 } from "../../../frontend/lib/room/connectionLogger";
 
 test("connection logs keep stable tags and structured public metadata", () => {
@@ -87,4 +92,34 @@ test("only known transfer refusals expose a retryable diagnostic code", () => {
         retryable: true,
     });
     assert.equal(transientRecoveryFailure(new Error("credential=secret")), undefined);
+});
+
+test("invalid and expired room JWTs produce an unrecoverable authentication error", () => {
+    for (const message of [
+        "認証トークンが無効または有効期限切れです。ルームに入り直してください。",
+        "認証情報が不正です。ルームに入り直してください。",
+    ]) {
+        const packet = { message, ...authenticationFailure(new ClientError(message)) };
+        assert.equal(packet.code, "AUTH_FAILED");
+        assert.equal(packet.retryable, false);
+        assert.equal(isTerminalConnectionError(packet), true);
+        assert.equal(connectionErrorDetails(packet).code, "AUTH_FAILED");
+    }
+});
+
+test("auth failures are terminal even when the retryable flag is absent", () => {
+    // Prior behavior incorrectly showed Connecting forever on a live socket.
+    assert.equal(isTerminalConnectionError({ code: "AUTH_FAILED" }), true);
+    assert.equal(isTerminalConnectionError({ message: "認証失敗" }), false);
+    assert.equal(isTerminalConnectionError({ retryable: true }), false);
+    assert.equal(isTerminalConnectionError(null), false);
+});
+
+test("connection errors stay retryable while certified checkpoint loss remains terminal", () => {
+    assert.equal(isTerminalConnectionError({ code: "NETWORK_UNAVAILABLE" }), false);
+    assert.equal(isTerminalConnectionError({ retryable: true }), false);
+    const checkpoint = authenticationFailure(new Error("Expected checkpoint is unavailable"));
+    assert.equal(checkpoint.code, "CHECKPOINT_UNAVAILABLE");
+    assert.equal(checkpoint.retryable, false);
+    assert.equal(isTerminalConnectionError(checkpoint), true);
 });
