@@ -30,6 +30,7 @@
     },
     "vars": {
         "ALLOWED_ORIGINS": "https://ei-typebomb.vgnz93hs.com,https://ei-typebomb.com",
+        "ETB_CLUSTER_CONFIG": "{\"version\":1,\"servers\":[\"https://server.ei-typebomb.com\",\"https://secondary-server.ei-typebomb.com/ws\",\"https://beta-ei-typebomb.onrender.com\"]}",
         "JWT_KEY_ID": "30029507-b2e8-4a8a-988c-22b7a1963a57",
         "JWT_PUBLIC_KEY": "{\"kty\":\"EC\",\"crv\":\"P-256\",\"x\":\"e60o5hEFIn4kROj2TmDDvtLE3jY8r20e3QgluZabdoA\",\"y\":\"keMeIVtGrzdAdvRoeghVUxrwuszWTagK5bdyI95qt8s\"}",
         "NEXT_PUBLIC_POSTHOG_KEY": "phc_p3eZiwnCZXCSeZ4TBmTzFgshSY3cKiNBXUhMj3oxGB6K",
