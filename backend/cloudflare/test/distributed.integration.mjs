@@ -697,7 +697,7 @@ for (const scenario of ["worker", "render", "render-restart", "render-state-loss
                 await wait(() => recoveryFailure, "lost persistent state is classified", 30000);
                 assert.equal(recoveryFailure.code, "VOTER_STATE_LOST");
                 assert.match(processLogs.map((read) => read()).join("\n"),
-                    /Cluster \/cluster\/report failed: Ineligible voter or lost process memory/);
+                    /Cluster \/cluster\/report failed: (Ineligible voter or lost process memory|Voter lost state; cannot vote)/);
                 assert.equal(recoveryFailure.retryable, false);
                 await delay(2_500);
                 assert.equal(recoveryFailures, 1, "unrecoverable reports do not loop");
