@@ -32,6 +32,7 @@ const isInteractive = Boolean(process.stdout.isTTY);
 const recentEvents: ConsoleEvent[] = [];
 const latencySamples: LatencySample[] = [];
 const roomIssues = new Map<string, number>();
+const MAX_ACTIVITY = 12;
 
 let state: ServerState = { rooms: [] };
 let renderScheduled = false;
@@ -77,57 +78,24 @@ const eventSymbol = (context: EventContext) => {
     return { symbol: "•", color: ansi.slate500 };
 };
 
-const logo = () => {
-    const etb = [
-        "███████  ████████  ██████   ",
-        "██          ██     ██    ██ ",
-        "██████      ██     ██████   ",
-        "██          ██     ██    ██ ",
-        "███████     ██     ██████   ",
-    ];
-    const consoleWord = [
-        " ██████    ███████    ███    ██    ███████    ███████    ██       ███████",
-        "██        ██     ██   ████   ██   ██         ██     ██   ██       ██",
-        "██        ██     ██   ██ ██  ██    ███████   ██     ██   ██       █████",
-        "██        ██     ██   ██  ██ ██          ██  ██     ██   ██       ██",
-        " ██████    ███████    ██   ████    ███████    ███████    ███████  ███████",
-    ];
-
-    return etb
-        .map(
-            (line, index) =>
-                `${colorize(line, ansi.cyan600)}   ${colorize(
-                    consoleWord[index],
-                    ansi.slate500,
-                )}`,
-        )
-        .join("\n");
+const header = () => {
+    const width = process.stdout.columns ?? 100;
+    const name = colorize("ETB", ansi.cyan600) + " " + colorize("Console", ansi.slate300);
+    return width < 52 ? name : name + colorize("   •   Backend dashboard", ansi.slate500);
 };
 
-const pulseIndicator = () => {
-    const players = state.rooms.reduce(
-        (total, room) => total + room.players.length,
-        0,
-    );
+const activityIndicator = (players: number) =>
+    players === 0
+        ? colorize("○ Idle", ansi.slate500)
+        : colorize("● Active", ansi.sage500);
 
-    if (players === 0) {
-        return `${colorize("░", ansi.slate700)} ${colorize(
-            "Idle",
-            ansi.slate500,
-        )}`;
-    }
-
-    const frames = [ansi.sage400, ansi.sage500, ansi.sage600, ansi.sage700];
-    const phase = Math.floor(Date.now() / 60) % 6;
-    const frameIndex = phase <= 3 ? phase : 6 - phase;
-    return `${colorize("██", frames[frameIndex])}   ${colorize(
-        `${ansi.bold}Used`,
-        ansi.sage600,
-    )}`;
+const section = (title: string) => {
+    const width = Math.max(0, Math.min(48, (process.stdout.columns ?? 80) - title.length - 2));
+    return colorize(title + " " + "─".repeat(width), ansi.sage500);
 };
 
-const latencyQuality = (latencyMs: number) =>
-    Math.max(0.08, Math.min(1, 1 - latencyMs / 500));
+const compact = (value: string, width: number) =>
+    value.length > width ? value.slice(0, Math.max(0, width - 1)) + "…" : value;
 
 const latencyColor = (latencyMs: number) => {
     if (latencyMs <= 100) return ansi.cyan600;
@@ -137,133 +105,39 @@ const latencyColor = (latencyMs: number) => {
 
 const renderLatency = () => {
     const now = Date.now();
-    const freshSamples = latencySamples.filter(
-        (sample) => now - sample.at <= 60_000,
-    );
-    const latest = freshSamples.at(-1)?.value;
-    if (latest === undefined) {
-        return [
-            `${colorize("Latency", ansi.slate500)}   ${colorize(
-                "█".repeat(24),
-                ansi.slate500,
-            )}   ${colorize("— ms", ansi.slate500)}`,
-        ].join("\n");
-    }
+    const fresh = latencySamples.filter((sample) => now - sample.at <= 60_000);
+    if (fresh.length === 0) return colorize("No recent latency samples", ansi.slate500);
 
-    const width = 24;
-    const filled = Math.max(1, Math.round(latencyQuality(latest) * width));
-    const gauge =
-        colorize("█".repeat(filled), ansi.cyan600) +
-        colorize("█".repeat(width - filled), ansi.slate300);
-
-    const sparkChars = "▁▂▃▄▅▆▇█";
-    const spark = freshSamples
-        .slice(-30)
-        .map((sample) => {
-            const level = Math.min(
-                sparkChars.length - 1,
-                Math.floor(sample.value / 50),
-            );
-            return sparkChars[level];
-        })
-        .join("");
-
+    const latest = fresh[fresh.length - 1].value;
+    const sorted = fresh.map((sample) => sample.value).sort((a, b) => a - b);
+    const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1];
+    const chars = "▁▂▃▄▅▆▇█";
+    const max = Math.max(1, ...fresh.map((sample) => sample.value));
+    const spark = fresh.slice(-Math.max(1, Math.min(30, (process.stdout.columns ?? 80) - 3)))
+        .map((sample) => chars[Math.min(7, Math.floor(sample.value / max * 7))]).join("");
+    const values = `Latest ${Math.round(latest)} ms   P95 ${Math.round(p95)} ms   (60s)`;
     return [
-        `LATENCY   ${gauge}   ${colorize(
-            `${Math.round(latest)} ms`,
-            latencyColor(latest),
-        )}`,
-        `          ${colorize(spark, ansi.slate500)}`,
+        colorize(values, latencyColor(latest)),
+        colorize(spark, ansi.cyan600),
     ].join("\n");
 };
 
-const ROOM_WIDTH = 30;
-const ROOM_INNER_WIDTH = ROOM_WIDTH - 2;
-const PLAYER_POSITIONS = [
-    [0, 13],
-    [1, 6],
-    [1, 20],
-    [2, 13],
-    [2, 2],
-    [2, 24],
-    [3, 8],
-    [3, 18],
-] as const;
-
-const renderRoomCard = (room: ConsoleRoom) => {
-    const hasIssue = (roomIssues.get(room.id) ?? 0) > Date.now();
-    const frameColor = hasIssue ? ansi.red : ansi.slate500;
-    const border = (value: string) => colorize(value, frameColor);
-    const top = border(`╭${"─".repeat(ROOM_INNER_WIDTH)}╮`);
-    const bottom = border(`╰${"─".repeat(ROOM_INNER_WIDTH)}╯`);
-
-    const roomLabel =
-        room.id.length > 18 ? `${room.id.slice(0, 17)}…` : room.id;
-    const title = ` ${roomLabel}`;
-    const titleLine =
-        border("│") + padVisible(title, ROOM_INNER_WIDTH) + border("│");
-
-    const rows = Array.from({ length: 4 }, () =>
-        Array.from({ length: ROOM_INNER_WIDTH }, () => " "),
-    );
-
-    room.players.slice(0, PLAYER_POSITIONS.length).forEach((player, index) => {
-        const [row, column] = PLAYER_POSITIONS[index];
-        const isHolder =
-            room.isStart &&
-            (room.bombHolders?.includes(index) ??
-                (room.bombHolder !== undefined && room.bombHolder === index));
-        rows[row][column] = isHolder
-            ? colorize("■", ansi.cyan600)
-            : colorize("■", ansi.slate300);
-    });
-
-    const playerRows = rows.map(
-        (row) => border("│") + row.join("") + border("│"),
-    );
-
-    const status =
-        room.players.length === 0
-            ? "empty"
-            : room.isStart
-              ? `${room.players.length} players Playing`
-              : `${room.players.length} players`;
-    const statusLine =
-        border("│") +
-        colorize(
-            padVisible(` ${status}`, ROOM_INNER_WIDTH),
-            hasIssue ? ansi.red : ansi.slate500,
-        ) +
-        border("│");
-
-    return [top, titleLine, ...playerRows, statusLine, bottom];
-};
-
 const renderRooms = () => {
-    if (state.rooms.length === 0) {
-        return colorize("No active rooms", ansi.slate500);
-    }
+    if (state.rooms.length === 0) return colorize("No active rooms", ansi.slate500);
 
-    const gap = 3;
-    const columns = process.stdout.columns ?? 100;
-    const perRow = Math.max(
-        1,
-        Math.floor((columns + gap) / (ROOM_WIDTH + gap)),
-    );
-    const cards = state.rooms.map(renderRoomCard);
-    const lines: string[] = [];
-
-    for (let index = 0; index < cards.length; index += perRow) {
-        const rowCards = cards.slice(index, index + perRow);
-        for (let line = 0; line < rowCards[0].length; line += 1) {
-            lines.push(
-                rowCards.map((card) => card[line]).join(" ".repeat(gap)),
-            );
-        }
-        if (index + perRow < cards.length) lines.push("");
-    }
-
-    return lines.join("\n");
+    const width = Math.max(12, (process.stdout.columns ?? 80) - 3);
+    return state.rooms.map((room) => {
+        const hasRecentError = (roomIssues.get(room.id) ?? 0) > Date.now();
+        const status = room.isStart ? "Playing" : "Waiting";
+        const holders = room.isStart
+            ? (room.bombHolders ?? (room.bombHolder === undefined ? [] : [room.bombHolder])).length
+            : 0;
+        const label = compact(room.id, Math.max(8, width - 31));
+        const details = `${room.players.length} players · ${status}${holders ? ` · ${holders} bomb${holders === 1 ? "" : "s"}` : ""}`;
+        return colorize(hasRecentError ? "! " : "• ", hasRecentError ? ansi.red : ansi.cyan600) +
+            colorize(label, ansi.slate300) + "\n  " +
+            colorize(compact(details, width), hasRecentError ? ansi.red : ansi.slate500);
+    }).join("\n\n");
 };
 
 const renderActivity = () => {
@@ -277,7 +151,7 @@ const renderActivity = () => {
         .map((event) => {
             const { symbol, color } = eventSymbol(event.context);
             return `${colorize(
-                padVisible(relativeTime(event.at), 9),
+                padVisible(new Date(event.at).toLocaleTimeString("en-GB", { hour12: false }), 8),
                 ansi.slate500,
             )} ${colorize(`${symbol} ${event.message}`, color)}`;
         })
@@ -285,36 +159,29 @@ const renderActivity = () => {
 };
 
 const formatState = () => {
-    const players = state.rooms.reduce(
-        (total, room) => total + room.players.length,
-        0,
-    );
+    const players = state.rooms.reduce((total, room) => total + room.players.length, 0);
     const activeGames = state.rooms.filter((room) => room.isStart).length;
-
+    const width = process.stdout.columns ?? 80;
+    const summary = width < 48
+        ? `${state.rooms.length} rooms · ${players} players · ${activeGames} games`
+        : `ROOMS ${state.rooms.length}    PLAYERS ${players}    GAMES ${activeGames}`;
+    const lastError = [...recentEvents].reverse().find((event) => event.context === "ERROR");
     return [
-        logo(),
+        header(),
+        colorize("────────────────────────", ansi.slate700),
+        activityIndicator(players),
+        colorize(summary, ansi.cyan600),
+        lastError ? colorize("! Recent error · see activity", ansi.yellow) : "",
         "",
-        `${pulseIndicator()}    ${colorize(
-            `${players} player${players === 1 ? "" : "s"}   ${state.rooms.length} room${state.rooms.length === 1 ? "" : "s"}   ${activeGames} game${activeGames === 1 ? "" : "s"}`,
-            ansi.cyan600,
-        )}`,
-        "",
+        section("LATENCY"),
         renderLatency(),
         "",
-        colorize(
-            `ROOMS ${"─".repeat(Math.min(process.stdout.columns ?? 67, 67))}`,
-            ansi.sage500,
-        ),
-        "",
+        section("ROOMS"),
         renderRooms(),
         "",
-        colorize(
-            `ACTIVITY ${"─".repeat(Math.min(process.stdout.columns ?? 64, 64))}`,
-            ansi.sage500,
-        ),
-        "",
+        section("ACTIVITY"),
         renderActivity(),
-    ].join("\n");
+    ].filter((line) => line !== undefined).join("\n");
 };
 
 const renderState = () => {
@@ -375,7 +242,7 @@ export const logEvent = (
     }
 
     recentEvents.push({ context, message, at: Date.now() });
-    if (recentEvents.length > 8) recentEvents.shift();
+    if (recentEvents.length > MAX_ACTIVITY) recentEvents.shift();
 
     if (isInteractive) scheduleRender();
     else console.log(`> [${context}] ${message}`);
@@ -426,7 +293,7 @@ export const startConsole = (port: number) => {
                 if (expiresAt <= Date.now()) roomIssues.delete(roomId);
             }
             scheduleRender();
-        }, 240);
+        }, 1000);
         animationTimer.unref();
     }
 
