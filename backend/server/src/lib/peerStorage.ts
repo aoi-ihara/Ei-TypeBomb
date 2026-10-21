@@ -9,7 +9,7 @@ import type { PeerStorage, VoteRecord } from "../../../shared/distributed/peers"
 /** Never write runtime state into the checked-out server or repository directory.
  * A mounted, durable CLUSTER_STATE_DIR is strongly recommended for Render. */
 export function clusterStateRoot(
-    env: Pick<NodeJS.ProcessEnv, "CLUSTER_STATE_DIR" | "XDG_STATE_HOME">,
+    env: { CLUSTER_STATE_DIR?: string; XDG_STATE_HOME?: string },
     workingDirectory = process.cwd(),
 ): string {
     const fallback = env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
@@ -55,7 +55,7 @@ export class NodePeerStorage implements PeerStorage {
             const previous = this.get<{ boot?: unknown }>("identity");
             if (previous && (typeof previous.boot !== "string" || !previous.boot.length))
                 throw new Error("Invalid persisted voter incarnation");
-            this.boot = previous?.boot as string | undefined ?? randomUUID();
+            this.boot = (previous?.boot as string | undefined) ?? randomUUID();
             this.put("identity", { boot: this.boot });
             this.db.exec("COMMIT");
         } catch (error) {
