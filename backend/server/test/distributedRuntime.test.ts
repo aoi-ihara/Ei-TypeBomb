@@ -271,17 +271,10 @@ test("pause shifts all deadlines together without changing questions, bombs or s
 });
 test("distributed mode requires public topology and refuses plaintext public endpoints", () => {
     assert.equal(clusterConfig({}, "socket.io"), null);
-    assert.throws(
-        () =>
-            clusterConfig(
-                {
-                    PRIMARY_SERVER_URL: "https://primary.test",
-                    SERVER_PUBLIC_URL: "https://primary.test",
-                },
-                "socket.io",
-            ),
-        /requires/i,
-    );
+    // Former per-node topology values may not silently reenable clustering.
+    assert.equal(clusterConfig({
+        SERVER_PUBLIC_URL: "https://primary.test",
+    }, "socket.io"), null);
     assert.throws(
         () =>
             clusterConfig(
