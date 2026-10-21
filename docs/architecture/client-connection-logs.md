@@ -32,8 +32,10 @@ checkpoint. Check the adjacent `[CONNECTION]` lines for routing failures.
 - **HTTP 409 and `CHECKPOINT_UNAVAILABLE`**: the receiving server could not
   read the requested room checkpoint. The client stops if there is no
   recoverable authoritative route.
-- **HTTP 503 / transport error**: the ownership check could not be completed.
-  Look at the owner/peer server logs for the underlying server-side reason.
+- **HTTP 503, `OWNER_TRANSFER_NOT_APPROVED`**: the current owner
+  explicitly declined a transfer. This is retryable; no takeover is permitted.
+- **Other HTTP 503 / transport error**: the ownership check could not be
+  completed. Look at owner/peer server logs for the underlying reason.
 - **`heartbeat_timeout`** after returning to a background tab: the client
   timed out; it does **not** by itself establish a server crash.
 
