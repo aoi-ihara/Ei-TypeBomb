@@ -380,11 +380,14 @@ export class RoutedSocket {
                             )
                                 terminalReport = problem;
                         } else if (!response.ok) {
+                            const diagnostic = response.headers.get("content-type")?.includes("application/json")
+                                ? await response.json().catch(() => null) : null;
                             connectionError("FALLBACK", "Ownership verification unavailable", {
                                 server: server.id,
                                 httpStatus: response.status,
                                 durationMs: Math.round(performance.now() - reportStartedAt),
                                 attempt,
+                                ...connectionErrorDetails(diagnostic),
                             });
                         }
                         if (response.ok) {
@@ -480,11 +483,14 @@ export class RoutedSocket {
                                     )
                                         terminalReport = problem;
                                 } else if (!response.ok) {
+                                    const diagnostic = response.headers.get("content-type")?.includes("application/json")
+                                        ? await response.json().catch(() => null) : null;
                                     connectionError("CONNECTION", "Route endpoint unavailable", {
                                         server: seed,
                                         attempt,
                                         httpStatus: response.status,
                                         durationMs: Math.round(performance.now() - lookupStartedAt),
+                                        ...connectionErrorDetails(diagnostic),
                                     });
                                 }
                                 if (!response.ok)
