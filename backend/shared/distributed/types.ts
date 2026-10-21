@@ -1,5 +1,7 @@
 import type { GameState } from "../types";
 import type { GameEvent } from "../game";
+import type { PlayerSession } from "../session";
+export { RECONNECT_GRACE_MS as GRACE_MS, NODE_SESSION_GRACE_MS as NODE_DISCONNECT_GRACE_MS } from "../session";
 
 export type Lifecycle =
     | "CREATING"
@@ -17,10 +19,7 @@ export type ServerInfo = {
 export type DurableRoom = {
     game: GameState;
     // Connected spectators count too. A transport disconnect starts a grace period.
-    sessions: Record<
-        string,
-        { connected: boolean; expires: number; recommendation?: string; connectionId?: string }
-    >;
+    sessions: Record<string, PlayerSession>;
     events: Record<string, number>;
     /** A player has joined this room at least once; used to clean up empty rooms. */
     hadPlayers?: boolean;
@@ -64,13 +63,5 @@ export type Command = {
     revision: number;
     event: GameEvent;
 };
-export const GRACE_MS = 20_000;
-// Lobby expiry is short; active-match disconnects use at least GRACE_MS.
-// A transient loss keeps the seat, but an expired grace must remove it.
-export const NODE_DISCONNECT_GRACE_MS = 8_000;
 export const MAX_SNAPSHOT_BYTES = 512 * 1024;
-export const GAME_RULES = {
-    allowSpectatorStart: true,
-    allowCountdownPass: true,
-    clearInputOnStop: false,
-};
+export { DEFAULT_GAME_RULES as GAME_RULES } from "../game";

@@ -2,6 +2,67 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RoutedSocket, recoveryRetryDelayMs } from "../../../frontend/lib/room/routedSocket";
 
+test("delayed snapshots cannot replace a newer room incarnation or revision", async () => {
+    const original = globalThis.fetch;
+    const owner = "https://owner.test";
+    const backup = "https://backup.test";
+    const servers = [{ id: owner, depth: 0, transport: "socket.io" },
+        { id: backup, depth: 1, transport: "socket.io" }];
+    globalThis.fetch = (async () => Response.json({ ownership: null,
+        servers })) as typeof fetch;
+    const handlers = new Map<string, ((value?: any) => void)[]>();
+    const push = (event: string, value?: any) => handlers.get(event)?.forEach(fn => fn(value));
+    const current = { id: "room", roomInstanceId: "new", ownerServerId: owner,
+        epoch: 4, revision: 10, users: [], bombs: [], isStart: false };
+    const broadcasts: any[] = [];
+    const opened: string[] = [];
+    const routed = new RoutedSocket([owner, backup], target => {
+        opened.push(target);
+        const socket = {
+            connected: true,
+            on(event: string, fn: (value?: any) => void) { handlers.set(event, [...(handlers.get(event) ?? []), fn]); return this; },
+            emit(event: string) {
+                if (event === "auth:response") {
+                    push("auth:session", { id: "a" });
+                    push("room:broadcast", target === backup
+                        ? { ...current, roomInstanceId: "next", epoch: 5, revision: 2, ownerServerId: backup }
+                        : current);
+                }
+                if (event === "cluster:ping") push("cluster:pong");
+            },
+            disconnect() { this.connected = false; },
+        };
+        setTimeout(() => push("auth:request"), 0);
+        return socket;
+    }, async () => "jwt", () => true);
+    routed.on("auth:request", () => routed.emit("auth:response", { jwtToken: "jwt" }));
+    routed.on("room:broadcast", value => broadcasts.push(value));
+    try {
+        for (let attempt = 0; attempt < 100 && !broadcasts.length; attempt++)
+            await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(broadcasts.length, 1);
+        push("room:broadcast", { ...current, epoch: 3, revision: 100 });
+        push("room:broadcast", { ...current, roomInstanceId: "old", epoch: 2, revision: 200 });
+        push("room:broadcast", { ...current, roomInstanceId: "conflicting", revision: 999 });
+        push("room:broadcast", { ...current, revision: 9 });
+        assert.equal(broadcasts.length, 1, "no stale or conflicting snapshot is exposed");
+        push("room:broadcast", { ...current, revision: 11 });
+        assert.equal(broadcasts.at(-1).revision, 11);
+        push("room:broadcast", { ...current, roomInstanceId: "next", epoch: 5, revision: 1 });
+        assert.equal(broadcasts.at(-1).roomInstanceId, "next");
+        // A fast stale route/tombstone must not clear the client fence and
+        // make it authenticate to a retired owner before the other read wins.
+        globalThis.fetch = (async (url: string) => Response.json({ servers, ownership:
+            String(url).startsWith(owner) ? { owner, epoch: 2, revision: 100,
+                instance: "old", lifecycle: "DELETED", roomId: "room" }
+                : { owner: backup, epoch: 5, revision: 2,
+                    instance: "next", lifecycle: "ACTIVE", roomId: "room" },
+        })) as typeof fetch;
+        await routed.connect();
+        assert.equal(opened.at(-1), backup, "stale routing cannot reset the snapshot version fence");
+    } finally { routed.disconnect(); globalThis.fetch = original; }
+});
+
 test("a first interrupted session starts recovery without a fixed 250ms delay", () => {
     assert.deepEqual([0, 1, 2, 3, 4].map(recoveryRetryDelayMs),
         [0, 500, 1000, 2000, 2000]);

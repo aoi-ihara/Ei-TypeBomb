@@ -4,13 +4,47 @@ import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { network, freshRoom, credentials } from "./clusterFixture";
 import { DistributedRoom } from "../../shared/distributed/runtime";
-import { PeerControl } from "../../shared/distributed/peers";
+import { PeerControl, type VotedCheckpoint } from "../../shared/distributed/peers";
 import { Identity } from "../../shared/distributed/identity";
 import type { Command } from "../../shared/distributed/types";
 const initial = (room: ReturnType<typeof freshRoom>) => ({
     game: { room, revision: 0 },
     sessions: {},
     events: {},
+});
+test("replication delay, duplicate and reverse delivery preserve the latest committed membership", async () => {
+    const n = await network(), room = freshRoom();
+    n.blocked.add("0:2");
+    n.blocked.add("1:2");
+    const runtime = new DistributedRoom(room.id, n.hosts[0], () => {});
+    await runtime.open(room);
+    const history: VotedCheckpoint[] = [];
+    const capture = async () => history.push(structuredClone(await n.hosts[0].dispatch(
+        n.hosts[0].identity.member, "status", { roomId: room.id },
+    )));
+    await runtime.connect("a", "connection");
+    await capture();
+    await runtime.apply({ type: "room:join", player: { id: "a" } });
+    await capture();
+    await runtime.leave("a");
+    await capture();
+    // Deliver the final leave first, then duplicate it and replay the old
+    // join/session in reverse order as a delayed transport would.
+    for (const checkpoint of [history[2], history[2], history[1], history[0]]) {
+        await n.hosts[2].dispatch(n.hosts[0].identity.member, "install", { checkpoint });
+        const local = await n.hosts[2].dispatch(n.hosts[0].identity.member, "status", { roomId: room.id });
+        assert.equal(local.hash, history[2].hash);
+        assert.deepEqual(local.value.game.room.users, []);
+        assert.equal(local.value.sessions.a.connected, true, "leave keeps the live spectator session");
+    }
+    const corrupted = structuredClone(history[2]);
+    assert.ok(corrupted.value);
+    corrupted.value.game.room.users.push({ id: "ghost" });
+    await assert.rejects(n.hosts[2].dispatch(n.hosts[0].identity.member, "install", {
+        checkpoint: corrupted,
+    }), /digest/);
+    const final = await n.hosts[2].dispatch(n.hosts[0].identity.member, "status", { roomId: room.id });
+    assert.equal(final.hash, history[2].hash);
 });
 test("solo availability, approved transfer and no automatic failback", async () => {
     const n = await network(),

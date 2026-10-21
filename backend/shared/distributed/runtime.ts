@@ -6,6 +6,7 @@ import {
 } from "../game";
 import { roomSnapshot } from "../protocol";
 import type { GameState, Room } from "../types";
+import { canDeleteRoom, disconnectDeadline } from "../session";
 import {
     GAME_RULES,
     GRACE_MS,
@@ -181,8 +182,8 @@ export class DistributedRoom {
         }
         this.checkpoint = result;
         this.lastConfirmation = this.now();
-        // call(commit) returned only after the fixed voting suffix stored the
-        // state and the tail's signed commit decision flowed back through it.
+        // commit durably stored the owner's local decision. Replication to
+        // standbys is best-effort; this is not a quorum acknowledgement.
         this.publish(
             {
                 state: this.state,
@@ -359,7 +360,8 @@ export class DistributedRoom {
      * the temporary-disconnect grace period. */
     leave(id: string): Promise<void> {
         return this.serial(async () => {
-            if (this.halted || this.deleted) return;
+            if (this.deleted) return;
+            this.assertActive();
             const value = structuredClone(this.checkpoint.value!);
             const present = value.game.room.users.some((user) => user.id === id);
             const session = value.sessions[id];
@@ -392,7 +394,11 @@ export class DistributedRoom {
         return this.serial(async () => {
             if (expectedInstance && this.checkpoint.ownership.instance !== expectedInstance)
                 throw new Error("Room instance changed");
-            if (this.halted || this.deleted) return;
+            if (this.deleted) return;
+            if (this.halted) {
+                if (immediate === true) this.assertActive();
+                return;
+            }
             const value = structuredClone(this.checkpoint.value!);
             if (!value.sessions[id]) return;
             if (expectedConnectionId && value.sessions[id].connectionId !== expectedConnectionId)
@@ -416,12 +422,13 @@ export class DistributedRoom {
                 await this.save(value, result.effects, "event");
                 return;
             }
+            // Duplicate close/error notifications are retries of one loss,
+            // not a new reservation. Only connect() can reset this deadline.
+            if (!value.sessions[id].connected) return;
             value.sessions[id] = {
                 ...value.sessions[id],
                 connected: false,
-                expires: this.now() + (value.game.room.isStart &&
-                    value.game.room.users.some((player) => player.id === id)
-                    ? Math.max(graceMs, GRACE_MS) : graceMs),
+                expires: disconnectDeadline(value.game.room, id, this.now(), graceMs),
             };
             if (value.game.room.isStart && !value.resumeUntil &&
                 value.game.room.users.every((player) => !value.sessions[player.id]?.connected)) {
@@ -525,11 +532,7 @@ export class DistributedRoom {
                 this.inputFlushAt = undefined;
             }
             if (changed) await this.save(value, effects, kind);
-            if (
-                !value.game.room.users.length &&
-                !value.game.room.isStart &&
-                !Object.keys(value.sessions).length
-            ) {
+            if (canDeleteRoom(value.game.room, Object.keys(value.sessions).length)) {
                 // Membership alone cannot retire a room: authenticated sockets
                 // can remain as spectators or rejoin after explicitly leaving.
                 // Wait for every socket session's disconnect grace to expire.

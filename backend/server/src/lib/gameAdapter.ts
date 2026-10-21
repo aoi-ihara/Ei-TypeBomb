@@ -1,17 +1,13 @@
 import {
     applyGameEvent,
     nextGameDeadline,
-    type GameRules,
     type GameEvent,
     type GameResult,
+    DEFAULT_GAME_RULES as NODE_GAME_RULES,
 } from "../../../shared/game";
 import type { GameState } from "../../../shared/types";
 
-export const NODE_GAME_RULES: GameRules = {
-    allowSpectatorStart: true,
-    allowCountdownPass: true,
-    clearInputOnStop: false,
-};
+export { NODE_GAME_RULES };
 
 // Socket.IO and logging are supplied by index.ts; timer handles never enter GameState.
 export class NodeGameAdapter {

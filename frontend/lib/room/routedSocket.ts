@@ -1,4 +1,5 @@
 "use client";
+import { acceptsRoomRoute, acceptsRoomSnapshot } from "../../../backend/shared/distributed/version";
 
 // The bootstrap URLs establish trust. Further URLs come only from a successful
 // HTTPS registry response at one of these URLs and are cached for this page.
@@ -297,7 +298,10 @@ export class RoutedSocket {
                                 terminalReport = problem;
                         }
                         if (response.ok) {
-                            route = await response.json();
+                            const value = await response.json();
+                            if (this.meta && !acceptsRoomRoute(this.meta, value.ownership))
+                                throw new Error("Stale routing response");
+                            route = value;
                             this.servers = route!.servers;
                             this.failure = undefined;
                             break;
@@ -348,6 +352,8 @@ export class RoutedSocket {
                                 if (!response.ok)
                                     throw new Error("Routing endpoint unavailable");
                                 const value = await response.json();
+                                if (this.meta && !acceptsRoomRoute(this.meta, value.ownership))
+                                    throw new Error("Stale routing response");
                                 if (!Array.isArray(value.servers) ||
                                     !value.servers.every((server: Server) => {
                                         try {
@@ -549,16 +555,12 @@ export class RoutedSocket {
                 });
                 socket.on("room:broadcast", (room) => {
                     if (!active()) return;
-                    if (!room.migrating) this.recoveryFailures = 0;
                     const previous = this.meta;
                     if (
-                        previous &&
-                        previous.roomInstanceId === room.roomInstanceId &&
-                        (room.epoch < previous.epoch ||
-                            (room.epoch === previous.epoch &&
-                                room.revision < previous.revision))
+                        previous && !acceptsRoomSnapshot(previous, room)
                     )
                         return;
+                    if (!room.migrating) this.recoveryFailures = 0;
                     this.lastReply = performance.now();
                     if (
                         this.meta &&

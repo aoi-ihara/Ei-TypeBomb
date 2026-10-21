@@ -23,7 +23,8 @@ import {
     isRequestId,
     parseClientEvent,
 } from "../../shared/validation";
-import { canStart } from "../../shared/game";
+import { canStart, type GameEvent } from "../../shared/game";
+import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
 import {
     roomSnapshot,
     type ClientPayloads,
@@ -85,7 +86,6 @@ const games = new Map<string, NodeGameAdapter | DistributedRoom>();
 const recommendedItems = new Map<string, string>();
 const liveSessions = new Map<string, string>();
 const pendingLeaves = new Map<string, ReturnType<typeof setTimeout>>();
-const DISCONNECT_GRACE_MS = 20_000;
 const sessionKey = (roomId: string, playerId: string) =>
     `${roomId}:${playerId}`;
 
@@ -505,6 +505,14 @@ io.on("connection", (socket) => {
     let user: User = { id: socket.id };
     let roomId: null | string = null;
     const getGame = () => (roomId ? games.get(roomId) : undefined);
+    const isCurrentSession = () => !!roomId &&
+        liveSessions.get(sessionKey(roomId, user.id)) === socket.id;
+    const applyEvent = (event: GameEvent) => {
+        if (!isCurrentSession()) return;
+        const game = getGame();
+        if (game) void Promise.resolve(game.apply(event)).catch(error =>
+            logError("Room event failed", error, { roomId, userId: user.id, event: event.type }));
+    };
     logEvent("SERVER", "client connected", { socketId: socket.id });
     socket.emit("auth:request");
 
@@ -557,7 +565,8 @@ io.on("connection", (socket) => {
             const status = await game.command(command, user.id);
             sendRoomInfo(roomId);
             emitRaw("command:ack", { id: command.id, status });
-        } catch {
+        } catch (error) {
+            logError("Distributed command failed", error, { roomId, userId: user.id });
             if (game.halted) emitRaw("cluster:paused");
             else
                 emitRaw("command:ack", {
@@ -568,7 +577,7 @@ io.on("connection", (socket) => {
     });
     socket.on("room:join", () => {
         const game = getGame();
-        if (!game || !roomId) return;
+        if (!game || !roomId || !isCurrentSession()) return;
         if (game instanceof DistributedRoom) return;
         const result = game.apply({ type: "room:join", player: user });
         if (result.effects.length) socket.join(roomId);
@@ -604,93 +613,92 @@ io.on("connection", (socket) => {
         acknowledge();
     });
 
-    socket.on(
-        "auth:response",
-        async (response: ClientPayloads["auth:response"]) => {
-            try {
-                response = validateAuthPayload(response);
-                const jwtResult = await verifyToken(response.jwtToken);
-                if (!jwtResult) {
-                    throw new ClientError(
-                        "認証トークンが無効または有効期限切れです。ルームに入り直してください。",
-                    );
-                }
-
-                if (cluster) {
-                    if (!response.sessionToken)
-                        throw new ClientError("署名付きセッションが必要です。");
-                    await verifyClientSessionToken(
-                        response.sessionToken,
-                        jwtResult,
-                    );
-                }
-                const room = await createRoomIfNeeded(
-                    jwtResult,
-                    response.jwtToken,
-                    undefined,
-                    response.expectedInstance,
-                );
-                if (!room) {
-                    throw new ClientError(
-                        "ルーム情報を取得できませんでした。ルームを確認して再度お試しください。",
-                    );
-                }
-                requireRoomItems(room);
-                if (!socket.connected) return;
-
-                const displayName = response.displayName;
-                const stableId = response.sessionToken
-                    ? await verifyClientSessionToken(
-                          response.sessionToken,
-                          jwtResult,
-                      )
-                    : socket.id;
-                const key = sessionKey(jwtResult, stableId);
-                const previousSocketId = liveSessions.get(key);
-                liveSessions.set(key, socket.id);
-                const pending = pendingLeaves.get(key);
-                if (pending) clearTimeout(pending);
-                pendingLeaves.delete(key);
-
-                roomId = jwtResult;
-                user = { id: stableId, displayName };
-                socket.join(roomId);
-                if (previousSocketId && previousSocketId !== socket.id) {
-                    io.sockets.sockets.get(previousSocketId)?.disconnect(true);
-                }
-                const game = getGame();
-                if (game instanceof DistributedRoom) {
-                    if (!response.sessionToken)
-                        throw new ClientError("署名付きセッションが必要です。");
-                    await game.connect(stableId, socket.id);
-                }
-                socket.emit("auth:session", { id: stableId });
-                logEvent("ROOM", `authenticated ${roomId}`, {
-                    roomId,
-                    socketId: socket.id,
-                    userId: user.id,
-                    displayName: user.displayName,
-                });
-                capturePostHogEvent("room_authenticated");
-                sendRoomInfo(roomId);
-            } catch (error) {
-                reportError(
-                    error instanceof ClientError
-                        ? error.message
-                        : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
-                    error,
+    const authenticate = async (response: ClientPayloads["auth:response"]) => {
+        try {
+            if (!socket.connected) return;
+            response = validateAuthPayload(response);
+            const jwtResult = await verifyToken(response.jwtToken);
+            if (!jwtResult) {
+                throw new ClientError(
+                    "認証トークンが無効または有効期限切れです。ルームに入り直してください。",
                 );
             }
-        },
-    );
+
+            if (cluster && !response.sessionToken)
+                throw new ClientError("署名付きセッションが必要です。");
+            const stableId = response.sessionToken
+                ? await verifyClientSessionToken(response.sessionToken, jwtResult)
+                : socket.id;
+            if (roomId && (roomId !== jwtResult || user.id !== stableId))
+                throw new ClientError("接続済みセッションの認証情報は変更できません。");
+            if (!socket.connected) return;
+            const room = await createRoomIfNeeded(
+                jwtResult,
+                response.jwtToken,
+                undefined,
+                response.expectedInstance,
+            );
+            if (!room) {
+                throw new ClientError(
+                    "ルーム情報を取得できませんでした。ルームを確認して再度お試しください。",
+                );
+            }
+            requireRoomItems(room);
+            if (!socket.connected) return;
+
+            const displayName = response.displayName;
+            const key = sessionKey(jwtResult, stableId);
+            const previousSocketId = liveSessions.get(key);
+            liveSessions.set(key, socket.id);
+            const pending = pendingLeaves.get(key);
+            if (pending) clearTimeout(pending);
+            pendingLeaves.delete(key);
+
+            roomId = jwtResult;
+            user = { id: stableId, displayName };
+            socket.join(roomId);
+            if (previousSocketId && previousSocketId !== socket.id) {
+                io.sockets.sockets.get(previousSocketId)?.disconnect(true);
+            }
+            const game = getGame();
+            if (game instanceof DistributedRoom) {
+                if (!response.sessionToken)
+                    throw new ClientError("署名付きセッションが必要です。");
+                await game.connect(stableId, socket.id);
+            }
+            if (!socket.connected || !isCurrentSession()) return;
+            socket.emit("auth:session", { id: stableId });
+            logEvent("ROOM", `authenticated ${roomId}`, {
+                roomId,
+                socketId: socket.id,
+                userId: user.id,
+                displayName: user.displayName,
+            });
+            capturePostHogEvent("room_authenticated");
+            sendRoomInfo(roomId);
+        } catch (error) {
+            reportError(
+                error instanceof ClientError
+                    ? error.message
+                    : "認証またはルーム情報の取得に失敗しました。しばらくしてから再度お試しください。",
+                error,
+            );
+        }
+    };
+    // A transport may resend auth while a database/peer read is in flight.
+    // Serialize it so completion order cannot rebind its room or identity.
+    let authentication = Promise.resolve();
+    socket.on("auth:response", response => {
+        authentication = authentication.then(() => authenticate(response));
+    });
 
     socket.on("currentInput", (input: unknown) => {
-        getGame()?.apply({ type: "currentInput", playerId: user.id, input });
+        applyEvent({ type: "currentInput", playerId: user.id, input });
     });
     socket.on("hint:update", (payload: unknown) => {
         const parsed = parseClientEvent("hint:update", payload);
         if (!parsed || parsed.event !== "hint:update") return;
-        getGame()?.apply({
+        applyEvent({
             type: "hint:update",
             playerId: user.id,
             length: parsed.data.length,
@@ -699,7 +707,7 @@ io.on("connection", (socket) => {
     socket.on("item:recommend", (payload: unknown) => {
         const game = getGame();
         const parsed = parseClientEvent("item:recommend", payload);
-        if (!game || !roomId || !parsed || parsed.event !== "item:recommend")
+        if (!game || !roomId || !isCurrentSession() || !parsed || parsed.event !== "item:recommend")
             return;
         // Only an authenticated room participant may influence their own
         // next question; unknown item IDs are ignored.
@@ -717,14 +725,14 @@ io.on("connection", (socket) => {
     });
     socket.on("word:success", () => {
         const game = getGame();
-        if (!(game instanceof DistributedRoom))
+        if (isCurrentSession() && !(game instanceof DistributedRoom))
             game?.apply({ type: "word:success", playerId: user.id });
     });
     socket.on("game:start", () => {
         const game = getGame();
 
         if (
-            !game ||
+            !game || !isCurrentSession() ||
             game instanceof DistributedRoom ||
             !canStart(game.state, user.id, NODE_GAME_RULES)
         ) {
@@ -749,12 +757,10 @@ io.on("connection", (socket) => {
         if (!game) return;
         game.apply({ type: "room:leave", playerId, reason });
         const socketRoom = io.sockets.adapter.rooms.get(roomId);
-        if (
-            (!socketRoom || socketRoom.size === 0) &&
-            ![...pendingLeaves.keys()].some((key) =>
+        const pendingCount = [...pendingLeaves.keys()].filter((key) =>
                 key.startsWith(`${roomId}:`),
-            )
-        ) {
+            ).length;
+        if (canDeleteRoom(game.state.room, (socketRoom?.size ?? 0) + pendingCount)) {
             game.dispose();
             games.delete(roomId);
             rooms = rooms.filter((item) => item.id !== roomId);
@@ -784,7 +790,7 @@ io.on("connection", (socket) => {
             // immediately. During an active match preserve the seat for
             // recovery: killing a game because of transient failover would
             // otherwise affect every remaining player.
-            void distributed.disconnect(user.id, "lobby", NODE_DISCONNECT_GRACE_MS).catch((error) =>
+            void distributed.disconnect(user.id, "lobby", NODE_DISCONNECT_GRACE_MS, undefined, socket.id).catch((error) =>
                 logError("Distributed socket disconnect cleanup failed", error, {
                     roomId,
                     userId: user.id,
@@ -792,8 +798,20 @@ io.on("connection", (socket) => {
             );
             return;
         }
-        // Socket.IO already reported this socket as disconnected. Remove its
-        // player now instead of delaying the room broadcast by 20 seconds.
+        // Lobby loss is immediate. An active player's transport loss has the
+        // same 20s recovery window as distributed rooms and Workers.
+        const game = getGame();
+        if (game?.state.room.isStart &&
+            game.state.room.users.some(player => player.id === user.id)) {
+            if (pendingLeaves.has(key)) return;
+            const deadline = disconnectDeadline(game.state.room, user.id, Date.now());
+            pendingLeaves.set(key, setTimeout(() => {
+                pendingLeaves.delete(key);
+                if (!liveSessions.has(key)) deleteUser(user.id, "disconnect");
+            }, Math.max(1, deadline - Date.now())));
+            logEvent("ROOM", `reconnect pending ${roomId}`, { roomId, userId: user.id, deadline });
+            return;
+        }
         deleteUser(user.id, "disconnect");
     });
 });

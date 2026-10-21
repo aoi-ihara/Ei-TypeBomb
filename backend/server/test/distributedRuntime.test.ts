@@ -105,6 +105,79 @@ function fixture() {
         fail: (op: string) => (failure = op),
     };
 }
+test("duplicate transport loss cannot renew a player's first reconnect deadline", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (const id of ["a", "b", "spectator"]) await f.runtime.connect(id, id);
+    for (const id of ["a", "b"]) await f.runtime.command(f.command(id, "room:join"), id);
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    const expires = f.runtime.checkpoint.value!.sessions.a.expires;
+    const publications = f.published.length;
+    f.advance(19_999);
+    await f.runtime.disconnect("a", "lobby", 8_000);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.expires, expires);
+    assert.equal(f.published.length, publications, "duplicate loss is not another commit");
+    f.advance(1);
+    await f.runtime.tick();
+    assert.equal(f.runtime.checkpoint.value!.sessions.a, undefined);
+    assert.equal(f.runtime.state.room.users.some(p => p.id === "a"), false);
+    assert.equal(f.runtime.state.room.isStart, false, "expired participant uses ordinary game cancellation");
+});
+
+test("a delayed disconnect for a replaced connection cannot remove the reconnected seat", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a", "old");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    // Queue both calls without awaiting: the connection fence must be checked
+    // inside the room's serialized mutation, after the replacement commits.
+    const reconnect = f.runtime.connect("a", "new");
+    const staleClose = f.runtime.disconnect("a", "lobby", 8_000, undefined, "old");
+    await reconnect;
+    await assert.rejects(staleClose, /replaced/);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.connectionId, "new");
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.connected, true);
+    assert.deepEqual(f.runtime.state.room.users.map(p => p.id), ["a"]);
+    await f.runtime.disconnect("a", "lobby", 8_000, undefined, "new");
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, true);
+});
+
+test("an unconfirmed explicit leave must reject after authority halts, so it cannot be ACKed", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    await f.runtime.connect("a");
+    await f.runtime.command(f.command("a", "room:join"), "a");
+    f.runtime.dispose();
+    const before = structuredClone(f.runtime.checkpoint);
+    await assert.rejects(f.runtime.leave("a"), /paused/);
+    await assert.rejects(f.runtime.closeSession("a", f.runtime.checkpoint.ownership.instance), /paused/);
+    assert.deepEqual(f.runtime.checkpoint, before);
+});
+
+test("repeated disconnect/reconnect sequences retain one seat and finally delete the room", async () => {
+    const f = fixture();
+    await f.runtime.open(room);
+    for (let cycle = 0; cycle < 25; cycle++) {
+        await f.runtime.connect("a", String(cycle));
+        await f.runtime.command(f.command("a", "room:join"), "a");
+        await f.runtime.command(f.command("a", "room:join"), "a");
+        assert.deepEqual(f.runtime.state.room.users.map(p => p.id), ["a"]);
+        await f.runtime.disconnect("a", false, 8_000);
+        f.advance(7_999);
+        await f.runtime.connect("a", String(cycle + 1));
+        f.advance(2);
+        await f.runtime.tick();
+        assert.deepEqual(f.runtime.state.room.users.map(p => p.id), ["a"]);
+        await f.runtime.leave("a");
+        await f.runtime.leave("a");
+        assert.deepEqual(f.runtime.state.room.users, []);
+    }
+    await f.runtime.disconnect("a", "lobby");
+    await f.runtime.tick();
+    assert.equal(f.runtime.deleted, true);
+});
 test("unacknowledged commit never publishes or changes local state", async () => {
     const f = fixture();
     await f.runtime.open(room);
