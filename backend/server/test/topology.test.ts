@@ -14,11 +14,12 @@ test("without ETB_CLUSTER_CONFIG even former topology variables are ignored", ()
     assert.deepEqual(parseServerTopology({}), {
         role: "standalone", primaryUrl: null, parentUrl: null, publicUrl: null,
     });
-    assert.equal(parseServerTopology({
+    const legacy = {
         ETB_CLUSTER_CONFIG: undefined,
         PRIMARY_SERVER_URL: primary,
         PARENT_SERVER_URL: worker,
-    }).role, "standalone");
+    };
+    assert.equal(parseServerTopology(legacy).role, "standalone");
 });
 
 test("current JSON selects primary and replica parent by order", () => {
