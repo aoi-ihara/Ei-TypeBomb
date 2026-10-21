@@ -39,3 +39,13 @@ export function transientRecoveryFailure(error: unknown) {
         return { code: "OWNER_TRANSFER_NOT_APPROVED", retryable: true };
     return undefined;
 }
+
+// Authentication errors are emitted on an already-connected socket. Unless
+// the error is a classified distributed recovery failure, the client cannot
+// resume automatically and must not show a perpetual reconnecting state.
+export function authenticationFailure(error: unknown) {
+    return recoveryFailure(error) ?? {
+        code: "AUTH_FAILED" as const,
+        retryable: false as const,
+    };
+}
