@@ -98,7 +98,7 @@ export default {
                     result.ownership.lifecycle === "MIGRATING"
                 )
                     await env.ROOMS.get(
-                        await roomObjectName(env, roomId)),
+                        env.ROOMS.idFromName(await roomObjectName(env, roomId)),
                     ).resumeMigration(roomId);
                 return Response.json(
                     { ownership: result.ownership, servers: result.servers },
