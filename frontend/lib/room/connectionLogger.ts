@@ -76,3 +76,10 @@ export function connectionErrorDetails(error: unknown): DiagnosticDetails {
             ? { reason: value.message } : {}),
     };
 }
+
+/** A connected socket will not retry authentication automatically. */
+export function isTerminalConnectionError(error: unknown): boolean {
+    if (!error || typeof error !== "object") return false;
+    const value = error as { code?: unknown; retryable?: unknown };
+    return value.code === "AUTH_FAILED" || value.retryable === false;
+}
