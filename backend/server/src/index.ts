@@ -43,7 +43,10 @@ import {
 import { DistributedRoom } from "../../shared/distributed/runtime";
 import { PeerControl } from "../../shared/distributed/peers";
 import { parsePageExit } from "../../shared/distributed/pageExit";
-import { recoveryFailure, transientRecoveryFailure } from "../../shared/distributed/recovery";
+import {
+    authenticationFailure,
+    transientRecoveryFailure,
+} from "../../shared/distributed/recovery";
 import { persistentPeerIdentity, clusterStateRoot } from "./lib/peerStorage";
 import {
     MAX_CLUSTER_FRAME_BYTES,
@@ -654,7 +657,7 @@ io.on("connection", (socket) => {
             displayName: user.displayName,
             roomId,
         });
-        socket.emit("error", { message, ...recoveryFailure(error) });
+        socket.emit("error", { message, ...authenticationFailure(error) });
     };
 
     const emitRaw = socket.emit.bind(socket) as (
