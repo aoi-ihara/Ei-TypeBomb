@@ -182,7 +182,7 @@ export default function GameView({
                     <div className="w-full max-w-sm px-4 flex flex-col gap-4 items-center animate-appear">
                         <div
                             data-cursor="text"
-                            className="font-bold text-4xl text-center break-words"
+                            className="font-bold text-4xl text-center wrap-break-words"
                         >
                             {loserNames?.length
                                 ? `${loserNames.join(", ")}の負け`
@@ -230,21 +230,9 @@ export default function GameView({
 
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-4 h-full justify-end flex flex-col">
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game ${serverError ? "min-h-14 h-auto justify-center" : !room ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
-                    {serverError ? (
-                        <div
-                            className="flex justify-start animate-appear w-full"
-                            role="alert"
-                        >
-                            <div
-                                className="font-mono w-fit pl-4 font-bold"
-                                data-cursor="text"
-                            >
-                                {serverError}
-                            </div>
-                        </div>
-                    ) : room ? (
+                    {room && !serverError ? (
                         isParticipant ? (
                             <div className="flex flex-col h-full animate-appear">
                                 <div className="flex h-full">
@@ -257,7 +245,7 @@ export default function GameView({
                                                     className="gradient-text h-fit px-2 py-1 font-bold flex"
                                                     data-cursor="text"
                                                 >
-                                                    ほかのプレイヤーを待っています…
+                                                    他のプレイヤーを待っています…
                                                 </div>
                                                 <div
                                                     className="rounded-lg w-48 flex"
@@ -360,7 +348,7 @@ export default function GameView({
                                 className="w-fit pl-4 font-bold gradient-text"
                                 data-cursor="text"
                             >
-                                サーバーに接続しています…
+                                読み込み中…
                             </div>
                         </div>
                     )}
