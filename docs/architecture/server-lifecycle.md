@@ -18,20 +18,20 @@ flowchart LR
   Peer --> DO[WorkerControl / ClusterDO / ReplicaDO]
 ```
 
-| 責務・入口 | 実装 | 状態の所有者・イベントの流れ |
-| --- | --- | --- |
-| 接続・再接続 | `frontend/lib/room/socket.ts`, `routedSocket.ts` | RoutedSocket がタブのJWT、接続世代、pending command、退出意図を保持。WorkerSocket はフレーム/heartbeatのみ。Socket.IOの自動再接続は分散モードで無効 |
-| サーバー候補・信頼 | `shared/clusterConfig.ts`, `topology.ts`, frontend `serverUrl.ts`, `clusterConfig.ts` | ETB_CLUSTER_CONFIG の順序と `/ws` が優先度とtransportを定義。単独のHTTP到達性でownerを決めない |
-| 障害検知・選択 | `healthProbe.ts`, `routedSocket.ts`, peers `read/report/promote` | `/health` は到達性のみ。foregroundで約1.25秒のcluster応答断→下位に障害報告→owner probe→checkpointがある有資格候補が昇格。正常復旧したPrimaryへ自動failbackしない |
-| ルーム設定・作成 | Node `createRoomIfNeeded`, `lib/get.ts`; Worker `ensureDistributed`, `lib/database.ts`; `shared/room.ts` | PostgreSQL/PostgRESTは新規ルームの設定・問題取得のみ。NodeはpendingRoomLoadsで同時ロードを合流。稼働状態はDBへ保存しない |
-| 参加・退出・復帰 | Node socket handlers、RoomDO `handle/disconnect/alarm`、DistributedRoom `connect/leave/disconnect/tick` | JWTのsessionIdがタブのプレイヤーID。transport IDは世代。認証は観戦接続、room:joinは座席追加。退出後も接続を残して再参加できる |
-| ゲーム状態 | `shared/types.ts`, `game.ts`, `protocol.ts` | 純粋reducerが唯一のルール。実行部がGameStateと絶対期限を持つ。NodeGameAdapterのtimerとWorker Alarmは環境固有 |
-| 所有権・同期 | `shared/distributed/{types,peers,replication,identity,link,runtime}.ts` | PeerControlがinstance/epoch/revision/promise/checkpoint/tombstone。runtimeのキューがルーム内操作を直列化。差分hash不一致時はfullを再取得 |
-| 永続化 | `server/src/lib/peerStorage.ts`, `cloudflare/src/{ClusterDO,lib/cluster}.ts` | NodeはSQLite FULL同期と排他ロック、WorkerはReplicaDOにルーム単位のvote保存。bootと投票状態を一緒に維持する |
-| 認証・認可 | frontend `auth.ts`, Node/Worker `lib/auth.ts`, `shared/{jwtPolicy,roomJwt,sessionJwt}.ts` | 既存ES256 room JWT + room-bound session JWTを暗号検証後にIDとして使用。room ID、audience、issuer、expiry、kidを共通方針で検証 |
-| ページ終了 | `shared/distributed/pageExit.ts`, `/cluster/leave`, `RoutedSocket.closePage` | beaconはroom JWT + session JWT + expectedInstance + connectionIdで古いページの退出をfence。配送失敗時は通常の切断期限が最終清掃 |
-| timeout/retry | `link.ts`, `routedSocket.ts`, runtime/RoomDO | peer接続約1.5秒、route/report HTTP 6秒、transport handshake 1.2秒、入力100ms集約、full snapshot 5秒。復旧retryは最大60回。分類された永続状態喪失は停止 |
-| 停止・復旧 | PeerControl confirm/probe/promote、Node保守tick、RoomDO alarm | SIGKILLからSQLite/DOのcheckpointで復元。drainingは譲渡を許可。旧ownerは新epochを観測すると停止。ルーム不明時にDBから対戦を捏造しない |
+| 責務・入口         | 実装                                                                                                     | 状態の所有者・イベントの流れ                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 接続・再接続       | `frontend/lib/room/socket.ts`, `routedSocket.ts`                                                         | RoutedSocket がタブのJWT、接続世代、pending command、退出意図を保持。WorkerSocket はフレーム/heartbeatのみ。Socket.IOの自動再接続は分散モードで無効              |
+| サーバー候補・信頼 | `shared/clusterConfig.ts`, `topology.ts`, frontend `serverUrl.ts`, `clusterConfig.ts`                    | ETB_CLUSTER_CONFIG の順序と `/ws` が優先度とtransportを定義。単独のHTTP到達性でownerを決めない                                                                   |
+| 障害検知・選択     | `healthProbe.ts`, `routedSocket.ts`, peers `read/report/promote`                                         | `/health` は到達性のみ。foregroundで約1.25秒のcluster応答断→下位に障害報告→owner probe→checkpointがある有資格候補が昇格。正常復旧したPrimaryへ自動failbackしない |
+| ルーム設定・作成   | Node `createRoomIfNeeded`, `lib/get.ts`; Worker `ensureDistributed`, `lib/database.ts`; `shared/room.ts` | PostgreSQL/PostgRESTは新規ルームの設定・問題取得のみ。NodeはpendingRoomLoadsで同時ロードを合流。稼働状態はDBへ保存しない                                         |
+| 参加・退出・復帰   | Node socket handlers、RoomDO `handle/disconnect/alarm`、DistributedRoom `connect/leave/disconnect/tick`  | JWTのsessionIdがタブのプレイヤーID。transport IDは世代。認証は観戦接続、room:joinは座席追加。退出後も接続を残して再参加できる                                    |
+| ゲーム状態         | `shared/types.ts`, `game.ts`, `protocol.ts`                                                              | 純粋reducerが唯一のルール。実行部がGameStateと絶対期限を持つ。NodeGameAdapterのtimerとWorker Alarmは環境固有                                                     |
+| 所有権・同期       | `shared/distributed/{types,peers,replication,identity,link,runtime}.ts`                                  | PeerControlがinstance/epoch/revision/promise/checkpoint/tombstone。runtimeのキューがルーム内操作を直列化。差分hash不一致時はfullを再取得                         |
+| 永続化             | `server/src/lib/peerStorage.ts`, `cloudflare/src/{ClusterDO,lib/cluster}.ts`                             | NodeはSQLite FULL同期と排他ロック、WorkerはReplicaDOにルーム単位のvote保存。bootと投票状態を一緒に維持する                                                       |
+| 認証・認可         | frontend `auth.ts`, Node/Worker `lib/auth.ts`, `shared/{jwtPolicy,roomJwt,sessionJwt}.ts`                | 既存ES256 room JWT + room-bound session JWTを暗号検証後にIDとして使用。room ID、audience、issuer、expiry、kidを共通方針で検証                                    |
+| ページ終了         | `shared/distributed/pageExit.ts`, `/cluster/leave`, `RoutedSocket.closePage`                             | beaconはroom JWT + session JWT + expectedInstance + connectionIdで古いページの退出をfence。配送失敗時は通常の切断期限が最終清掃                                  |
+| timeout/retry      | `link.ts`, `routedSocket.ts`, runtime/RoomDO                                                             | peer接続約1.5秒、route/report HTTP 6秒、transport handshake 1.2秒、入力100ms集約、full snapshot 5秒。復旧retryは最大60回。分類された永続状態喪失は停止           |
+| 停止・復旧         | PeerControl confirm/probe/promote、Node保守tick、RoomDO alarm                                            | SIGKILLからSQLite/DOのcheckpointで復元。drainingは譲渡を許可。旧ownerは新epochを観測すると停止。ルーム不明時にDBから対戦を捏造しない                             |
 
 ## 発見した問題と変更方針
 

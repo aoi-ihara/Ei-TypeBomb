@@ -1,5 +1,5 @@
 import { parsePageExit } from "../../shared/distributed/pageExit";
-import { recoveryFailure } from "../../shared/distributed/recovery";
+import { recoveryFailure, transientRecoveryFailure } from "../../shared/distributed/recovery";
 import { readLimitedBody } from "../../shared/distributed/replication";
 import type { Env } from "./types";
 import { clusterConfig } from "../../shared/distributed/control";
@@ -27,16 +27,21 @@ export default {
                 return new Response(null, { status: 405 });
             return Response.json(
                 { ok: true, role: topology.role },
-                { headers: {
-                    "Access-Control-Allow-Origin": "*",
-                    "Cache-Control": "no-store",
-                } },
+                {
+                    headers: {
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "no-store",
+                    },
+                },
             );
         }
-        if (url.pathname === "/cluster/ws" || url.pathname === "/cluster/identity")
-            return env.CLUSTER.get(env.CLUSTER.idFromName(await clusterObjectName(env))).fetch(
-                request,
-            );
+        if (
+            url.pathname === "/cluster/ws" ||
+            url.pathname === "/cluster/identity"
+        )
+            return env.CLUSTER.get(
+                env.CLUSTER.idFromName(await clusterObjectName(env)),
+            ).fetch(request);
         if (
             url.pathname === "/cluster/route" ||
             url.pathname === "/cluster/report" ||
@@ -65,18 +70,29 @@ export default {
                 const roomId = await verifyRoomToken(data.jwtToken, env);
                 if (url.pathname.endsWith("leave")) {
                     const exit = parsePageExit(data);
-                    const { verifyClientSessionToken } = await import("./lib/auth");
-                    const id = await verifyClientSessionToken(exit.sessionToken, roomId, env);
-                    await env.ROOMS.get(env.ROOMS.idFromName(await roomObjectName(env, roomId))).closePageSession(roomId, id, exit.expectedInstance, exit.connectionId);
+                    const { verifyClientSessionToken } =
+                        await import("./lib/auth");
+                    const id = await verifyClientSessionToken(
+                        exit.sessionToken,
+                        roomId,
+                        env,
+                    );
+                    await env.ROOMS.get(
+                        env.ROOMS.idFromName(await roomObjectName(env, roomId)),
+                    ).closePageSession(
+                        roomId,
+                        id,
+                        exit.expectedInstance,
+                        exit.connectionId,
+                    );
                     return new Response(null, { status: 204, headers: cors });
                 }
                 const report = url.pathname.endsWith("report");
                 if (data.roomId && data.roomId !== roomId)
                     throw new Error("Wrong room");
                 if (report) {
-                    const { verifyClientSessionToken } = await import(
-                        "./lib/auth"
-                    );
+                    const { verifyClientSessionToken } =
+                        await import("./lib/auth");
                     await verifyClientSessionToken(
                         data.sessionToken,
                         roomId,
@@ -107,12 +123,17 @@ export default {
             } catch (error) {
                 // Diagnose failed promotion/peer lookups in Worker logs without
                 // exposing cluster internals or secrets to unauthenticated clients.
-                console.error(`Cluster ${url.pathname} failed:`,
-                    error instanceof Error ? error.message : "Unknown error");
+                console.error(
+                    `Cluster ${url.pathname} failed:`,
+                    error instanceof Error ? error.message : "Unknown error",
+                );
                 const failure = recoveryFailure(error);
+                const transient = transientRecoveryFailure(error);
                 return failure
                     ? Response.json(failure, { status: 409, headers: cors })
-                    : new Response(null, { status: 503, headers: cors });
+                    : transient
+                        ? Response.json(transient, { status: 503, headers: cors })
+                        : new Response(null, { status: 503, headers: cors });
             }
         }
         const match = /^\/ws\/([^/]+)$/.exec(url.pathname);
@@ -134,7 +155,9 @@ export default {
                 return new Response("Origin not allowed", { status: 403 });
             }
         }
-        const id = env.ROOMS.idFromName(await roomObjectName(env, match[1].toLowerCase()));
+        const id = env.ROOMS.idFromName(
+            await roomObjectName(env, match[1].toLowerCase()),
+        );
         return env.ROOMS.get(id).fetch(request);
     },
 };

@@ -4,6 +4,12 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { io } from "@/lib/room/socket";
+import {
+    connectionError,
+    connectionErrorDetails,
+    connectionLog,
+    isTerminalConnectionError,
+} from "@/lib/room/connectionLogger";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import type { GameNoticeProps } from "@/components/feature/GameNotice";
@@ -39,6 +45,10 @@ type Props = {
     initialSounDeffects: boolean;
 };
 
+// Connection internals belong in DevTools, never in student-facing UI.
+const CONNECTING_MESSAGE = "接続中…";
+const UNAVAILABLE_MESSAGE =
+    "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 const MAX_CURRENT_INPUT_LENGTH = 32;
 
@@ -242,7 +252,8 @@ export default function Clinet({
         const fallbackUrl = configuredServers.length
             ? configuredServers[2]
             : process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL;
-        const distributed = configuredServers.length > 0 ||
+        const distributed =
+            configuredServers.length > 0 ||
             process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
@@ -302,19 +313,69 @@ export default function Clinet({
 
         const authenticate = async (candidate: Candidate) => {
             const socket = candidate.socket;
-            const [authToken, sessionToken] = await Promise.all([
-                getAuthToken(),
-                sessionTokenPromise,
-            ]);
+            let authToken: string | null | undefined;
+            let sessionToken: string | null | undefined;
+            try {
+                [authToken, sessionToken] = await Promise.all([
+                    getAuthToken(),
+                    sessionTokenPromise,
+                ]);
+            } catch (error) {
+                if (disposed || socketRef.current !== socket) return;
+                connectionError(
+                    "AUTH",
+                    "Unable to retrieve authentication credentials",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        ...connectionErrorDetails(error),
+                    },
+                );
+                setServerError(UNAVAILABLE_MESSAGE);
+                return;
+            }
             if (!selected || socketRef.current !== socket || disposed) return;
             if (!authToken || !sessionToken) {
-                setServerError("認証情報を取得できませんでした。ルームに入り直してください。");
+                connectionError(
+                    "AUTH",
+                    "Authentication credentials are unavailable",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        reason: !authToken
+                            ? "room_token_missing"
+                            : "session_token_missing",
+                    },
+                );
+                setServerError(UNAVAILABLE_MESSAGE);
                 return;
             }
 
             // Never disclose the authentication token to an untrusted origin.
-            if (!isTrustedServerUrl(candidate.url, primaryUrl, configuredServers)) return;
+            if (
+                !isTrustedServerUrl(
+                    candidate.url,
+                    primaryUrl,
+                    configuredServers,
+                )
+            ) {
+                connectionError(
+                    "AUTH",
+                    "Untrusted authentication destination blocked",
+                    {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                    },
+                );
+                setServerError(UNAVAILABLE_MESSAGE);
+                return;
+            }
 
+            if (!distributed)
+                connectionLog("AUTH", "Sending authentication request", {
+                    server: candidate.url,
+                    tier: candidate.tier,
+                });
             socket.emit("auth:response", {
                 jwtToken: authToken,
                 sessionToken,
@@ -357,14 +418,23 @@ export default function Clinet({
             );
 
             if (candidate.tier === "primary") {
-                console.info("Connected to primary server.");
+                if (!distributed)
+                    connectionLog("CONNECTED", "Connected to primary server", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        durationMs: connectionTimeMs,
+                    });
                 posthog.capture("primary_server_connected", {
                     connection_time_ms: connectionTimeMs,
                 });
             } else if (candidate.tier === "secondary") {
-                console.warn(
-                    "Primary server unavailable. Switching to secondary server.",
-                );
+                if (!distributed)
+                    connectionLog("FALLBACK", "Switching to secondary server", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        durationMs: connectionTimeMs,
+                        reason: "primary_unreachable",
+                    });
                 posthog.capture("secondary_server_connected", {
                     connection_time_ms: connectionTimeMs,
                 });
@@ -377,9 +447,13 @@ export default function Clinet({
                     });
                 }
             } else {
-                console.warn(
-                    "Primary and secondary servers unavailable. Switching to fallback server.",
-                );
+                if (!distributed)
+                    connectionLog("FALLBACK", "Switching to fallback server", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        durationMs: connectionTimeMs,
+                        reason: "higher_priority_servers_unreachable",
+                    });
                 posthog.capture("fallback_server_connected", {
                     connection_time_ms: connectionTimeMs,
                 });
@@ -423,30 +497,60 @@ export default function Clinet({
             const { socket } = candidate;
             const retrySelectedConnection = () => {
                 if (distributed) return;
-                if (disposed || !selected || socketRef.current !== socket || reconnectTimer) return;
+                if (
+                    disposed ||
+                    !selected ||
+                    socketRef.current !== socket ||
+                    reconnectTimer
+                )
+                    return;
                 reconnectTimer = setTimeout(() => {
                     reconnectTimer = null;
-                    if (!disposed && socketRef.current === socket && !socket.connected) {
+                    if (
+                        !disposed &&
+                        socketRef.current === socket &&
+                        !socket.connected
+                    ) {
                         socket.connect();
                     }
                 }, 1_000);
             };
 
             socket.on("disconnect", () => {
-                if (!selected || socketRef.current !== socket || disposed) return;
+                if (!selected || socketRef.current !== socket || disposed)
+                    return;
+                if (!distributed)
+                    connectionLog("CONNECTION", "Transport disconnected", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        visibility: document.visibilityState,
+                    });
                 cancelDisconnectNotice();
                 // Sleeping tabs may suspend the heartbeat and transport. Keep
                 // transient background recovery silent; show errors only if a
                 // foreground reconnection remains unsuccessful.
-                disconnectNoticeTimer = setTimeout(() => {
-                    disconnectNoticeTimer = null;
-                    if (!disposed && socketRef.current === socket &&
-                        !socket.connected && document.visibilityState === "visible")
-                        setServerError("接続が切れました。再接続しています…");
-                }, document.visibilityState === "hidden" ? 6000 : 3000);
+                disconnectNoticeTimer = setTimeout(
+                    () => {
+                        disconnectNoticeTimer = null;
+                        if (
+                            !disposed &&
+                            socketRef.current === socket &&
+                            !socket.connected &&
+                            document.visibilityState === "visible"
+                        )
+                            setServerError(CONNECTING_MESSAGE);
+                    },
+                    document.visibilityState === "hidden" ? 6000 : 3000,
+                );
                 retrySelectedConnection();
             });
-            socket.on("connect_error", () => {
+            socket.on("connect_error", (error: unknown) => {
+                if (!distributed)
+                    connectionError("CONNECTION", "Socket connection failed", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        ...connectionErrorDetails(error),
+                    });
                 if (selected) {
                     retrySelectedConnection();
                     return;
@@ -459,13 +563,36 @@ export default function Clinet({
                 }
             });
 
-            socket.on("error", (error: { message?: unknown; retryable?: boolean } | null) => {
-                if (!selected || socketRef.current !== socket) return;
-                if (typeof error?.message !== "string" || !error.message.trim())
-                    return;
-                if (error.retryable === false) cancelDisconnectNotice();
-                setServerError(error.message);
-            });
+            socket.on(
+                "error",
+                (
+                    error: {
+                        message?: unknown;
+                        retryable?: boolean;
+                        code?: string;
+                    } | null,
+                ) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    const authFailed = error?.code === "AUTH_FAILED";
+                    const terminal = isTerminalConnectionError(error);
+                    if (!distributed)
+                        connectionError(
+                            authFailed ? "AUTH" : "CONNECTION",
+                            authFailed
+                                ? "Authentication failed"
+                                : "Server returned an error",
+                            {
+                                server: candidate.url,
+                                tier: candidate.tier,
+                                ...connectionErrorDetails(error),
+                            },
+                        );
+                    if (terminal) cancelDisconnectNotice();
+                    setServerError(
+                        terminal ? UNAVAILABLE_MESSAGE : CONNECTING_MESSAGE,
+                    );
+                },
+            );
 
             socket.on(
                 "room:broadcast",
@@ -482,7 +609,9 @@ export default function Clinet({
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
                     cancelDisconnectNotice();
-                    setServerError(newRoom.migrating ? "サーバーを切り替えています。参加者の再接続を待っています…" : null);
+                    setServerError(
+                        newRoom.migrating ? CONNECTING_MESSAGE : null,
+                    );
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
                     const normalizedRoom: Room = {
@@ -571,73 +700,90 @@ export default function Clinet({
                     title: "接続が切れました",
                     description: "プレイヤーがルームから退出しました。",
                 });
-                console.log("game quited");
+                connectionLog("CONNECTION", "Player exited the room", {
+                    reason: "player_left",
+                });
                 posthog.capture("game_quited");
             });
 
-            socket.on("cluster:recovery-started", ({
-                recoveryId, fromDepth, detectionHeartbeatAgeMs,
-            }: {
-                recoveryId: string;
-                fromDepth: number;
-                detectionHeartbeatAgeMs: number;
-            }) => {
-                if (!selected || socketRef.current !== socket) return;
-                posthog.capture("game_connection_recovery_started", {
-                    recovery_id: recoveryId,
-                    from_depth: fromDepth,
-                    detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
-                });
-                console.info("[ETB failover started]", {
-                    recoveryId, fromDepth, detectionHeartbeatAgeMs,
-                });
-            });
+            socket.on(
+                "cluster:recovery-started",
+                ({
+                    recoveryId,
+                    fromDepth,
+                    detectionHeartbeatAgeMs,
+                }: {
+                    recoveryId: string;
+                    fromDepth: number;
+                    detectionHeartbeatAgeMs: number;
+                }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    posthog.capture("game_connection_recovery_started", {
+                        recovery_id: recoveryId,
+                        from_depth: fromDepth,
+                        detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
+                    });
+                },
+            );
 
-            socket.on("cluster:recovered", (diagnostics: {
-                snapshotRecoveryMs: number;
-                recoveryId?: string;
-                snapshotBeforeAuth?: boolean;
-                detectionHeartbeatAgeMs?: number;
-                fromDepth?: number;
-                toDepth?: number;
-                retryWaitMs?: number;
-                routeMs?: number;
-                routeCalls?: number;
-                reportMs?: number;
-                reportCalls?: number;
-                serverReadMs?: number;
-                serverProbeMs?: number;
-                serverPromoteMs?: number;
-                serverResumeMs?: number;
-                serverAuthMs?: number;
-                serverTotalMs?: number;
-                serverResumeReadMs?: number;
-                serverResumeOpenMs?: number;
-                socketHandshakeMs?: number;
-                socketCalls?: number;
-                authenticationMs?: number;
-                snapshotAfterAuthMs?: number;
-                migrationWaitMs?: number;
-            }) => {
-                if (!selected || socketRef.current !== socket) return;
-                const { snapshotRecoveryMs, ...phases } = diagnostics;
-                const timingProperties = Object.fromEntries(
-                    Object.entries(phases).map(([key, value]) => [
-                        // Keep the existing event name for backwards
-                        // compatibility; new phase properties are additive.
-                        key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase()),
-                        typeof value === "number" ? Math.round(value) : value,
-                    ]),
-                );
-                posthog.capture("game_connection_snapshot_recovered", {
-                    snapshot_recovery_time_ms: snapshotRecoveryMs,
-                    ...timingProperties,
-                });
-                console.info("[ETB failover timings]", diagnostics);
-            });
+            socket.on(
+                "cluster:recovered",
+                (diagnostics: {
+                    snapshotRecoveryMs: number;
+                    recoveryId?: string;
+                    snapshotBeforeAuth?: boolean;
+                    detectionHeartbeatAgeMs?: number;
+                    fromDepth?: number;
+                    toDepth?: number;
+                    retryWaitMs?: number;
+                    routeMs?: number;
+                    routeCalls?: number;
+                    reportMs?: number;
+                    reportCalls?: number;
+                    serverReadMs?: number;
+                    serverProbeMs?: number;
+                    serverPromoteMs?: number;
+                    serverResumeMs?: number;
+                    serverAuthMs?: number;
+                    serverTotalMs?: number;
+                    serverResumeReadMs?: number;
+                    serverResumeOpenMs?: number;
+                    socketHandshakeMs?: number;
+                    socketCalls?: number;
+                    authenticationMs?: number;
+                    snapshotAfterAuthMs?: number;
+                    migrationWaitMs?: number;
+                }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    const { snapshotRecoveryMs, ...phases } = diagnostics;
+                    const timingProperties = Object.fromEntries(
+                        Object.entries(phases).map(([key, value]) => [
+                            // Keep the existing event name for backwards
+                            // compatibility; new phase properties are additive.
+                            key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase()),
+                            typeof value === "number"
+                                ? Math.round(value)
+                                : value,
+                        ]),
+                    );
+                    posthog.capture("game_connection_snapshot_recovered", {
+                        snapshot_recovery_time_ms: snapshotRecoveryMs,
+                        ...timingProperties,
+                    });
+                },
+            );
 
             socket.on("auth:session", ({ id }: { id: string }) => {
                 if (!selected || socketRef.current !== socket) return;
+                if (!distributed)
+                    connectionLog("AUTH", "Authentication succeeded", {
+                        server: candidate.url,
+                        tier: candidate.tier,
+                        durationMs: Math.round(
+                            performance.now() - candidate.startedAt,
+                        ),
+                    });
+                setServerError(null);
                 setUserId(id);
                 userIdRef.current = id;
             });
@@ -755,7 +901,10 @@ export default function Clinet({
 
         attachSocketListeners(primaryCandidate);
         if (!distributed)
-            primaryTimer = setTimeout(startFailover, SERVER_FAILOVER_TIMEOUT_MS);
+            primaryTimer = setTimeout(
+                startFailover,
+                SERVER_FAILOVER_TIMEOUT_MS,
+            );
 
         return () => {
             disposed = true;
@@ -766,7 +915,8 @@ export default function Clinet({
             cancelDisconnectNotice();
             blipAudioRef.current?.pause();
             powerupAudioRef.current?.pause();
-            if ("closePage" in primaryCandidate.socket) primaryCandidate.socket.closePage();
+            if ("closePage" in primaryCandidate.socket)
+                primaryCandidate.socket.closePage();
             primaryCandidate.socket.disconnect();
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();
@@ -854,7 +1004,7 @@ export default function Clinet({
     }, [router, initialBackgroundMusic, initialSounDeffects]);
 
     const handleJoin = (source: "join_button" | "play_again") => {
-        console.log("join request");
+        connectionLog("CONNECTION", "Room join requested", { reason: source });
         posthog.capture("room_join_clicked", { source });
         socketRef.current?.emit("room:join");
     };

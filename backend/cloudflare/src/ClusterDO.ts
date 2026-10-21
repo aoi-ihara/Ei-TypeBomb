@@ -2,8 +2,14 @@ import { DurableObject } from "cloudflare:workers";
 import { PeerControl, type VoteRecord } from "../../shared/distributed/peers";
 import { Identity, type Member } from "../../shared/distributed/identity";
 import { parseETBClusterConfig } from "../../shared/clusterConfig";
-import { clusterConfig, assertClusterIdentity } from "../../shared/distributed/control";
-import { bufferPeerSocket, type ClusterSocket } from "../../shared/distributed/link";
+import {
+    clusterConfig,
+    assertClusterIdentity,
+} from "../../shared/distributed/control";
+import {
+    bufferPeerSocket,
+    type ClusterSocket,
+} from "../../shared/distributed/link";
 import type { Env } from "./types";
 import { replicaObjectName } from "./lib/namespace";
 /** A per-room storage atom. It never advances games or initiates ownership. */
@@ -60,16 +66,24 @@ export class ClusterDO extends DurableObject<Env> {
                 },
                 {
                     load: async (room) =>
-                        env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).load(),
+                        env.REPLICAS.get(
+                            env.REPLICAS.idFromName(
+                                await replicaObjectName(env, room),
+                            ),
+                        ).load(),
                     save: async (room, state) =>
-                        env.REPLICAS.get(env.REPLICAS.idFromName(await replicaObjectName(env, room))).save(
-                            state,
-                        ),
+                        env.REPLICAS.get(
+                            env.REPLICAS.idFromName(
+                                await replicaObjectName(env, room),
+                            ),
+                        ).save(state),
                     registry: (members) => ctx.storage.put("registry", members),
                 },
             );
             peer.draining = env.CLUSTER_DRAINING === "true";
-            await peer.restoreRegistry((await ctx.storage.get<Member[]>("registry")) ?? []);
+            await peer.restoreRegistry(
+                (await ctx.storage.get<Member[]>("registry")) ?? [],
+            );
             return peer;
         });
         // Network registration starts after local initialization, outside the
@@ -83,9 +97,11 @@ export class ClusterDO extends DurableObject<Env> {
     }
     async fetch(request: Request): Promise<Response> {
         if (new URL(request.url).pathname === "/cluster/identity") {
-            if (request.method !== "GET") return new Response(null, { status: 405 });
-            return Response.json((await this.ready).identity.publicIdentity(),
-                { headers: { "Cache-Control": "no-store" } });
+            if (request.method !== "GET")
+                return new Response(null, { status: 405 });
+            return Response.json((await this.ready).identity.publicIdentity(), {
+                headers: { "Cache-Control": "no-store" },
+            });
         }
         if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket")
             return new Response(null, { status: 426 });

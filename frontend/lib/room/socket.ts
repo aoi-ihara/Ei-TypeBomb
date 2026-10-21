@@ -153,7 +153,8 @@ export class WorkerSocket {
 /** A URL ending in /ws explicitly selects Workers, including custom domains. */
 export function io(url?: string, options?: Options) {
     if (
-        (options?.clusterServers?.length || process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") &&
+        (options?.clusterServers?.length ||
+            process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true") &&
         !options?.healthOnly
     ) {
         // An explicit ordered cluster list must not be mixed with the
@@ -162,14 +163,11 @@ export function io(url?: string, options?: Options) {
         const configured = options?.clusterServers?.length
             ? options.clusterServers
             : [
-                process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
-                process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
-                process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
-            ];
-        const seeds = [
-            url,
-            ...configured,
-        ]
+                  process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
+                  process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
+                  process.env.NEXT_PUBLIC_FALLBACK_SERVER_URL,
+              ];
+        const seeds = [url, ...configured]
             .filter((value): value is string => !!value)
             .map((value) => new URL(value).origin);
         return new RoutedSocket(

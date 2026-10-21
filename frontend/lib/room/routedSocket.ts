@@ -1,5 +1,13 @@
 "use client";
-import { acceptsRoomRoute, acceptsRoomSnapshot } from "../../../backend/shared/distributed/version";
+import {
+    acceptsRoomRoute,
+    acceptsRoomSnapshot,
+} from "../../../backend/shared/distributed/version";
+import {
+    connectionError,
+    connectionErrorDetails,
+    connectionLog,
+} from "./connectionLogger";
 
 // The bootstrap URLs establish trust. Further URLs come only from a successful
 // HTTPS registry response at one of these URLs and are cached for this page.
@@ -27,7 +35,9 @@ type Transport = {
 };
 type RecoveryFailure = { code: string; retryable: false; message: string };
 class RecoveryStopped extends Error {
-    constructor(readonly failure: RecoveryFailure) { super(failure.message); }
+    constructor(readonly failure: RecoveryFailure) {
+        super(failure.message);
+    }
 }
 
 type Meta = { roomInstanceId: string; epoch: number; revision: number };
@@ -76,6 +86,27 @@ export class RoutedSocket {
     private recoveryDiagnostics?: RecoveryDiagnostics;
     private firstMigrationSnapshotAt?: number;
     private wasBackgrounded = false;
+    private backgroundStartedAt?: number;
+    private readonly onVisibilityChange = () => {
+        if (document.visibilityState === "hidden") {
+            this.backgroundStartedAt = performance.now();
+            connectionLog("CONNECTION", "Tab moved to background", {
+                visibility: "hidden",
+                socketConnected: this.transport?.connected ?? false,
+                owner: this.currentOwner,
+            });
+            return;
+        }
+        connectionLog("CONNECTION", "Tab returned to foreground", {
+            visibility: "visible",
+            durationMs: this.backgroundStartedAt === undefined
+                ? undefined : Math.round(performance.now() - this.backgroundStartedAt),
+            socketConnected: this.transport?.connected ?? false,
+            owner: this.currentOwner,
+            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+        });
+        this.backgroundStartedAt = undefined;
+    };
     private heartbeat?: ReturnType<typeof setInterval>;
     private lastReply = 0;
     private meta?: Meta;
@@ -83,6 +114,7 @@ export class RoutedSocket {
     private sessionToken?: string;
     private roomId?: string;
     private currentOwner?: string;
+    private currentOwnerUrl?: string;
     private routedRevision?: number;
     private routedInstance?: string;
     private failure?: { owner: string; revision: number };
@@ -126,6 +158,7 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.addEventListener("pagehide", this.pageHidden);
             window.addEventListener("beforeunload", this.pageHidden);
+            document.addEventListener("visibilitychange", this.onVisibilityChange);
         }
         void this.connect();
     }
@@ -151,8 +184,13 @@ export class RoutedSocket {
     }
     private recordServerTiming(header: string | null) {
         if (!this.recoveryDiagnostics || !header) return;
-        const keys: Record<string, Exclude<keyof RecoveryDiagnostics,
-            "recoveryId" | "snapshotBeforeAuth">> = {
+        const keys: Record<
+            string,
+            Exclude<
+                keyof RecoveryDiagnostics,
+                "recoveryId" | "snapshotBeforeAuth"
+            >
+        > = {
             read: "serverReadMs",
             ownerProbe: "serverProbeMs",
             promote: "serverPromoteMs",
@@ -195,21 +233,35 @@ export class RoutedSocket {
         if (event === "auth:response") {
             const auth = data as { sessionToken?: string };
             this.sessionToken = auth.sessionToken ?? this.sessionToken;
+            connectionLog("AUTH", "Sending authentication request", {
+                server: this.currentOwner,
+                attempt: this.attempt,
+            });
             this.transport?.emit(event, {
                 ...(data as Record<string, unknown>),
                 ...((this.meta?.roomInstanceId ?? this.routedInstance)
-                    ? { expectedInstance: this.meta?.roomInstanceId ?? this.routedInstance } : {}),
+                    ? {
+                          expectedInstance:
+                              this.meta?.roomInstanceId ?? this.routedInstance,
+                      }
+                    : {}),
             });
             return this;
         }
         if (
-            ["room:join", "room:leave", "game:start", "word:success"].includes(event)
+            ["room:join", "room:leave", "game:start", "word:success"].includes(
+                event,
+            )
         ) {
             // A correct answer can be completed exactly as the transport
             // closes. Retain its stable ID, game, turn and bomb until the
             // next authenticated snapshot; the authority will validate it.
-            if (!this.meta || this.pending.size ||
-                (!this.connected && event !== "word:success")) return this;
+            if (
+                !this.meta ||
+                this.pending.size ||
+                (!this.connected && event !== "word:success")
+            )
+                return this;
             const command = {
                 originRevision: this.meta.revision,
                 id: crypto.randomUUID(),
@@ -228,9 +280,14 @@ export class RoutedSocket {
     }
     private sendLeaveIfAuthenticated() {
         const socket = this.transport;
-        if (!this.leaveRequested || !this.leaveRequestId || !socket ||
+        if (
+            !this.leaveRequested ||
+            !this.leaveRequestId ||
+            !socket ||
             this.authenticatedTransport !== socket ||
-            this.leaveSentTo === socket) return;
+            this.leaveSentTo === socket
+        )
+            return;
         this.leaveSentTo = socket;
         socket.emit("room:leave", { requestId: this.leaveRequestId });
     }
@@ -249,6 +306,12 @@ export class RoutedSocket {
     async connect() {
         this.stopped = false;
         const attempt = ++this.attempt;
+        connectionLog("CONNECTION", "Resolving authoritative server", {
+            attempt,
+            recoveryId: this.recoveryDiagnostics?.recoveryId,
+            previousOwner: this.currentOwner,
+            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+        });
         try {
             this.token ??= await this.getToken();
             this.sessionToken ??= await this.getSession?.();
@@ -260,8 +323,7 @@ export class RoutedSocket {
                 ]),
             ];
             let route:
-                | { ownership: Ownership | null; servers: Server[] }
-                | undefined;
+                { ownership: Ownership | null; servers: Server[] } | undefined;
             const failure = this.failure;
             let terminalReport: RecoveryFailure | undefined;
             if (failure && this.sessionToken && this.roomId) {
@@ -272,7 +334,15 @@ export class RoutedSocket {
                     .sort((a, b) => a.depth - b.depth)
                     .filter((server) => server.depth > ownerDepth)) {
                     const reportStartedAt = performance.now();
-                    if (this.recoveryDiagnostics) this.recoveryDiagnostics.reportCalls++;
+                    if (this.recoveryDiagnostics)
+                        this.recoveryDiagnostics.reportCalls++;
+                    connectionLog("FALLBACK", "Requesting ownership verification", {
+                        server: server.id,
+                        previousOwner: failure.owner,
+                        revision: failure.revision,
+                        attempt,
+                        recoveryId: this.recoveryDiagnostics?.recoveryId,
+                    });
                     try {
                         const response = await fetch(
                             `${server.id}/cluster/report`,
@@ -291,30 +361,76 @@ export class RoutedSocket {
                                 signal: AbortSignal.timeout(6000),
                             },
                         );
-                        this.recordServerTiming(response.headers.get("Server-Timing"));
+                        this.recordServerTiming(
+                            response.headers.get("Server-Timing"),
+                        );
                         if (response.status === 409) {
                             const problem = await response.json();
-                            if (problem.retryable === false && typeof problem.code === "string")
+                            connectionError("FALLBACK", "Ownership verification rejected", {
+                                server: server.id,
+                                previousOwner: failure.owner,
+                                httpStatus: response.status,
+                                durationMs: Math.round(performance.now() - reportStartedAt),
+                                attempt,
+                                ...connectionErrorDetails(problem),
+                            });
+                            if (
+                                problem.retryable === false &&
+                                typeof problem.code === "string"
+                            )
                                 terminalReport = problem;
+                        } else if (!response.ok) {
+                            const diagnostic = response.headers.get("content-type")?.includes("application/json")
+                                ? await response.json().catch(() => null) : null;
+                            connectionError("FALLBACK", "Ownership verification unavailable", {
+                                server: server.id,
+                                httpStatus: response.status,
+                                durationMs: Math.round(performance.now() - reportStartedAt),
+                                attempt,
+                                ...connectionErrorDetails(diagnostic),
+                            });
                         }
                         if (response.ok) {
                             const value = await response.json();
-                            if (this.meta && !acceptsRoomRoute(this.meta, value.ownership))
+                            if (
+                                this.meta &&
+                                !acceptsRoomRoute(this.meta, value.ownership)
+                            )
                                 throw new Error("Stale routing response");
                             route = value;
+                            connectionLog("FALLBACK",
+                                value.ownership?.owner === failure.owner
+                                    ? "Current owner remains authoritative"
+                                    : "Ownership route changed", {
+                                server: server.id,
+                                previousOwner: failure.owner,
+                                owner: value.ownership?.owner,
+                                epoch: value.ownership?.epoch,
+                                revision: value.ownership?.revision,
+                                lifecycle: value.ownership?.lifecycle,
+                                httpStatus: response.status,
+                                durationMs: Math.round(performance.now() - reportStartedAt),
+                            });
                             this.servers = route!.servers;
                             this.failure = undefined;
                             break;
                         }
-                    } catch {
-                        /* An uncertain confirmation pauses; try another lower voter. */
+                    } catch (error) {
+                        connectionError("FALLBACK", "Ownership verification request failed", {
+                            server: server.id,
+                            previousOwner: failure.owner,
+                            attempt,
+                            durationMs: Math.round(performance.now() - reportStartedAt),
+                            ...connectionErrorDetails(error),
+                        });
                     } finally {
                         if (this.recoveryDiagnostics)
                             this.recoveryDiagnostics.reportMs +=
                                 performance.now() - reportStartedAt;
                     }
                 }
-                if (!route && terminalReport) throw new RecoveryStopped(terminalReport);
+                if (!route && terminalReport)
+                    throw new RecoveryStopped(terminalReport);
             }
             if (!route && known.length) {
                 // Routing reads are non-mutating: try the known endpoints in
@@ -329,8 +445,10 @@ export class RoutedSocket {
                             const endpoint = new URL(seed);
                             endpoint.pathname = "/cluster/route";
                             const timeout = setTimeout(
-                                () => controllers[index].abort(), 6000,
+                                () => controllers[index].abort(),
+                                6000,
                             );
+                            const lookupStartedAt = performance.now();
                             try {
                                 // Each seed initiates its own parallel HTTP request.
                                 // The batch's elapsed time is measured separately.
@@ -339,37 +457,101 @@ export class RoutedSocket {
                                 const response = await fetch(endpoint, {
                                     method: "POST",
                                     redirect: "manual",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ jwtToken: this.token,
-                                        expectedInstance: this.meta?.roomInstanceId ?? this.routedInstance }),
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                        jwtToken: this.token,
+                                        expectedInstance:
+                                            this.meta?.roomInstanceId ??
+                                            this.routedInstance,
+                                    }),
                                     signal: controllers[index].signal,
                                 });
                                 if (response.status === 409) {
                                     const problem = await response.json();
-                                    if (problem.retryable === false && typeof problem.code === "string")
+                                    connectionError("CONNECTION", "Route lookup rejected", {
+                                        server: seed,
+                                        attempt,
+                                        httpStatus: response.status,
+                                        durationMs: Math.round(performance.now() - lookupStartedAt),
+                                        ...connectionErrorDetails(problem),
+                                    });
+                                    if (
+                                        problem.retryable === false &&
+                                        typeof problem.code === "string"
+                                    )
                                         terminalReport = problem;
+                                } else if (!response.ok) {
+                                    const diagnostic = response.headers.get("content-type")?.includes("application/json")
+                                        ? await response.json().catch(() => null) : null;
+                                    connectionError("CONNECTION", "Route endpoint unavailable", {
+                                        server: seed,
+                                        attempt,
+                                        httpStatus: response.status,
+                                        durationMs: Math.round(performance.now() - lookupStartedAt),
+                                        ...connectionErrorDetails(diagnostic),
+                                    });
                                 }
                                 if (!response.ok)
-                                    throw new Error("Routing endpoint unavailable");
+                                    throw new Error(
+                                        "Routing endpoint unavailable",
+                                    );
                                 const value = await response.json();
-                                if (this.meta && !acceptsRoomRoute(this.meta, value.ownership))
+                                if (
+                                    this.meta &&
+                                    !acceptsRoomRoute(
+                                        this.meta,
+                                        value.ownership,
+                                    )
+                                )
                                     throw new Error("Stale routing response");
-                                if (!Array.isArray(value.servers) ||
+                                if (
+                                    !Array.isArray(value.servers) ||
                                     !value.servers.every((server: Server) => {
                                         try {
                                             const url = new URL(server.id);
-                                            return url.origin === server.id &&
+                                            return (
+                                                url.origin === server.id &&
                                                 (url.protocol === "https:" ||
-                                                    ["localhost", "127.0.0.1"].includes(url.hostname));
+                                                    [
+                                                        "localhost",
+                                                        "127.0.0.1",
+                                                    ].includes(url.hostname))
+                                            );
                                         } catch {
                                             return false;
                                         }
-                                    }))
+                                    })
+                                )
                                     throw new Error("Invalid routing response");
+                                connectionLog("CONNECTION", "Authoritative route resolved", {
+                                    server: seed,
+                                    owner: value.ownership?.owner,
+                                    epoch: value.ownership?.epoch,
+                                    revision: value.ownership?.revision,
+                                    lifecycle: value.ownership?.lifecycle,
+                                    httpStatus: response.status,
+                                    durationMs: Math.round(performance.now() - lookupStartedAt),
+                                    attempt,
+                                });
                                 return value as {
                                     ownership: Ownership | null;
                                     servers: Server[];
                                 };
+                            } catch (error) {
+                                // Promise.any cancels losing probes on success; do
+                                // not report those intentional aborts as outages.
+                                if (!controllers[index].signal.aborted &&
+                                    attempt === this.attempt && !this.stopped &&
+                                    !(error instanceof Error && error.message === "Routing endpoint unavailable"))
+                                    connectionError("CONNECTION", "Route lookup failed", {
+                                        server: seed,
+                                        attempt,
+                                        durationMs: Math.round(performance.now() - lookupStartedAt),
+                                        ...connectionErrorDetails(error),
+                                    });
+                                throw error;
                             } finally {
                                 clearTimeout(timeout);
                             }
@@ -386,7 +568,8 @@ export class RoutedSocket {
                 }
             }
             if (attempt !== this.attempt || this.stopped) return this;
-            if (!route && terminalReport) throw new RecoveryStopped(terminalReport);
+            if (!route && terminalReport)
+                throw new RecoveryStopped(terminalReport);
             if (!route) throw new Error("Authoritative routing unavailable");
             const own = route.ownership;
             const ordered = [...route.servers].sort(
@@ -421,7 +604,8 @@ export class RoutedSocket {
                         ? `${server.id}/ws`
                         : server.id;
                 const handshakeStartedAt = performance.now();
-                if (this.recoveryDiagnostics) this.recoveryDiagnostics.socketCalls++;
+                if (this.recoveryDiagnostics)
+                    this.recoveryDiagnostics.socketCalls++;
                 const socket = this.open(url);
                 const ready = await new Promise<boolean>((resolve) => {
                     const timer = setTimeout(() => resolve(false), 1200);
@@ -438,6 +622,14 @@ export class RoutedSocket {
                     this.recoveryDiagnostics.socketHandshakeMs +=
                         performance.now() - handshakeStartedAt;
                 if (!ready || attempt !== this.attempt || this.stopped) {
+                    if (!ready && attempt === this.attempt && !this.stopped)
+                        connectionError("CONNECTION", "Socket handshake failed", {
+                            server: server.id,
+                            tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                            transport: server.transport,
+                            attempt,
+                            durationMs: Math.round(performance.now() - handshakeStartedAt),
+                        });
                     socket.disconnect();
                     if (own && server.id === own.owner)
                         this.failure = {
@@ -446,10 +638,30 @@ export class RoutedSocket {
                         };
                     continue;
                 }
+                const previousOwner = this.currentOwner;
+                if (previousOwner && previousOwner !== server.id)
+                    connectionLog("FALLBACK", `Switching to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`, {
+                        previousOwner,
+                        server: server.id,
+                        tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                        attempt,
+                        recoveryId: this.recoveryDiagnostics?.recoveryId,
+                    });
                 this.transport?.disconnect();
                 this.transport = socket;
                 this.authenticatedTransport = undefined;
                 this.currentOwner = server.id;
+                // Preserve the endpoint independently of the stable owner ID
+                // supplied by subsequent room snapshots.
+                this.currentOwnerUrl = url;
+                connectionLog("CONNECTED", `Connected to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`, {
+                    server: server.id,
+                    tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                    serverDepth: server.depth,
+                    transport: server.transport,
+                    attempt,
+                    durationMs: Math.round(performance.now() - handshakeStartedAt),
+                });
                 let authenticating = true;
                 const authStartedAt = performance.now();
                 let authenticatedAt: number | undefined;
@@ -468,8 +680,11 @@ export class RoutedSocket {
                     // In distributed Node, game.connect() can broadcast a room
                     // snapshot before the server emits auth:session. Both are
                     // needed for a valid, measured recovery.
-                    if (this.recoveryStartedAt === undefined ||
-                        authenticatedAt === undefined) return;
+                    if (
+                        this.recoveryStartedAt === undefined ||
+                        authenticatedAt === undefined
+                    )
+                        return;
                     const metrics = this.recoveryDiagnostics;
                     if (metrics) {
                         metrics.toDepth = server.depth;
@@ -481,12 +696,24 @@ export class RoutedSocket {
                             // Stop the migration phase at the playable
                             // snapshot, not at a later auth:session event.
                             // Both signals still gate overall recovery.
-                            metrics.migrationWaitMs += Math.max(0,
+                            metrics.migrationWaitMs += Math.max(
+                                0,
                                 (snapshotBeforeAuth
-                                    ? readySnapshotBeforeAuthAt ?? finishedAt
+                                    ? (readySnapshotBeforeAuthAt ?? finishedAt)
                                     : finishedAt) -
-                                this.firstMigrationSnapshotAt);
+                                    this.firstMigrationSnapshotAt,
+                            );
                     }
+                    connectionLog("FALLBACK", "Connection recovered", {
+                        server: server.id,
+                        owner: this.currentOwner,
+                        recoveryId: metrics?.recoveryId,
+                        fromDepth: metrics?.fromDepth,
+                        toDepth: server.depth,
+                        snapshotRecoveryMs: Math.round(finishedAt - this.recoveryStartedAt),
+                        routeCalls: metrics?.routeCalls,
+                        reportCalls: metrics?.reportCalls,
+                    });
                     this.dispatch("cluster:recovered", {
                         snapshotRecoveryMs: Math.round(
                             finishedAt - this.recoveryStartedAt,
@@ -498,16 +725,24 @@ export class RoutedSocket {
                     this.firstMigrationSnapshotAt = undefined;
                 };
                 socket.on("disconnect", () => {
-                    if (active()) this.recover();
+                    if (active()) this.recover("transport_disconnected");
                 });
                 socket.on("error", (error) => {
                     if (active()) {
-                        const hasLowerTier = this.servers.some((peer) => peer.depth > server.depth);
+                        connectionError("CONNECTION", "Server returned an error", {
+                            server: server.id,
+                            attempt,
+                            phase: authenticating ? "authentication" : "connected",
+                            ...connectionErrorDetails(error),
+                        });
+                        const hasLowerTier = this.servers.some(
+                            (peer) => peer.depth > server.depth,
+                        );
                         if (error?.retryable === false && !hasLowerTier)
                             this.stopRecovery(error);
                         else {
                             this.dispatch("error", error);
-                            this.recover();
+                            this.recover("server_error");
                         }
                     }
                 });
@@ -521,6 +756,12 @@ export class RoutedSocket {
                                 this.lastReply - authStartedAt;
                         this.playerId = value.id;
                         this.authenticatedTransport = socket;
+                        connectionLog("AUTH", "Authentication succeeded", {
+                            server: server.id,
+                            tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                            attempt,
+                            durationMs: Math.round(this.lastReply - authStartedAt),
+                        });
                         this.dispatch("auth:session", value);
                         this.sendLeaveIfAuthenticated();
                         if (readySnapshotBeforeAuthAt !== undefined)
@@ -528,11 +769,15 @@ export class RoutedSocket {
                     }
                 });
                 socket.on("room:leave:ack", (message: unknown) => {
-                    if (!active() || !this.leaveRequested ||
+                    if (
+                        !active() ||
+                        !this.leaveRequested ||
                         this.leaveSentTo !== socket ||
-                        !message || typeof message !== "object" ||
+                        !message ||
+                        typeof message !== "object" ||
                         !("requestId" in message) ||
-                        message.requestId !== this.leaveRequestId)
+                        message.requestId !== this.leaveRequestId
+                    )
                         return;
                     // The owner has committed the explicit leave. Never
                     // retransmit it after the next successful authentication.
@@ -551,14 +796,12 @@ export class RoutedSocket {
                     if (active()) this.lastReply = performance.now();
                 });
                 socket.on("cluster:paused", () => {
-                    if (active()) this.recover();
+                    if (active()) this.recover("authority_paused");
                 });
                 socket.on("room:broadcast", (room) => {
                     if (!active()) return;
                     const previous = this.meta;
-                    if (
-                        previous && !acceptsRoomSnapshot(previous, room)
-                    )
+                    if (previous && !acceptsRoomSnapshot(previous, room))
                         return;
                     if (!room.migrating) this.recoveryFailures = 0;
                     this.lastReply = performance.now();
@@ -589,18 +832,27 @@ export class RoutedSocket {
                         this.rejoinOnSnapshot = false;
                     }
                     this.dispatch("room:broadcast", room);
-                    if (this.recoveryStartedAt !== undefined && room.migrating &&
-                        this.firstMigrationSnapshotAt === undefined)
+                    if (
+                        this.recoveryStartedAt !== undefined &&
+                        room.migrating &&
+                        this.firstMigrationSnapshotAt === undefined
+                    )
                         this.firstMigrationSnapshotAt = performance.now();
-                    if (this.recoveryStartedAt !== undefined &&
+                    if (
+                        this.recoveryStartedAt !== undefined &&
                         !room.migrating &&
-                        (!this.joinedRoom || inRoom)) {
+                        (!this.joinedRoom || inRoom)
+                    ) {
                         if (authenticatedAt === undefined)
                             readySnapshotBeforeAuthAt = performance.now();
                         else finishRecovery(performance.now(), false);
                     }
-                    if (this.rejoinOnSnapshot && !this.leaveRequested &&
-                        !inRoom && !room.isStart) {
+                    if (
+                        this.rejoinOnSnapshot &&
+                        !this.leaveRequested &&
+                        !inRoom &&
+                        !room.isStart
+                    ) {
                         // The new owner has authenticated us but the old
                         // Socket.IO disconnect already removed our seat.
                         // Drop commands from the previous connection before
@@ -654,13 +906,13 @@ export class RoutedSocket {
                     }
                     if (authenticating) {
                         if (performance.now() - this.lastReply > 10000)
-                            this.recover();
+                            this.recover("authentication_timeout");
                         return;
                     }
                     // Background throttling only requests a fresh authority check.
                     // A server-side suffix confirmation is required to change ownership.
                     if (performance.now() - this.lastReply > 1250)
-                        this.recover();
+                        this.recover("heartbeat_timeout");
                     else {
                         socket.emit("cluster:ping");
                         for (const command of this.pending.values())
@@ -674,13 +926,24 @@ export class RoutedSocket {
             throw new Error("No reachable room owner");
         } catch (error) {
             if (attempt === this.attempt && !this.stopped) {
-                if (error instanceof RecoveryStopped) this.stopRecovery(error.failure);
-                else this.recover();
+                connectionError("CONNECTION", "Connection attempt failed", {
+                    attempt,
+                    previousOwner: this.currentOwner,
+                    ...connectionErrorDetails(error),
+                });
+                if (error instanceof RecoveryStopped)
+                    this.stopRecovery(error.failure);
+                else this.recover("connection_attempt_failed");
             }
         }
         return this;
     }
     private stopRecovery(problem: RecoveryFailure) {
+        connectionError("FALLBACK", "Automatic recovery stopped", {
+            previousOwner: this.currentOwner,
+            recoveryId: this.recoveryDiagnostics?.recoveryId,
+            ...connectionErrorDetails(problem),
+        });
         this.stopped = true;
         this.attempt++;
         this.connected = false;
@@ -693,15 +956,21 @@ export class RoutedSocket {
         this.dispatch("cluster:recovery-failed", problem);
         this.dispatch("error", problem);
     }
-    private recover() {
+    private recover(reason = "connection_lost") {
         if (this.stopped || this.retry) return;
         if (this.recoveryFailures >= 60) {
-            this.stopRecovery({ code: "RECOVERY_TIMEOUT", retryable: false,
-                message: "接続先の復旧を確認できないため自動再試行を停止しました。サーバーの状態を確認してから再接続してください。" });
+            this.stopRecovery({
+                code: "RECOVERY_TIMEOUT",
+                retryable: false,
+                message:
+                    "接続先の復旧を確認できないため自動再試行を停止しました。サーバーの状態を確認してから再接続してください。",
+            });
             return;
         }
-        if ((this.meta || this.joinedRoom) &&
-            this.recoveryStartedAt === undefined) {
+        if (
+            (this.meta || this.joinedRoom) &&
+            this.recoveryStartedAt === undefined
+        ) {
             this.recoveryStartedAt = performance.now();
             this.recoveryDiagnostics = {
                 recoveryId: crypto.randomUUID(),
@@ -709,9 +978,9 @@ export class RoutedSocket {
                 detectionHeartbeatAgeMs: Math.round(
                     Math.max(0, performance.now() - this.lastReply),
                 ),
-                fromDepth: this.servers.find(
-                    (item) => item.id === this.currentOwner,
-                )?.depth ?? -1,
+                fromDepth:
+                    this.servers.find((item) => item.id === this.currentOwner)
+                        ?.depth ?? -1,
                 retryWaitMs: 0,
                 routeMs: 0,
                 routeCalls: 0,
@@ -739,6 +1008,15 @@ export class RoutedSocket {
                     this.recoveryDiagnostics.detectionHeartbeatAgeMs,
             });
         }
+        connectionLog("FALLBACK", "Starting connection recovery", {
+            reason,
+            previousOwner: this.currentOwner,
+            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+            socketConnected: this.transport?.connected ?? false,
+            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+            retryCount: this.recoveryFailures,
+            recoveryId: this.recoveryDiagnostics?.recoveryId,
+        });
         if (
             this.currentOwner &&
             (this.meta || this.routedRevision !== undefined)
@@ -763,6 +1041,13 @@ export class RoutedSocket {
         // sleep adds latency after every detected failure. Repeated failures
         // still use exponential backoff to avoid hammering offline hosts.
         const delay = recoveryRetryDelayMs(this.recoveryFailures++);
+        connectionLog("FALLBACK", "Scheduling connection retry", {
+            reason,
+            previousOwner: this.currentOwner,
+            retryCount: this.recoveryFailures,
+            retryDelayMs: delay,
+            recoveryId: this.recoveryDiagnostics?.recoveryId,
+        });
         const waitingSince = performance.now();
         this.retry = setTimeout(() => {
             if (this.recoveryDiagnostics)
@@ -779,18 +1064,39 @@ export class RoutedSocket {
         this.emit("room:leave");
         const instance = this.meta?.roomInstanceId;
         const connectionId = this.transport?.id ?? this.id;
-        if (this.currentOwner && this.token && this.sessionToken && instance && connectionId) {
-            const endpoint = new URL("/cluster/leave", this.currentOwner);
-            const body = JSON.stringify({ jwtToken: this.token, sessionToken: this.sessionToken,
-                expectedInstance: instance, connectionId });
+        if (
+            this.currentOwnerUrl &&
+            this.token &&
+            this.sessionToken &&
+            instance &&
+            connectionId
+        ) {
+            const endpoint = new URL("/cluster/leave", this.currentOwnerUrl);
+            const body = JSON.stringify({
+                jwtToken: this.token,
+                sessionToken: this.sessionToken,
+                expectedInstance: instance,
+                connectionId,
+            });
             // A normal WebSocket emit can be lost as the browser destroys the
             // page. Beacon survives teardown; text/plain avoids a CORS preflight.
             let queued = false;
-            try { queued = typeof navigator !== "undefined" &&
-                typeof navigator.sendBeacon === "function" && navigator.sendBeacon(endpoint, body); }
-            catch { /* Keepalive is the fallback when beacon cannot be queued. */ }
-            if (!queued) void fetch(endpoint, { method: "POST", body, keepalive: true,
-                headers: { "Content-Type": "text/plain;charset=UTF-8" }, redirect: "error" }).catch(() => {});
+            try {
+                queued =
+                    typeof navigator !== "undefined" &&
+                    typeof navigator.sendBeacon === "function" &&
+                    navigator.sendBeacon(endpoint, body);
+            } catch {
+                /* Keepalive is the fallback when beacon cannot be queued. */
+            }
+            if (!queued)
+                void fetch(endpoint, {
+                    method: "POST",
+                    body,
+                    keepalive: true,
+                    headers: { "Content-Type": "text/plain;charset=UTF-8" },
+                    redirect: "error",
+                }).catch(() => {});
         }
         return this;
     }
@@ -798,6 +1104,7 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.removeEventListener("pagehide", this.pageHidden);
             window.removeEventListener("beforeunload", this.pageHidden);
+            document.removeEventListener("visibilitychange", this.onVisibilityChange);
         }
         this.stopped = true;
         this.joinedRoom = false;

@@ -3,13 +3,22 @@ import assert from "node:assert/strict";
 import { parseWireMessage, encodeWireMessage } from "../src/lib/wire";
 
 test("native websocket frame preserves event and payload", () => {
-    const packet = parseWireMessage(encodeWireMessage("item:recommend", { itemId: "a" }));
-    assert.deepEqual(packet, { event: "item:recommend", data: { itemId: "a" } });
+    const packet = parseWireMessage(
+        encodeWireMessage("item:recommend", { itemId: "a" }),
+    );
+    assert.deepEqual(packet, {
+        event: "item:recommend",
+        data: { itemId: "a" },
+    });
 });
 
 test("native websocket accepts hint failures as objects", () => {
-    assert.deepEqual(parseWireMessage('{"event":"currentInput","data":{"input":"x","failed":true}}'),
-        { event: "currentInput", data: { input: "x", failed: true } });
+    assert.deepEqual(
+        parseWireMessage(
+            '{"event":"currentInput","data":{"input":"x","failed":true}}',
+        ),
+        { event: "currentInput", data: { input: "x", failed: true } },
+    );
 });
 
 test("malformed, binary and oversized frames are discarded", () => {

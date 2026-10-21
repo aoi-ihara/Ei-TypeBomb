@@ -1,4 +1,8 @@
-import { ROOM_SELECT_COLUMNS, roomFromRow, type RoomRow } from "../../../shared/room";
+import {
+    ROOM_SELECT_COLUMNS,
+    roomFromRow,
+    type RoomRow,
+} from "../../../shared/room";
 import type { Room } from "../../../shared/types";
 import type { Env } from "../types";
 
@@ -8,8 +12,10 @@ export async function loadRoom(
     jwtToken: string,
     env: Env,
 ): Promise<Room | null> {
-    if (!env.NEXT_PUBLIC_SUPABASE_URL ||
-        !env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    if (
+        !env.NEXT_PUBLIC_SUPABASE_URL ||
+        !env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    ) {
         throw new Error("Supabase environment variables are missing");
     }
     const url = new URL(

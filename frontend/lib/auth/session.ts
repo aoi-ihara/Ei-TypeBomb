@@ -61,16 +61,18 @@ export const getUserDetails = async () => {
  * A temporary Auth outage must never silently turn a signed-in player into
  * a guest and switch their learning history to local-only storage.
  */
-export const getMemoryAuthStatus = async (): Promise<
-    { userId: string | null; error: { message: string } | null }
-> => {
+export const getMemoryAuthStatus = async (): Promise<{
+    userId: string | null;
+    error: { message: string } | null;
+}> => {
     try {
         const supabase = await createClient();
         if (isOAuthEnabled()) {
             const store = await cookies();
             const names = oauthCookieNames();
             const hasCredentials = Boolean(
-                store.get(names.access)?.value || store.get(names.refresh)?.value,
+                store.get(names.access)?.value ||
+                store.get(names.refresh)?.value,
             );
             if (!hasCredentials) return { userId: null, error: null };
 
@@ -85,13 +87,18 @@ export const getMemoryAuthStatus = async (): Promise<
             if (error || !data.user) {
                 return {
                     userId: null,
-                    error: { message: error?.message ?? "Could not verify authenticated user" },
+                    error: {
+                        message:
+                            error?.message ??
+                            "Could not verify authenticated user",
+                    },
                 };
             }
             return { userId: data.user.id, error: null };
         }
 
-        const { data: session, error: sessionError } = await supabase.auth.getSession();
+        const { data: session, error: sessionError } =
+            await supabase.auth.getSession();
         if (sessionError) {
             return { userId: null, error: { message: sessionError.message } };
         }
@@ -101,7 +108,10 @@ export const getMemoryAuthStatus = async (): Promise<
         if (error || !data.user) {
             return {
                 userId: null,
-                error: { message: error?.message ?? "Could not verify authenticated user" },
+                error: {
+                    message:
+                        error?.message ?? "Could not verify authenticated user",
+                },
             };
         }
         return { userId: data.user.id, error: null };

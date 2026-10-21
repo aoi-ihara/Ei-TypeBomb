@@ -14,7 +14,7 @@ export default function Toggle({ checked, onChange, className = "" }: Props) {
                 onClick={() => onChange(!checked)}
             >
                 <div
-                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${checked ? "ml-6" : ""} transition-all duration-(--duration-etb) ease-etb`}
+                    className={`h-6 w-8 rounded-full ${checked ? "bg-white" : "bg-(--color-foreground)"} ${checked ? "ml-6" : ""} transition-all duration-(--duration-etb) ease-etb`}
                 />
             </button>
         </div>

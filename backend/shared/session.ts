@@ -19,8 +19,12 @@ export function disconnectDeadline(
     graceMs = RECONNECT_GRACE_MS,
     pendingDeadline?: number,
 ): number {
-    const participant = room.isStart && room.users.some(player => player.id === playerId);
-    return pendingDeadline ?? now + (participant ? Math.max(graceMs, RECONNECT_GRACE_MS) : graceMs);
+    const participant =
+        room.isStart && room.users.some((player) => player.id === playerId);
+    return (
+        pendingDeadline ??
+        now + (participant ? Math.max(graceMs, RECONNECT_GRACE_MS) : graceMs)
+    );
 }
 
 /** Connected spectators and reconnect reservations also own room lifetime. */

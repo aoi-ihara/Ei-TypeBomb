@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import { parseETBClusterConfig } from "@/lib/room/clusterConfig";
@@ -28,9 +28,14 @@ export default function ServerUrl() {
         getServerSnapshot,
     );
     const [draft, setDraft] = useState(storedConfig);
+    const [previousStoredConfig, setPreviousStoredConfig] =
+        useState(storedConfig);
     const [storageError, setStorageError] = useState("");
 
-    useEffect(() => setDraft(storedConfig), [storedConfig]);
+    if (storedConfig !== previousStoredConfig) {
+        setPreviousStoredConfig(storedConfig);
+        setDraft(storedConfig);
+    }
 
     let error = "";
     let serverCount = 0;
@@ -38,9 +43,10 @@ export default function ServerUrl() {
         try {
             serverCount = parseETBClusterConfig(draft).length;
         } catch (cause) {
-            error = cause instanceof Error
-                ? cause.message.replaceAll("ETB_CLUSTER_CONFIG", "JSON")
-                : "JSONの形式が正しくありません。";
+            error =
+                cause instanceof Error
+                    ? cause.message.replaceAll("ETB_CLUSTER_CONFIG", "JSON")
+                    : "JSONの形式が正しくありません。";
         }
     }
 
@@ -57,7 +63,8 @@ export default function ServerUrl() {
             }
         }
         try {
-            if (value.trim()) window.localStorage.setItem(SERVER_CONFIG_STORAGE_KEY, value);
+            if (value.trim())
+                window.localStorage.setItem(SERVER_CONFIG_STORAGE_KEY, value);
             else window.localStorage.removeItem(SERVER_CONFIG_STORAGE_KEY);
             window.localStorage.removeItem("server-url");
             window.dispatchEvent(new Event(SERVER_CONFIG_CHANGE_EVENT));
@@ -83,10 +90,13 @@ export default function ServerUrl() {
                     {storageError ? (
                         <p className="text-red-500">{storageError}</p>
                     ) : error ? (
-                        <p className="text-red-500">{error} 前回の有効な設定が引き続き使用されます。</p>
+                        <p className="text-red-500">
+                            {error} 前回の有効な設定が引き続き使用されます。
+                        </p>
                     ) : serverCount ? (
                         <p className="text-green-500">
-                            {serverCount}台のサーバー設定を適用しました。次の接続から使用されます。
+                            {serverCount}
+                            台のサーバー設定を適用しました。次の接続から使用されます。
                         </p>
                     ) : (
                         <p className="opacity-60">

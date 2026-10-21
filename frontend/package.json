@@ -9,7 +9,7 @@
         "lint": "eslint",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "postinstall": "node scripts/fix-word-drag.js",
+        "postinstall": "node scripts/fix-word-drag.mjs",
         "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs",
         "test:kana": "node --test test/romaji-input.test.mjs",
         "test:import": "node --test test/import-words.test.mjs",

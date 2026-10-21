@@ -85,23 +85,33 @@ export function parseClientEvent(
                     "認証情報が不正です。ルームに入り直してください。",
                 );
             }
-            if ("sessionToken" in data &&
+            if (
+                "sessionToken" in data &&
                 (typeof data.sessionToken !== "string" ||
-                    !data.sessionToken.length || data.sessionToken.length > 4096)) {
+                    !data.sessionToken.length ||
+                    data.sessionToken.length > 4096)
+            ) {
                 throw new ClientError("セッション情報が不正です。");
             }
-            if ("expectedInstance" in data &&
-                (typeof data.expectedInstance !== "string" || data.expectedInstance.length > 100))
+            if (
+                "expectedInstance" in data &&
+                (typeof data.expectedInstance !== "string" ||
+                    data.expectedInstance.length > 100)
+            )
                 throw new ClientError("ルーム識別子が不正です。");
             return {
                 event,
                 data: {
-                    ...("expectedInstance" in data ? { expectedInstance: data.expectedInstance as string } : {}),
+                    ...("expectedInstance" in data
+                        ? { expectedInstance: data.expectedInstance as string }
+                        : {}),
                     jwtToken: data.jwtToken,
                     displayName: validateDisplayName(
                         "displayName" in data ? data.displayName : undefined,
                     ),
-                    ...("sessionToken" in data ? { sessionToken: data.sessionToken as string } : {}),
+                    ...("sessionToken" in data
+                        ? { sessionToken: data.sessionToken as string }
+                        : {}),
                 },
             };
         default:
