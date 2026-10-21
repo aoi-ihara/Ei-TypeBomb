@@ -37,6 +37,7 @@ export function topologyStateDirectory(root: string, declaration: string): strin
  * released after SIGKILL; boot and votes must survive ordinary restarts. */
 export class NodePeerStorage implements PeerStorage {
     private readonly db: DatabaseSync;
+    private readonly writtenRooms: Set<string>;
     readonly boot: string;
     constructor(directory: string) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -52,11 +53,17 @@ export class NodePeerStorage implements PeerStorage {
             this.db.exec("BEGIN IMMEDIATE");
             // Persist only the voter incarnation, not a server URL, parent,
             // roster or a previously configured topology.
-            const previous = this.get<{ boot?: unknown }>("identity");
+            const previous = this.get<{ boot?: unknown; rooms?: unknown }>("identity");
             if (previous && (typeof previous.boot !== "string" || !previous.boot.length))
                 throw new Error("Invalid persisted voter incarnation");
+            const rooms = previous?.rooms ?? [];
+            if (!Array.isArray(rooms) || !rooms.every(
+                (room: unknown) => typeof room === "string" && room.length > 0,
+            ) || new Set(rooms).size !== rooms.length)
+                throw new Error("Invalid persisted voter room index");
             this.boot = (previous?.boot as string | undefined) ?? randomUUID();
-            this.put("identity", { boot: this.boot });
+            this.writtenRooms = new Set(rooms as string[]);
+            this.put("identity", { boot: this.boot, rooms: [...this.writtenRooms] });
             this.db.exec("COMMIT");
         } catch (error) {
             this.db.close();
@@ -71,8 +78,33 @@ export class NodePeerStorage implements PeerStorage {
         this.db.prepare("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)")
             .run(key, JSON.stringify(value));
     }
-    async load(room: string) { return this.get<VoteRecord>(`room:${room}`); }
-    async save(room: string, value: VoteRecord) { this.put(`room:${room}`, value); }
+    async load(room: string) {
+        const record = this.get<VoteRecord>(`room:${room}`);
+        if (!record && this.writtenRooms.has(room))
+            throw new Error("Voter lost state; cannot vote");
+        return record;
+    }
+    async save(room: string, value: VoteRecord) {
+        if (this.writtenRooms.has(room)) {
+            this.put(`room:${room}`, value);
+            return;
+        }
+        // Atomically record the room's first vote and its durable participation
+        // index. Losing room records while retaining the boot ID must NOT
+        // silently let the old voter reacquire its ballot by replication.
+        this.db.exec("BEGIN IMMEDIATE");
+        try {
+            this.put(`room:${room}`, value);
+            this.put("identity", {
+                boot: this.boot, rooms: [...this.writtenRooms, room],
+            });
+            this.db.exec("COMMIT");
+            this.writtenRooms.add(room);
+        } catch (error) {
+            this.db.exec("ROLLBACK");
+            throw error;
+        }
+    }
     async registry(members: import("../../../shared/distributed/identity").Member[]) {
         this.put("registry", members);
     }
