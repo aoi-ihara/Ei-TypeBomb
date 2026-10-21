@@ -355,10 +355,11 @@ export default function Clinet({
                 return;
             }
 
-            connectionLog("AUTH", "Sending authentication request", {
-                server: candidate.url,
-                tier: candidate.tier,
-            });
+            if (!distributed)
+                connectionLog("AUTH", "Sending authentication request", {
+                    server: candidate.url,
+                    tier: candidate.tier,
+                });
             socket.emit("auth:response", {
                 jwtToken: authToken,
                 sessionToken,
