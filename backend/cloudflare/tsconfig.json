@@ -7,7 +7,7 @@
         "types": ["@cloudflare/workers-types"],
         "strict": true,
         "skipLibCheck": true,
-        "noEmit": true
+        "noEmit": true,
     },
-    "include": ["src/**/*.ts", "../shared/**/*.ts"]
+    "include": ["src/**/*.ts", "../shared/**/*.ts"],
 }

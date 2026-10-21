@@ -16,7 +16,10 @@ const originOf = (url: string | undefined | null): string | null => {
     }
 };
 
-const trustedOrigins = (selectedPrimary?: string, clusterServers: string[] = []): string[] =>
+const trustedOrigins = (
+    selectedPrimary?: string,
+    clusterServers: string[] = [],
+): string[] =>
     [
         process.env.NEXT_PUBLIC_PRIMARY_SERVER_URL,
         process.env.NEXT_PUBLIC_SECONDARY_SERVER_URL,
@@ -51,7 +54,8 @@ export const getStoredServerConfig = (): string => {
     if (
         process.env.NEXT_PUBLIC_DEVELOPER_MODE !== "true" ||
         typeof window === "undefined"
-    ) return "";
+    )
+        return "";
     try {
         return window.localStorage.getItem(SERVER_CONFIG_STORAGE_KEY) ?? "";
     } catch {

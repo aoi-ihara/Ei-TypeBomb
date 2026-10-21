@@ -32,8 +32,6 @@ export function orientImportPair(left, right) {
     const rightCount = countTypingCharacters(right);
     const leftIsDominant =
         leftCount > rightCount && leftCount >= 2 * rightCount;
-    const rightIsDominant =
-        rightCount > leftCount && rightCount >= 2 * leftCount;
     const answer = leftIsDominant ? left : right;
     const question = leftIsDominant ? right : left;
     // Right remains the answer for tied or similar lengths.

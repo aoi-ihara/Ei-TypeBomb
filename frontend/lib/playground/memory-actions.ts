@@ -69,17 +69,18 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
     if (!userId) return { message: "Authentication required" };
 
     if (
-        memory.some((item) =>
-            item.userId !== userId ||
-            !/^[a-f0-9-]{36}$/i.test(item.roomId) ||
-            !/^[a-f0-9-]{36}$/i.test(item.itemId) ||
-            !Number.isFinite(item.stability) ||
-            item.stability <= 0 ||
-            !Number.isFinite(item.difficulty) ||
-            item.difficulty < 1 ||
-            item.difficulty > 10 ||
-            !Number.isSafeInteger(item.reviewCount) ||
-            item.reviewCount < 0
+        memory.some(
+            (item) =>
+                item.userId !== userId ||
+                !/^[a-f0-9-]{36}$/i.test(item.roomId) ||
+                !/^[a-f0-9-]{36}$/i.test(item.itemId) ||
+                !Number.isFinite(item.stability) ||
+                item.stability <= 0 ||
+                !Number.isFinite(item.difficulty) ||
+                item.difficulty < 1 ||
+                item.difficulty > 10 ||
+                !Number.isSafeInteger(item.reviewCount) ||
+                item.reviewCount < 0,
         )
     ) {
         return { message: "Invalid memory update" };

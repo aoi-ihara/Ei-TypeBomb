@@ -27,7 +27,11 @@ export const createClient = async (
                         ? { Authorization: "Bearer " + accessToken }
                         : {},
                     fetch: (url, options) =>
-                        fetch(url, { ...options, ...cacheOptions, cache: "no-store" }),
+                        fetch(url, {
+                            ...options,
+                            ...cacheOptions,
+                            cache: "no-store",
+                        }),
                 },
             },
         );

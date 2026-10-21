@@ -10,10 +10,13 @@ export default async function SettingsPage() {
     const sounDeffects = cookieStore.get("sound-effects")?.value !== "false";
 
     const clusterServers = process.env.ETB_CLUSTER_CONFIG
-        ? parseETBClusterConfig(process.env.ETB_CLUSTER_CONFIG).map(s => s.endpoint)
+        ? parseETBClusterConfig(process.env.ETB_CLUSTER_CONFIG).map(
+              (s) => s.endpoint,
+          )
         : [];
     return (
-        <Client clusterServers={clusterServers}
+        <Client
+            clusterServers={clusterServers}
             initialSounDeffects={sounDeffects}
             initialBackgroundMusic={backgroundMusic}
         />

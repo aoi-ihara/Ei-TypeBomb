@@ -10,7 +10,8 @@ export type ClusterSocket = {
 export function bufferPeerSocket(socket: ClusterSocket): ClusterSocket {
     const listeners = new Map<string, ((event: any) => void)[]>();
     const waiting = new Map<string, any[]>();
-    let bytes = 0, frames = 0;
+    let bytes = 0,
+        frames = 0;
     for (const type of ["message", "close", "error"]) {
         socket.addEventListener(type, (event) => {
             const handlers = listeners.get(type);
@@ -19,7 +20,10 @@ export function bufferPeerSocket(socket: ClusterSocket): ClusterSocket {
                 return;
             }
             if (type === "message") {
-                if (typeof event.data !== "string" || event.data.length > MAX_CLUSTER_FRAME_BYTES) {
+                if (
+                    typeof event.data !== "string" ||
+                    event.data.length > MAX_CLUSTER_FRAME_BYTES
+                ) {
                     socket.close(1008, "Invalid cluster message");
                     return;
                 }
@@ -120,10 +124,7 @@ export function attachLink(
             if (answeredChallenge)
                 throw new Error("Repeated handshake challenge");
             answeredChallenge = true;
-            if (
-                typeof message.nonce !== "string" ||
-                message.nonce.length > 100
-            )
+            if (typeof message.nonce !== "string" || message.nonce.length > 100)
                 throw new Error("Invalid challenge");
             send({
                 type: "hello",
@@ -141,7 +142,8 @@ export function attachLink(
                 ),
             });
         } else if (message.type === "hello") {
-            if (message.version !== 3) throw new Error("Incompatible cluster protocol");
+            if (message.version !== 3)
+                throw new Error("Incompatible cluster protocol");
             const member = await identity.inspectPeer(
                 message.declaration,
                 message.boot,
@@ -195,9 +197,7 @@ export function attachLink(
                 clearTimeout(p.timer);
                 if (message.error)
                     p.reject(
-                        new Error(
-                            "Peer rejected request: " + message.error,
-                        ),
+                        new Error("Peer rejected request: " + message.error),
                     );
                 else p.resolve(message.value);
             } else if (message.type === "rpc") {
@@ -211,20 +211,14 @@ export function attachLink(
                     send({
                         type: "reply",
                         id: message.id,
-                        value: await dispatch(
-                            peer,
-                            message.op,
-                            message.args,
-                        ),
+                        value: await dispatch(peer, message.op, message.args),
                     });
                 } catch (error) {
                     send({
                         type: "reply",
                         id: message.id,
                         error:
-                            error instanceof Error
-                                ? error.message
-                                : "Rejected",
+                            error instanceof Error ? error.message : "Rejected",
                     });
                 }
             } else throw new Error("Invalid peer packet");
@@ -244,13 +238,19 @@ export function attachLink(
         // not. Finish challenge and hello in order before processing the first
         // RPC. After negotiation, dispatch concurrently so nested RPC replies
         // are never blocked behind the request that needs them.
-        if (typeof event.data !== "string" || event.data.length > MAX_CLUSTER_FRAME_BYTES) {
+        if (
+            typeof event.data !== "string" ||
+            event.data.length > MAX_CLUSTER_FRAME_BYTES
+        ) {
             invalid();
             return;
         }
         const size = new TextEncoder().encode(event.data).byteLength;
         handshakeBytes += size;
-        if (++handshakeFrames > 128 || handshakeBytes > MAX_CLUSTER_FRAME_BYTES) {
+        if (
+            ++handshakeFrames > 128 ||
+            handshakeBytes > MAX_CLUSTER_FRAME_BYTES
+        ) {
             invalid();
             return;
         }

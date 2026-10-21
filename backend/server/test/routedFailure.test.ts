@@ -2,6 +2,75 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { RoutedSocket, recoveryRetryDelayMs } from "../../../frontend/lib/room/routedSocket";
 
+for (const beaconResult of [true, false, "throw"] as const) {
+    test(`page exit uses the connected endpoint with a friendly owner ID (beacon ${beaconResult})`, async () => {
+        const originalFetch = globalThis.fetch;
+        const originalBeacon = Object.getOwnPropertyDescriptor(navigator, "sendBeacon");
+        const endpoint = "https://owner.test";
+        const beacons: Array<{ url: string; body: unknown }> = [];
+        const requests: Array<{ url: string; options?: RequestInit }> = [];
+        Object.defineProperty(navigator, "sendBeacon", {
+            configurable: true,
+            value: (url: URL, body: unknown) => {
+                beacons.push({ url: String(url), body });
+                if (beaconResult === "throw") throw new Error("Beacon unavailable");
+                return beaconResult;
+            },
+        });
+        globalThis.fetch = (async (url, options) => {
+            if (String(url).endsWith("/cluster/leave")) {
+                requests.push({ url: String(url), options });
+                return new Response(null, { status: 204 });
+            }
+            return Response.json({ ownership: null, servers: [
+                { id: endpoint, depth: 0, transport: "socket.io" },
+            ] });
+        }) as typeof fetch;
+        let publish!: () => void;
+        const socket = new RoutedSocket([endpoint], () => {
+            const handlers = new Map<string, (value?: unknown) => void>();
+            publish = () => {
+                handlers.get("auth:session")?.({ id: "player" });
+                handlers.get("room:broadcast")?.({
+                    id: "room", ownerServerId: "primary", roomInstanceId: "instance",
+                    epoch: 1, revision: 1, users: [], bombs: [], isStart: false,
+                });
+            };
+            setTimeout(() => handlers.get("auth:request")?.(), 0);
+            return {
+                id: "connection", connected: true,
+                on(event, listener) { handlers.set(event, listener); return this; },
+                emit() {},
+                disconnect() {},
+            };
+        }, async () => "room-jwt", () => true, async () => "session-jwt");
+        try {
+            // connect() completes after the transport's auth:request handshake.
+            await new Promise<void>((resolve) => socket.once("connect", resolve));
+            publish();
+            assert.doesNotThrow(() => socket.closePage());
+            const body = JSON.stringify({
+                jwtToken: "room-jwt", sessionToken: "session-jwt",
+                expectedInstance: "instance", connectionId: "connection",
+            });
+            assert.deepEqual(beacons, [{ url: `${endpoint}/cluster/leave`, body }]);
+            assert.equal(requests.length, beaconResult === true ? 0 : 1);
+            if (requests.length) {
+                assert.equal(requests[0].url, `${endpoint}/cluster/leave`);
+                assert.equal(requests[0].options?.keepalive, true);
+                assert.equal(requests[0].options?.body, body);
+            }
+            socket.closePage();
+            assert.equal(beacons.length, 1, "duplicate page-exit events send once");
+        } finally {
+            socket.disconnect();
+            globalThis.fetch = originalFetch;
+            if (originalBeacon) Object.defineProperty(navigator, "sendBeacon", originalBeacon);
+            else Reflect.deleteProperty(navigator, "sendBeacon");
+        }
+    });
+}
+
 test("delayed snapshots cannot replace a newer room incarnation or revision", async () => {
     const original = globalThis.fetch;
     const owner = "https://owner.test";

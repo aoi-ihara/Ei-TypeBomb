@@ -22,7 +22,9 @@ export default function Morph({ first, last, state, onSettled }: MorphProps) {
     const updateRef = useRef<(() => void) | null>(null);
     const stateRef = useRef(state);
     const onSettledRef = useRef(onSettled);
-    onSettledRef.current = onSettled;
+    useLayoutEffect(() => {
+        onSettledRef.current = onSettled;
+    }, [onSettled]);
 
     useLayoutEffect(() => {
         const root = rootRef.current!;

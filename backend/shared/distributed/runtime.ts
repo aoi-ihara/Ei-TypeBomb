@@ -157,7 +157,7 @@ export class DistributedRoom {
         value.hadPlayers ||= Boolean(
             this.checkpoint.value?.hadPlayers ||
             this.checkpoint.value?.game.room.users.length ||
-            value.game.room.users.length
+            value.game.room.users.length,
         );
         // revision is the durable commit sequence, including typing/session changes.
         value.game.revision = own.revision + 1;
@@ -363,7 +363,9 @@ export class DistributedRoom {
             if (this.deleted) return;
             this.assertActive();
             const value = structuredClone(this.checkpoint.value!);
-            const present = value.game.room.users.some((user) => user.id === id);
+            const present = value.game.room.users.some(
+                (user) => user.id === id,
+            );
             const session = value.sessions[id];
             if (!present && !session) return;
             // Keep the authenticated socket session while it remains connected:
@@ -380,8 +382,20 @@ export class DistributedRoom {
         });
     }
     /** Page exit is explicit intent; unlike transport loss it has no recovery grace. */
-    closeSession(id: string, instance: string, connectionId?: string, preserveConnection = false): Promise<void> {
-        return this.disconnect(id, true, 0, instance, connectionId, preserveConnection);
+    closeSession(
+        id: string,
+        instance: string,
+        connectionId?: string,
+        preserveConnection = false,
+    ): Promise<void> {
+        return this.disconnect(
+            id,
+            true,
+            0,
+            instance,
+            connectionId,
+            preserveConnection,
+        );
     }
     disconnect(
         id: string,
@@ -392,7 +406,10 @@ export class DistributedRoom {
         preserveConnection = false,
     ): Promise<void> {
         return this.serial(async () => {
-            if (expectedInstance && this.checkpoint.ownership.instance !== expectedInstance)
+            if (
+                expectedInstance &&
+                this.checkpoint.ownership.instance !== expectedInstance
+            )
                 throw new Error("Room instance changed");
             if (this.deleted) return;
             if (this.halted) {
@@ -401,13 +418,18 @@ export class DistributedRoom {
             }
             const value = structuredClone(this.checkpoint.value!);
             if (!value.sessions[id]) return;
-            if (expectedConnectionId && value.sessions[id].connectionId !== expectedConnectionId)
+            if (
+                expectedConnectionId &&
+                value.sessions[id].connectionId !== expectedConnectionId
+            )
                 throw new Error("Page session was replaced");
             // Evaluate the match state inside the serialized mutation. A
             // concurrently committed game:start must never be canceled by
             // a stale pre-start disconnect decision.
-            if (immediate === true ||
-                (immediate === "lobby" && !value.game.room.isStart)) {
+            if (
+                immediate === true ||
+                (immediate === "lobby" && !value.game.room.isStart)
+            ) {
                 // A disconnected lobby participant has no active match to
                 // preserve. Remove their session and seat immediately; do
                 // not leave ghost users visible through the grace window.
@@ -428,10 +450,20 @@ export class DistributedRoom {
             value.sessions[id] = {
                 ...value.sessions[id],
                 connected: false,
-                expires: disconnectDeadline(value.game.room, id, this.now(), graceMs),
+                expires: disconnectDeadline(
+                    value.game.room,
+                    id,
+                    this.now(),
+                    graceMs,
+                ),
             };
-            if (value.game.room.isStart && !value.resumeUntil &&
-                value.game.room.users.every((player) => !value.sessions[player.id]?.connected)) {
+            if (
+                value.game.room.isStart &&
+                !value.resumeUntil &&
+                value.game.room.users.every(
+                    (player) => !value.sessions[player.id]?.connected,
+                )
+            ) {
                 // Preserve the whole match, including deadlines, when every
                 // player loses transport. Lobby expiry must not cancel it
                 // before the shared reconnect grace has elapsed.
@@ -440,7 +472,11 @@ export class DistributedRoom {
                 this.pauseAt = this.now();
                 for (const player of value.game.room.users) {
                     const session = value.sessions[player.id];
-                    if (session) session.expires = Math.max(session.expires, value.resumeUntil);
+                    if (session)
+                        session.expires = Math.max(
+                            session.expires,
+                            value.resumeUntil,
+                        );
                 }
             }
             await this.save(value, [], "session");
@@ -532,7 +568,12 @@ export class DistributedRoom {
                 this.inputFlushAt = undefined;
             }
             if (changed) await this.save(value, effects, kind);
-            if (canDeleteRoom(value.game.room, Object.keys(value.sessions).length)) {
+            if (
+                canDeleteRoom(
+                    value.game.room,
+                    Object.keys(value.sessions).length,
+                )
+            ) {
                 // Membership alone cannot retire a room: authenticated sockets
                 // can remain as spectators or rejoin after explicitly leaving.
                 // Wait for every socket session's disconnect grace to expire.
