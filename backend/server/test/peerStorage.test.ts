@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { NodePeerStorage, persistentPeerIdentity } from "../src/lib/peerStorage";
 import { credentials, freshRoom } from "./clusterFixture";
 import { PeerControl } from "../../shared/distributed/peers";
@@ -10,17 +11,19 @@ import { PeerControl } from "../../shared/distributed/peers";
 test("durable incarnation and promises survive reopen; a second SQLite connection cannot share the voter", async (t) => {
     const dir = await mkdtemp(join(tmpdir(), "etb-vote-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
-    const first = new NodePeerStorage(dir, "https://primary.test");
+    const first = new NodePeerStorage(dir);
     const boot = first.boot;
     await first.save("room", { promised: 73, candidate: "owner", contact: 10 });
-    assert.throws(() => new NodePeerStorage(dir, "https://primary.test"), /locked/);
+    assert.throws(() => new NodePeerStorage(dir), /locked/);
     first.close();
-    const second = new NodePeerStorage(dir, "https://primary.test");
+    const second = new NodePeerStorage(dir);
     assert.equal(second.boot, boot);
     assert.equal((await second.load("room"))!.promised, 73);
     assert.equal(await second.load("unknown"), undefined);
     second.close();
-    assert.throws(() => new NodePeerStorage(dir, "https://different.test"), /URL changed/);
+    const noStoredTopology = new DatabaseSync(join(dir, "cluster.sqlite"), { readOnly: true });
+    assert.deepEqual(JSON.parse(noStoredTopology.prepare("SELECT value FROM state WHERE key = 'identity'").get()!.value as string), { boot });
+    noStoredTopology.close();
 });
 
 test("restored sole owner recovers its certified game without changing boot or instance", async (t) => {
@@ -69,5 +72,5 @@ test("corrupt persistent storage fails closed instead of generating a fresh inca
     const dir = await mkdtemp(join(tmpdir(), "etb-corrupt-"));
     t.after(() => rm(dir, { recursive: true, force: true }));
     await writeFile(join(dir, "cluster.sqlite"), "broken disk data");
-    assert.throws(() => new NodePeerStorage(dir, "https://primary.test"), /database/);
+    assert.throws(() => new NodePeerStorage(dir), /database/);
 });
