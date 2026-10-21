@@ -279,7 +279,6 @@ test("distributed mode requires public topology and refuses plaintext public end
         () =>
             clusterConfig(
                 {
-                    PRIMARY_SERVER_URL: "http://primary.test",
                     SERVER_PUBLIC_URL: "http://primary.test",
                     ETB_CLUSTER_CONFIG: JSON.stringify({version:1,servers:["http://primary.test"]}),
                 },
