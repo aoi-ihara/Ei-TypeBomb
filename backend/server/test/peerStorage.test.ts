@@ -22,7 +22,7 @@ test("durable incarnation and promises survive reopen; a second SQLite connectio
     assert.equal(await second.load("unknown"), undefined);
     second.close();
     const noStoredTopology = new DatabaseSync(join(dir, "cluster.sqlite"), { readOnly: true });
-    assert.deepEqual(JSON.parse(noStoredTopology.prepare("SELECT value FROM state WHERE key = 'identity'").get()!.value as string), { boot });
+    assert.deepEqual(JSON.parse(noStoredTopology.prepare("SELECT value FROM state WHERE key = 'identity'").get()!.value as string), { boot, rooms: ["room"] });
     noStoredTopology.close();
 });
 
@@ -73,4 +73,22 @@ test("corrupt persistent storage fails closed instead of generating a fresh inca
     t.after(() => rm(dir, { recursive: true, force: true }));
     await writeFile(join(dir, "cluster.sqlite"), "broken disk data");
     assert.throws(() => new NodePeerStorage(dir), /database/);
+});
+
+test("missing voting rows cannot be restored under an unchanged boot ID", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "etb-lost-votes-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const declaration = JSON.stringify((await credentials(["https://primary.test"]))[0]);
+    const first = await persistentPeerIdentity(declaration, root);
+    const boot = first.identity.member.boot;
+    await first.storage.save("room", { promised: 42, candidate: "owner", contact: 3 });
+    first.storage.close();
+    const { topologyStateDirectory } = await import("../src/lib/peerStorage");
+    const db = new DatabaseSync(join(topologyStateDirectory(root, declaration), "cluster.sqlite"));
+    db.prepare("DELETE FROM state WHERE key = ?").run("room:room");
+    db.close();
+    const recovered = await persistentPeerIdentity(declaration, root);
+    assert.equal(recovered.identity.member.boot, boot);
+    await assert.rejects(recovered.storage.load("room"), /Voter lost state/);
+    recovered.storage.close();
 });
