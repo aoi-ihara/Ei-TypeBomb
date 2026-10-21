@@ -1,3 +1,4 @@
+import { transientRecoveryFailure } from "../../shared/distributed/recovery";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -78,4 +79,12 @@ test("known network failures retain actionable reason but unexpected messages st
     assert.equal(details.retryable, false);
     assert.equal(details.reason, undefined);
     assert.doesNotMatch(JSON.stringify(details), /private-secret/);
+});
+
+test("only known transfer refusals expose a retryable diagnostic code", () => {
+    assert.deepEqual(transientRecoveryFailure(new Error("Owner has not approved transfer")), {
+        code: "OWNER_TRANSFER_NOT_APPROVED",
+        retryable: true,
+    });
+    assert.equal(transientRecoveryFailure(new Error("credential=secret")), undefined);
 });
