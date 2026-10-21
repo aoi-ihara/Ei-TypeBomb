@@ -859,7 +859,7 @@ test("Playground full hints and online partial hints clear incorrect English and
     );
     assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
     assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
-    assert.match(source, /const incorrectAfterReveal = answerRevealed &&/);
+    assert.match(source, /const incorrectAfterReveal =\s*answerRevealed &&/);
     // Playground's fully revealed hint applies to all answer types.
     // Online hints enforce immediate failure within the revealed prefix.
     assert.match(source, /const typedInsideHint = Array\.from\(/);
