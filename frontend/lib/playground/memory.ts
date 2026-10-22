@@ -1,8 +1,12 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v5-hints";
+export const MEMORY_MODEL_VERSION = "playground-v6-continuous-priority";
 const INITIAL_ENCODING_STABILITY = 0.15;
+// Uncalibrated hypotheses, measured in days.
+export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
+export const INITIAL_WEAK_RECALL_STABILITY = 0.18;
+export const RETENTION_GAIN_FACTOR = 0.5;
 // Product hypotheses, not calibrated measures of human memory.
 export const RECENT_EXPOSURE_MS = 3_000;
 export const HEAVY_CUE_RATIO = 0.4;
@@ -255,9 +259,16 @@ export const applyRecallObservation = ({
         // Speed controls session repetition, not the magnitude of long-term gain.
         const weight = evaluation.memoryEvidence === "weak_recall" ? 0.2 : 1;
         const gain = current.lastReviewedAt
-            ? (1 - getRetrievability(current, now.getTime())) * 0.5 * weight
+            ? (1 - getRetrievability(current, now.getTime())) * RETENTION_GAIN_FACTOR * weight
             : 0;
-        stability = Math.max(0.12, stability * (1 + gain));
+        stability = current.lastReviewedAt
+            ? Math.max(0.12, stability * (1 + gain))
+            : Math.max(
+                  stability,
+                  weight === 1
+                      ? INITIAL_CLEAR_RECALL_STABILITY
+                      : INITIAL_WEAK_RECALL_STABILITY,
+              );
         difficulty = clamp(difficulty + (weight === 1 ? -0.15 : 0.1), 1, 10);
         lastReviewedAt = iso;
     }
