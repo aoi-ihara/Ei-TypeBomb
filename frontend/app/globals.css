@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme inline {
-    --font-sans: var(--font-line-seed-jp);
-    --font-mono: var(--jetbrains-mono);
+    --font-sans: var(--font-line-seed-jp), sans-serif;
+    --font-mono: var(--jetbrains-mono), var(--font-line-seed-jp), monospace;
 }
 
 :root {

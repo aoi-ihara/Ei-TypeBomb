@@ -80,8 +80,13 @@ const eventSymbol = (context: EventContext) => {
 
 const header = () => {
     const width = process.stdout.columns ?? 100;
-    const name = colorize("ETB", ansi.cyan600) + " " + colorize("Console", ansi.slate300);
-    return width < 52 ? name : name + colorize("   •   Backend dashboard", ansi.slate500);
+    const name =
+        colorize("ETB", ansi.cyan600) +
+        " " +
+        colorize("Console", ansi.slate300);
+    return width < 52
+        ? name
+        : name + colorize("   •   Backend dashboard", ansi.slate500);
 };
 
 const activityIndicator = (players: number) =>
@@ -90,7 +95,10 @@ const activityIndicator = (players: number) =>
         : colorize("● Active", ansi.sage500);
 
 const section = (title: string) => {
-    const width = Math.max(0, Math.min(48, (process.stdout.columns ?? 80) - title.length - 2));
+    const width = Math.max(
+        0,
+        Math.min(48, (process.stdout.columns ?? 80) - title.length - 2),
+    );
     return colorize(title + " " + "─".repeat(width), ansi.sage500);
 };
 
@@ -106,15 +114,21 @@ const latencyColor = (latencyMs: number) => {
 const renderLatency = () => {
     const now = Date.now();
     const fresh = latencySamples.filter((sample) => now - sample.at <= 60_000);
-    if (fresh.length === 0) return colorize("No recent latency samples", ansi.slate500);
+    if (fresh.length === 0)
+        return colorize("No recent latency samples", ansi.slate500);
 
     const latest = fresh[fresh.length - 1].value;
     const sorted = fresh.map((sample) => sample.value).sort((a, b) => a - b);
     const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1];
     const chars = "▁▂▃▄▅▆▇█";
     const max = Math.max(1, ...fresh.map((sample) => sample.value));
-    const spark = fresh.slice(-Math.max(1, Math.min(30, (process.stdout.columns ?? 80) - 3)))
-        .map((sample) => chars[Math.min(7, Math.floor(sample.value / max * 7))]).join("");
+    const spark = fresh
+        .slice(-Math.max(1, Math.min(30, (process.stdout.columns ?? 80) - 3)))
+        .map(
+            (sample) =>
+                chars[Math.min(7, Math.floor((sample.value / max) * 7))],
+        )
+        .join("");
     const values = `Latest ${Math.round(latest)} ms   P95 ${Math.round(p95)} ms   (60s)`;
     return [
         colorize(values, latencyColor(latest)),
@@ -123,21 +137,36 @@ const renderLatency = () => {
 };
 
 const renderRooms = () => {
-    if (state.rooms.length === 0) return colorize("No active rooms", ansi.slate500);
+    if (state.rooms.length === 0)
+        return colorize("No active rooms", ansi.slate500);
 
     const width = Math.max(12, (process.stdout.columns ?? 80) - 3);
-    return state.rooms.map((room) => {
-        const hasRecentError = (roomIssues.get(room.id) ?? 0) > Date.now();
-        const status = room.isStart ? "Playing" : "Waiting";
-        const holders = room.isStart
-            ? (room.bombHolders ?? (room.bombHolder === undefined ? [] : [room.bombHolder])).length
-            : 0;
-        const label = compact(room.id, Math.max(8, width - 31));
-        const details = `${room.players.length} players · ${status}${holders ? ` · ${holders} bomb${holders === 1 ? "" : "s"}` : ""}`;
-        return colorize(hasRecentError ? "! " : "• ", hasRecentError ? ansi.red : ansi.cyan600) +
-            colorize(label, ansi.slate300) + "\n  " +
-            colorize(compact(details, width), hasRecentError ? ansi.red : ansi.slate500);
-    }).join("\n\n");
+    return state.rooms
+        .map((room) => {
+            const hasRecentError = (roomIssues.get(room.id) ?? 0) > Date.now();
+            const status = room.isStart ? "Playing" : "Waiting";
+            const holders = room.isStart
+                ? (
+                      room.bombHolders ??
+                      (room.bombHolder === undefined ? [] : [room.bombHolder])
+                  ).length
+                : 0;
+            const label = compact(room.id, Math.max(8, width - 31));
+            const details = `${room.players.length} players · ${status}${holders ? ` · ${holders} bomb${holders === 1 ? "" : "s"}` : ""}`;
+            return (
+                colorize(
+                    hasRecentError ? "! " : "• ",
+                    hasRecentError ? ansi.red : ansi.cyan600,
+                ) +
+                colorize(label, ansi.slate300) +
+                "\n  " +
+                colorize(
+                    compact(details, width),
+                    hasRecentError ? ansi.red : ansi.slate500,
+                )
+            );
+        })
+        .join("\n\n");
 };
 
 const renderActivity = () => {
@@ -151,7 +180,12 @@ const renderActivity = () => {
         .map((event) => {
             const { symbol, color } = eventSymbol(event.context);
             return `${colorize(
-                padVisible(new Date(event.at).toLocaleTimeString("en-GB", { hour12: false }), 8),
+                padVisible(
+                    new Date(event.at).toLocaleTimeString("en-GB", {
+                        hour12: false,
+                    }),
+                    8,
+                ),
                 ansi.slate500,
             )} ${colorize(`${symbol} ${event.message}`, color)}`;
         })
@@ -159,13 +193,19 @@ const renderActivity = () => {
 };
 
 const formatState = () => {
-    const players = state.rooms.reduce((total, room) => total + room.players.length, 0);
+    const players = state.rooms.reduce(
+        (total, room) => total + room.players.length,
+        0,
+    );
     const activeGames = state.rooms.filter((room) => room.isStart).length;
     const width = process.stdout.columns ?? 80;
-    const summary = width < 48
-        ? `${state.rooms.length} rooms · ${players} players · ${activeGames} games`
-        : `ROOMS ${state.rooms.length}    PLAYERS ${players}    GAMES ${activeGames}`;
-    const lastError = [...recentEvents].reverse().find((event) => event.context === "ERROR");
+    const summary =
+        width < 48
+            ? `${state.rooms.length} rooms · ${players} players · ${activeGames} games`
+            : `ROOMS ${state.rooms.length}    PLAYERS ${players}    GAMES ${activeGames}`;
+    const lastError = [...recentEvents]
+        .reverse()
+        .find((event) => event.context === "ERROR");
     return [
         header(),
         colorize("────────────────────────", ansi.slate700),
@@ -181,7 +221,9 @@ const formatState = () => {
         "",
         section("ACTIVITY"),
         renderActivity(),
-    ].filter((line) => line !== undefined).join("\n");
+    ]
+        .filter((line) => line !== undefined)
+        .join("\n");
 };
 
 const renderState = () => {
