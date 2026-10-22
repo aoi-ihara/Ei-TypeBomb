@@ -19,6 +19,8 @@ type ButtonProps = Pick<
     padding?: "small" | "middle" | "large";
     iconName?: IconName;
     alignment?: "left" | "center";
+    value?: string;
+    name?: string;
 };
 
 const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
@@ -52,6 +54,8 @@ export default function Button({
     padding = "middle",
     iconName,
     alignment = "center",
+    value,
+    name,
     ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
@@ -112,6 +116,8 @@ export default function Button({
                 type={type}
                 onClick={handleClick}
                 disabled={disabled}
+                value={value}
+                name={name}
                 className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
                 {iconName && (!loading || !children) && (
