@@ -226,7 +226,7 @@ export default function Picker({
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex h-fit w-max flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
+                            className="flex h-fit w-max flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1 min-w-48"
                         >
                             {items.map((item, index) => (
                                 <div

@@ -1,12 +1,35 @@
 "use client";
 
-import { cloneElement, type MouseEventHandler, type ReactElement, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+    cloneElement,
+    type MouseEventHandler,
+    type ReactElement,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useRef,
+    useState,
+} from "react";
 import { Icon, type IconName } from "./Icon";
 import Morph from "./Morph";
 
-export type MenuItem = { label: string; onClick: () => void; icon?: IconName; disabled?: boolean };
-type TriggerProps = { onClick?: MouseEventHandler<HTMLButtonElement>; "aria-haspopup"?: "menu"; "aria-expanded"?: boolean; "aria-controls"?: string };
-export type MenuProps = { name: string; button: ReactElement<TriggerProps>; items: MenuItem[] };
+export type MenuItem = {
+    label: string;
+    onClick: () => void;
+    icon?: IconName;
+    disabled?: boolean;
+};
+type TriggerProps = {
+    onClick?: MouseEventHandler<HTMLButtonElement>;
+    "aria-haspopup"?: "menu";
+    "aria-expanded"?: boolean;
+    "aria-controls"?: string;
+};
+export type MenuProps = {
+    name: string;
+    button: ReactElement<TriggerProps>;
+    items: MenuItem[];
+};
 
 export default function Menu({ name, button, items }: MenuProps) {
     const [open, setOpen] = useState(false);
@@ -92,7 +115,9 @@ export default function Menu({ name, button, items }: MenuProps) {
         wasOpen.current = true;
         const menu = menuRef.current;
         (
-            menu?.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)") ?? menu
+            menu?.querySelector<HTMLButtonElement>(
+                "[role=menuitem]:not(:disabled)",
+            ) ?? menu
         )?.focus();
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
@@ -106,8 +131,9 @@ export default function Menu({ name, button, items }: MenuProps) {
             )
                 return;
             const buttons = Array.from(
-                menu?.querySelectorAll<HTMLButtonElement>("[role=menuitem]:not(:disabled)") ??
-                    [],
+                menu?.querySelectorAll<HTMLButtonElement>(
+                    "[role=menuitem]:not(:disabled)",
+                ) ?? [],
             );
             event.preventDefault();
             if (!buttons.length) return;
@@ -186,9 +212,7 @@ export default function Menu({ name, button, items }: MenuProps) {
                     onSettled={() => {
                         if (!open) setRaised(false);
                     }}
-                    first={
-                        <div ref={triggerRef}>{trigger}</div>
-                    }
+                    first={<div ref={triggerRef}>{trigger}</div>}
                     last={
                         <div
                             ref={menuRef}
@@ -196,7 +220,7 @@ export default function Menu({ name, button, items }: MenuProps) {
                             role="menu"
                             aria-label={name}
                             tabIndex={-1}
-                            className="flex h-fit w-max flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1"
+                            className="flex h-fit w-max flex-col overflow-y-auto rounded-2xl bg-(--color-background) p-1 min-w-48"
                         >
                             {items.map((item, index) => (
                                 <div
@@ -219,9 +243,7 @@ export default function Menu({ name, button, items }: MenuProps) {
                                         {showIcon && (
                                             <div className="w-6 h-6 shrink-0">
                                                 {item.icon && (
-                                                    <Icon
-                                                        name={item.icon}
-                                                    />
+                                                    <Icon name={item.icon} />
                                                 )}
                                             </div>
                                         )}

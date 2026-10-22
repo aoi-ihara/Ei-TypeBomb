@@ -92,10 +92,21 @@ export default function Home({
                         items={[
                             {
                                 label: "ルーム一覧",
+                                icon: "layoutGrid",
                                 onClick: () => router.push("/my-rooms"),
                             },
                             {
+                                label: "ユーザー設定",
+                                icon: "userRoundCog",
+                                onClick: () =>
+                                    router.push(
+                                        process.env
+                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
+                                    ),
+                            },
+                            {
                                 label: "サインアウト",
+                                icon: "logOut",
                                 onClick: () => {
                                     posthog.capture("signed_out");
                                     posthog.reset();
