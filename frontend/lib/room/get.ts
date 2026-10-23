@@ -50,7 +50,7 @@ export const getRoomFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration",
+                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration, is_public",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -83,6 +83,7 @@ export const getRoomFromId = async (id: string) => {
         updatedAt: data.updated_at,
         items: data.items,
         link: data.link,
+        isPublic: data.is_public,
     } as Room;
 };
 
@@ -94,7 +95,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration",
+            "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration, is_public",
         )
         .eq("user_id", userId);
 
@@ -116,6 +117,7 @@ export const getMyRooms = async () => {
         updatedAt: room.updated_at,
         items: room.items,
         link: room.link,
+        isPublic: room.is_public,
     }));
 
     serverLog("DB", "rooms fetched", { count: rooms.length });

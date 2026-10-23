@@ -40,6 +40,7 @@ export type Room = {
     losers?: GameLoser[];
     typingFocusPlayerId?: string;
     typingFocusInput?: string;
+    isPublic?: boolean;
 };
 
 export type User = {

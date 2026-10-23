@@ -141,7 +141,6 @@ export default function Page({
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
     const [isStartingPlay, setIsStartingPlay] = useState(false);
-    const [playError, setPlayError] = useState("");
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -616,7 +615,9 @@ export default function Page({
                             (_, index) => `${index + 1}個`,
                         ),
                     ]}
-                    itemIcons={Array(Math.min(Number(maxPlayers), 4) + 1).fill(null)}
+                    itemIcons={Array(Math.min(Number(maxPlayers), 4) + 1).fill(
+                        null,
+                    )}
                     onSelected={(index) =>
                         setBombCount(index === 0 ? null : index)
                     }
