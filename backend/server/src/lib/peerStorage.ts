@@ -39,7 +39,11 @@ class MemoryPeerStorage implements PeerStorage {
 
 /** Test-only storage namespace. It is never used by the production server. */
 export function clusterStateRoot(
-    env: { CLUSTER_STATE_DIR?: string; XDG_STATE_HOME?: string },
+    env: {
+        CLUSTER_STATE_DIR?: string;
+        XDG_STATE_HOME?: string;
+        ETB_TEST_PERSISTENT_PEER_STORAGE?: string;
+    },
     workingDirectory = process.cwd(),
 ): string {
     if (env.ETB_TEST_PERSISTENT_PEER_STORAGE !== "true")
