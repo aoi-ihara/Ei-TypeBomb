@@ -48,7 +48,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public, items",
         )
         .eq("is_public", true)
         .order("updated_at", { ascending: false });
@@ -60,6 +60,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
 
     return data.map((room) => ({
         id: room.id,
+        userId: room.user_id ?? undefined,
         title: room.title,
         explanation: room.explanation,
         maxPlayers: room.max_players,
@@ -68,6 +69,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         items: [],
+        itemCount: Array.isArray(room.items) ? room.items.length : 0,
         isPublic: room.is_public,
     }));
 };
@@ -106,6 +108,7 @@ export const getRoomSummaryFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         items: [],
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
         isPublic: data.is_public,
     };
 
@@ -185,6 +188,7 @@ export const getRoomFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         items: data.items,
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
         link: data.link,
         isPublic: data.is_public,
     } as Room;
@@ -198,7 +202,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public, items",
         )
         .eq("user_id", userId);
 
@@ -209,6 +213,7 @@ export const getMyRooms = async () => {
 
     const rooms: Room[] = data.map((room) => ({
         id: room.id,
+        userId: room.user_id ?? userId,
         title: room.title,
         explanation: room.explanation,
         maxPlayers: room.max_players,
@@ -217,6 +222,7 @@ export const getMyRooms = async () => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         items: [],
+        itemCount: Array.isArray(room.items) ? room.items.length : 0,
         isPublic: room.is_public,
     }));
 
