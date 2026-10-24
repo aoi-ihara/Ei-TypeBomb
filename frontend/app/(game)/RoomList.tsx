@@ -17,6 +17,7 @@ import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Picker from "@/components/ui/Picker";
+import Image from "next/image";
 
 type CurrentUser = {
     id: string;
@@ -43,6 +44,7 @@ export default function RoomList({
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
+    const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
     const [showSettings, setShowSettings] = useState(false);
     const [backgroundMusic, setBackgroundMusic] = useState(
@@ -112,6 +114,16 @@ export default function RoomList({
         await signOut();
         router.replace("/");
     };
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            setShowCursor((prev) => !prev);
+        }, 500);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, []);
 
     return (
         <>
@@ -210,6 +222,15 @@ export default function RoomList({
                     </Button>
                 )}
             </header>
+
+            <div className="items-center mb-4 rounded-lg overflow-clip">
+                <Image
+                    src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
+                    alt="page-logo"
+                    width={150}
+                    height={150}
+                />
+            </div>
 
             <Shell size="large">
                 <Button
