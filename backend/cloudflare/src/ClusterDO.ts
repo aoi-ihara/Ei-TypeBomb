@@ -40,6 +40,9 @@ export class ClusterDO extends DurableObject<Env> {
             // This Durable Object is already scoped to the current topology.
             // Keep only the incarnation; never store or inspect old config.
             await ctx.storage.put("boot", boot);
+            const restoredMembers =
+                (await ctx.storage.get<Member[]>("registry")) ?? [];
+            let registryMembers = structuredClone(restoredMembers);
             const peer = new PeerControl(
                 identity,
                 config,
@@ -77,13 +80,16 @@ export class ClusterDO extends DurableObject<Env> {
                                 await replicaObjectName(env, room),
                             ),
                         ).save(state),
-                    registry: (members) => ctx.storage.put("registry", members),
+                    registry: async (members) => {
+                        registryMembers = structuredClone(members);
+                        await ctx.storage.put("registry", registryMembers);
+                    },
+                    members: () => structuredClone(registryMembers),
+                    close: () => {},
                 },
             );
             peer.draining = env.CLUSTER_DRAINING === "true";
-            await peer.restoreRegistry(
-                (await ctx.storage.get<Member[]>("registry")) ?? [],
-            );
+            await peer.restoreRegistry(registryMembers);
             return peer;
         });
         // Network registration starts after local initialization, outside the
