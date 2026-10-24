@@ -42,12 +42,14 @@ export default async function RoomPage({
                 </p>
             )}
 
-            <Link
-                href={"/" + room.id + "/play"}
-                className="w-full rounded-xl bg-cyan-600 px-4 py-3 text-center font-semibold text-white transition-transform active:scale-[0.98]"
-            >
-                プレイする
-            </Link>
+            {itemCount > 0 && (
+                <Link
+                    href={"/" + room.id + "/play"}
+                    className="w-full rounded-xl bg-cyan-600 px-4 py-3 text-center font-semibold text-white transition-transform active:scale-[0.98]"
+                >
+                    プレイする
+                </Link>
+            )}
             {isOwner && (
                 <Link
                     href={"/" + room.id + "/edit"}

@@ -17,10 +17,12 @@ export default function PlayRoom({
     roomId,
     title,
     alreadyAuthorized,
+    itemCount,
 }: {
     roomId: string;
     title: string;
     alreadyAuthorized: boolean;
+    itemCount: number;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
@@ -66,6 +68,10 @@ export default function PlayRoom({
         turnstileToken?: string,
         mode: PlayMode = selectedMode,
     ) => {
+        if (itemCount === 0) {
+            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
+            return;
+        }
         if (mode === "online" && !displayName.trim()) {
             setError("表示名を入力してください。");
             return;
@@ -114,6 +120,10 @@ export default function PlayRoom({
     };
 
     const handleContinue = () => {
+        if (itemCount === 0) {
+            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
+            return;
+        }
         if (selectedMode === "online" && !displayName.trim()) {
             setError("表示名を入力してください。");
             return;
@@ -128,7 +138,9 @@ export default function PlayRoom({
     return (
         <Shell title={title} size="small" loading={roomLoading} animateAppear>
             <p className="w-full text-start text-sm opacity-70">
-                プレイ方法を選択してください。
+                {itemCount === 0
+                    ? "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。"
+                    : "プレイ方法を選択してください。"}
             </p>
 
             <div className="grid w-full grid-cols-2 gap-3">
@@ -174,6 +186,7 @@ export default function PlayRoom({
                 className="w-full"
                 variant="primary"
                 disabled={
+                    itemCount === 0 ||
                     joining !== null ||
                     (showPasswordField && !alreadyAuthorized && !roomPassword) ||
                     (selectedMode === "online" && !displayName.trim())

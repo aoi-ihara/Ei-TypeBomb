@@ -20,6 +20,7 @@ export default async function PlayPage({
             roomId={slug}
             title={summary.room.title || "ルーム"}
             alreadyAuthorized={authorizedRoom?.id === slug}
+            itemCount={summary.itemCount}
         />
     );
 }
