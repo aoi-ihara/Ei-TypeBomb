@@ -10,7 +10,7 @@ type AuthShellProps = {
 export default function Shell({
     title,
     children,
-    className = "flex flex-col gap-4 items-center",
+    className = "flex flex-col gap-4 items-center px-4",
     size = "medium",
     loading,
     animateAppear = false,
@@ -26,7 +26,7 @@ export default function Shell({
                 </h1>
             )}
             <div
-                className={`px-4 pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className} ${!loading && animateAppear && "animate-appear origin-top"}`}
+                className={`pb-[50vh] ${size === "medium" ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-xs"} w-full ${className} ${!loading && animateAppear && "animate-appear origin-top"}`}
             >
                 {title && loading && (
                     <div className="w-full flex justify-center">

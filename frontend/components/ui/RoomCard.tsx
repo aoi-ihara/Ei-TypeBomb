@@ -10,16 +10,22 @@ import posthog from "posthog-js";
 export default function RoomCard({
     room,
     isOwner = false,
+    isSaved = false,
+    onToggleSaved,
 }: {
     room: Room;
     isOwner?: boolean;
+    isSaved?: boolean;
+    onToggleSaved?: () => void;
 }) {
     const router = useRouter();
     const [copied, setCopied] = useState(false);
 
     const copyRoomLink = async () => {
         try {
-            const path = room.isPublic ? "/" + room.id : "/" + room.id + "/play";
+            const path = room.isPublic
+                ? "/" + room.id
+                : "/" + room.id + "/play";
             await navigator.clipboard.writeText(window.location.origin + path);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2000);
@@ -30,25 +36,35 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full min-w-0 w-full flex-col gap-3 rounded-xl bg-(--color-background-secondary) px-4 py-4">
+        <article className="flex h-full min-w-0 w-full flex-col gap-3 rounded-lg bg-(--color-background-secondary) px-4 py-4">
             <div className="flex min-w-0 items-center gap-2">
                 <Icon name={room.isPublic ? "earth" : "lock"} />
-                <h2 className="min-w-0 flex-1 truncate text-lg font-bold" data-cursor="text">
+                <h2
+                    className="min-w-0 flex-1 truncate text-lg font-bold"
+                    data-cursor="text"
+                >
                     {room.title || "無題のルーム"}
                 </h2>
             </div>
 
-            <p className="line-clamp-2 min-h-10 w-full text-start text-sm opacity-80">
+            <p
+                className="line-clamp-2 w-full text-start opacity-80"
+                data-cursor="text"
+            >
                 {room.explanation || "説明はありません。"}
             </p>
 
             <div className="flex items-center gap-2 text-sm">
                 <Icon name="usersRound" />
-                <span className="font-mono font-bold">{room.maxPlayers ?? 2}</span>
-                <span className="opacity-60">人まで</span>
+                <div>
+                    <span className="font-mono font-bold">
+                        {room.maxPlayers ?? 2}
+                    </span>
+                    <span className="opacity-50">人まで</span>
+                </div>
             </div>
 
-            <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-(--color-border) pt-3">
+            <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2">
                 <Button
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
@@ -78,6 +94,15 @@ export default function RoomCard({
                 <Button onClick={copyRoomLink} iconName="copy" variant="text">
                     {copied ? "コピー済み" : "リンクをコピー"}
                 </Button>
+                {onToggleSaved && (
+                    <Button
+                        onClick={onToggleSaved}
+                        iconName={isSaved ? "check" : "bookmark"}
+                        variant="text"
+                    >
+                        {isSaved ? "保存を解除" : "保存"}
+                    </Button>
+                )}
             </div>
         </article>
     );

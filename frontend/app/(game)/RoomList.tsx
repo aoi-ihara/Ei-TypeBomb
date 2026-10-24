@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
@@ -13,10 +12,8 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
-import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
-import Picker from "@/components/ui/Picker";
 import Image from "next/image";
 
 type CurrentUser = {
@@ -24,6 +21,8 @@ type CurrentUser = {
     email: string | null;
     displayName: string | null;
 };
+
+type View = "recommended" | "mine" | "saved";
 
 type Props = {
     publicRooms: Room[];
@@ -33,6 +32,18 @@ type Props = {
     initialBackgroundMusic: boolean;
     initialSoundEffects: boolean;
 };
+
+const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
+
+const navigationItems: {
+    value: View;
+    label: string;
+    iconName: "wandSparkles" | "layoutGrid" | "archive";
+}[] = [
+    { value: "recommended", label: "おすすめ", iconName: "wandSparkles" },
+    { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
+    { value: "saved", label: "保存", iconName: "archive" },
+];
 
 export default function RoomList({
     publicRooms,
@@ -51,22 +62,144 @@ export default function RoomList({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
-    const [view, setView] = useState<"public" | "me">(initialView);
-    const rooms = view === "me" ? myRooms : publicRooms;
+    const [view, setView] = useState<View>(
+        initialView === "me" ? "mine" : "recommended",
+    );
+    const [keyword, setKeyword] = useState("");
+    const [savedRoomIds, setSavedRoomIds] = useState<string[]>([]);
 
-    const selectView = (nextView: "public" | "me") => {
-        if (nextView === "me" && !currentUser) {
+    const rooms = useMemo(() => {
+        const roomsById = new Map<string, Room>();
+
+        for (const room of publicRooms) {
+            roomsById.set(room.id, room);
+        }
+
+        // Prefer the owner's copy when a room appears in both lists.
+        for (const room of myRooms) {
+            roomsById.set(room.id, {
+                ...room,
+                userId: room.userId ?? currentUser?.id,
+            });
+        }
+
+        return Array.from(roomsById.values()).sort(
+            (a, b) =>
+                new Date(b.updatedAt ?? 0).getTime() -
+                new Date(a.updatedAt ?? 0).getTime(),
+        );
+    }, [publicRooms, myRooms, currentUser?.id]);
+
+    const myRoomIds = useMemo(
+        () => new Set(myRooms.map((room) => room.id)),
+        [myRooms],
+    );
+
+    const roomsInView = useMemo(() => {
+        if (view === "mine") return myRooms;
+        if (view === "saved") {
+            return rooms.filter((room) => savedRoomIds.includes(room.id));
+        }
+        return rooms.filter((room) => room.isPublic);
+    }, [view, myRooms, rooms, savedRoomIds]);
+
+    const filteredRooms = useMemo(() => {
+        const query = keyword.trim().toLowerCase();
+
+        return roomsInView
+            .filter((room) => {
+                if (!query) return true;
+
+                const searchableText = [room.id, room.title, room.explanation]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
+
+                return searchableText.includes(query);
+            })
+            .sort(
+                (a, b) =>
+                    new Date(b.updatedAt ?? 0).getTime() -
+                    new Date(a.updatedAt ?? 0).getTime(),
+            );
+    }, [roomsInView, keyword]);
+
+    const selectView = (nextView: View) => {
+        if (nextView === "mine" && !currentUser) {
             router.push(getSignInUrl());
             return;
         }
 
         setView(nextView);
 
-        // Filter query parameters are for entering this page from elsewhere.
-        // Once the user interacts with the in-page filter, normalize the URL.
+        // Keep the old query parameters only for arriving at this page.
         if (window.location.pathname === "/" && window.location.search) {
             window.history.replaceState(window.history.state, "", "/");
         }
+    };
+
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
+            if (!stored) return;
+
+            const parsed: unknown = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                setSavedRoomIds(
+                    Array.from(
+                        new Set(
+                            parsed.filter(
+                                (value): value is string =>
+                                    typeof value === "string",
+                            ),
+                        ),
+                    ),
+                );
+            }
+        } catch (error) {
+            console.error("Failed to load saved rooms:", error);
+        }
+    }, []);
+
+    const toggleSavedRoom = (roomId: string) => {
+        let currentSavedIds = savedRoomIds;
+
+        // Re-read storage to avoid overwriting saved rooms if this is clicked
+        // before the initial effect has finished.
+        try {
+            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
+            if (stored) {
+                const parsed: unknown = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    currentSavedIds = parsed.filter(
+                        (value): value is string => typeof value === "string",
+                    );
+                }
+            }
+        } catch {
+            // Continue with in-memory state if storage is unavailable.
+        }
+
+        const wasSaved = currentSavedIds.includes(roomId);
+        const nextSavedIds = wasSaved
+            ? currentSavedIds.filter((id) => id !== roomId)
+            : Array.from(new Set([...currentSavedIds, roomId]));
+
+        setSavedRoomIds(nextSavedIds);
+
+        try {
+            window.localStorage.setItem(
+                SAVED_ROOMS_STORAGE_KEY,
+                JSON.stringify(nextSavedIds),
+            );
+        } catch (error) {
+            console.error("Failed to save room list:", error);
+        }
+
+        posthog.capture("room_saved_toggled", {
+            room_id: roomId,
+            saved: !wasSaved,
+        });
     };
 
     useEffect(() => {
@@ -125,9 +258,13 @@ export default function RoomList({
         };
     }, []);
 
+    const viewTitle =
+        navigationItems.find((item) => item.value === view)?.label ??
+        "おすすめ";
+
     return (
         <>
-            <header className={`w-full flex justify-end p-4 gap-4`}>
+            <header className="w-full flex justify-end p-4 gap-4">
                 <div className="w-18">
                     <MorphDialog
                         button={
@@ -193,9 +330,9 @@ export default function RoomList({
                         }
                         items={[
                             {
-                                label: "ルーム一覧",
+                                label: "自分のルーム",
                                 icon: "layoutGrid",
-                                onClick: () => selectView("me"),
+                                onClick: () => selectView("mine"),
                             },
                             {
                                 label: "ユーザー設定",
@@ -232,93 +369,93 @@ export default function RoomList({
                 />
             </div>
 
-            <Shell size="large">
-                <Button
-                    onClick={addRoom}
-                    loading={creating}
-                    iconName="plus"
-                    className="shrink-0 w-full"
+            <div className="flex flex-col w-full items-center gap-4">
+                <div
+                    aria-label="ルームカテゴリ"
+                    className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
                 >
-                    新規
-                </Button>
-                <div className="flex w-full gap-4">
-                    <Input value="f" />
+                    {navigationItems.map((item) => (
+                        <Button
+                            key={item.value}
+                            className="w-fit shrink-0"
+                            variant={
+                                view === item.value ? "primary" : "default"
+                            }
+                            onClick={() => selectView(item.value)}
+                            iconName={item.iconName}
+                            alignment="left"
+                        >
+                            {item.label}
+                        </Button>
+                    ))}
                 </div>
 
-                <div className="grid gap-4 w-full grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                    <Picker
-                        name="ゲーム時間"
-                        labelPrefix="作成者"
-                        selection={0}
-                        items={["すべて", "自分", "自分以外"]}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => {}}
-                    />
-                    <Picker
-                        name="公開設定"
-                        labelPrefix="作成者"
-                        selection={0}
-                        items={["公開", "自分"]}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => {}}
-                    />
-                    <Picker
-                        name="問題数"
-                        labelPrefix="問題数"
-                        selection={0}
-                        items={[
-                            "0",
-                            "0~",
-                            "10~",
-                            "20~",
-                            "40~",
-                            "60~",
-                            "80~",
-                            "100~",
-                        ]}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => {}}
-                    />
-                </div>
+                <Shell size="large">
+                    <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                        <h1 className="text-2xl font-bold" data-cursor="text">
+                            {viewTitle}
+                        </h1>
+                        <Button
+                            onClick={addRoom}
+                            loading={creating}
+                            iconName="plus"
+                            className="w-fit shrink-0"
+                        >
+                            ルームを作成
+                        </Button>
+                    </div>
 
-                {createError && (
-                    <p className="text-red-500" role="alert">
-                        {createError}
-                    </p>
-                )}
+                    <Input
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        label="ルームを検索"
+                        autoComplete="off"
+                    />
 
-                {rooms.length > 0 ? (
-                    <div className="grid w-full gap-4 sm:grid-cols-2">
-                        {rooms
-                            .slice()
-                            .sort(
-                                (a, b) =>
-                                    new Date(b.updatedAt ?? 0).getTime() -
-                                    new Date(a.updatedAt ?? 0).getTime(),
-                            )
-                            .map((room) => (
+                    {createError && (
+                        <p className="text-red-500" role="alert">
+                            {createError}
+                        </p>
+                    )}
+
+                    {filteredRooms.length > 0 ? (
+                        <div className="flex flex-col w-full gap-4">
+                            {filteredRooms.map((room) => (
                                 <RoomCard
                                     key={room.id}
                                     room={room}
-                                    isOwner={view === "me"}
+                                    isOwner={myRoomIds.has(room.id)}
+                                    isSaved={savedRoomIds.includes(room.id)}
+                                    onToggleSaved={() =>
+                                        toggleSavedRoom(room.id)
+                                    }
                                 />
                             ))}
-                    </div>
-                ) : (
-                    <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
-                        <p className="font-semibold">
-                            {view === "me"
-                                ? "まだルームがありません"
-                                : "共有されているルームはありません"}
-                        </p>
-                        <p className="mt-2 text-sm opacity-60">
-                            {view === "me"
-                                ? "ルームを作成して、単語リストを準備しましょう。"
-                                : "公開されたルームがここに表示されます。"}
-                        </p>
-                    </div>
-                )}
-            </Shell>
+                        </div>
+                    ) : (
+                        <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
+                            <p className="font-semibold">
+                                {keyword.trim()
+                                    ? "検索結果がありません"
+                                    : view === "mine"
+                                      ? "まだルームがありません"
+                                      : view === "saved"
+                                        ? "保存したルームはありません"
+                                        : "公開ルームはまだありません"}
+                            </p>
+                            <p className="mt-2 text-sm opacity-60">
+                                {keyword.trim()
+                                    ? "別のキーワードで検索してみてください。"
+                                    : view === "mine"
+                                      ? "ルームを作成して、単語リストを準備しましょう。"
+                                      : view === "saved"
+                                        ? "気になるルームの「保存」を押すと、ここに表示されます。"
+                                        : "公開されたルームがここに表示されます。"}
+                            </p>
+                        </div>
+                    )}
+                </Shell>
+            </div>
         </>
     );
 }
