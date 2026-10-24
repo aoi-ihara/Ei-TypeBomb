@@ -17,87 +17,43 @@ function sockets(): [ClusterSocket, ClusterSocket] {
         send(data: string) {
             queueMicrotask(() => {
                 if (!closed)
-                    listeners[1 - i]
-                        .get("message")
-                        ?.forEach((fn) => fn({ data }));
+                    listeners[1 - i].get("message")?.forEach((fn) => fn({ data }));
             });
         },
         close() {
             if (closed) return;
             closed = true;
-            for (const side of listeners)
-                side.get("close")?.forEach((fn) => fn({}));
+            for (const side of listeners) side.get("close")?.forEach((fn) => fn({}));
         },
         addEventListener(event: string, listener: (event: any) => void) {
-            listeners[i].set(event, [
-                ...(listeners[i].get(event) ?? []),
-                listener,
-            ]);
+            listeners[i].set(event, [...(listeners[i].get(event) ?? []), listener]);
         },
     })) as [ClusterSocket, ClusterSocket];
 }
 async function identities() {
     return Promise.all(
-        (
-            await credentials(["https://primary.test", "https://worker.test"])
-        ).map((bundle) => Identity.create(JSON.stringify(bundle))),
+        (await credentials(["https://primary.test", "https://worker.test"]))
+            .map((bundle) => Identity.create(JSON.stringify(bundle))),
     );
 }
 test("outbound TLS target and inbound client negotiate public topology before RPC", async () => {
-    const [a, b] = await identities(),
-        [left, right] = sockets();
+    const [a, b] = await identities(), [left, right] = sockets();
     const [client, server] = await Promise.all([
-        attachLink(
-            left,
-            a,
-            b.member.id,
-            async () => null,
-            () => {},
-            () => {},
-        ),
-        attachLink(
-            right,
-            b,
-            undefined,
-            async (peer) => peer.id,
-            () => {},
-            () => {},
-        ),
+        attachLink(left, a, b.member.id, async () => null, () => {}, () => {}),
+        attachLink(right, b, undefined, async (peer) => peer.id, () => {}, () => {}),
     ]);
     try {
         assert.equal(client.member.id, b.member.id);
         assert.equal(server.member.id, a.member.id);
         assert.equal(await client.call("status", {}), a.member.id);
-    } finally {
-        client.close();
-    }
+    } finally { client.close(); }
 });
 test("two inbound handshakes with the wrong direction are rejected", async () => {
-    const [a, b] = await identities(),
-        [left, right] = sockets();
-    let ready = 0,
-        calls = 0;
+    const [a, b] = await identities(), [left, right] = sockets();
+    let ready = 0, calls = 0;
     const results = await Promise.allSettled([
-        attachLink(
-            left,
-            a,
-            undefined,
-            async () => ++calls,
-            () => {
-                ready++;
-            },
-            () => {},
-        ),
-        attachLink(
-            right,
-            b,
-            undefined,
-            async () => ++calls,
-            () => {
-                ready++;
-            },
-            () => {},
-        ),
+        attachLink(left, a, undefined, async () => ++calls, () => { ready++; }, () => {}),
+        attachLink(right, b, undefined, async () => ++calls, () => { ready++; }, () => {}),
     ]);
     assert.ok(results.every((result) => result.status === "rejected"));
     assert.equal(ready, 0);
@@ -121,14 +77,10 @@ for (const transport of ["in-memory", "real WebSocket"]) test(
             left = outgoing as unknown as ClusterSocket;
             right = accepted as unknown as ClusterSocket;
             t.after(() => new Promise<void>((resolve) => {
-                outgoing.terminate();
-                accepted.terminate();
-                listener.close(() => resolve());
+                outgoing.terminate(); accepted.terminate(); listener.close(() => resolve());
             }));
         }
         const proof = a.statement.bind(a);
-        // Metadata processing can finish after the opposite direction has verified its hello.
-        // Start the first RPC as soon as the local link announces readiness.
         a.statement = async (...args: Parameters<Identity["statement"]>) => {
             await new Promise((resolve) => setTimeout(resolve, 100));
             return proof(...args);
@@ -136,23 +88,15 @@ for (const transport of ["in-memory", "real WebSocket"]) test(
         const client = attachLink(left, a, b.member.id, async () => null, () => {}, () => {});
         const server = attachLink(right, b, undefined, async (peer) => peer.id, () => {}, () => {});
         try {
-            const [response] = await Promise.all([
-                client.then((link) => link.call("status", {})),
-                server,
-            ]);
+            const [response] = await Promise.all([client.then((link) => link.call("status", {})), server]);
             assert.equal(response, a.member.id);
-        } finally {
-            left.close();
-        }
+        } finally { left.close(); }
     },
 );
 
 test("first route after Primary restart reads the live Render owner over WebSocket", async (t) => {
     const n = await network(), room = freshRoom();
-    await n.hosts[0].call("open", {
-        roomId: room.id,
-        initial: { game: { room, revision: 0 }, sessions: {}, events: {} },
-    });
+    await n.hosts[0].call("open", { roomId: room.id, initial: { game: { room, revision: 0 }, sessions: {}, events: {} } });
     const old = (await n.hosts[0].read(room.id))!;
     n.alive[0] = n.alive[1] = false;
     const current = await n.hosts[2].call("report", { roomId: room.id, owner: n.ids[0], revision: 0 });
@@ -177,13 +121,14 @@ test("first route after Primary restart reads the live Render owner over WebSock
         const socket = new WebSocket(`ws://127.0.0.1:${address.port}`);
         const buffered = bufferPeerSocket(socket as unknown as ClusterSocket);
         await once(socket, "open");
-        // Force the remote challenge to arrive before attachLink is installed.
         await new Promise((resolve) => setTimeout(resolve, 20));
         t.after(() => socket.terminate());
         return buffered;
     }, {
         async load() { return { committed: old, promised: old.ownership.epoch, candidate: n.ids[0], contact: 0 }; },
         async save() {},
+        members() { return []; },
+        close() {},
     });
     const route = await restarted.call("read", { roomId: room.id });
     assert.equal(route.ownership.owner, n.ids[2], "first route must not expose the persisted former owner");
