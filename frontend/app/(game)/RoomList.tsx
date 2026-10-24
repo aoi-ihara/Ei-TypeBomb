@@ -229,20 +229,18 @@ export default function RoomList({
                         name="ゲーム時間"
                         labelPrefix="作成者"
                         selection={0}
-                        items={["すべて", "自分"]}
+                        items={["すべて", "自分", "自分以外"]}
                         itemIcons={[null, null, null]}
                         onSelected={(index) => {}}
                     />
-                    {true && (
-                        <Picker
-                            name="公開設定"
-                            labelPrefix="作成者"
-                            selection={0}
-                            items={["公開", "自分"]}
-                            itemIcons={[null, null, null]}
-                            onSelected={(index) => {}}
-                        />
-                    )}
+                    <Picker
+                        name="公開設定"
+                        labelPrefix="作成者"
+                        selection={0}
+                        items={["公開", "自分"]}
+                        itemIcons={[null, null, null]}
+                        onSelected={(index) => {}}
+                    />
                     <Picker
                         name="問題数"
                         labelPrefix="問題数"
@@ -261,38 +259,6 @@ export default function RoomList({
                         onSelected={(index) => {}}
                     />
                 </div>
-
-                <nav
-                    className="flex gap-2 border-b border-(--color-border)"
-                    aria-label="ルームの絞り込み"
-                >
-                    <button
-                        type="button"
-                        aria-pressed={view === "public"}
-                        onClick={() => selectView("public")}
-                        className={
-                            "px-4 py-3 font-semibold transition-colors " +
-                            (view === "public"
-                                ? "border-b-2 border-cyan-600"
-                                : "opacity-60")
-                        }
-                    >
-                        共有ルーム
-                    </button>
-                    <button
-                        type="button"
-                        aria-pressed={view === "me"}
-                        onClick={() => selectView("me")}
-                        className={
-                            "px-4 py-3 font-semibold transition-colors " +
-                            (view === "me"
-                                ? "border-b-2 border-cyan-600"
-                                : "opacity-60")
-                        }
-                    >
-                        自分のルーム
-                    </button>
-                </nav>
 
                 {createError && (
                     <p className="text-red-500" role="alert">
