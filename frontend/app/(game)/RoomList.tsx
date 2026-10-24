@@ -12,6 +12,8 @@ import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
+import Menu from "@/components/ui/Menu";
+import { Icon } from "@/components/ui/Icon";
 
 type CurrentUser = {
     id: string;
@@ -40,7 +42,9 @@ export default function RoomList({
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
     const [showSettings, setShowSettings] = useState(false);
-    const [backgroundMusic, setBackgroundMusic] = useState(initialBackgroundMusic);
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
     const [view, setView] = useState<"public" | "me">(initialView);
     const rooms = view === "me" ? myRooms : publicRooms;
@@ -69,7 +73,11 @@ export default function RoomList({
     }, [currentUser]);
 
     const setCookie = (key: string, value: boolean) => {
-        document.cookie = key + "=" + String(value) + "; path=/; max-age=31536000; SameSite=Lax";
+        document.cookie =
+            key +
+            "=" +
+            String(value) +
+            "; path=/; max-age=31536000; SameSite=Lax";
     };
 
     const addRoom = async () => {
@@ -88,7 +96,9 @@ export default function RoomList({
             router.push("/" + roomId + "/edit");
         } catch (error) {
             console.error("Failed to create room:", error);
-            setCreateError("ルームを作成できませんでした。もう一度お試しください。");
+            setCreateError(
+                "ルームを作成できませんでした。もう一度お試しください。",
+            );
             setCreating(false);
         }
     };
@@ -102,17 +112,14 @@ export default function RoomList({
 
     return (
         <div className="min-h-dvh w-full px-4 pb-24">
-            <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b border-(--color-border) py-4">
-                <Link href="/" className="text-lg font-bold tracking-tight">
-                    Ei-TypeBomb
-                </Link>
-                <div className="flex flex-wrap items-center gap-2">
+            <header className={`w-full flex justify-end py-4 gap-4`}>
+                <div className="w-18">
                     <MorphDialog
                         button={
                             <Button
                                 variant="text"
+                                onClick={() => setShowSettings(!showSettings)}
                                 iconName="settings"
-                                onClick={() => setShowSettings(true)}
                             >
                                 設定
                             </Button>
@@ -159,30 +166,46 @@ export default function RoomList({
                             完了
                         </Button>
                     </MorphDialog>
-
-                    {currentUser ? (
-                        <>
-                            <Button variant="text" onClick={() => selectView("me")}>
-                                自分のルーム
-                            </Button>
-                            {process.env.NEXT_PUBLIC_USER_SETTINGS_URL && (
-                                <Button
-                                    variant="text"
-                                    onClick={() => router.push(process.env.NEXT_PUBLIC_USER_SETTINGS_URL!)}
-                                >
-                                    ユーザー設定
-                                </Button>
-                            )}
-                            <Button variant="text" onClick={handleSignOut}>
-                                サインアウト
-                            </Button>
-                        </>
-                    ) : (
-                        <Button variant="text" onClick={() => router.push(getSignInUrl())}>
-                            ログイン
-                        </Button>
-                    )}
                 </div>
+
+                {currentUser ? (
+                    <Menu
+                        name="ユーザーアクション"
+                        button={
+                            <Button variant="text" iconName="circleUserRound">
+                                ユーザー
+                            </Button>
+                        }
+                        items={[
+                            {
+                                label: "ルーム一覧",
+                                icon: "layoutGrid",
+                                onClick: () => selectView("me"),
+                            },
+                            {
+                                label: "ユーザー設定",
+                                icon: "userRoundCog",
+                                onClick: () =>
+                                    router.push(
+                                        process.env
+                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
+                                    ),
+                            },
+                            {
+                                label: "サインアウト",
+                                icon: "logOut",
+                                onClick: handleSignOut,
+                            },
+                        ]}
+                    />
+                ) : (
+                    <Button
+                        variant="text"
+                        onClick={() => router.push(getSignInUrl())}
+                    >
+                        ログイン
+                    </Button>
+                )}
             </header>
 
             <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 pt-10">
@@ -193,17 +216,29 @@ export default function RoomList({
                             ルーム一覧
                         </h1>
                     </div>
-                    <Button onClick={addRoom} loading={creating} iconName="plus">
+                    <Button
+                        onClick={addRoom}
+                        loading={creating}
+                        iconName="plus"
+                    >
                         ルームを作成
                     </Button>
                 </div>
 
-                <nav className="flex gap-2 border-b border-(--color-border)" aria-label="ルームの絞り込み">
+                <nav
+                    className="flex gap-2 border-b border-(--color-border)"
+                    aria-label="ルームの絞り込み"
+                >
                     <button
                         type="button"
                         aria-pressed={view === "public"}
                         onClick={() => selectView("public")}
-                        className={"px-4 py-3 font-semibold transition-colors " + (view === "public" ? "border-b-2 border-cyan-600" : "opacity-60")}
+                        className={
+                            "px-4 py-3 font-semibold transition-colors " +
+                            (view === "public"
+                                ? "border-b-2 border-cyan-600"
+                                : "opacity-60")
+                        }
                     >
                         共有ルーム
                     </button>
@@ -211,30 +246,51 @@ export default function RoomList({
                         type="button"
                         aria-pressed={view === "me"}
                         onClick={() => selectView("me")}
-                        className={"px-4 py-3 font-semibold transition-colors " + (view === "me" ? "border-b-2 border-cyan-600" : "opacity-60")}
+                        className={
+                            "px-4 py-3 font-semibold transition-colors " +
+                            (view === "me"
+                                ? "border-b-2 border-cyan-600"
+                                : "opacity-60")
+                        }
                     >
                         自分のルーム
                     </button>
                 </nav>
 
-                {createError && <p className="text-red-500" role="alert">{createError}</p>}
+                {createError && (
+                    <p className="text-red-500" role="alert">
+                        {createError}
+                    </p>
+                )}
 
                 {rooms.length > 0 ? (
                     <div className="grid w-full gap-4 sm:grid-cols-2">
                         {rooms
                             .slice()
-                            .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
+                            .sort(
+                                (a, b) =>
+                                    new Date(b.updatedAt ?? 0).getTime() -
+                                    new Date(a.updatedAt ?? 0).getTime(),
+                            )
                             .map((room) => (
-                                <RoomCard key={room.id} room={room} isOwner={view === "me"} />
+                                <RoomCard
+                                    key={room.id}
+                                    room={room}
+                                    isOwner={view === "me"}
+                                />
                             ))}
                     </div>
                 ) : (
                     <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
                         <p className="font-semibold">
-                            {view === "me" ? "まだルームがありません" : "共有されているルームはありません"}
+                            {view === "me"
+                                ? "まだルームがありません"
+                                : "共有されているルームはありません"}
                         </p>
                         <p className="mt-2 text-sm opacity-60">
-                            {view === "me" ? "ルームを作成して、単語リストを準備しましょう。" : "公開されたルームがここに表示されます。"}
+                            {view === "me"
+                                ? "ルームを作成して、単語リストを準備しましょう。"
+                                : "公開されたルームがここに表示されます。"}
                         </p>
                     </div>
                 )}
