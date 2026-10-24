@@ -10,9 +10,13 @@ import posthog from "posthog-js";
 export default function RoomCard({
     room,
     isOwner = false,
+    isSaved = false,
+    onToggleSaved,
 }: {
     room: Room;
     isOwner?: boolean;
+    isSaved?: boolean;
+    onToggleSaved?: () => void;
 }) {
     const router = useRouter();
     const [copied, setCopied] = useState(false);
@@ -78,6 +82,15 @@ export default function RoomCard({
                 <Button onClick={copyRoomLink} iconName="copy" variant="text">
                     {copied ? "コピー済み" : "リンクをコピー"}
                 </Button>
+                {onToggleSaved && (
+                    <Button
+                        onClick={onToggleSaved}
+                        iconName={isSaved ? "check" : "bookmark"}
+                        variant="text"
+                    >
+                        {isSaved ? "保存を解除" : "保存"}
+                    </Button>
+                )}
             </div>
         </article>
     );
