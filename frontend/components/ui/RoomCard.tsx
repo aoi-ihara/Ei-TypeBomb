@@ -39,10 +39,10 @@ export default function RoomCard({ room }: { room: Room }) {
                     </div>
                 </Link>
             </div>
-            <div className="flex flex-col gap-4">
-                <Button onClick={() => {}} iconName="pen" padding="small" />
-                <Button onClick={() => {}} iconName="copy" padding="small" />
-                <Button onClick={() => {}} iconName="qrCode" padding="small" />
+            <div className="flex flex-col gap-4 h-full">
+                <Button onClick={() => {}} iconName="pen" />
+                <Button onClick={() => {}} iconName="copy" />
+                <Button onClick={() => {}} iconName="qrCode" />
             </div>
         </div>
     );
