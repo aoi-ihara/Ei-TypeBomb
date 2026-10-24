@@ -108,7 +108,6 @@ export const getRoomSummaryFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         items: [],
-        itemCount: Array.isArray(data.items) ? data.items.length : 0,
         isPublic: data.is_public,
     };
 
@@ -188,7 +187,6 @@ export const getRoomFromId = async (id: string) => {
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         items: data.items,
-        itemCount: Array.isArray(data.items) ? data.items.length : 0,
         link: data.link,
         isPublic: data.is_public,
     } as Room;
