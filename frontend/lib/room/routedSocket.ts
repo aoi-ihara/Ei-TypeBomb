@@ -99,11 +99,15 @@ export class RoutedSocket {
         }
         connectionLog("CONNECTION", "Tab returned to foreground", {
             visibility: "visible",
-            durationMs: this.backgroundStartedAt === undefined
-                ? undefined : Math.round(performance.now() - this.backgroundStartedAt),
+            durationMs:
+                this.backgroundStartedAt === undefined
+                    ? undefined
+                    : Math.round(performance.now() - this.backgroundStartedAt),
             socketConnected: this.transport?.connected ?? false,
             owner: this.currentOwner,
-            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+            heartbeatAgeMs: Math.round(
+                Math.max(0, performance.now() - this.lastReply),
+            ),
         });
         this.backgroundStartedAt = undefined;
     };
@@ -158,7 +162,10 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.addEventListener("pagehide", this.pageHidden);
             window.addEventListener("beforeunload", this.pageHidden);
-            document.addEventListener("visibilitychange", this.onVisibilityChange);
+            document.addEventListener(
+                "visibilitychange",
+                this.onVisibilityChange,
+            );
         }
         void this.connect();
     }
@@ -310,7 +317,10 @@ export class RoutedSocket {
             attempt,
             recoveryId: this.recoveryDiagnostics?.recoveryId,
             previousOwner: this.currentOwner,
-            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+            visibility:
+                typeof document === "undefined"
+                    ? "unknown"
+                    : document.visibilityState,
         });
         try {
             this.token ??= await this.getToken();
@@ -336,13 +346,17 @@ export class RoutedSocket {
                     const reportStartedAt = performance.now();
                     if (this.recoveryDiagnostics)
                         this.recoveryDiagnostics.reportCalls++;
-                    connectionLog("FALLBACK", "Requesting ownership verification", {
-                        server: server.id,
-                        previousOwner: failure.owner,
-                        revision: failure.revision,
-                        attempt,
-                        recoveryId: this.recoveryDiagnostics?.recoveryId,
-                    });
+                    connectionLog(
+                        "FALLBACK",
+                        "Requesting ownership verification",
+                        {
+                            server: server.id,
+                            previousOwner: failure.owner,
+                            revision: failure.revision,
+                            attempt,
+                            recoveryId: this.recoveryDiagnostics?.recoveryId,
+                        },
+                    );
                     try {
                         const response = await fetch(
                             `${server.id}/cluster/report`,
@@ -366,29 +380,44 @@ export class RoutedSocket {
                         );
                         if (response.status === 409) {
                             const problem = await response.json();
-                            connectionError("FALLBACK", "Ownership verification rejected", {
-                                server: server.id,
-                                previousOwner: failure.owner,
-                                httpStatus: response.status,
-                                durationMs: Math.round(performance.now() - reportStartedAt),
-                                attempt,
-                                ...connectionErrorDetails(problem),
-                            });
+                            connectionError(
+                                "FALLBACK",
+                                "Ownership verification rejected",
+                                {
+                                    server: server.id,
+                                    previousOwner: failure.owner,
+                                    httpStatus: response.status,
+                                    durationMs: Math.round(
+                                        performance.now() - reportStartedAt,
+                                    ),
+                                    attempt,
+                                    ...connectionErrorDetails(problem),
+                                },
+                            );
                             if (
                                 problem.retryable === false &&
                                 typeof problem.code === "string"
                             )
                                 terminalReport = problem;
                         } else if (!response.ok) {
-                            const diagnostic = response.headers.get("content-type")?.includes("application/json")
-                                ? await response.json().catch(() => null) : null;
-                            connectionError("FALLBACK", "Ownership verification unavailable", {
-                                server: server.id,
-                                httpStatus: response.status,
-                                durationMs: Math.round(performance.now() - reportStartedAt),
-                                attempt,
-                                ...connectionErrorDetails(diagnostic),
-                            });
+                            const diagnostic = response.headers
+                                .get("content-type")
+                                ?.includes("application/json")
+                                ? await response.json().catch(() => null)
+                                : null;
+                            connectionError(
+                                "FALLBACK",
+                                "Ownership verification unavailable",
+                                {
+                                    server: server.id,
+                                    httpStatus: response.status,
+                                    durationMs: Math.round(
+                                        performance.now() - reportStartedAt,
+                                    ),
+                                    attempt,
+                                    ...connectionErrorDetails(diagnostic),
+                                },
+                            );
                         }
                         if (response.ok) {
                             const value = await response.json();
@@ -398,31 +427,42 @@ export class RoutedSocket {
                             )
                                 throw new Error("Stale routing response");
                             route = value;
-                            connectionLog("FALLBACK",
+                            connectionLog(
+                                "FALLBACK",
                                 value.ownership?.owner === failure.owner
                                     ? "Current owner remains authoritative"
-                                    : "Ownership route changed", {
-                                server: server.id,
-                                previousOwner: failure.owner,
-                                owner: value.ownership?.owner,
-                                epoch: value.ownership?.epoch,
-                                revision: value.ownership?.revision,
-                                lifecycle: value.ownership?.lifecycle,
-                                httpStatus: response.status,
-                                durationMs: Math.round(performance.now() - reportStartedAt),
-                            });
+                                    : "Ownership route changed",
+                                {
+                                    server: server.id,
+                                    previousOwner: failure.owner,
+                                    owner: value.ownership?.owner,
+                                    epoch: value.ownership?.epoch,
+                                    revision: value.ownership?.revision,
+                                    lifecycle: value.ownership?.lifecycle,
+                                    httpStatus: response.status,
+                                    durationMs: Math.round(
+                                        performance.now() - reportStartedAt,
+                                    ),
+                                },
+                            );
                             this.servers = route!.servers;
                             this.failure = undefined;
                             break;
                         }
                     } catch (error) {
-                        connectionError("FALLBACK", "Ownership verification request failed", {
-                            server: server.id,
-                            previousOwner: failure.owner,
-                            attempt,
-                            durationMs: Math.round(performance.now() - reportStartedAt),
-                            ...connectionErrorDetails(error),
-                        });
+                        connectionError(
+                            "FALLBACK",
+                            "Ownership verification request failed",
+                            {
+                                server: server.id,
+                                previousOwner: failure.owner,
+                                attempt,
+                                durationMs: Math.round(
+                                    performance.now() - reportStartedAt,
+                                ),
+                                ...connectionErrorDetails(error),
+                            },
+                        );
                     } finally {
                         if (this.recoveryDiagnostics)
                             this.recoveryDiagnostics.reportMs +=
@@ -470,28 +510,49 @@ export class RoutedSocket {
                                 });
                                 if (response.status === 409) {
                                     const problem = await response.json();
-                                    connectionError("CONNECTION", "Route lookup rejected", {
-                                        server: seed,
-                                        attempt,
-                                        httpStatus: response.status,
-                                        durationMs: Math.round(performance.now() - lookupStartedAt),
-                                        ...connectionErrorDetails(problem),
-                                    });
+                                    connectionError(
+                                        "CONNECTION",
+                                        "Route lookup rejected",
+                                        {
+                                            server: seed,
+                                            attempt,
+                                            httpStatus: response.status,
+                                            durationMs: Math.round(
+                                                performance.now() -
+                                                    lookupStartedAt,
+                                            ),
+                                            ...connectionErrorDetails(problem),
+                                        },
+                                    );
                                     if (
                                         problem.retryable === false &&
                                         typeof problem.code === "string"
                                     )
                                         terminalReport = problem;
                                 } else if (!response.ok) {
-                                    const diagnostic = response.headers.get("content-type")?.includes("application/json")
-                                        ? await response.json().catch(() => null) : null;
-                                    connectionError("CONNECTION", "Route endpoint unavailable", {
-                                        server: seed,
-                                        attempt,
-                                        httpStatus: response.status,
-                                        durationMs: Math.round(performance.now() - lookupStartedAt),
-                                        ...connectionErrorDetails(diagnostic),
-                                    });
+                                    const diagnostic = response.headers
+                                        .get("content-type")
+                                        ?.includes("application/json")
+                                        ? await response
+                                              .json()
+                                              .catch(() => null)
+                                        : null;
+                                    connectionError(
+                                        "CONNECTION",
+                                        "Route endpoint unavailable",
+                                        {
+                                            server: seed,
+                                            attempt,
+                                            httpStatus: response.status,
+                                            durationMs: Math.round(
+                                                performance.now() -
+                                                    lookupStartedAt,
+                                            ),
+                                            ...connectionErrorDetails(
+                                                diagnostic,
+                                            ),
+                                        },
+                                    );
                                 }
                                 if (!response.ok)
                                     throw new Error(
@@ -525,16 +586,22 @@ export class RoutedSocket {
                                     })
                                 )
                                     throw new Error("Invalid routing response");
-                                connectionLog("CONNECTION", "Authoritative route resolved", {
-                                    server: seed,
-                                    owner: value.ownership?.owner,
-                                    epoch: value.ownership?.epoch,
-                                    revision: value.ownership?.revision,
-                                    lifecycle: value.ownership?.lifecycle,
-                                    httpStatus: response.status,
-                                    durationMs: Math.round(performance.now() - lookupStartedAt),
-                                    attempt,
-                                });
+                                connectionLog(
+                                    "CONNECTION",
+                                    "Authoritative route resolved",
+                                    {
+                                        server: seed,
+                                        owner: value.ownership?.owner,
+                                        epoch: value.ownership?.epoch,
+                                        revision: value.ownership?.revision,
+                                        lifecycle: value.ownership?.lifecycle,
+                                        httpStatus: response.status,
+                                        durationMs: Math.round(
+                                            performance.now() - lookupStartedAt,
+                                        ),
+                                        attempt,
+                                    },
+                                );
                                 return value as {
                                     ownership: Ownership | null;
                                     servers: Server[];
@@ -542,15 +609,29 @@ export class RoutedSocket {
                             } catch (error) {
                                 // Promise.any cancels losing probes on success; do
                                 // not report those intentional aborts as outages.
-                                if (!controllers[index].signal.aborted &&
-                                    attempt === this.attempt && !this.stopped &&
-                                    !(error instanceof Error && error.message === "Routing endpoint unavailable"))
-                                    connectionError("CONNECTION", "Route lookup failed", {
-                                        server: seed,
-                                        attempt,
-                                        durationMs: Math.round(performance.now() - lookupStartedAt),
-                                        ...connectionErrorDetails(error),
-                                    });
+                                if (
+                                    !controllers[index].signal.aborted &&
+                                    attempt === this.attempt &&
+                                    !this.stopped &&
+                                    !(
+                                        error instanceof Error &&
+                                        error.message ===
+                                            "Routing endpoint unavailable"
+                                    )
+                                )
+                                    connectionError(
+                                        "CONNECTION",
+                                        "Route lookup failed",
+                                        {
+                                            server: seed,
+                                            attempt,
+                                            durationMs: Math.round(
+                                                performance.now() -
+                                                    lookupStartedAt,
+                                            ),
+                                            ...connectionErrorDetails(error),
+                                        },
+                                    );
                                 throw error;
                             } finally {
                                 clearTimeout(timeout);
@@ -623,13 +704,24 @@ export class RoutedSocket {
                         performance.now() - handshakeStartedAt;
                 if (!ready || attempt !== this.attempt || this.stopped) {
                     if (!ready && attempt === this.attempt && !this.stopped)
-                        connectionError("CONNECTION", "Socket handshake failed", {
-                            server: server.id,
-                            tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
-                            transport: server.transport,
-                            attempt,
-                            durationMs: Math.round(performance.now() - handshakeStartedAt),
-                        });
+                        connectionError(
+                            "CONNECTION",
+                            "Socket handshake failed",
+                            {
+                                server: server.id,
+                                tier:
+                                    server.depth === 0
+                                        ? "primary"
+                                        : server.depth === 1
+                                          ? "secondary"
+                                          : "fallback",
+                                transport: server.transport,
+                                attempt,
+                                durationMs: Math.round(
+                                    performance.now() - handshakeStartedAt,
+                                ),
+                            },
+                        );
                     socket.disconnect();
                     if (own && server.id === own.owner)
                         this.failure = {
@@ -640,13 +732,22 @@ export class RoutedSocket {
                 }
                 const previousOwner = this.currentOwner;
                 if (previousOwner && previousOwner !== server.id)
-                    connectionLog("FALLBACK", `Switching to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`, {
-                        previousOwner,
-                        server: server.id,
-                        tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
-                        attempt,
-                        recoveryId: this.recoveryDiagnostics?.recoveryId,
-                    });
+                    connectionLog(
+                        "FALLBACK",
+                        `Switching to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`,
+                        {
+                            previousOwner,
+                            server: server.id,
+                            tier:
+                                server.depth === 0
+                                    ? "primary"
+                                    : server.depth === 1
+                                      ? "secondary"
+                                      : "fallback",
+                            attempt,
+                            recoveryId: this.recoveryDiagnostics?.recoveryId,
+                        },
+                    );
                 this.transport?.disconnect();
                 this.transport = socket;
                 this.authenticatedTransport = undefined;
@@ -654,14 +755,25 @@ export class RoutedSocket {
                 // Preserve the endpoint independently of the stable owner ID
                 // supplied by subsequent room snapshots.
                 this.currentOwnerUrl = url;
-                connectionLog("CONNECTED", `Connected to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`, {
-                    server: server.id,
-                    tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
-                    serverDepth: server.depth,
-                    transport: server.transport,
-                    attempt,
-                    durationMs: Math.round(performance.now() - handshakeStartedAt),
-                });
+                connectionLog(
+                    "CONNECTED",
+                    `Connected to ${server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback"} server`,
+                    {
+                        server: server.id,
+                        tier:
+                            server.depth === 0
+                                ? "primary"
+                                : server.depth === 1
+                                  ? "secondary"
+                                  : "fallback",
+                        serverDepth: server.depth,
+                        transport: server.transport,
+                        attempt,
+                        durationMs: Math.round(
+                            performance.now() - handshakeStartedAt,
+                        ),
+                    },
+                );
                 let authenticating = true;
                 const authStartedAt = performance.now();
                 let authenticatedAt: number | undefined;
@@ -710,7 +822,9 @@ export class RoutedSocket {
                         recoveryId: metrics?.recoveryId,
                         fromDepth: metrics?.fromDepth,
                         toDepth: server.depth,
-                        snapshotRecoveryMs: Math.round(finishedAt - this.recoveryStartedAt),
+                        snapshotRecoveryMs: Math.round(
+                            finishedAt - this.recoveryStartedAt,
+                        ),
                         routeCalls: metrics?.routeCalls,
                         reportCalls: metrics?.reportCalls,
                     });
@@ -729,12 +843,18 @@ export class RoutedSocket {
                 });
                 socket.on("error", (error) => {
                     if (active()) {
-                        connectionError("CONNECTION", "Server returned an error", {
-                            server: server.id,
-                            attempt,
-                            phase: authenticating ? "authentication" : "connected",
-                            ...connectionErrorDetails(error),
-                        });
+                        connectionError(
+                            "CONNECTION",
+                            "Server returned an error",
+                            {
+                                server: server.id,
+                                attempt,
+                                phase: authenticating
+                                    ? "authentication"
+                                    : "connected",
+                                ...connectionErrorDetails(error),
+                            },
+                        );
                         const hasLowerTier = this.servers.some(
                             (peer) => peer.depth > server.depth,
                         );
@@ -758,9 +878,16 @@ export class RoutedSocket {
                         this.authenticatedTransport = socket;
                         connectionLog("AUTH", "Authentication succeeded", {
                             server: server.id,
-                            tier: server.depth === 0 ? "primary" : server.depth === 1 ? "secondary" : "fallback",
+                            tier:
+                                server.depth === 0
+                                    ? "primary"
+                                    : server.depth === 1
+                                      ? "secondary"
+                                      : "fallback",
                             attempt,
-                            durationMs: Math.round(this.lastReply - authStartedAt),
+                            durationMs: Math.round(
+                                this.lastReply - authStartedAt,
+                            ),
                         });
                         this.dispatch("auth:session", value);
                         this.sendLeaveIfAuthenticated();
@@ -1011,9 +1138,14 @@ export class RoutedSocket {
         connectionLog("FALLBACK", "Starting connection recovery", {
             reason,
             previousOwner: this.currentOwner,
-            heartbeatAgeMs: Math.round(Math.max(0, performance.now() - this.lastReply)),
+            heartbeatAgeMs: Math.round(
+                Math.max(0, performance.now() - this.lastReply),
+            ),
             socketConnected: this.transport?.connected ?? false,
-            visibility: typeof document === "undefined" ? "unknown" : document.visibilityState,
+            visibility:
+                typeof document === "undefined"
+                    ? "unknown"
+                    : document.visibilityState,
             retryCount: this.recoveryFailures,
             recoveryId: this.recoveryDiagnostics?.recoveryId,
         });
@@ -1104,7 +1236,10 @@ export class RoutedSocket {
         if (typeof window !== "undefined") {
             window.removeEventListener("pagehide", this.pageHidden);
             window.removeEventListener("beforeunload", this.pageHidden);
-            document.removeEventListener("visibilitychange", this.onVisibilityChange);
+            document.removeEventListener(
+                "visibilitychange",
+                this.onVisibilityChange,
+            );
         }
         this.stopped = true;
         this.joinedRoom = false;

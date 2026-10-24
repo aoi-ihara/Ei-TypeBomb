@@ -282,8 +282,14 @@ export default function Clinet({
                     visible: false,
                 }));
                 noticeTimer = null;
-            }, 3000);
+            }, 5000);
         };
+
+        showNotice({
+            iconName: "keyboard",
+            title: "半角で入力してください",
+            description: "単語は日本語でも英語でも、半角で入力してください。",
+        });
 
         type ServerTier = "primary" | "secondary" | "fallback";
         type Candidate = {

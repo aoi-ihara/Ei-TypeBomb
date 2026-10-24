@@ -63,6 +63,10 @@ export const updateRoomFromId = async (room: Room) => {
         else updateData.game_duration = room.gameDuration;
     }
 
+    if (room.isPublic !== undefined) {
+        updateData.is_public = room.isPublic;
+    }
+
     let shouldUpdatePassword = false;
     let newHashedPassword: string | null | undefined;
 

@@ -10,20 +10,50 @@ type DiagnosticValue = string | number | boolean | null | undefined;
 type DiagnosticDetails = Record<string, DiagnosticValue>;
 
 const allowedKeys = new Set([
-    "attempt", "code", "durationMs", "elapsedMs", "epoch", "errorType",
-    "expectedInstanceKnown", "fromDepth", "fromTier", "heartbeatAgeMs",
-    "httpStatus", "lifecycle", "owner", "phase", "previousOwner", "reason",
-    "recoveryId", "reportCalls", "retryable", "retryCount", "retryDelayMs",
-    "revision", "routeCalls", "server", "serverDepth", "snapshotRecoveryMs",
-    "socketConnected", "tier", "toDepth", "toTier", "transport", "visibility",
+    "attempt",
+    "code",
+    "durationMs",
+    "elapsedMs",
+    "epoch",
+    "errorType",
+    "expectedInstanceKnown",
+    "fromDepth",
+    "fromTier",
+    "heartbeatAgeMs",
+    "httpStatus",
+    "lifecycle",
+    "owner",
+    "phase",
+    "previousOwner",
+    "reason",
+    "recoveryId",
+    "reportCalls",
+    "retryable",
+    "retryCount",
+    "retryDelayMs",
+    "revision",
+    "routeCalls",
+    "server",
+    "serverDepth",
+    "snapshotRecoveryMs",
+    "socketConnected",
+    "tier",
+    "toDepth",
+    "toTier",
+    "transport",
+    "visibility",
 ]);
 
 const safeDetails = (details: DiagnosticDetails): DiagnosticDetails =>
-    Object.fromEntries(Object.entries(details).filter(
-        ([key, value]) => allowedKeys.has(key) &&
-            (value === null || ["string", "number", "boolean"].includes(typeof value)) &&
-            (typeof value !== "string" || value.length <= 250),
-    ));
+    Object.fromEntries(
+        Object.entries(details).filter(
+            ([key, value]) =>
+                allowedKeys.has(key) &&
+                (value === null ||
+                    ["string", "number", "boolean"].includes(typeof value)) &&
+                (typeof value !== "string" || value.length <= 250),
+        ),
+    );
 
 export function connectionLog(
     topic: ConnectionTopic,
@@ -55,8 +85,7 @@ const safeReasons = new Set([
     "No existing room to restore",
 ]);
 export function connectionErrorDetails(error: unknown): DiagnosticDetails {
-    if (!error || typeof error !== "object")
-        return { errorType: typeof error };
+    if (!error || typeof error !== "object") return { errorType: typeof error };
     const value = error as {
         name?: unknown;
         message?: unknown;
@@ -65,15 +94,23 @@ export function connectionErrorDetails(error: unknown): DiagnosticDetails {
         status?: unknown;
     };
     return {
-        ...(typeof value.name === "string" && /^[A-Za-z]{1,40}$/.test(value.name)
-            ? { errorType: value.name } : {}),
-        ...(typeof value.code === "string" && /^[A-Z][A-Z0-9_]{1,63}$/.test(value.code)
-            ? { code: value.code } : {}),
-        ...(typeof value.retryable === "boolean" ? { retryable: value.retryable } : {}),
+        ...(typeof value.name === "string" &&
+        /^[A-Za-z]{1,40}$/.test(value.name)
+            ? { errorType: value.name }
+            : {}),
+        ...(typeof value.code === "string" &&
+        /^[A-Z][A-Z0-9_]{1,63}$/.test(value.code)
+            ? { code: value.code }
+            : {}),
+        ...(typeof value.retryable === "boolean"
+            ? { retryable: value.retryable }
+            : {}),
         ...(typeof value.status === "number" && Number.isInteger(value.status)
-            ? { httpStatus: value.status } : {}),
+            ? { httpStatus: value.status }
+            : {}),
         ...(typeof value.message === "string" && safeReasons.has(value.message)
-            ? { reason: value.message } : {}),
+            ? { reason: value.message }
+            : {}),
     };
 }
 

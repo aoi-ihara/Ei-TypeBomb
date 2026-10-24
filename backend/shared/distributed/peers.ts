@@ -32,6 +32,8 @@ export type PeerStorage = {
     load(room: string): Promise<VoteRecord | undefined>;
     save(room: string, record: VoteRecord): Promise<void>;
     registry?(members: Member[]): Promise<void>;
+    members(): Member[];
+    close(): void;
 };
 export class PeerControl implements Control {
     readonly links = new Map<string, PeerLink>();
@@ -409,17 +411,10 @@ export class PeerControl implements Control {
             }
             if (!old && args.expectedInstance)
                 throw new Error("Expected checkpoint is unavailable");
-            // Registration normally runs in the background. At startup the
-            // first room can race ahead of it and permanently exclude an
-            // already-online standby from this room's fixed voting cohort.
-            // Allow a short bounded discovery window before sealing voters.
             await Promise.race([
                 this.register(),
                 new Promise<void>((resolve) => setTimeout(resolve, 300)),
             ]);
-            // The creator is the first voter. A backup can initialize a fresh
-            // room when all earlier tiers are unavailable. Its signed cohort
-            // is a contiguous suffix, so no unreachable primary is required.
             const voters: Member[] = [];
             for (const id of this.identity.member.roster.slice(
                 this.identity.member.depth,
@@ -445,8 +440,6 @@ export class PeerControl implements Control {
                     }
                 }),
             );
-            // Offline lower-priority servers cannot block a new game.
-            // Voters are fixed for this room; standby catch-up is best-effort.
             const initial = args.initial as DurableRoom;
             if (
                 !initial ||
@@ -471,10 +464,6 @@ export class PeerControl implements Control {
                 voters,
             });
             const initialized = await this.propose(cp, "init", old);
-            // Solo commit is allowed, but a crash-safe failover is possible
-            // only after at least one standby has received this checkpoint.
-            // Give an online standby a short opportunity to receive the
-            // initial room data; never wait indefinitely for sleeping peers.
             await Promise.race([
                 this.broadcast(initialized),
                 new Promise<void>((resolve) => setTimeout(resolve, 150)),
@@ -492,9 +481,6 @@ export class PeerControl implements Control {
         )
             throw new Error("Fenced owner");
         if (op === "confirm") {
-            // Opportunistic reconciliation must NEVER dial an offline Render
-            // during a gameplay heartbeat. Query only existing peer sockets,
-            // with a short bounded timeout, and always check local mirrors.
             const observations: VotedCheckpoint[] = [];
             const mirror = this.mirrors.get(roomId);
             if (mirror) observations.push(mirror);
@@ -622,8 +608,6 @@ export class PeerControl implements Control {
                 .filter((member) => member.depth > self.depth)
                 .map((member) => {
                     const voter = cp.voters.find((v) => v.id === member.id);
-                    // A caught-up voter is eligible for a later election.
-                    // Non-voting mirrors are best-effort and cannot certify events.
                     const op =
                         voter && voter.boot === member.boot
                             ? "install"
@@ -636,8 +620,6 @@ export class PeerControl implements Control {
         roomId: string,
         args: Record<string, unknown>,
     ): Promise<ControlResult> {
-        // Diagnostic timings never affect votes, checkpoint contents, or
-        // failover decisions. The HTTP handler owns this ephemeral object.
         const timings = args.diagnosticTimings as
             Record<string, number> | undefined;
         const readStartedAt = performance.now();
@@ -699,12 +681,8 @@ export class PeerControl implements Control {
         const suffix = cp.voters.slice(
             cp.voters.findIndex((v) => v.id === this.config.id),
         );
-        // Bring reachable voters up to the latest certified checkpoint
-        // before promising a higher epoch. Mirrors alone are never votes.
         const ballots = await Promise.allSettled(
             suffix.map(async (v) => {
-                // If a voter has a higher uncommitted promise, installing an
-                // older checkpoint must fail, but its ballot still counts.
                 await this.rpc(v.id, "install", { checkpoint: cp }).catch(
                     () => {},
                 );
@@ -746,8 +724,6 @@ export class PeerControl implements Control {
             },
         });
         const elected = await this.propose(replacement, "elect", latest);
-        // The only surviving owner may elect immediately; promptly spread
-        // the new epoch so sleeping/lower replicas can later recover it.
         await Promise.race([
             this.broadcast(elected),
             new Promise<void>((resolve) => setTimeout(resolve, 150)),
@@ -904,9 +880,6 @@ export class PeerControl implements Control {
                         record.promised > args.epoch
                     )
                         throw new Error("Fenced owner");
-                    // A probe only verifies fencing; it must not move the timer
-                    // pause boundary of a halted game. Only its runtime heartbeat
-                    // (or a committed event) proves continued game execution.
                     if (args.progress === true)
                         await this.store(roomId, {
                             ...record,
@@ -990,8 +963,6 @@ export class PeerControl implements Control {
                 return old;
             }
             if (proposal.mode === "init") {
-                // A migrated owner only writes its suffix. The signed terminal
-                // tombstone authorizes replacing stale records at old owners.
                 let released = !old || old.ownership.lifecycle === "DELETED";
                 if (proposal.base) {
                     const base = proposal.base;

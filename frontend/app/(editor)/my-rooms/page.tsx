@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { Icon } from "@/components/ui/Icon";
 import posthog from "posthog-js";
+import RoomCard from "@/components/ui/RoomCard";
 
 export default function Profile() {
     const router = useRouter();
@@ -53,7 +54,7 @@ export default function Profile() {
             </Button>
 
             {rooms && rooms.length !== 0 && (
-                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+                <div className="w-full grid gap-4">
                     {rooms
                         .sort(
                             (a, b) =>
@@ -61,43 +62,7 @@ export default function Profile() {
                                 new Date(a.updatedAt ?? 0).getTime(),
                         )
                         .map((room) => (
-                            <div
-                                key={room.id}
-                                data-cursor="button"
-                                className="rounded-lg"
-                            >
-                                <button
-                                    className="flex cursor-pointer w-full active:scale-95 transition-all duration-(--duration-etb) ease-etb flex-col gap-2 px-4 py-3 h-48 rounded-lg bg-(--color-background-secondary)"
-                                    onClick={() =>
-                                        router.push(`/my-rooms/${room.id}`)
-                                    }
-                                >
-                                    {rooms && (
-                                        <div className="flex shrink-0 gap-2 items-center">
-                                            {room.password ? (
-                                                <Icon name="lock" />
-                                            ) : (
-                                                <Icon name="earth" />
-                                            )}
-                                            <div
-                                                className="font-bold w-full text-start font-mono truncate text-lg"
-                                                data-cursor="text"
-                                            >
-                                                {room.title}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="text-start line-clamp-2">
-                                        {room.explanation}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Icon name="usersRound" />
-                                        <div className="font-mono font-bold">
-                                            {room.maxPlayers}
-                                        </div>
-                                    </div>
-                                </button>
-                            </div>
+                            <RoomCard key={room.id} room={room} />
                         ))}
                 </div>
             )}

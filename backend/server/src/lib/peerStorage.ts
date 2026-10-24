@@ -9,12 +9,45 @@ import type {
     VoteRecord,
 } from "../../../shared/distributed/peers";
 
-/** Never write runtime state into the checked-out server or repository directory.
- * A mounted, durable CLUSTER_STATE_DIR is strongly recommended for Render. */
+/**
+ * Production peer state is intentionally process-local. The persistent
+ * implementation below exists only for the distributed integration harness;
+ * the production server must not write runtime state outside its log path.
+ */
+class MemoryPeerStorage implements PeerStorage {
+    private readonly records = new Map<string, VoteRecord>();
+    private membersList: import("../../../shared/distributed/identity").Member[] = [];
+
+    async load(room: string) {
+        return this.records.get(room);
+    }
+
+    async save(room: string, value: VoteRecord) {
+        this.records.set(room, structuredClone(value));
+    }
+
+    async registry(members: import("../../../shared/distributed/identity").Member[]) {
+        this.membersList = structuredClone(members);
+    }
+
+    members() {
+        return structuredClone(this.membersList);
+    }
+
+    close() {}
+}
+
+/** Test-only storage namespace. It is never used by the production server. */
 export function clusterStateRoot(
-    env: { CLUSTER_STATE_DIR?: string; XDG_STATE_HOME?: string },
+    env: {
+        CLUSTER_STATE_DIR?: string;
+        XDG_STATE_HOME?: string;
+        ETB_TEST_PERSISTENT_PEER_STORAGE?: string;
+    },
     workingDirectory = process.cwd(),
 ): string {
+    if (env.ETB_TEST_PERSISTENT_PEER_STORAGE !== "true")
+        return "memory://ei-typebomb/cluster";
     const fallback =
         env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
             ? join(env.XDG_STATE_HOME, "ei-typebomb", "cluster")
@@ -37,8 +70,6 @@ export function clusterStateRoot(
     return location;
 }
 
-/** The CURRENT declaration selects a new namespace. No former server URL or
- * former topology is loaded from disk, even if old unscoped SQLite exists. */
 export function topologyStateDirectory(
     root: string,
     declaration: string,
@@ -49,12 +80,12 @@ export function topologyStateDirectory(
     );
 }
 
-/** One persistent voter per scoped directory. SQLite's exclusive OS lock is
- * released after SIGKILL; boot and votes must survive ordinary restarts. */
-export class NodePeerStorage implements PeerStorage {
+/** Legacy persistence used only by the distributed integration harness. */
+class TestNodePeerStorage implements PeerStorage {
     private readonly db: DatabaseSync;
     private readonly writtenRooms: Set<string>;
     readonly boot: string;
+
     constructor(directory: string) {
         mkdirSync(directory, { recursive: true, mode: 0o700 });
         const path = resolve(directory, "cluster.sqlite");
@@ -67,8 +98,6 @@ export class NodePeerStorage implements PeerStorage {
                 CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 COMMIT;`);
             this.db.exec("BEGIN IMMEDIATE");
-            // Persist only the voter incarnation, not a server URL, parent,
-            // roster or a previously configured topology.
             const previous = this.get<{ boot?: unknown; rooms?: unknown }>(
                 "identity",
             );
@@ -99,31 +128,32 @@ export class NodePeerStorage implements PeerStorage {
             throw error;
         }
     }
+
     private get<T>(key: string): T | undefined {
         const row = this.db
             .prepare("SELECT value FROM state WHERE key = ?")
             .get(key);
         return row ? (JSON.parse(row.value as string) as T) : undefined;
     }
+
     private put(key: string, value: unknown) {
         this.db
             .prepare("INSERT OR REPLACE INTO state (key, value) VALUES (?, ?)")
             .run(key, JSON.stringify(value));
     }
+
     async load(room: string) {
         const record = this.get<VoteRecord>(`room:${room}`);
         if (!record && this.writtenRooms.has(room))
             throw new Error("Voter lost state; cannot vote");
         return record;
     }
+
     async save(room: string, value: VoteRecord) {
         if (this.writtenRooms.has(room)) {
             this.put(`room:${room}`, value);
             return;
         }
-        // Atomically record the room's first vote and its durable participation
-        // index. Losing room records while retaining the boot ID must NOT
-        // silently let the old voter reacquire its ballot by replication.
         this.db.exec("BEGIN IMMEDIATE");
         try {
             this.put(`room:${room}`, value);
@@ -138,11 +168,13 @@ export class NodePeerStorage implements PeerStorage {
             throw error;
         }
     }
+
     async registry(
         members: import("../../../shared/distributed/identity").Member[],
     ) {
         this.put("registry", members);
     }
+
     members() {
         return (
             this.get<import("../../../shared/distributed/identity").Member[]>(
@@ -150,6 +182,7 @@ export class NodePeerStorage implements PeerStorage {
             ) ?? []
         );
     }
+
     close() {
         this.db.close();
     }
@@ -159,13 +192,25 @@ export async function persistentPeerIdentity(
     declaration: string,
     root: string,
 ) {
-    await Identity.create(declaration);
-    const storage = new NodePeerStorage(
-        topologyStateDirectory(root, declaration),
-    );
+    const usePersistentStorage =
+        process.env.ETB_TEST_PERSISTENT_PEER_STORAGE === "true";
+    let storage: PeerStorage;
+    let boot: string;
+
+    if (usePersistentStorage) {
+        const persistentStorage = new TestNodePeerStorage(
+            topologyStateDirectory(root, declaration),
+        );
+        storage = persistentStorage;
+        boot = persistentStorage.boot;
+    } else {
+        storage = new MemoryPeerStorage();
+        boot = randomUUID();
+    }
+
     try {
         return {
-            identity: await Identity.create(declaration, storage.boot),
+            identity: await Identity.create(declaration, boot),
             storage,
         };
     } catch (error) {
