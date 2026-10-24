@@ -48,7 +48,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public, items",
+            "id, title, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
         )
         .eq("is_public", true)
         .order("updated_at", { ascending: false });
@@ -60,7 +60,6 @@ export const getPublicRooms = async (): Promise<Room[]> => {
 
     return data.map((room) => ({
         id: room.id,
-        userId: room.user_id ?? undefined,
         title: room.title,
         explanation: room.explanation,
         maxPlayers: room.max_players,
@@ -69,7 +68,6 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         items: [],
-        itemCount: Array.isArray(room.items) ? room.items.length : 0,
         isPublic: room.is_public,
     }));
 };
@@ -200,7 +198,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public, items",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
         )
         .eq("user_id", userId);
 
@@ -211,7 +209,6 @@ export const getMyRooms = async () => {
 
     const rooms: Room[] = data.map((room) => ({
         id: room.id,
-        userId: room.user_id ?? userId,
         title: room.title,
         explanation: room.explanation,
         maxPlayers: room.max_players,
@@ -220,7 +217,6 @@ export const getMyRooms = async () => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         items: [],
-        itemCount: Array.isArray(room.items) ? room.items.length : 0,
         isPublic: room.is_public,
     }));
 
