@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getPlaygroundRoom } from "@/lib/room/playground";
-import { getRoomSummaryFromId } from "@/lib/room/get";
+import { getRoomPlayInfoFromId } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 
 export default async function PlayPage({
@@ -10,7 +10,7 @@ export default async function PlayPage({
 }) {
     const { slug } = await params;
     const [summary, authorizedRoom] = await Promise.all([
-        getRoomSummaryFromId(slug),
+        getRoomPlayInfoFromId(slug),
         getPlaygroundRoom(),
     ]);
     if (!summary) notFound();
@@ -18,7 +18,7 @@ export default async function PlayPage({
     return (
         <PlayRoom
             roomId={slug}
-            title={summary.room.title || "ルーム"}
+            title={summary.title || "ルーム"}
             alreadyAuthorized={authorizedRoom?.id === slug}
             itemCount={summary.itemCount}
         />

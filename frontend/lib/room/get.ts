@@ -93,6 +93,9 @@ export const getRoomSummaryFromId = async (id: string) => {
     }
     if (!data) return null;
 
+    const isOwner = data.user_id === userId;
+    if (!data.is_public && !isOwner) return null;
+
     const room: Room = {
         id: data.id,
         title: data.title,
@@ -109,7 +112,37 @@ export const getRoomSummaryFromId = async (id: string) => {
     return {
         room,
         itemCount: Array.isArray(data.items) ? data.items.length : 0,
-        isOwner: data.user_id === userId,
+        isOwner,
+    };
+};
+
+export const getRoomPlayInfoFromId = async (id: string) => {
+    if (!isUUID(id, 4)) return null;
+
+    const supabase = await createAdminClient();
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select("id, title, user_id, is_public, items")
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
+
+    if (error) {
+        serverError("failed to fetch room play info", error, "DB");
+        return null;
+    }
+    if (!data) return null;
+
+    const isOwner = data.user_id === userId;
+    const canViewDetails = Boolean(data.is_public) || isOwner;
+    const hasItems = Array.isArray(data.items) && data.items.length > 0;
+
+    return {
+        title: canViewDetails ? data.title : "非公開ルーム",
+        // Keep private room metadata minimal before password authentication.
+        itemCount: canViewDetails ? (Array.isArray(data.items) ? data.items.length : 0) : (hasItems ? 1 : 0),
     };
 };
 

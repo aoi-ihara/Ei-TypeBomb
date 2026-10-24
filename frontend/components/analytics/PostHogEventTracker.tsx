@@ -55,11 +55,6 @@ export default function PostHogEventTracker() {
             const inFeaturePanel = isFeaturePanelElement(button);
             const roomId = getRoomId(currentPathname);
 
-            if (currentPathname === "/" && text === "プレイ") {
-                posthog.capture("play_clicked");
-                return;
-            }
-
             if (inRoomEditor && icon === "qrCode") {
                 posthog.capture("room_qr_opened", { room_id: roomId });
                 return;

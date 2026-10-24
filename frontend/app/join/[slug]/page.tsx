@@ -8,7 +8,12 @@ export default async function JoinLegacyRoute({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const roomId = isUUID(slug, 4) ? slug : await getRoomFromLink(slug);
+
+    // A custom invite slug can itself look like a UUID. Resolve the unique
+    // custom link first; only fall back to treating the slug as a room ID.
+    const roomId = (await getRoomFromLink(slug)) ??
+        (isUUID(slug, 4) ? slug : null);
+
     if (!roomId) notFound();
-    redirect("/" + roomId);
+    redirect("/" + roomId + "/play");
 }

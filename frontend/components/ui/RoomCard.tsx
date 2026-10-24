@@ -19,7 +19,8 @@ export default function RoomCard({
 
     const copyRoomLink = async () => {
         try {
-            await navigator.clipboard.writeText(window.location.origin + "/" + room.id);
+            const path = room.isPublic ? "/" + room.id : "/" + room.id + "/play";
+            await navigator.clipboard.writeText(window.location.origin + path);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2000);
             posthog.capture("room_code_copied", { room_id: room.id });

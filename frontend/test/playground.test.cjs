@@ -402,7 +402,7 @@ test("BOT random fallback prefers non-protected words before protected answered 
 // Exercise the real queue callback, including arrivals during an in-flight request.
 function getCallback(name, globals) {
     const source = fs.readFileSync(
-        path.join(root, "app/(game)/playground/Client.tsx"),
+        path.join(root, "app/(game)/[slug]/play/playground/Client.tsx"),
         "utf8",
     );
     const ast = ts.createSourceFile(
@@ -487,7 +487,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
 
 function clientCallbacks(names, globals) {
     const source = fs.readFileSync(
-        path.join(root, "app/(game)/playground/Client.tsx"),
+        path.join(root, "app/(game)/[slug]/play/playground/Client.tsx"),
         "utf8",
     );
     const ast = ts.createSourceFile(
