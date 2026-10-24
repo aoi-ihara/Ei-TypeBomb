@@ -17,7 +17,7 @@ function isRoomEditorPath(pathname: string) {
 }
 
 function getRoomId(pathname: string) {
-    return pathname.split("/").at(-1);
+    return pathname.split("/")[1];
 }
 
 function isFeaturePanelElement(element: Element | null) {
