@@ -1,17 +1,32 @@
-import { cookies } from "next/headers";
-import Home from "./Home";
+import { getUser } from "@/lib/auth/session";
+import { getMyRooms, getPublicRooms } from "@/lib/room/get";
+import RoomList from "./RoomList";
 
-export default async function Page() {
-    const cookieStore = await cookies();
+export default async function Page({
+    searchParams,
+}: {
+    searchParams: Promise<{ owner?: string }>;
+}) {
+    const { owner } = await searchParams;
 
-    const backgroundMusic =
-        cookieStore.get("background-music")?.value !== "false";
-    const sounDeffects = cookieStore.get("sound-effects")?.value !== "false";
+    if (owner === "me") {
+        const result = await getMyRooms();
+        return (
+            <RoomList
+                rooms={result?.rooms ?? []}
+                view="me"
+                isSignedIn={true}
+            />
+        );
+    }
+
+    const [rooms, userId] = await Promise.all([getPublicRooms(), getUser()]);
 
     return (
-        <Home
-            initialSounDeffects={sounDeffects}
-            initialBackgroundMusic={backgroundMusic}
+        <RoomList
+            rooms={rooms}
+            view="public"
+            isSignedIn={Boolean(userId)}
         />
     );
 }

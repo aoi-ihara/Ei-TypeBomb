@@ -43,6 +43,76 @@ export const getRoomStatusFromId = async (id: string) => {
     return Boolean(data.password);
 };
 
+export const getPublicRooms = async (): Promise<Room[]> => {
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select(
+            "id, title, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
+        )
+        .eq("is_public", true)
+        .order("updated_at", { ascending: false });
+
+    if (error) {
+        serverError("failed to fetch public rooms", error, "DB");
+        return [];
+    }
+
+    return data.map((room) => ({
+        id: room.id,
+        title: room.title,
+        explanation: room.explanation,
+        maxPlayers: room.max_players,
+        bombCount: room.bomb_count ?? null,
+        gameDuration: room.game_duration ?? 20,
+        createdAt: room.created_at,
+        updatedAt: room.updated_at,
+        items: [],
+        isPublic: room.is_public,
+    }));
+};
+
+export const getRoomSummaryFromId = async (id: string) => {
+    if (!isUUID(id, 4)) return null;
+
+    const supabase = await createAdminClient();
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select(
+                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public",
+            )
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
+
+    if (error) {
+        serverError("failed to fetch room summary", error, "DB");
+        return null;
+    }
+    if (!data) return null;
+
+    const room: Room = {
+        id: data.id,
+        title: data.title,
+        explanation: data.explanation,
+        maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
+        gameDuration: data.game_duration ?? 20,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        items: [],
+        isPublic: data.is_public,
+    };
+
+    return {
+        room,
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        isOwner: data.user_id === userId,
+    };
+};
+
 export const getRoomFromId = async (id: string) => {
     const supabase = await createAdminClient();
 
@@ -95,7 +165,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration, is_public",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, game_duration, is_public",
         )
         .eq("user_id", userId);
 
@@ -107,16 +177,13 @@ export const getMyRooms = async () => {
     const rooms: Room[] = data.map((room) => ({
         id: room.id,
         title: room.title,
-        userId: room.user_id,
         explanation: room.explanation,
         maxPlayers: room.max_players,
         bombCount: room.bomb_count ?? null,
         gameDuration: room.game_duration ?? 20,
-        password: room.password,
         createdAt: room.created_at,
         updatedAt: room.updated_at,
-        items: room.items,
-        link: room.link,
+        items: [],
         isPublic: room.is_public,
     }));
 

@@ -1012,7 +1012,7 @@ export default function Client({
             stopRecommended={stopRecommended}
             onStop={() => {
                 void flushPendingMemory().finally(() => {
-                    router.push("/room");
+                    router.push("/" + room.id);
                 });
             }}
             resultExtraActions={

@@ -13,7 +13,7 @@ const GENERATION_EXAMPLES = new Set([
 ]);
 
 function isRoomEditorPath(pathname: string) {
-    return /^\/my-rooms\/[^/]+$/.test(pathname);
+    return /^\/[^/]+\/edit$/.test(pathname);
 }
 
 function getRoomId(pathname: string) {
@@ -57,11 +57,6 @@ export default function PostHogEventTracker() {
 
             if (currentPathname === "/" && text === "プレイ") {
                 posthog.capture("play_clicked");
-                return;
-            }
-
-            if (currentPathname === "/room" && text === "デモをプレイ") {
-                posthog.capture("demo_started");
                 return;
             }
 
