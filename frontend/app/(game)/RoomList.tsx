@@ -14,7 +14,6 @@ import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
-import Picker from "@/components/ui/Picker";
 import Image from "next/image";
 
 type CurrentUser = {
@@ -22,6 +21,8 @@ type CurrentUser = {
     email: string | null;
     displayName: string | null;
 };
+
+type View = "recommended" | "mine" | "saved";
 
 type Props = {
     publicRooms: Room[];
@@ -32,44 +33,16 @@ type Props = {
     initialSoundEffects: boolean;
 };
 
-type CreatorFilter = "all" | "mine" | "others";
-type VisibilityFilter = "all" | "public" | "private";
-type ItemCountFilter =
-    | "all"
-    | "empty"
-    | "1-9"
-    | "10-19"
-    | "20-39"
-    | "40-59"
-    | "60-79"
-    | "80-99"
-    | "100+";
+const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
 
-const CREATOR_FILTERS: CreatorFilter[] = ["all", "mine", "others"];
-const CREATOR_FILTER_ITEMS = ["すべて", "自分", "自分以外"];
-const VISIBILITY_FILTERS: VisibilityFilter[] = ["all", "public", "private"];
-const VISIBILITY_FILTER_ITEMS = ["すべて", "公開", "非公開"];
-const ITEM_COUNT_FILTERS: ItemCountFilter[] = [
-    "all",
-    "empty",
-    "1-9",
-    "10-19",
-    "20-39",
-    "40-59",
-    "60-79",
-    "80-99",
-    "100+",
-];
-const ITEM_COUNT_FILTER_ITEMS = [
-    "すべて",
-    "0",
-    "1〜9",
-    "10〜19",
-    "20〜39",
-    "40〜59",
-    "60〜79",
-    "80〜99",
-    "100以上",
+const navigationItems: {
+    value: View;
+    label: string;
+    iconName: "wandSparkles" | "layoutGrid" | "archive";
+}[] = [
+    { value: "recommended", label: "おすすめ", iconName: "wandSparkles" },
+    { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
+    { value: "saved", label: "保存", iconName: "archive" },
 ];
 
 export default function RoomList({
@@ -89,50 +62,148 @@ export default function RoomList({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
-    const [keyword, setKeyword] = useState("");
-    const [creatorFilter, setCreatorFilter] = useState<CreatorFilter>(
-        initialView === "me" ? "mine" : "all",
+    const [view, setView] = useState<View>(
+        initialView === "me" ? "mine" : "recommended",
     );
-    const [visibilityFilter, setVisibilityFilter] =
-        useState<VisibilityFilter>(
-            initialView === "me" ? "all" : "public",
-        );
-    const [itemCountFilter, setItemCountFilter] =
-        useState<ItemCountFilter>("all");
+    const [keyword, setKeyword] = useState("");
+    const [savedRoomIds, setSavedRoomIds] = useState<string[]>([]);
 
     const rooms = useMemo(() => {
-        // Show every public room plus the current user's private rooms.
-        // Merge by ID so the owner's copy wins and retains its edit metadata.
         const roomsById = new Map<string, Room>();
-        for (const room of publicRooms) roomsById.set(room.id, room);
+
+        for (const room of publicRooms) {
+            roomsById.set(room.id, room);
+        }
+
+        // Prefer the owner's copy when a room appears in both lists.
         for (const room of myRooms) {
             roomsById.set(room.id, {
                 ...room,
                 userId: room.userId ?? currentUser?.id,
             });
         }
-        return Array.from(roomsById.values());
+
+        return Array.from(roomsById.values()).sort(
+            (a, b) =>
+                new Date(b.updatedAt ?? 0).getTime() -
+                new Date(a.updatedAt ?? 0).getTime(),
+        );
     }, [publicRooms, myRooms, currentUser?.id]);
 
-    const normalizeListUrl = () => {
-        // Query parameters initialize the list when navigating from elsewhere.
-        // Once an in-page control is used, keep the URL at "/".
+    const myRoomIds = useMemo(
+        () => new Set(myRooms.map((room) => room.id)),
+        [myRooms],
+    );
+
+    const roomsInView = useMemo(() => {
+        if (view === "mine") return myRooms;
+        if (view === "saved") {
+            return rooms.filter((room) => savedRoomIds.includes(room.id));
+        }
+        return rooms.filter((room) => room.isPublic);
+    }, [view, myRooms, rooms, savedRoomIds]);
+
+    const filteredRooms = useMemo(() => {
+        const query = keyword.trim().toLowerCase();
+
+        return roomsInView
+            .filter((room) => {
+                if (!query) return true;
+
+                const searchableText = [
+                    room.id,
+                    room.title,
+                    room.explanation,
+                ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
+
+                return searchableText.includes(query);
+            })
+            .sort(
+                (a, b) =>
+                    new Date(b.updatedAt ?? 0).getTime() -
+                    new Date(a.updatedAt ?? 0).getTime(),
+            );
+    }, [roomsInView, keyword]);
+
+    const selectView = (nextView: View) => {
+        if (nextView === "mine" && !currentUser) {
+            router.push(getSignInUrl());
+            return;
+        }
+
+        setView(nextView);
+
+        // Keep the old query parameters only for arriving at this page.
         if (window.location.pathname === "/" && window.location.search) {
             window.history.replaceState(window.history.state, "", "/");
         }
     };
 
-    const selectView = (nextView: "public" | "me") => {
-        if (nextView === "me" && !currentUser) {
-            router.push(getSignInUrl());
-            return;
+    useEffect(() => {
+        try {
+            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
+            if (!stored) return;
+
+            const parsed: unknown = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                setSavedRoomIds(
+                    Array.from(
+                        new Set(
+                            parsed.filter(
+                                (value): value is string =>
+                                    typeof value === "string",
+                            ),
+                        ),
+                    ),
+                );
+            }
+        } catch (error) {
+            console.error("Failed to load saved rooms:", error);
+        }
+    }, []);
+
+    const toggleSavedRoom = (roomId: string) => {
+        let currentSavedIds = savedRoomIds;
+
+        // Re-read storage to avoid overwriting saved rooms if this is clicked
+        // before the initial effect has finished.
+        try {
+            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
+            if (stored) {
+                const parsed: unknown = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    currentSavedIds = parsed.filter(
+                        (value): value is string => typeof value === "string",
+                    );
+                }
+            }
+        } catch {
+            // Continue with in-memory state if storage is unavailable.
         }
 
-        setCreatorFilter(nextView === "me" ? "mine" : "all");
-        setVisibilityFilter(nextView === "me" ? "all" : "public");
-        setItemCountFilter("all");
-        setKeyword("");
-        normalizeListUrl();
+        const wasSaved = currentSavedIds.includes(roomId);
+        const nextSavedIds = wasSaved
+            ? currentSavedIds.filter((id) => id !== roomId)
+            : Array.from(new Set([...currentSavedIds, roomId]));
+
+        setSavedRoomIds(nextSavedIds);
+
+        try {
+            window.localStorage.setItem(
+                SAVED_ROOMS_STORAGE_KEY,
+                JSON.stringify(nextSavedIds),
+            );
+        } catch (error) {
+            console.error("Failed to save room list:", error);
+        }
+
+        posthog.capture("room_saved_toggled", {
+            room_id: roomId,
+            saved: !wasSaved,
+        });
     };
 
     useEffect(() => {
@@ -142,111 +213,6 @@ export default function RoomList({
             display_name: currentUser.displayName,
         });
     }, [currentUser]);
-
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        return () => {
-            clearInterval(intervalId);
-        };
-    }, []);
-
-    // Keep in-page filter state in sync when another page navigates to
-    // "/?filter=mine" or "/?filter=public".
-    useEffect(() => {
-        if (initialView === "me") {
-            setCreatorFilter("mine");
-            setVisibilityFilter("all");
-        } else {
-            setCreatorFilter("all");
-            setVisibilityFilter("public");
-        }
-        setItemCountFilter("all");
-        setKeyword("");
-    }, [initialView]);
-
-    const filteredRooms = useMemo(() => {
-        const normalizedKeyword = keyword.trim().toLocaleLowerCase();
-
-        return rooms
-            .filter((room) => {
-                if (normalizedKeyword) {
-                    const searchableText = [
-                        room.title,
-                        room.explanation,
-                        room.id,
-                    ]
-                        .filter(Boolean)
-                        .join(" ")
-                        .toLocaleLowerCase();
-                    if (!searchableText.includes(normalizedKeyword)) {
-                        return false;
-                    }
-                }
-
-                const isOwner =
-                    Boolean(currentUser) && room.userId === currentUser?.id;
-                if (creatorFilter === "mine" && !isOwner) return false;
-                if (creatorFilter === "others" && isOwner) return false;
-
-                if (visibilityFilter === "public" && !room.isPublic) {
-                    return false;
-                }
-                if (
-                    visibilityFilter === "private" &&
-                    (room.isPublic !== false || !isOwner)
-                ) {
-                    return false;
-                }
-
-                const itemCount =
-                    room.itemCount ?? room.items?.length ?? 0;
-                switch (itemCountFilter) {
-                    case "empty":
-                        if (itemCount !== 0) return false;
-                        break;
-                    case "1-9":
-                        if (itemCount < 1 || itemCount > 9) return false;
-                        break;
-                    case "10-19":
-                        if (itemCount < 10 || itemCount > 19) return false;
-                        break;
-                    case "20-39":
-                        if (itemCount < 20 || itemCount > 39) return false;
-                        break;
-                    case "40-59":
-                        if (itemCount < 40 || itemCount > 59) return false;
-                        break;
-                    case "60-79":
-                        if (itemCount < 60 || itemCount > 79) return false;
-                        break;
-                    case "80-99":
-                        if (itemCount < 80 || itemCount > 99) return false;
-                        break;
-                    case "100+":
-                        if (itemCount < 100) return false;
-                        break;
-                    case "all":
-                        break;
-                }
-
-                return true;
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.updatedAt ?? 0).getTime() -
-                    new Date(a.updatedAt ?? 0).getTime(),
-            );
-    }, [
-        rooms,
-        keyword,
-        creatorFilter,
-        visibilityFilter,
-        itemCountFilter,
-        currentUser?.id,
-    ]);
 
     const setCookie = (key: string, value: boolean) => {
         document.cookie =
@@ -285,6 +251,19 @@ export default function RoomList({
         await signOut();
         router.replace("/");
     };
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            setShowCursor((prev) => !prev);
+        }, 500);
+
+        return () => {
+            clearInterval(intervalId);
+        };
+    }, []);
+
+    const viewTitle =
+        navigationItems.find((item) => item.value === view)?.label ?? "おすすめ";
 
     return (
         <>
@@ -356,15 +335,14 @@ export default function RoomList({
                             {
                                 label: "自分のルーム",
                                 icon: "layoutGrid",
-                                onClick: () => selectView("me"),
+                                onClick: () => selectView("mine"),
                             },
                             {
                                 label: "ユーザー設定",
                                 icon: "userRoundCog",
                                 onClick: () =>
                                     router.push(
-                                        process.env
-                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
+                                        process.env.NEXT_PUBLIC_USER_SETTINGS_URL!,
                                     ),
                             },
                             {
@@ -393,113 +371,93 @@ export default function RoomList({
                 />
             </div>
 
-            <Shell size="large">
-                <Button
-                    onClick={addRoom}
-                    loading={creating}
-                    iconName="plus"
-                    className="shrink-0 w-full"
-                >
-                    新規
-                </Button>
-
-                <div className="flex w-full gap-4">
-                    <Input
-                        value={keyword}
-                        label="キーワード検索"
-                        onChange={(event) => {
-                            setKeyword(event.target.value);
-                            normalizeListUrl();
-                        }}
-                        autoComplete="off"
-                    />
-                </div>
-
-                <div className="grid gap-4 w-full grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                    <Picker
-                        name="作成者"
-                        labelPrefix="作成者"
-                        selection={CREATOR_FILTERS.indexOf(creatorFilter)}
-                        items={CREATOR_FILTER_ITEMS}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => {
-                            const nextFilter = CREATOR_FILTERS[index];
-                            if (nextFilter === "mine" && !currentUser) {
-                                router.push(getSignInUrl());
-                                return;
-                            }
-                            setCreatorFilter(nextFilter);
-                            normalizeListUrl();
-                        }}
-                    />
-                    <Picker
-                        name="公開設定"
-                        labelPrefix="公開設定"
-                        selection={VISIBILITY_FILTERS.indexOf(
-                            visibilityFilter,
-                        )}
-                        items={VISIBILITY_FILTER_ITEMS}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => {
-                            const nextFilter = VISIBILITY_FILTERS[index];
-                            if (nextFilter === "private" && !currentUser) {
-                                router.push(getSignInUrl());
-                                return;
-                            }
-                            setVisibilityFilter(nextFilter);
-                            normalizeListUrl();
-                        }}
-                    />
-                    <Picker
-                        name="問題数"
-                        labelPrefix="問題数"
-                        selection={ITEM_COUNT_FILTERS.indexOf(itemCountFilter)}
-                        items={ITEM_COUNT_FILTER_ITEMS}
-                        itemIcons={ITEM_COUNT_FILTER_ITEMS.map(() => null)}
-                        onSelected={(index) => {
-                            setItemCountFilter(ITEM_COUNT_FILTERS[index]);
-                            normalizeListUrl();
-                        }}
-                    />
-                </div>
-
-                {createError && (
-                    <p className="text-red-500" role="alert">
-                        {createError}
-                    </p>
-                )}
-
-                {filteredRooms.length > 0 ? (
-                    <div className="grid w-full gap-4 sm:grid-cols-2">
-                        {filteredRooms.map((room) => (
-                            <RoomCard
-                                key={room.id}
-                                room={room}
-                                isOwner={
-                                    Boolean(currentUser) &&
-                                    room.userId === currentUser?.id
-                                }
-                            />
+            <Shell
+                size="large"
+                className="flex flex-col gap-4 items-center max-w-6xl"
+            >
+                <div className="flex w-full flex-col gap-6 sm:flex-row sm:items-start">
+                    <nav
+                        aria-label="ルームカテゴリ"
+                        className="w-full sm:w-48 flex sm:flex-col shrink-0 no-scrollbar overflow-x-auto gap-2 px-4 -mx-4 sm:px-0 sm:mx-0 sm:overflow-visible"
+                    >
+                        {navigationItems.map((item) => (
+                            <Button
+                                key={item.value}
+                                className="w-fit shrink-0 sm:w-full"
+                                variant={view === item.value ? "primary" : "default"}
+                                onClick={() => selectView(item.value)}
+                                iconName={item.iconName}
+                                alignment="left"
+                            >
+                                {item.label}
+                            </Button>
                         ))}
-                    </div>
-                ) : (
-                    <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
-                        <p className="font-semibold">
-                            {rooms.length === 0
-                                ? initialView === "me"
-                                    ? "まだルームがありません"
-                                    : "共有されているルームはありません"
-                                : "条件に一致するルームがありません"}
-                        </p>
-                        <p className="mt-2 text-sm opacity-60">
-                            {rooms.length === 0
-                                ? initialView === "me"
-                                    ? "ルームを作成して、単語リストを準備しましょう。"
-                                    : "公開されたルームがここに表示されます。"
-                                : "キーワードやフィルタを変更してみてください。"}
-                        </p>
-                    </div>
-                )}
+                    </nav>
+
+                    <main className="flex min-w-0 w-full flex-1 flex-col gap-4">
+                        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                            <h1 className="text-2xl font-bold" data-cursor="text">
+                                {viewTitle}
+                            </h1>
+                            <Button
+                                onClick={addRoom}
+                                loading={creating}
+                                iconName="plus"
+                                className="w-fit shrink-0"
+                            >
+                                ルームを作成
+                            </Button>
+                        </div>
+
+                        <Input
+                            value={keyword}
+                            onChange={(event) => setKeyword(event.target.value)}
+                            label="ルームを検索"
+                            autoComplete="off"
+                        />
+
+                        {createError && (
+                            <p className="text-red-500" role="alert">
+                                {createError}
+                            </p>
+                        )}
+
+                        {filteredRooms.length > 0 ? (
+                            <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                {filteredRooms.map((room) => (
+                                    <RoomCard
+                                        key={room.id}
+                                        room={room}
+                                        isOwner={myRoomIds.has(room.id)}
+                                        isSaved={savedRoomIds.includes(room.id)}
+                                        onToggleSaved={() => toggleSavedRoom(room.id)}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
+                                <p className="font-semibold">
+                                    {keyword.trim()
+                                        ? "検索結果がありません"
+                                        : view === "mine"
+                                          ? "まだルームがありません"
+                                          : view === "saved"
+                                            ? "保存したルームはありません"
+                                            : "公開ルームはまだありません"}
+                                </p>
+                                <p className="mt-2 text-sm opacity-60">
+                                    {keyword.trim()
+                                        ? "別のキーワードで検索してみてください。"
+                                        : view === "mine"
+                                          ? "ルームを作成して、単語リストを準備しましょう。"
+                                          : view === "saved"
+                                            ? "気になるルームの「保存」を押すと、ここに表示されます。"
+                                            : "公開されたルームがここに表示されます。"}
+                                </p>
+                            </div>
+                        )}
+                    </main>
+                </div>
             </Shell>
         </>
     );
