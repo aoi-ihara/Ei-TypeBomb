@@ -1,24 +1,7 @@
-import Client from "./Client";
-import { cookies } from "next/headers";
-import { parseETBClusterConfig } from "@/lib/room/clusterConfig";
+import { redirect } from "next/navigation";
+import { getPlaygroundRoom } from "@/lib/room/playground";
 
-export default async function SettingsPage() {
-    const cookieStore = await cookies();
-
-    const backgroundMusic =
-        cookieStore.get("background-music")?.value !== "false";
-    const sounDeffects = cookieStore.get("sound-effects")?.value !== "false";
-
-    const clusterServers = process.env.ETB_CLUSTER_CONFIG
-        ? parseETBClusterConfig(process.env.ETB_CLUSTER_CONFIG).map(
-              (s) => s.endpoint,
-          )
-        : [];
-    return (
-        <Client
-            clusterServers={clusterServers}
-            initialSounDeffects={sounDeffects}
-            initialBackgroundMusic={backgroundMusic}
-        />
-    );
+export default async function LegacyOnlineRoute() {
+    const room = await getPlaygroundRoom();
+    redirect(room ? "/" + room.id + "/play/online" : "/");
 }
