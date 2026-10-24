@@ -14,6 +14,9 @@ import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import { Icon } from "@/components/ui/Icon";
+import Shell from "@/components/layout/Shell";
+import Input from "@/components/ui/Input";
+import Picker from "@/components/ui/Picker";
 
 type CurrentUser = {
     id: string;
@@ -111,8 +114,8 @@ export default function RoomList({
     };
 
     return (
-        <div className="min-h-dvh w-full px-4 pb-24">
-            <header className={`w-full flex justify-end py-4 gap-4`}>
+        <>
+            <header className={`w-full flex justify-end p-4 gap-4`}>
                 <div className="w-18">
                     <MorphDialog
                         button={
@@ -208,21 +211,55 @@ export default function RoomList({
                 )}
             </header>
 
-            <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 pt-10">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <p className="mb-2 text-sm opacity-60">ROOMS</p>
-                        <h1 className="text-3xl font-bold" data-cursor="text">
-                            ルーム一覧
-                        </h1>
-                    </div>
-                    <Button
-                        onClick={addRoom}
-                        loading={creating}
-                        iconName="plus"
-                    >
-                        ルームを作成
-                    </Button>
+            <Shell size="large">
+                <Button
+                    onClick={addRoom}
+                    loading={creating}
+                    iconName="plus"
+                    className="shrink-0 w-full"
+                >
+                    新規
+                </Button>
+                <div className="flex w-full gap-4">
+                    <Input value="f" />
+                </div>
+
+                <div className="grid gap-4 w-full grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                    <Picker
+                        name="ゲーム時間"
+                        labelPrefix="作成者"
+                        selection={0}
+                        items={["すべて", "自分"]}
+                        itemIcons={[null, null, null]}
+                        onSelected={(index) => {}}
+                    />
+                    {true && (
+                        <Picker
+                            name="公開設定"
+                            labelPrefix="作成者"
+                            selection={0}
+                            items={["公開", "自分"]}
+                            itemIcons={[null, null, null]}
+                            onSelected={(index) => {}}
+                        />
+                    )}
+                    <Picker
+                        name="問題数"
+                        labelPrefix="問題数"
+                        selection={0}
+                        items={[
+                            "0",
+                            "0~",
+                            "10~",
+                            "20~",
+                            "40~",
+                            "60~",
+                            "80~",
+                            "100~",
+                        ]}
+                        itemIcons={[null, null, null]}
+                        onSelected={(index) => {}}
+                    />
                 </div>
 
                 <nav
@@ -294,7 +331,7 @@ export default function RoomList({
                         </p>
                     </div>
                 )}
-            </main>
-        </div>
+            </Shell>
+        </>
     );
 }
