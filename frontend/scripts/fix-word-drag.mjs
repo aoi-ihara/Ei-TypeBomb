@@ -6,8 +6,8 @@ const filePath = path.join(
     "..",
     "app",
     "(editor)",
-    "my-rooms",
     "[slug]",
+    "edit",
     "page.tsx",
 );
 
