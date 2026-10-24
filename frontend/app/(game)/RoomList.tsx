@@ -1,30 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
+import Toggle from "@/components/ui/Toggle";
+import MorphDialog from "@/components/ui/MorphDialog";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
 import posthog from "posthog-js";
 
+type CurrentUser = {
+    id: string;
+    email: string | null;
+    displayName: string | null;
+};
+
 type Props = {
     rooms: Room[];
     view: "public" | "me";
-    isSignedIn: boolean;
+    currentUser: CurrentUser | null;
+    initialBackgroundMusic: boolean;
+    initialSoundEffects: boolean;
 };
 
-export default function RoomList({ rooms, view, isSignedIn }: Props) {
+export default function RoomList({
+    rooms,
+    view,
+    currentUser,
+    initialBackgroundMusic,
+    initialSoundEffects,
+}: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
+    const [showSettings, setShowSettings] = useState(false);
+    const [backgroundMusic, setBackgroundMusic] = useState(initialBackgroundMusic);
+    const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        posthog.identify(currentUser.id, {
+            email: currentUser.email,
+            display_name: currentUser.displayName,
+        });
+    }, [currentUser]);
+
+    const setCookie = (key: string, value: boolean) => {
+        document.cookie = key + "=" + String(value) + "; path=/; max-age=31536000; SameSite=Lax";
+    };
 
     const addRoom = async () => {
         if (creating) return;
-        if (!isSignedIn) {
+        if (!currentUser) {
             router.push(getSignInUrl());
             return;
         }
@@ -52,24 +83,87 @@ export default function RoomList({ rooms, view, isSignedIn }: Props) {
 
     return (
         <div className="min-h-dvh w-full px-4 pb-24">
-            <header className="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-(--color-border) py-4">
+            <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b border-(--color-border) py-4">
                 <Link href="/" className="text-lg font-bold tracking-tight">
                     Ei-TypeBomb
                 </Link>
-                {isSignedIn ? (
-                    <div className="flex items-center gap-2">
-                        <Button variant="text" onClick={() => router.push("/?owner=me")}>
-                            自分のルーム
+                <div className="flex flex-wrap items-center gap-2">
+                    <MorphDialog
+                        button={
+                            <Button
+                                variant="text"
+                                iconName="settings"
+                                onClick={() => setShowSettings(true)}
+                            >
+                                設定
+                            </Button>
+                        }
+                        title="設定"
+                        alignment="vertical"
+                        open={showSettings}
+                        onClose={() => setShowSettings(false)}
+                    >
+                        <div className="flex w-full items-center justify-between pl-3">
+                            <div data-cursor="text">BGM</div>
+                            <Toggle
+                                checked={backgroundMusic}
+                                onChange={(next) => {
+                                    setBackgroundMusic(next);
+                                    setCookie("background-music", next);
+                                    posthog.capture("settings_changed", {
+                                        setting: "background_music",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
+                        <div className="flex w-full items-center justify-between pl-3">
+                            <div data-cursor="text">効果音</div>
+                            <Toggle
+                                checked={soundEffects}
+                                onChange={(next) => {
+                                    setSoundEffects(next);
+                                    setCookie("sound-effects", next);
+                                    posthog.capture("settings_changed", {
+                                        setting: "sound_effects",
+                                        value: next,
+                                    });
+                                }}
+                            />
+                        </div>
+                        <Button
+                            className="w-full"
+                            variant="primary"
+                            iconName="check"
+                            onClick={() => setShowSettings(false)}
+                        >
+                            完了
                         </Button>
-                        <Button variant="text" onClick={handleSignOut}>
-                            サインアウト
+                    </MorphDialog>
+
+                    {currentUser ? (
+                        <>
+                            <Button variant="text" onClick={() => router.push("/?owner=me")}>
+                                自分のルーム
+                            </Button>
+                            {process.env.NEXT_PUBLIC_USER_SETTINGS_URL && (
+                                <Button
+                                    variant="text"
+                                    onClick={() => router.push(process.env.NEXT_PUBLIC_USER_SETTINGS_URL!)}
+                                >
+                                    ユーザー設定
+                                </Button>
+                            )}
+                            <Button variant="text" onClick={handleSignOut}>
+                                サインアウト
+                            </Button>
+                        </>
+                    ) : (
+                        <Button variant="text" onClick={() => router.push(getSignInUrl())}>
+                            ログイン
                         </Button>
-                    </div>
-                ) : (
-                    <Button variant="text" onClick={() => router.push(getSignInUrl())}>
-                        ログイン
-                    </Button>
-                )}
+                    )}
+                </div>
             </header>
 
             <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 pt-10">
