@@ -318,7 +318,7 @@ export default function Page({
     };
 
     const handleCopyRoomLink = async () => {
-        const joinLink = process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink;
+        const joinLink = new URL("/" + slug, process.env.NEXT_PUBLIC_JOIN_LINK!).toString();
         await navigator.clipboard.writeText(joinLink);
         posthog.capture("room_code_copied", { room_id: slug });
         setIsLinkCopied(true);
@@ -532,7 +532,7 @@ export default function Page({
         >
             <div className="flex mt-16 mb-4 items-center w-full">
                 <Button
-                    onClick={() => router.push("/my-rooms")}
+                    onClick={() => router.push("/?owner=me")}
                     variant="text"
                     className="h-full"
                 >
@@ -1378,7 +1378,7 @@ export default function Page({
                 </div>
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
-                        value={process.env.NEXT_PUBLIC_JOIN_LINK! + roomLink}
+                        value={new URL("/" + slug, process.env.NEXT_PUBLIC_JOIN_LINK!).toString()}
                         size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
