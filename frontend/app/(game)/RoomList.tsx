@@ -110,11 +110,7 @@ export default function RoomList({
             .filter((room) => {
                 if (!query) return true;
 
-                const searchableText = [
-                    room.id,
-                    room.title,
-                    room.explanation,
-                ]
+                const searchableText = [room.id, room.title, room.explanation]
                     .filter(Boolean)
                     .join(" ")
                     .toLowerCase();
@@ -263,7 +259,8 @@ export default function RoomList({
     }, []);
 
     const viewTitle =
-        navigationItems.find((item) => item.value === view)?.label ?? "おすすめ";
+        navigationItems.find((item) => item.value === view)?.label ??
+        "おすすめ";
 
     return (
         <>
@@ -342,7 +339,8 @@ export default function RoomList({
                                 icon: "userRoundCog",
                                 onClick: () =>
                                     router.push(
-                                        process.env.NEXT_PUBLIC_USER_SETTINGS_URL!,
+                                        process.env
+                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
                                     ),
                             },
                             {
@@ -371,94 +369,93 @@ export default function RoomList({
                 />
             </div>
 
-            <Shell
-                size="large"
-                className="flex flex-col gap-4 items-center max-w-6xl"
-            >
-                <div className="flex w-full flex-col gap-6 sm:flex-row sm:items-start">
-                    <nav
-                        aria-label="ルームカテゴリ"
-                        className="w-full sm:w-48 flex sm:flex-col shrink-0 no-scrollbar overflow-x-auto gap-2 px-4 -mx-4 sm:px-0 sm:mx-0 sm:overflow-visible"
-                    >
-                        {navigationItems.map((item) => (
-                            <Button
-                                key={item.value}
-                                className="w-fit shrink-0 sm:w-full"
-                                variant={view === item.value ? "primary" : "default"}
-                                onClick={() => selectView(item.value)}
-                                iconName={item.iconName}
-                                alignment="left"
-                            >
-                                {item.label}
-                            </Button>
-                        ))}
-                    </nav>
-
-                    <main className="flex min-w-0 w-full flex-1 flex-col gap-4">
-                        <div className="flex w-full flex-wrap items-center justify-between gap-3">
-                            <h1 className="text-2xl font-bold" data-cursor="text">
-                                {viewTitle}
-                            </h1>
-                            <Button
-                                onClick={addRoom}
-                                loading={creating}
-                                iconName="plus"
-                                className="w-fit shrink-0"
-                            >
-                                ルームを作成
-                            </Button>
-                        </div>
-
-                        <Input
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
-                            label="ルームを検索"
-                            autoComplete="off"
-                        />
-
-                        {createError && (
-                            <p className="text-red-500" role="alert">
-                                {createError}
-                            </p>
-                        )}
-
-                        {filteredRooms.length > 0 ? (
-                            <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                                {filteredRooms.map((room) => (
-                                    <RoomCard
-                                        key={room.id}
-                                        room={room}
-                                        isOwner={myRoomIds.has(room.id)}
-                                        isSaved={savedRoomIds.includes(room.id)}
-                                        onToggleSaved={() => toggleSavedRoom(room.id)}
-                                    />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
-                                <p className="font-semibold">
-                                    {keyword.trim()
-                                        ? "検索結果がありません"
-                                        : view === "mine"
-                                          ? "まだルームがありません"
-                                          : view === "saved"
-                                            ? "保存したルームはありません"
-                                            : "公開ルームはまだありません"}
-                                </p>
-                                <p className="mt-2 text-sm opacity-60">
-                                    {keyword.trim()
-                                        ? "別のキーワードで検索してみてください。"
-                                        : view === "mine"
-                                          ? "ルームを作成して、単語リストを準備しましょう。"
-                                          : view === "saved"
-                                            ? "気になるルームの「保存」を押すと、ここに表示されます。"
-                                            : "公開されたルームがここに表示されます。"}
-                                </p>
-                            </div>
-                        )}
-                    </main>
+            <div className="flex flex-col w-full items-center gap-4">
+                <div
+                    aria-label="ルームカテゴリ"
+                    className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
+                >
+                    {navigationItems.map((item) => (
+                        <Button
+                            key={item.value}
+                            className="w-fit shrink-0"
+                            variant={
+                                view === item.value ? "primary" : "default"
+                            }
+                            onClick={() => selectView(item.value)}
+                            iconName={item.iconName}
+                            alignment="left"
+                        >
+                            {item.label}
+                        </Button>
+                    ))}
                 </div>
-            </Shell>
+
+                <Shell size="large">
+                    <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                        <h1 className="text-2xl font-bold" data-cursor="text">
+                            {viewTitle}
+                        </h1>
+                        <Button
+                            onClick={addRoom}
+                            loading={creating}
+                            iconName="plus"
+                            className="w-fit shrink-0"
+                        >
+                            ルームを作成
+                        </Button>
+                    </div>
+
+                    <Input
+                        value={keyword}
+                        onChange={(event) => setKeyword(event.target.value)}
+                        label="ルームを検索"
+                        autoComplete="off"
+                    />
+
+                    {createError && (
+                        <p className="text-red-500" role="alert">
+                            {createError}
+                        </p>
+                    )}
+
+                    {filteredRooms.length > 0 ? (
+                        <div className="flex flex-col w-full gap-4">
+                            {filteredRooms.map((room) => (
+                                <RoomCard
+                                    key={room.id}
+                                    room={room}
+                                    isOwner={myRoomIds.has(room.id)}
+                                    isSaved={savedRoomIds.includes(room.id)}
+                                    onToggleSaved={() =>
+                                        toggleSavedRoom(room.id)
+                                    }
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
+                            <p className="font-semibold">
+                                {keyword.trim()
+                                    ? "検索結果がありません"
+                                    : view === "mine"
+                                      ? "まだルームがありません"
+                                      : view === "saved"
+                                        ? "保存したルームはありません"
+                                        : "公開ルームはまだありません"}
+                            </p>
+                            <p className="mt-2 text-sm opacity-60">
+                                {keyword.trim()
+                                    ? "別のキーワードで検索してみてください。"
+                                    : view === "mine"
+                                      ? "ルームを作成して、単語リストを準備しましょう。"
+                                      : view === "saved"
+                                        ? "気になるルームの「保存」を押すと、ここに表示されます。"
+                                        : "公開されたルームがここに表示されます。"}
+                            </p>
+                        </div>
+                    )}
+                </Shell>
+            </div>
         </>
     );
 }
