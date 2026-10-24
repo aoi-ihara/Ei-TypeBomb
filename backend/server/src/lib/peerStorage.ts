@@ -194,15 +194,23 @@ export async function persistentPeerIdentity(
 ) {
     const usePersistentStorage =
         process.env.ETB_TEST_PERSISTENT_PEER_STORAGE === "true";
-    const storage = usePersistentStorage
-        ? new TestNodePeerStorage(topologyStateDirectory(root, declaration))
-        : new MemoryPeerStorage();
+    let storage: PeerStorage;
+    let boot: string;
+
+    if (usePersistentStorage) {
+        const persistentStorage = new TestNodePeerStorage(
+            topologyStateDirectory(root, declaration),
+        );
+        storage = persistentStorage;
+        boot = persistentStorage.boot;
+    } else {
+        storage = new MemoryPeerStorage();
+        boot = randomUUID();
+    }
+
     try {
         return {
-            identity: await Identity.create(
-                declaration,
-                usePersistentStorage ? storage.boot : randomUUID(),
-            ),
+            identity: await Identity.create(declaration, boot),
             storage,
         };
     } catch (error) {
