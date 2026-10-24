@@ -20,16 +20,18 @@ type CurrentUser = {
 };
 
 type Props = {
-    rooms: Room[];
-    view: "public" | "me";
+    publicRooms: Room[];
+    myRooms: Room[];
+    initialView: "public" | "me";
     currentUser: CurrentUser | null;
     initialBackgroundMusic: boolean;
     initialSoundEffects: boolean;
 };
 
 export default function RoomList({
-    rooms,
-    view,
+    publicRooms,
+    myRooms,
+    initialView,
     currentUser,
     initialBackgroundMusic,
     initialSoundEffects,
@@ -40,6 +42,23 @@ export default function RoomList({
     const [showSettings, setShowSettings] = useState(false);
     const [backgroundMusic, setBackgroundMusic] = useState(initialBackgroundMusic);
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
+    const [view, setView] = useState<"public" | "me">(initialView);
+    const rooms = view === "me" ? myRooms : publicRooms;
+
+    const selectView = (nextView: "public" | "me") => {
+        if (nextView === "me" && !currentUser) {
+            router.push(getSignInUrl());
+            return;
+        }
+
+        setView(nextView);
+
+        // Filter query parameters are for entering this page from elsewhere.
+        // Once the user interacts with the in-page filter, normalize the URL.
+        if (window.location.pathname === "/" && window.location.search) {
+            window.history.replaceState(window.history.state, "", "/");
+        }
+    };
 
     useEffect(() => {
         if (!currentUser) return;
@@ -143,7 +162,7 @@ export default function RoomList({
 
                     {currentUser ? (
                         <>
-                            <Button variant="text" onClick={() => router.push("/?owner=me")}>
+                            <Button variant="text" onClick={() => selectView("me")}>
                                 自分のルーム
                             </Button>
                             {process.env.NEXT_PUBLIC_USER_SETTINGS_URL && (
@@ -180,20 +199,22 @@ export default function RoomList({
                 </div>
 
                 <nav className="flex gap-2 border-b border-(--color-border)" aria-label="ルームの絞り込み">
-                    <Link
-                        href="/"
-                        aria-current={view === "public" ? "page" : undefined}
+                    <button
+                        type="button"
+                        aria-pressed={view === "public"}
+                        onClick={() => selectView("public")}
                         className={"px-4 py-3 font-semibold transition-colors " + (view === "public" ? "border-b-2 border-cyan-600" : "opacity-60")}
                     >
                         共有ルーム
-                    </Link>
-                    <Link
-                        href="/?owner=me"
-                        aria-current={view === "me" ? "page" : undefined}
+                    </button>
+                    <button
+                        type="button"
+                        aria-pressed={view === "me"}
+                        onClick={() => selectView("me")}
                         className={"px-4 py-3 font-semibold transition-colors " + (view === "me" ? "border-b-2 border-cyan-600" : "opacity-60")}
                     >
                         自分のルーム
-                    </Link>
+                    </button>
                 </nav>
 
                 {createError && <p className="text-red-500" role="alert">{createError}</p>}

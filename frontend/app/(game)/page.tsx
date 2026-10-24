@@ -6,9 +6,9 @@ import RoomList from "./RoomList";
 export default async function Page({
     searchParams,
 }: {
-    searchParams: Promise<{ owner?: string }>;
+    searchParams: Promise<{ filter?: string; owner?: string }>;
 }) {
-    const [{ owner }, cookieStore] = await Promise.all([
+    const [{ filter, owner }, cookieStore] = await Promise.all([
         searchParams,
         cookies(),
     ]);
@@ -17,31 +17,32 @@ export default async function Page({
     const initialSoundEffects =
         cookieStore.get("sound-effects")?.value !== "false";
 
-    if (owner === "me") {
-        const [result, currentUser] = await Promise.all([
-            getMyRooms(),
-            getUserDetails(),
-        ]);
-        return (
-            <RoomList
-                rooms={result?.rooms ?? []}
-                view="me"
-                currentUser={currentUser}
-                initialBackgroundMusic={initialBackgroundMusic}
-                initialSoundEffects={initialSoundEffects}
-            />
-        );
-    }
+    // Query filters initialize the list when arriving from another page.
+    // Keep supporting the old owner=me URL for existing bookmarks.
+    const initialView =
+        filter === "mine"
+            ? "me"
+            : filter === "public"
+              ? "public"
+              : owner === "me"
+                ? "me"
+                : "public";
 
-    const [rooms, currentUser] = await Promise.all([
+    const [publicRooms, currentUser] = await Promise.all([
         getPublicRooms(),
         getUserDetails(),
     ]);
 
+    // Load owned rooms on the server so switching tabs on this page does not
+    // require a route transition or another request.
+    const myRoomsResult =
+        currentUser || initialView === "me" ? await getMyRooms() : null;
+
     return (
         <RoomList
-            rooms={rooms}
-            view="public"
+            publicRooms={publicRooms}
+            myRooms={myRoomsResult?.rooms ?? []}
+            initialView={initialView}
             currentUser={currentUser}
             initialBackgroundMusic={initialBackgroundMusic}
             initialSoundEffects={initialSoundEffects}
