@@ -274,6 +274,45 @@ test("isolated Worker can advance but a restarted voter without state cannot rec
         /incarnation|memory/,
     );
 });
+test("a restarted owner with no room state releases an eligible replica to recover", async () => {
+    const n = await network();
+    const room = freshRoom();
+    const original = await n.hosts[0].call("open", {
+        roomId: room.id,
+        initial: initial(room),
+    });
+    const checkpoint = await n.hosts[1].call("read", { roomId: room.id });
+    assert.equal(checkpoint.ownership.instance, original.ownership.instance);
+
+    // A process restart changes the primary's boot ID and loses its in-memory
+    // vote record. It must not retain ownership of a room it can no longer
+    // serve, while the existing worker remains an eligible voter with a copy.
+    const restartedIdentity = await Identity.create(JSON.stringify(n.bundles[0]));
+    assert.notEqual(
+        restartedIdentity.member.boot,
+        n.hosts[0].identity.member.boot,
+    );
+    const previousPrimary = n.hosts[0];
+    n.hosts[0] = new PeerControl(
+        restartedIdentity,
+        previousPrimary.config,
+        async () => {
+            throw new Error("Unavailable");
+        },
+    );
+
+    const recovered = await n.hosts[1].call("report", {
+        roomId: room.id,
+        owner: n.ids[0],
+        revision: checkpoint.ownership.revision,
+    });
+
+    assert.equal(recovered.ownership.owner, n.ids[1]);
+    assert.ok(recovered.ownership.epoch > checkpoint.ownership.epoch);
+    assert.equal(recovered.ownership.instance, original.ownership.instance);
+    assert.equal(recovered.ownership.lifecycle, "MIGRATING");
+});
+
 test("configured topology rejects outsiders and requires a certified voting prefix", async () => {
     const n = await network();
     const other = await credentials([
