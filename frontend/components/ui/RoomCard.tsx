@@ -23,9 +23,7 @@ export default function RoomCard({
 
     const copyRoomLink = async () => {
         try {
-            const path = room.isPublic
-                ? "/" + room.id
-                : "/" + room.id + "/play";
+            const path = "/" + room.id;
             await navigator.clipboard.writeText(window.location.origin + path);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2000);
@@ -68,19 +66,12 @@ export default function RoomCard({
                 <Button
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
-                        router.push("/" + room.id + "/play");
+                        router.push("/" + room.id);
                     }}
                     iconName="play"
                     variant="text"
                 >
                     プレイ
-                </Button>
-                <Button
-                    onClick={() => router.push("/" + room.id)}
-                    iconName="info"
-                    variant="text"
-                >
-                    詳細
                 </Button>
                 {isOwner && (
                     <Button

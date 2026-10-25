@@ -319,7 +319,7 @@ export default function Page({
 
     const handleCopyRoomLink = async () => {
         const joinLink = new URL(
-            "/" + slug + (isPrivate ? "/play" : ""),
+            "/" + slug,
             process.env.NEXT_PUBLIC_JOIN_LINK!,
         ).toString();
         await navigator.clipboard.writeText(joinLink);
@@ -468,7 +468,7 @@ export default function Page({
 
     const handlePlay = async () => {
         setShowPlayWarning(false);
-        router.push("/" + slug + "/play");
+        router.push("/" + slug);
     };
 
     useEffect(() => {
@@ -1382,7 +1382,7 @@ export default function Page({
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={new URL(
-                            "/" + slug + (isPrivate ? "/play" : ""),
+                            "/" + slug,
                             process.env.NEXT_PUBLIC_JOIN_LINK!,
                         ).toString()}
                         size={256}
