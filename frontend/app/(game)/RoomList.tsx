@@ -139,12 +139,22 @@ export default function RoomList({
     };
 
     useEffect(() => {
-        try {
-            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
-            if (!stored) return;
+        let active = true;
 
-            const parsed: unknown = JSON.parse(stored);
-            if (Array.isArray(parsed)) {
+        // Read browser storage in a deferred task instead of synchronously
+        // scheduling a state update inside the effect body.
+        void Promise.resolve()
+            .then(() => {
+                if (!active) return;
+
+                const stored = window.localStorage.getItem(
+                    SAVED_ROOMS_STORAGE_KEY,
+                );
+                if (!stored) return;
+
+                const parsed: unknown = JSON.parse(stored);
+                if (!Array.isArray(parsed)) return;
+
                 setSavedRoomIds(
                     Array.from(
                         new Set(
@@ -155,10 +165,14 @@ export default function RoomList({
                         ),
                     ),
                 );
-            }
-        } catch (error) {
-            console.error("Failed to load saved rooms:", error);
-        }
+            })
+            .catch((error: unknown) => {
+                console.error("Failed to load saved rooms:", error);
+            });
+
+        return () => {
+            active = false;
+        };
     }, []);
 
     const toggleSavedRoom = (roomId: string) => {
