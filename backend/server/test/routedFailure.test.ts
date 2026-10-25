@@ -1100,7 +1100,7 @@ test("a certified deleted room does not bind a new page to the retired checkpoin
                         message: "以前の対戦のチェックポイントを取得できません。" });
                     else {
                         dispatch("auth:session", {id:"new-page"});
-                        dispatch("room:broadcast", {id:"room",roomInstanceId:"fresh-instance",epoch:1,revision:1,users:[],bombs:[]});
+                        dispatch("room:broadcast", {id:"room",roomInstanceId:"fresh-instance",epoch:6,revision:1,users:[],bombs:[]});
                     }
                 }
                 return this;
