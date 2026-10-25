@@ -240,7 +240,7 @@ test("a reloaded tab reports a failed owner before receiving its first game snap
     }
 });
 
-test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover ownership", async () => {
+test("a DELETED route followed by VOTER_STATE_LOST retries at a lower tier", async () => {
     const originalFetch = globalThis.fetch;
     const ids = [
         "https://primary.test",
@@ -250,7 +250,7 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
     const servers = ids.map((id, depth) => ({
         id,
         depth,
-        transport: "socket.io" as const,
+        transport: depth === 1 ? "websocket" as const : "socket.io" as const,
     }));
     const tombstone = {
         owner: ids[1],
@@ -260,45 +260,60 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
         lifecycle: "DELETED",
         roomId: "room",
     };
+    const staleActive = {
+        owner: ids[0],
+        epoch: 7,
+        revision: 4,
+        instance: "old-active-instance",
+        lifecycle: "ACTIVE",
+        roomId: "room",
+    };
     const recovered = {
-        owner: ids[2],
+        owner: ids[1],
         epoch: 39,
         revision: 0,
         instance: "recovered-instance",
         lifecycle: "ACTIVE",
         roomId: "room",
     };
-    const reports: Array<{ url: string; body: any }> = [];
+    let workerRouteCalls = 0;
+    let reportCalls = 0;
     const opened: string[] = [];
+    const authenticatedOwners: string[] = [];
     globalThis.fetch = (async (url: string | URL, options?: RequestInit) => {
         const target = String(url);
         if (target.endsWith("/cluster/route")) {
             if (target.startsWith(ids[0]))
                 throw new TypeError("Simulated CORS preflight failure");
-            if (target.startsWith(ids[1]))
-                return Response.json({ ownership: tombstone, servers });
-            return new Promise<Response>((_resolve, reject) => {
+            if (target.startsWith(ids[1])) {
+                workerRouteCalls++;
+                return Response.json({
+                    ownership: workerRouteCalls === 1 ? tombstone : staleActive,
+                    servers,
+                });
+            }
+            return new Promise<Response>((resolve, reject) => {
+                const timer = setTimeout(
+                    () => resolve(Response.json({ ownership: tombstone, servers })),
+                    30,
+                );
                 options?.signal?.addEventListener(
                     "abort",
-                    () => reject(new DOMException("Aborted", "AbortError")),
+                    () => {
+                        clearTimeout(timer);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    },
                     { once: true },
                 );
             });
         }
         if (target.endsWith("/cluster/report")) {
-            const body = JSON.parse(options?.body as string);
-            reports.push({ url: target, body });
-            if (target.startsWith(ids[1]))
-                return Response.json({
-                    code: "CHECKPOINT_UNAVAILABLE",
-                    retryable: false,
-                }, { status: 409 });
-            return Response.json({ ownership: recovered, servers });
+            reportCalls++;
+            return Response.json({ code: "UNEXPECTED_REPORT", retryable: false }, { status: 409 });
         }
         throw new Error("Unexpected request: " + target);
     }) as typeof fetch;
 
-    const openedOwners: string[] = [];
     const socket = new RoutedSocket(
         ids,
         (url) => {
@@ -307,7 +322,7 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
             const dispatch = (event: string, value?: any) =>
                 handlers.get(event)?.forEach((listener) => listener(value));
             const transport = {
-                id: "socket-" + ids.indexOf(url),
+                id: "socket-" + opened.length,
                 connected: true,
                 on(event: string, listener: (value?: any) => void) {
                     handlers.set(event, [...(handlers.get(event) ?? []), listener]);
@@ -324,12 +339,12 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
                                 }),
                                 0,
                             );
-                        } else {
-                            openedOwners.push(url);
+                        } else if (url === ids[1] + "/ws") {
+                            authenticatedOwners.push(url);
                             dispatch("auth:session", { id: "player" });
                             dispatch("room:broadcast", {
                                 id: "room",
-                                ownerServerId: url,
+                                ownerServerId: ids[1],
                                 roomInstanceId: recovered.instance,
                                 epoch: recovered.epoch,
                                 revision: 0,
@@ -364,12 +379,11 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
     const waitForRecovery = async () => {
         const deadline = Date.now() + 4_000;
         while (
-            !reports.some((report) => report.url === ids[2] + "/cluster/report") ||
-            !openedOwners.includes(ids[2]) ||
+            !authenticatedOwners.includes(ids[1] + "/ws") ||
             !socket.connected
         ) {
             if (Date.now() >= deadline)
-                throw new Error("The fallback owner was not reached");
+                throw new Error("The lower-tier owner was not reached");
             await new Promise((resolve) => setTimeout(resolve, 10));
         }
     };
@@ -383,23 +397,11 @@ test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover o
                 );
             }),
         ]);
-        const workerReport = reports.find(
-            (report) => report.url === ids[1] + "/cluster/report",
-        );
-        const renderReport = reports.find(
-            (report) => report.url === ids[2] + "/cluster/report",
-        );
-        assert.ok(workerReport, "the first lower tier should be checked");
-        assert.ok(renderReport, "recovery should continue after a deleted checkpoint");
-        assert.deepEqual(renderReport.body, {
-            roomId: "room",
-            jwtToken: "room-jwt",
-            sessionToken: "session-jwt",
-            owner: ids[0],
-            revision: tombstone.revision,
-            failure: true,
-        });
-        assert.equal(openedOwners.at(-1), ids[2]);
+        assert.ok(workerRouteCalls >= 2, "the stale lower-epoch route was retried");
+        assert.ok(opened.includes(ids[0]), "the primary should be attempted first");
+        assert.ok(opened.includes(ids[1] + "/ws"), "recovery should open the secondary");
+        assert.deepEqual(opened.slice(1), [ids[1] + "/ws"]);
+        assert.equal(reportCalls, 0, "a DELETED instance should be reopened, not elected via /report");
     } finally {
         clearTimeout(timeout);
         socket.disconnect();
