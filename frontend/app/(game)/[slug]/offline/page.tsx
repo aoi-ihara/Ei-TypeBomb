@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import Client from "../play/playground/Client";
+import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
 
 export default async function OfflinePlayPage({
@@ -16,7 +16,8 @@ export default async function OfflinePlayPage({
 
     if (!room || room.id !== slug) redirect("/" + slug);
 
-    const backgroundMusic = cookieStore.get("background-music")?.value !== "false";
+    const backgroundMusic =
+        cookieStore.get("background-music")?.value !== "false";
     const soundEffects = cookieStore.get("sound-effects")?.value !== "false";
 
     return (
