@@ -3,8 +3,8 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
+import { isRoomAuthorized } from "./auth";
 import type { Room } from "@/type";
-import { getPlaygroundRoom } from "./playground";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
@@ -31,7 +31,7 @@ export const getRoomStatusFromId = async (id: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("*")
+        .select("id, password")
         .eq("id", id)
         .maybeSingle();
 
@@ -77,16 +77,15 @@ export const getRoomSummaryFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
-    const [{ data, error }, userId, authorizedRoom] = await Promise.all([
+    const [{ data, error }, userId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public",
+                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, game_duration, is_public",
             )
             .eq("id", id)
             .maybeSingle(),
         getUser(),
-        getPlaygroundRoom(),
     ]);
 
     if (error) {
@@ -96,7 +95,8 @@ export const getRoomSummaryFromId = async (id: string) => {
     if (!data) return null;
 
     const isOwner = data.user_id === userId;
-    if (!data.is_public && !isOwner && authorizedRoom?.id !== id) return null;
+    const authorized = !data.password || (await isRoomAuthorized(id));
+    if (!authorized) return null;
 
     const room: Room = {
         id: data.id,
@@ -122,29 +122,34 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
-    const [{ data, error }, userId] = await Promise.all([
-        supabase
-            .from("ei_typebomb_rooms")
-            .select("id, title, user_id, is_public, items")
-            .eq("id", id)
-            .maybeSingle(),
-        getUser(),
-    ]);
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, title, password, items")
+        .eq("id", id)
+        .maybeSingle();
 
     if (error) {
         serverError("failed to fetch room play info", error, "DB");
         return null;
     }
-    if (!data) return null;
+    if (!data) {
+        return {
+            exists: false,
+            requiresPassword: false,
+            authorized: false,
+        };
+    }
 
-    const isOwner = data.user_id === userId;
-    const canViewDetails = Boolean(data.is_public) || isOwner;
-    const hasItems = Array.isArray(data.items) && data.items.length > 0;
+    const requiresPassword = Boolean(data.password);
+    const authorized = await isRoomAuthorized(id);
+    const canViewDetails = !requiresPassword || authorized;
 
     return {
-        title: canViewDetails ? data.title : "非公開ルーム",
-        // Keep private room metadata minimal before password authentication.
-        itemCount: canViewDetails ? (Array.isArray(data.items) ? data.items.length : 0) : (hasItems ? 1 : 0),
+        exists: true,
+        requiresPassword,
+        authorized,
+        title: canViewDetails ? data.title : undefined,
+        itemCount: canViewDetails ? (Array.isArray(data.items) ? data.items.length : 0) : 0,
     };
 };
 
