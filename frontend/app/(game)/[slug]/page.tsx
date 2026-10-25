@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import { getRoomPlayInfoFromId, getRoomSummaryFromId } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
-import Button from "@/components/ui/Button";
 
 export default async function RoomPage({
     params,
@@ -54,7 +52,7 @@ export default async function RoomPage({
                     </span>
                 </div>
 
-                <div className="flex items-end gap-2 font-bold">
+                <div className="flex items-end gap-2">
                     <Icon name="usersRound" />
                     <span
                         className="flex gap-1 items-center"
@@ -68,7 +66,7 @@ export default async function RoomPage({
                     </span>
                 </div>
 
-                <div className="flex items-end gap-2 font-bold">
+                <div className="flex items-end gap-2">
                     <Icon name="playingCardsFan" />
                     <span
                         className="flex gap-1 items-center"

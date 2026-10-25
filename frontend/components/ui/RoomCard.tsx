@@ -38,7 +38,7 @@ export default function RoomCard({
             <div className="flex min-w-0 items-center gap-2">
                 <Icon name={room.isPublic ? "earth" : "lock"} />
                 <h2
-                    className="min-w-0 flex-1 truncate text-lg font-bold"
+                    className="min-w-0 flex-1 truncate font-bold"
                     data-cursor="text"
                 >
                     {room.title || "無題のルーム"}
@@ -46,19 +46,38 @@ export default function RoomCard({
             </div>
 
             <p
-                className="line-clamp-2 w-full text-start opacity-80"
+                className={`line-clamp-2 w-full text-start ${!room.explanation && "italic opacity-50"}`}
                 data-cursor="text"
             >
-                {room.explanation || "説明はありません。"}
+                {room.explanation || "説明なし"}
             </p>
 
-            <div className="flex items-center gap-2 text-sm">
-                <Icon name="usersRound" />
-                <div>
-                    <span className="font-mono font-bold">
-                        {room.maxPlayers ?? 2}
+            <div className="flex flex-wrap gap-4">
+                <div className="flex items-end gap-2 opacity-50">
+                    <Icon name="usersRound" />
+                    <span
+                        className="flex gap-1 items-center"
+                        data-cursor="text"
+                    >
+                        <span className="text-sm">最大</span>
+                        <span className="font-bold font-mono">
+                            {room.maxPlayers ?? 2}
+                        </span>
+                        <span className="text-sm">人</span>
                     </span>
-                    <span className="opacity-50">人まで</span>
+                </div>
+
+                <div className="flex items-end gap-2 opacity-50">
+                    <Icon name="playingCardsFan" />
+                    <span
+                        className="flex gap-1 items-center"
+                        data-cursor="text"
+                    >
+                        <span className="font-bold font-mono">
+                            {room.items?.length ?? 0}
+                        </span>
+                        <span className="text-sm">個の単語</span>
+                    </span>
                 </div>
             </div>
 
