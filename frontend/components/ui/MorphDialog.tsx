@@ -41,6 +41,7 @@ export default function MorphDialog({
     const dockRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLDivElement>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
+    const openSettledRef = useRef(false);
     const id = useId();
     const closeFromKeyboard = useEffectEvent(() => onClose());
     const attachAnchor = useCallback((element: HTMLDivElement | null) => {
@@ -67,18 +68,16 @@ export default function MorphDialog({
         };
         const showAnchor = () => {
             element.style.opacity = "1";
-            element.inert = false;
-            element.removeAttribute("aria-hidden");
             dock.style.opacity = "0";
-            dock.inert = true;
         };
         const showMorph = () => {
             element.style.opacity = "0";
-            element.inert = true;
-            element.setAttribute("aria-hidden", "true");
             dock.style.opacity = "1";
-            dock.inert = false;
         };
+        element.inert = open;
+        if (open) element.setAttribute("aria-hidden", "true");
+        else element.removeAttribute("aria-hidden");
+        dock.inert = !open;
         const origin = syncWidth();
         const hadPosition = dock.style.left !== "";
         const from =
@@ -238,10 +237,13 @@ export default function MorphDialog({
                             aria-label="ダイアログを閉じる"
                             tabIndex={-1}
                             aria-hidden="true"
-                            onClick={onClose}
-                            className="pointer-events-auto absolute inset-0 cursor-default bg-(--color-background-secondary)/50 motion-reduce:transition-none!"
+                            onClick={() => {
+                                if (openSettledRef.current) onClose();
+                            }}
+                            className="absolute inset-0 cursor-default bg-(--color-background-secondary)/50 motion-reduce:transition-none!"
                             style={{
                                 opacity: open ? 1 : 0,
+                                pointerEvents: open ? "auto" : "none",
                                 visibility: open ? "visible" : "hidden",
                                 transition: `opacity var(--duration-etb, 400ms) var(--ease-etb, ease), visibility 0s ${open ? "0s" : "var(--duration-etb, 400ms)"}`,
                             }}
@@ -252,6 +254,9 @@ export default function MorphDialog({
                         >
                             <Morph
                                 state={open}
+                                onSettled={() => {
+                                    openSettledRef.current = open;
+                                }}
                                 first={
                                     <div
                                         ref={triggerRef}
