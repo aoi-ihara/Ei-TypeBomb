@@ -18,10 +18,7 @@ export default async function RoomPage({
     ]);
     if (!playInfo) notFound();
 
-    const result = await getRoomSummaryFromId(
-        slug,
-        authorizedRoom?.id === slug,
-    );
+    const result = await getRoomSummaryFromId(slug);
     const room = result?.room;
     const itemCount = result?.itemCount ?? playInfo.itemCount;
     const isOwner = result?.isOwner ?? false;

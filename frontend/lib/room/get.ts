@@ -4,6 +4,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import type { Room } from "@/type";
+import { getPlaygroundRoom } from "./playground";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
@@ -72,11 +73,11 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     }));
 };
 
-export const getRoomSummaryFromId = async (id: string, canViewPrivate = false) => {
+export const getRoomSummaryFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
-    const [{ data, error }, userId] = await Promise.all([
+    const [{ data, error }, userId, authorizedRoom] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
             .select(
@@ -85,6 +86,7 @@ export const getRoomSummaryFromId = async (id: string, canViewPrivate = false) =
             .eq("id", id)
             .maybeSingle(),
         getUser(),
+        getPlaygroundRoom(),
     ]);
 
     if (error) {
@@ -94,7 +96,7 @@ export const getRoomSummaryFromId = async (id: string, canViewPrivate = false) =
     if (!data) return null;
 
     const isOwner = data.user_id === userId;
-    if (!data.is_public && !isOwner && !canViewPrivate) return null;
+    if (!data.is_public && !isOwner && authorizedRoom?.id !== id) return null;
 
     const room: Room = {
         id: data.id,
