@@ -757,8 +757,12 @@ export class PeerControl implements Control {
         if (op === "probe") {
             const state = await this.record(args.roomId),
                 cp = state.committed;
+            // A process that has no committed checkpoint for this room cannot
+            // still be serving it as owner. Let a lower voter with a valid
+            // checkpoint attempt promotion; promote() still enforces the fixed
+            // cohort, boot ID, epoch and checkpoint checks.
             if (!cp || cp.ownership.owner !== this.config.id)
-                return { healthy: false, release: false };
+                return { healthy: false, release: true };
             if (this.draining) return { healthy: false, release: true };
             try {
                 await this.rpc(this.config.id, "fence", {
