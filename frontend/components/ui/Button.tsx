@@ -51,7 +51,7 @@ export default function Button({
     className = "w-fit",
     type = "button",
     variant = "default",
-    padding = "middle",
+    padding = variant === "text" ? "small" : "middle",
     iconName,
     alignment = "center",
     value,
@@ -60,7 +60,7 @@ export default function Button({
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
-        variant === "text"
+        variant === "text" && padding === "small"
             ? `gap-1 py-0.5 ${iconName ? "pl-0.5" : "pl-1"} ${children ? "pr-1.5" : "pr-0.5"}`
             : padding === "small"
               ? `rounded-lg ${iconName ? "pl-1.5" : "pl-2"} ${children ? "pr-2" : "pr-1.5"} py-1.5 gap-1`
