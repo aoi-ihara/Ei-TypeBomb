@@ -47,14 +47,7 @@ export default function RoomPasswordGate({ roomId }: { roomId: string }) {
     };
 
     return (
-        <div className="flex w-full flex-col gap-4">
-            <div className="w-full text-start">
-                <h1 className="text-xl font-semibold">パスワードが必要です</h1>
-                <p className="mt-1 text-sm opacity-70">
-                    このルームの情報を見るには、パスワードを入力してください。
-                </p>
-            </div>
-
+        <>
             <Input
                 value={password}
                 type="password"
@@ -91,6 +84,6 @@ export default function RoomPasswordGate({ roomId }: { roomId: string }) {
                     onCancel={() => setTurnstile(false)}
                 />
             </PopUp>
-        </div>
+        </>
     );
 }

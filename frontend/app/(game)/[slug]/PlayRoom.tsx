@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import MorphDialog from "@/components/ui/MorphDialog";
 import { PopUp } from "@/components/ui/PopUp";
 import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import { getRoomStatusFromId } from "@/lib/room/get";
@@ -16,29 +17,46 @@ export default function PlayRoom({
     roomId,
     alreadyAuthorized,
     itemCount,
+    isOwner,
+    slug,
 }: {
     roomId: string;
     alreadyAuthorized: boolean;
     itemCount: number;
+    isOwner: boolean;
+    slug: string;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
-    const [selectedMode, setSelectedMode] = useState<PlayMode>("online");
+    const [activeDialog, setActiveDialog] = useState<PlayMode | null>(null);
     const [joining, setJoining] = useState<PlayMode | null>(null);
     const [turnstile, setTurnstile] = useState(false);
+    const [turnstileMode, setTurnstileMode] = useState<PlayMode | null>(null);
     const [error, setError] = useState("");
 
     useEffect(() => {
-        setDisplayName(localStorage.getItem("display-name") ?? "");
+        let active = true;
+
+        void Promise.resolve().then(() => {
+            if (!active) return;
+            try {
+                setDisplayName(
+                    window.localStorage.getItem("display-name") ?? "",
+                );
+            } catch (reason) {
+                console.error("Failed to load display name:", reason);
+            }
+        });
+
         if (alreadyAuthorized) {
-            setRoomLoading(false);
-            return;
+            return () => {
+                active = false;
+            };
         }
 
-        let active = true;
         getRoomStatusFromId(roomId)
             .then((result) => {
                 if (!active) return;
@@ -70,11 +88,13 @@ export default function PlayRoom({
     };
 
     const handleSignIn = async (
-        turnstileToken?: string,
-        mode: PlayMode = selectedMode,
+        turnstileToken: string | undefined,
+        mode: PlayMode,
     ) => {
         if (itemCount === 0) {
-            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
+            setError(
+                "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。",
+            );
             return;
         }
         if (mode === "online" && !displayName.trim()) {
@@ -86,7 +106,11 @@ export default function PlayRoom({
         setError("");
 
         if (mode === "online") {
-            localStorage.setItem("display-name", displayName.trim());
+            try {
+                localStorage.setItem("display-name", displayName.trim());
+            } catch (reason) {
+                console.error("Failed to save display name:", reason);
+            }
             posthog.capture("display_name_set");
         }
 
@@ -95,17 +119,20 @@ export default function PlayRoom({
             return;
         }
 
-        const result = await signInToRoom(
-            {
-                id: roomId,
-                password: showPasswordField ? roomPassword : "",
-            },
-            turnstileToken,
-        );
+        try {
+            const result = await signInToRoom(
+                {
+                    id: roomId,
+                    password: showPasswordField ? roomPassword : "",
+                },
+                turnstileToken,
+            );
 
-        if (result === null) {
-            navigateToMode(mode);
-        } else {
+            if (result === null) {
+                navigateToMode(mode);
+                return;
+            }
+
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
                 play_mode: mode,
@@ -113,108 +140,175 @@ export default function PlayRoom({
             });
             setError(result);
             setJoining(null);
+        } catch (reason) {
+            console.error("Failed to authorize room:", reason);
+            setError("ルームの認証に失敗しました。もう一度お試しください。");
+            setJoining(null);
         }
     };
 
-    const handleContinue = () => {
+    const handleContinue = (mode: PlayMode) => {
         if (itemCount === 0) {
-            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
+            setError(
+                "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。",
+            );
             return;
         }
-        if (selectedMode === "online" && !displayName.trim()) {
+        if (mode === "online" && !displayName.trim()) {
             setError("表示名を入力してください。");
             return;
         }
+
+        setError("");
         if (showPasswordField && !alreadyAuthorized) {
+            setTurnstileMode(mode);
             setTurnstile(true);
             return;
         }
-        void handleSignIn();
+        void handleSignIn(undefined, mode);
     };
 
-    return (
-        <div className="flex w-full flex-col gap-4">
-            {roomLoading ? (
-                <p className="w-full py-3 text-center text-sm opacity-70" role="status">
-                    ルーム情報を確認しています…
-                </p>
-            ) : (
-                <>
-                    <p className="w-full text-start text-sm opacity-70">
-                        {itemCount === 0
-                            ? "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。"
-                            : "オンラインかオフラインを選んでください。"}
+    const renderModeDialog = (mode: PlayMode) => {
+        const isOnline = mode === "online";
+        const title = isOnline ? "オンライン" : "オフライン";
+        const isActive = activeDialog === mode;
+
+        return (
+            <MorphDialog
+                key={mode}
+                button={
+                    <Button
+                        onClick={() => {
+                            setError("");
+                            if (
+                                mode === "offline" &&
+                                (!showPasswordField || alreadyAuthorized)
+                            ) {
+                                handleContinue(mode);
+                            } else {
+                                setActiveDialog(mode);
+                            }
+                        }}
+                        className="w-full"
+                        variant="primary"
+                        iconName={isOnline ? "users" : "user"}
+                        disabled={roomLoading || itemCount === 0}
+                    >
+                        {isOnline ? "オンライン" : "オフライン"}
+                    </Button>
+                }
+                title={title}
+                description={
+                    isOnline
+                        ? showPasswordField && !alreadyAuthorized
+                            ? "表示名とパスワードを入力してください。"
+                            : "表示名を入力してください。"
+                        : "パスワードを入力してください。"
+                }
+                alignment="vertical"
+                size="middle"
+                open={isActive}
+                onClose={() => setActiveDialog(null)}
+            >
+                {showPasswordField && !alreadyAuthorized && (
+                    <Input
+                        value={roomPassword}
+                        type="password"
+                        onChange={(event) =>
+                            setRoomPassword(event.target.value)
+                        }
+                        label="ルームのパスワード"
+                        disabled={joining !== null}
+                        autoComplete="current-password"
+                    />
+                )}
+
+                {isOnline && (
+                    <Input
+                        value={displayName}
+                        onChange={(event) => setDisplayName(event.target.value)}
+                        label="表示名"
+                        disabled={joining !== null}
+                        autoComplete="name"
+                    />
+                )}
+
+                {error && isActive && (
+                    <p className="w-full text-sm text-red-500" role="alert">
+                        {error}
                     </p>
+                )}
 
-                    <div className="grid w-full grid-cols-2 gap-3">
-                        <Button
-                            onClick={() => setSelectedMode("online")}
-                            variant={selectedMode === "online" ? "primary" : "text"}
-                            className="w-full"
-                            iconName="users"
-                        >
-                            オンライン
-                        </Button>
-                        <Button
-                            onClick={() => setSelectedMode("offline")}
-                            variant={selectedMode === "offline" ? "primary" : "text"}
-                            className="w-full"
-                            iconName="user"
-                        >
-                            オフライン
-                        </Button>
-                    </div>
-
-                    {showPasswordField && !alreadyAuthorized && (
-                        <Input
-                            value={roomPassword}
-                            type="password"
-                            onChange={(event) => setRoomPassword(event.target.value)}
-                            label="ルームのパスワード"
-                        />
-                    )}
-
-                    {selectedMode === "online" && (
-                        <Input
-                            value={displayName}
-                            onChange={(event) => setDisplayName(event.target.value)}
-                            label="表示名"
-                        />
-                    )}
-                </>
-            )}
-
-            {error && <p className="w-full text-sm text-red-500" role="alert">{error}</p>}
-
-            {!roomLoading && (
                 <Button
-                    onClick={handleContinue}
+                    onClick={() => handleContinue(mode)}
                     className="w-full"
                     variant="primary"
                     disabled={
-                        itemCount === 0 ||
                         joining !== null ||
-                        (showPasswordField && !alreadyAuthorized && !roomPassword) ||
-                        (selectedMode === "online" && !displayName.trim())
+                        (showPasswordField &&
+                            !alreadyAuthorized &&
+                            !roomPassword) ||
+                        (isOnline && !displayName.trim())
                     }
-                    loading={joining !== null}
+                    loading={joining === mode}
                     iconName="arrowRight"
                 >
                     続ける
                 </Button>
+            </MorphDialog>
+        );
+    };
+
+    return (
+        <div className="flex w-full flex-col gap-4">
+            {!roomLoading && (
+                <>
+                    {itemCount === 0 && (
+                        <p className="w-full text-start text-sm opacity-70">
+                            このルームには単語がありません。
+                        </p>
+                    )}
+
+                    <div className="grid w-full grid-cols-2 gap-4">
+                        {renderModeDialog("online")}
+                        {renderModeDialog("offline")}
+                    </div>
+                </>
+            )}
+
+            {isOwner && (
+                <Button
+                    onClick={() => router.push("/" + slug + "/edit")}
+                    className="w-full"
+                    iconName="pen"
+                >
+                    ルームを編集
+                </Button>
+            )}
+
+            {error && !activeDialog && !turnstile && (
+                <p className="w-full text-sm text-red-500" role="alert">
+                    {error}
+                </p>
             )}
 
             <PopUp show={turnstile}>
                 <TurnstileChallenge
                     onSuccess={(token) => {
                         setTurnstile(false);
-                        void handleSignIn(token);
+                        const mode = turnstileMode;
+                        setTurnstileMode(null);
+                        if (mode) void handleSignIn(token, mode);
                     }}
                     onFail={(reason) => {
                         setTurnstile(false);
+                        setTurnstileMode(null);
                         setError(reason);
                     }}
-                    onCancel={() => setTurnstile(false)}
+                    onCancel={() => {
+                        setTurnstile(false);
+                        setTurnstileMode(null);
+                    }}
                 />
             </PopUp>
         </div>

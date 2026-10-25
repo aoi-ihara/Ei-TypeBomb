@@ -45,6 +45,7 @@ import {
     UserRoundCog,
     Keyboard,
     Send,
+    PlayingCardsFan,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -93,6 +94,7 @@ const icons: Record<string, LucideIcon> = {
     userRoundCog: UserRoundCog,
     keyboard: Keyboard,
     send: Send,
+    playingCardsFan: PlayingCardsFan,
 };
 
 export type IconName = keyof typeof icons;

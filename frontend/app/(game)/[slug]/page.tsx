@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
@@ -19,11 +18,8 @@ export default async function RoomPage({
 
     if (playInfo.requiresPassword && !playInfo.authorized) {
         return (
-            <Shell title="ルーム" size="medium" animateAppear>
+            <Shell title="パスワードを入力" size="medium" animateAppear>
                 <RoomPasswordGate roomId={slug} />
-                <Link href="/" className="py-2 text-center text-sm opacity-60">
-                    ルーム一覧に戻る
-                </Link>
             </Shell>
         );
     }
@@ -37,22 +33,48 @@ export default async function RoomPage({
 
     return (
         <Shell title={title} size="medium" animateAppear>
-            <p className="w-full text-start opacity-80">
-                {room.explanation || "このルームの説明はありません。"}
-            </p>
+            {room.explanation && (
+                <p className="w-full text-start" data-cursor="text">
+                    {room.explanation}
+                </p>
+            )}
 
-            <div className="flex w-full flex-col gap-3 rounded-xl bg-(--color-background-secondary) p-4">
-                <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+                <div className="flex items-end gap-2 font-bold">
                     <Icon name={room.isPublic ? "earth" : "lock"} />
-                    <span>{room.isPublic ? "共有ルーム" : "非公開ルーム"}</span>
+                    <span
+                        className="flex gap-1 items-center"
+                        data-cursor="text"
+                    >
+                        <span className="font-bold font-mono">
+                            {room.isPublic ? "共有" : "非公開"}
+                        </span>
+                    </span>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-end gap-2">
                     <Icon name="usersRound" />
-                    <span>最大 {room.maxPlayers ?? 2} 人</span>
+                    <span
+                        className="flex gap-1 items-center"
+                        data-cursor="text"
+                    >
+                        <span className="opacity-50 text-sm">最大</span>
+                        <span className="font-bold font-mono">
+                            {room.maxPlayers ?? 2}
+                        </span>
+                        <span className="opacity-50 text-sm">人</span>
+                    </span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Icon name="list" />
-                    <span>{itemCount} 個の単語</span>
+
+                <div className="flex items-end gap-2">
+                    <Icon name="playingCardsFan" />
+                    <span
+                        className="flex gap-1 items-center"
+                        data-cursor="text"
+                    >
+                        <span className="font-bold font-mono">{itemCount}</span>
+                        <span className="opacity-50 text-sm">個の単語</span>
+                    </span>
                 </div>
             </div>
 
@@ -60,19 +82,9 @@ export default async function RoomPage({
                 roomId={slug}
                 alreadyAuthorized={playInfo.authorized}
                 itemCount={itemCount}
+                isOwner={isOwner}
+                slug={slug}
             />
-
-            {isOwner && (
-                <Link
-                    href={"/" + slug + "/edit"}
-                    className="w-full rounded-xl border border-(--color-border) px-4 py-3 text-center font-semibold"
-                >
-                    ルームを編集
-                </Link>
-            )}
-            <Link href="/" className="py-2 text-center text-sm opacity-60">
-                ルーム一覧に戻る
-            </Link>
         </Shell>
     );
 }
