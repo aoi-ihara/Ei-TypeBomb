@@ -141,14 +141,15 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     }
 
     const requiresPassword = Boolean(data.password);
-    const authorized = !requiresPassword || (await isRoomAuthorized(id));
+    const authorized = await isRoomAuthorized(id);
+    const canViewDetails = !requiresPassword || authorized;
 
     return {
         exists: true,
         requiresPassword,
         authorized,
-        title: authorized ? data.title : undefined,
-        itemCount: authorized ? (Array.isArray(data.items) ? data.items.length : 0) : 0,
+        title: canViewDetails ? data.title : undefined,
+        itemCount: canViewDetails ? (Array.isArray(data.items) ? data.items.length : 0) : 0,
     };
 };
 
