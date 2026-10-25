@@ -45,6 +45,13 @@ const navigationItems: {
     { value: "saved", label: "保存", iconName: "archive" },
 ];
 
+const getViewFromSearchParams = (searchParams: URLSearchParams): View => {
+    const filter = searchParams.get("filter");
+    if (filter === "mine") return "mine";
+    if (filter === "saved") return "saved";
+    return "recommended";
+};
+
 export default function RoomList({
     publicRooms,
     myRooms,
@@ -130,13 +137,41 @@ export default function RoomList({
             return;
         }
 
+        if (nextView === view) return;
+
         setView(nextView);
 
-        // Keep the old query parameters only for arriving at this page.
-        if (window.location.pathname === "/" && window.location.search) {
-            window.history.replaceState(window.history.state, "", "/");
+        const url = new URL(window.location.href);
+        if (nextView === "recommended") {
+            url.searchParams.delete("filter");
+        } else {
+            url.searchParams.set("filter", nextView);
         }
+
+        window.history.pushState(
+            window.history.state,
+            "",
+            url.pathname + (url.search ? url.search : ""),
+        );
     };
+
+    useEffect(() => {
+        const handlePopState = () => {
+            const nextView = getViewFromSearchParams(
+                new URLSearchParams(window.location.search),
+            );
+
+            if (nextView === "mine" && !currentUser) {
+                setView("recommended");
+                return;
+            }
+
+            setView(nextView);
+        };
+
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+    }, [currentUser]);
 
     useEffect(() => {
         let active = true;
