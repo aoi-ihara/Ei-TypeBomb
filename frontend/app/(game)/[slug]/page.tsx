@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
-import { getRoomSummaryFromId } from "@/lib/room/get";
+import { getRoomPlayInfoFromId, getRoomSummaryFromId } from "@/lib/room/get";
+import { getPlaygroundRoom } from "@/lib/room/playground";
+import PlayRoom from "./PlayRoom";
 
 export default async function RoomPage({
     params,
@@ -10,49 +12,59 @@ export default async function RoomPage({
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const result = await getRoomSummaryFromId(slug);
-    if (!result) notFound();
+    const [playInfo, authorizedRoom] = await Promise.all([
+        getRoomPlayInfoFromId(slug),
+        getPlaygroundRoom(),
+    ]);
+    if (!playInfo) notFound();
 
-    const { room, itemCount, isOwner } = result;
+    const result = await getRoomSummaryFromId(
+        slug,
+        authorizedRoom?.id === slug,
+    );
+    const room = result?.room;
+    const itemCount = result?.itemCount ?? playInfo.itemCount;
+    const isOwner = result?.isOwner ?? false;
+    const title = room?.title || playInfo.title || "ルーム";
 
     return (
-        <Shell title={room.title || "ルーム"} size="medium" animateAppear>
-            <p className="w-full text-start opacity-80">
-                {room.explanation || "このルームの説明はありません。"}
-            </p>
+        <Shell title={title} size="medium" animateAppear>
+            {room ? (
+                <>
+                    <p className="w-full text-start opacity-80">
+                        {room.explanation || "このルームの説明はありません。"}
+                    </p>
 
-            <div className="flex w-full flex-col gap-3 rounded-xl bg-(--color-background-secondary) p-4">
-                <div className="flex items-center gap-2">
-                    <Icon name={room.isPublic ? "earth" : "lock"} />
-                    <span>{room.isPublic ? "共有ルーム" : "非公開ルーム"}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Icon name="usersRound" />
-                    <span>最大 {room.maxPlayers ?? 2} 人</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Icon name="list" />
-                    <span>{itemCount} 個の単語</span>
-                </div>
-            </div>
-
-            {itemCount === 0 && (
-                <p className="w-full text-sm text-red-500">
-                    このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。
+                    <div className="flex w-full flex-col gap-3 rounded-xl bg-(--color-background-secondary) p-4">
+                        <div className="flex items-center gap-2">
+                            <Icon name={room.isPublic ? "earth" : "lock"} />
+                            <span>{room.isPublic ? "共有ルーム" : "非公開ルーム"}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Icon name="usersRound" />
+                            <span>最大 {room.maxPlayers ?? 2} 人</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Icon name="list" />
+                            <span>{itemCount} 個の単語</span>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <p className="w-full text-start text-sm opacity-70">
+                    このルームは非公開です。パスワードを入力して参加してください。
                 </p>
             )}
 
-            {itemCount > 0 && (
-                <Link
-                    href={"/" + room.id + "/play"}
-                    className="w-full rounded-xl bg-cyan-600 px-4 py-3 text-center font-semibold text-white transition-transform active:scale-[0.98]"
-                >
-                    プレイする
-                </Link>
-            )}
+            <PlayRoom
+                roomId={slug}
+                alreadyAuthorized={authorizedRoom?.id === slug}
+                itemCount={itemCount}
+            />
+
             {isOwner && (
                 <Link
-                    href={"/" + room.id + "/edit"}
+                    href={"/" + slug + "/edit"}
                     className="w-full rounded-xl border border-(--color-border) px-4 py-3 text-center font-semibold"
                 >
                     ルームを編集

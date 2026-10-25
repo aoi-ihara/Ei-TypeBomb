@@ -1,26 +1,10 @@
-import { notFound } from "next/navigation";
-import { getPlaygroundRoom } from "@/lib/room/playground";
-import { getRoomPlayInfoFromId } from "@/lib/room/get";
-import PlayRoom from "./PlayRoom";
+import { redirect } from "next/navigation";
 
-export default async function PlayPage({
+export default async function LegacyRoomPlayPage({
     params,
 }: {
     params: Promise<{ slug: string }>;
 }) {
     const { slug } = await params;
-    const [summary, authorizedRoom] = await Promise.all([
-        getRoomPlayInfoFromId(slug),
-        getPlaygroundRoom(),
-    ]);
-    if (!summary) notFound();
-
-    return (
-        <PlayRoom
-            roomId={slug}
-            title={summary.title || "ルーム"}
-            alreadyAuthorized={authorizedRoom?.id === slug}
-            itemCount={summary.itemCount}
-        />
-    );
+    redirect("/" + slug);
 }

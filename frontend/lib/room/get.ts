@@ -72,7 +72,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     }));
 };
 
-export const getRoomSummaryFromId = async (id: string) => {
+export const getRoomSummaryFromId = async (id: string, canViewPrivate = false) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
@@ -94,7 +94,7 @@ export const getRoomSummaryFromId = async (id: string) => {
     if (!data) return null;
 
     const isOwner = data.user_id === userId;
-    if (!data.is_public && !isOwner) return null;
+    if (!data.is_public && !isOwner && !canViewPrivate) return null;
 
     const room: Room = {
         id: data.id,

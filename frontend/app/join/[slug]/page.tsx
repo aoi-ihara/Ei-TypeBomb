@@ -15,5 +15,5 @@ export default async function JoinLegacyRoute({
         (isUUID(slug, 4) ? slug : null);
 
     if (!roomId) notFound();
-    redirect("/" + roomId + "/play");
+    redirect("/" + roomId);
 }
