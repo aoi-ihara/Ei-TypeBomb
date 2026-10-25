@@ -121,6 +121,9 @@ export class RoutedSocket {
     private currentOwnerUrl?: string;
     private routedRevision?: number;
     private routedInstance?: string;
+    // A DELETED route clears the old instance fence, but its revision is still
+    // useful if the next auth attempt discovers a conflicting surviving copy.
+    private tombstoneRoute?: { roomId: string; revision: number };
     private failure?: { owner: string; revision: number };
     private deliveredResults = new Set<string>();
     private pending = new Map<
@@ -657,8 +660,14 @@ export class RoutedSocket {
                 (a, b) => a.depth - b.depth,
             );
             if (own?.lifecycle === "DELETED") {
-                // The certified tombstone ends the old incarnation. A new
-                // page must not demand its retired checkpoint from a fresh tier.
+                // Do not send the retired instance as expectedInstance, but keep
+                // enough information to report a contradictory auth result to
+                // a lower tier. A stale tombstone can coexist with a newer
+                // checkpoint during a partition.
+                this.tombstoneRoute = {
+                    roomId: own.roomId,
+                    revision: own.revision,
+                };
                 this.meta = undefined;
                 this.routedInstance = undefined;
                 this.routedRevision = undefined;
@@ -667,9 +676,12 @@ export class RoutedSocket {
                 this.joinedRoom = false;
                 this.rejoinOnSnapshot = false;
             } else if (own) {
+                this.tombstoneRoute = undefined;
                 this.roomId = own.roomId;
                 this.routedRevision = own.revision;
                 this.routedInstance = own.instance;
+            } else {
+                this.tombstoneRoute = undefined;
             }
             // Try certified tiers in priority order for fresh/deleted rooms.
             // A reachable backup can initialize its own signed cohort when
@@ -843,6 +855,23 @@ export class RoutedSocket {
                 });
                 socket.on("error", (error) => {
                     if (active()) {
+                        // A deleted route may have come from a replica that
+                        // has not observed a newer surviving checkpoint. If
+                        // auth finds that the chosen owner lost its voter state,
+                        // explicitly ask lower tiers to verify/promote rather
+                        // than repeatedly resolving the same tombstone.
+                        if (
+                            authenticating &&
+                            error?.code === "VOTER_STATE_LOST" &&
+                            this.tombstoneRoute
+                        ) {
+                            this.roomId = this.tombstoneRoute.roomId;
+                            this.failure = {
+                                owner: server.id,
+                                revision: this.tombstoneRoute.revision,
+                            };
+                            this.tombstoneRoute = undefined;
+                        }
                         connectionError(
                             "CONNECTION",
                             "Server returned an error",
@@ -869,6 +898,7 @@ export class RoutedSocket {
                 socket.on("auth:session", (value) => {
                     if (active()) {
                         authenticating = false;
+                        this.tombstoneRoute = undefined;
                         this.lastReply = performance.now();
                         authenticatedAt = this.lastReply;
                         if (this.recoveryDiagnostics)
