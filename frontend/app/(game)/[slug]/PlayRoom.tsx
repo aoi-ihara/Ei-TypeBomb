@@ -17,10 +17,14 @@ export default function PlayRoom({
     roomId,
     alreadyAuthorized,
     itemCount,
+    isOwner,
+    slug,
 }: {
     roomId: string;
     alreadyAuthorized: boolean;
     itemCount: number;
+    isOwner: boolean;
+    slug: string;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
@@ -36,12 +40,12 @@ export default function PlayRoom({
     useEffect(() => {
         let active = true;
 
-        // localStorage is an external browser store. Defer its initial read so
-        // the effect doesn't synchronously schedule a cascading React render.
         void Promise.resolve().then(() => {
             if (!active) return;
             try {
-                setDisplayName(window.localStorage.getItem("display-name") ?? "");
+                setDisplayName(
+                    window.localStorage.getItem("display-name") ?? "",
+                );
             } catch (reason) {
                 console.error("Failed to load display name:", reason);
             }
@@ -166,7 +170,7 @@ export default function PlayRoom({
 
     const renderModeDialog = (mode: PlayMode) => {
         const isOnline = mode === "online";
-        const title = isOnline ? "オンラインで遊ぶ" : "オフラインで遊ぶ";
+        const title = isOnline ? "オンライン" : "オフライン";
         const isActive = activeDialog === mode;
 
         return (
@@ -176,10 +180,17 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
-                            setActiveDialog(mode);
+                            if (
+                                mode === "offline" &&
+                                (!showPasswordField || alreadyAuthorized)
+                            ) {
+                                handleContinue(mode);
+                            } else {
+                                setActiveDialog(mode);
+                            }
                         }}
-                        variant="text"
                         className="w-full"
+                        variant="primary"
                         iconName={isOnline ? "users" : "user"}
                         disabled={roomLoading || itemCount === 0}
                     >
@@ -189,8 +200,10 @@ export default function PlayRoom({
                 title={title}
                 description={
                     isOnline
-                        ? "表示名を設定して、ほかのプレイヤーと一緒に遊びます。"
-                        : "この端末だけで練習します。"
+                        ? showPasswordField && !alreadyAuthorized
+                            ? "表示名とパスワードを入力してください。"
+                            : "表示名を入力してください。"
+                        : "パスワードを入力してください。"
                 }
                 alignment="vertical"
                 size="middle"
@@ -201,7 +214,9 @@ export default function PlayRoom({
                     <Input
                         value={roomPassword}
                         type="password"
-                        onChange={(event) => setRoomPassword(event.target.value)}
+                        onChange={(event) =>
+                            setRoomPassword(event.target.value)
+                        }
                         label="ルームのパスワード"
                         disabled={joining !== null}
                         autoComplete="current-password"
@@ -246,23 +261,29 @@ export default function PlayRoom({
 
     return (
         <div className="flex w-full flex-col gap-4">
-            {roomLoading ? (
-                <p className="w-full py-3 text-center text-sm opacity-70" role="status">
-                    ルーム情報を確認しています…
-                </p>
-            ) : (
+            {!roomLoading && (
                 <>
-                    <p className="w-full text-start text-sm opacity-70">
-                        {itemCount === 0
-                            ? "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。"
-                            : "プレイ方法を選んでください。"}
-                    </p>
+                    {itemCount === 0 && (
+                        <p className="w-full text-start text-sm opacity-70">
+                            このルームには単語がありません。
+                        </p>
+                    )}
 
-                    <div className="grid w-full grid-cols-2 gap-3">
+                    <div className="grid w-full grid-cols-2 gap-4">
                         {renderModeDialog("online")}
                         {renderModeDialog("offline")}
                     </div>
                 </>
+            )}
+
+            {isOwner && (
+                <Button
+                    onClick={() => router.push("/" + slug + "/edit")}
+                    className="w-full"
+                    iconName="pen"
+                >
+                    ルームを編集
+                </Button>
             )}
 
             {error && !activeDialog && !turnstile && (

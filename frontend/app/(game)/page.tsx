@@ -33,8 +33,6 @@ export default async function Page({
         getUserDetails(),
     ]);
 
-    // Load owned rooms on the server so switching tabs on this page does not
-    // require a route transition or another request.
     const myRoomsResult =
         currentUser || initialView === "me" ? await getMyRooms() : null;
 

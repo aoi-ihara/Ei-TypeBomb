@@ -34,7 +34,7 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full min-w-0 w-full flex-col gap-3 rounded-lg bg-(--color-background-secondary) px-4 py-4">
+        <article className="flex h-full min-w-0 w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) px-4 py-4">
             <div className="flex min-w-0 items-center gap-2">
                 <Icon name={room.isPublic ? "earth" : "lock"} />
                 <h2

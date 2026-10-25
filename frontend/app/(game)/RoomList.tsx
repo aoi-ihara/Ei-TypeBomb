@@ -405,7 +405,7 @@ export default function RoomList({
                 </div>
 
                 <Shell size="large">
-                    <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                    <div className="flex w-full flex-wrap items-center justify-between gap-4">
                         <h1 className="text-2xl font-bold" data-cursor="text">
                             {viewTitle}
                         </h1>

@@ -22,11 +22,6 @@ export const TurnstileChallenge = ({
 
     return (
         <>
-            {!widgetLoaded && (
-                <a className="gradient-text font-bold" data-cursor="text">
-                    読み込み中…
-                </a>
-            )}
             <Turnstile
                 options={{ language: "ja" }}
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
@@ -35,10 +30,14 @@ export const TurnstileChallenge = ({
                 onSuccess={onSuccess}
                 onError={(errorCode) => onFail(FAILED_MESSAGE, errorCode)}
                 onExpire={() =>
-                    onFail("確認の有効期限が切れました。もう一度お試しください。")
+                    onFail(
+                        "確認の有効期限が切れました。もう一度お試しください。",
+                    )
                 }
                 onTimeout={() =>
-                    onFail("確認がタイムアウトしました。もう一度お試しください。")
+                    onFail(
+                        "確認がタイムアウトしました。もう一度お試しください。",
+                    )
                 }
                 onUnsupported={() =>
                     onFail(
@@ -46,9 +45,6 @@ export const TurnstileChallenge = ({
                     )
                 }
             />
-            <Button onClick={onCancel} variant="text">
-                キャンセル
-            </Button>
         </>
     );
 };
