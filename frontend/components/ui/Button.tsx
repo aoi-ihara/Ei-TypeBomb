@@ -34,7 +34,7 @@ const variantStyles = (
     disabled: boolean,
 ) => {
     return variant === "text"
-        ? `${!loading && "underline"} w-fit flex rounded-md active:no-underline active:scale-95`
+        ? `w-fit flex rounded-md active:scale-95`
         : variant === "default" || loading
           ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
           : variant === "danger"
