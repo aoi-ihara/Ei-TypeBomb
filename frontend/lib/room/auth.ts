@@ -6,7 +6,7 @@ import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
 import argon2 from "argon2";
-import { importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
+import { importJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWK } from "jose";
 import { cookies } from "next/headers";
 import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 
@@ -14,6 +14,32 @@ export const getAuthToken = async () => {
     const cookieStore = await cookies();
     const authToken = cookieStore.get("jwt_token")?.value;
     return authToken;
+};
+
+export const isRoomAuthorized = async (roomId: string) => {
+    if (!isUUID(roomId, 4)) return false;
+
+    const token = await getAuthToken();
+    if (!token) return false;
+
+    try {
+        const jwk = JSON.parse(process.env.JWT_PUBLIC_KEY!) as JWK;
+        const publicKey = await importJWK(jwk, "ES256");
+        const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+            algorithms: ["ES256"],
+            issuer: "ei-typebomb",
+            audience: "authenticated",
+            requiredClaims: ["exp", "iat"],
+        });
+
+        return (
+            protectedHeader.kid === process.env.JWT_KEY_ID &&
+            payload.role === "authenticated" &&
+            payload.id === roomId
+        );
+    } catch {
+        return false;
+    }
 };
 
 export const prepareRoomJoin = async (link: string) => {
