@@ -96,7 +96,8 @@ export const getRoomSummaryFromId = async (id: string) => {
     if (!data) return null;
 
     const isOwner = data.user_id === userId;
-    const authorized = !data.password || (await isRoomAuthorized(id));
+    const authorized =
+        isOwner || !data.password || (await isRoomAuthorized(id));
     if (!authorized) return null;
 
     const room: Room = {
@@ -124,11 +125,14 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("id, title, password, items")
-        .eq("id", id)
-        .maybeSingle();
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select("id, title, user_id, password, items")
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
 
     if (error) {
         serverError("failed to fetch room play info", error, "DB");
@@ -143,7 +147,9 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     }
 
     const requiresPassword = Boolean(data.password);
-    const authorized = await isRoomAuthorized(id);
+    const isOwner = data.user_id === userId;
+    const authorized =
+        isOwner || !requiresPassword || (await isRoomAuthorized(id));
     const canViewDetails = !requiresPassword || authorized;
 
     return {
@@ -151,7 +157,11 @@ export const getRoomPlayInfoFromId = async (id: string) => {
         requiresPassword,
         authorized,
         title: canViewDetails ? data.title : undefined,
-        itemCount: canViewDetails ? (Array.isArray(data.items) ? data.items.length : 0) : 0,
+        itemCount: canViewDetails
+            ? Array.isArray(data.items)
+                ? data.items.length
+                : 0
+            : 0,
     };
 };
 
