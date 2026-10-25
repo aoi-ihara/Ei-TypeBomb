@@ -433,7 +433,7 @@ export default function RoomList({
                     )}
 
                     {filteredRooms.length > 0 ? (
-                        <div className="flex flex-col w-full gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-4">
                             {filteredRooms.map((room) => (
                                 <RoomCard
                                     key={room.id}

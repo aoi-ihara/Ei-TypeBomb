@@ -34,54 +34,56 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full min-w-0 w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) px-4 py-4">
-            <div className="flex min-w-0 items-center gap-2">
-                <Icon name={room.isPublic ? "earth" : "lock"} />
-                <h2
-                    className="min-w-0 flex-1 truncate font-bold"
+        <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary)">
+            <div className="flex flex-col gap-4">
+                <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
+                    <Icon name={room.isPublic ? "earth" : "lock"} />
+                    <h2
+                        className="min-w-0 flex-1 truncate font-bold"
+                        data-cursor="text"
+                    >
+                        {room.title || "無題のルーム"}
+                    </h2>
+                </div>
+
+                <p
+                    className={`line-clamp-2 w-full px-4 text-start ${!room.explanation && "italic opacity-50"}`}
                     data-cursor="text"
                 >
-                    {room.title || "無題のルーム"}
-                </h2>
-            </div>
+                    {room.explanation || "説明なし"}
+                </p>
 
-            <p
-                className={`line-clamp-2 w-full text-start ${!room.explanation && "italic opacity-50"}`}
-                data-cursor="text"
-            >
-                {room.explanation || "説明なし"}
-            </p>
-
-            <div className="flex flex-wrap gap-4">
-                <div className="flex items-end gap-2 opacity-50">
-                    <Icon name="usersRound" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
-                        <span className="text-sm">最大</span>
-                        <span className="font-bold font-mono">
-                            {room.maxPlayers ?? 2}
+                <div className="flex flex-wrap gap-4 px-4">
+                    <div className="flex items-end gap-2 opacity-50">
+                        <Icon name="usersRound" />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="text-sm">最大</span>
+                            <span className="font-bold font-mono">
+                                {room.maxPlayers ?? 2}
+                            </span>
+                            <span className="text-sm">人</span>
                         </span>
-                        <span className="text-sm">人</span>
-                    </span>
-                </div>
+                    </div>
 
-                <div className="flex items-end gap-2 opacity-50">
-                    <Icon name="playingCardsFan" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
-                        <span className="font-bold font-mono">
-                            {room.items?.length ?? 0}
+                    <div className="flex items-end gap-2 opacity-50">
+                        <Icon name="playingCardsFan" />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="font-bold font-mono">
+                                {room.items?.length ?? 0}
+                            </span>
+                            <span className="text-sm">個の単語</span>
                         </span>
-                        <span className="text-sm">個の単語</span>
-                    </span>
+                    </div>
                 </div>
             </div>
 
-            <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
@@ -89,29 +91,29 @@ export default function RoomCard({
                     }}
                     iconName="play"
                     variant="text"
-                >
-                    プレイ
-                </Button>
+                    padding="middle"
+                />
                 {isOwner && (
                     <Button
                         onClick={() => router.push("/" + room.id + "/edit")}
                         iconName="pen"
                         variant="text"
-                    >
-                        編集
-                    </Button>
+                        padding="middle"
+                    />
                 )}
-                <Button onClick={copyRoomLink} iconName="copy" variant="text">
-                    {copied ? "コピー済み" : "リンクをコピー"}
-                </Button>
+                <Button
+                    onClick={copyRoomLink}
+                    iconName={copied ? "check" : "copy"}
+                    variant="text"
+                    padding="middle"
+                />
                 {onToggleSaved && (
                     <Button
                         onClick={onToggleSaved}
-                        iconName={isSaved ? "check" : "bookmark"}
+                        iconName={isSaved ? "bookmarkOff" : "bookmark"}
                         variant="text"
-                    >
-                        {isSaved ? "保存を解除" : "保存"}
-                    </Button>
+                        padding="middle"
+                    />
                 )}
             </div>
         </article>
