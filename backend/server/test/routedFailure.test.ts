@@ -240,6 +240,173 @@ test("a reloaded tab reports a failed owner before receiving its first game snap
     }
 });
 
+test("a DELETED route followed by VOTER_STATE_LOST asks lower tiers to recover ownership", async () => {
+    const originalFetch = globalThis.fetch;
+    const ids = [
+        "https://primary.test",
+        "https://worker.test",
+        "https://render.test",
+    ];
+    const servers = ids.map((id, depth) => ({
+        id,
+        depth,
+        transport: "socket.io" as const,
+    }));
+    const tombstone = {
+        owner: ids[1],
+        epoch: 38,
+        revision: 6,
+        instance: "retired-instance",
+        lifecycle: "DELETED",
+        roomId: "room",
+    };
+    const recovered = {
+        owner: ids[2],
+        epoch: 39,
+        revision: 0,
+        instance: "recovered-instance",
+        lifecycle: "ACTIVE",
+        roomId: "room",
+    };
+    const reports: Array<{ url: string; body: any }> = [];
+    const opened: string[] = [];
+    globalThis.fetch = (async (url: string | URL, options?: RequestInit) => {
+        const target = String(url);
+        if (target.endsWith("/cluster/route")) {
+            if (target.startsWith(ids[0]))
+                throw new TypeError("Simulated CORS preflight failure");
+            if (target.startsWith(ids[1]))
+                return Response.json({ ownership: tombstone, servers });
+            return new Promise<Response>((_resolve, reject) => {
+                options?.signal?.addEventListener(
+                    "abort",
+                    () => reject(new DOMException("Aborted", "AbortError")),
+                    { once: true },
+                );
+            });
+        }
+        if (target.endsWith("/cluster/report")) {
+            const body = JSON.parse(options?.body as string);
+            reports.push({ url: target, body });
+            if (target.startsWith(ids[1]))
+                return Response.json({
+                    code: "CHECKPOINT_UNAVAILABLE",
+                    retryable: false,
+                }, { status: 409 });
+            return Response.json({ ownership: recovered, servers });
+        }
+        throw new Error("Unexpected request: " + target);
+    }) as typeof fetch;
+
+    const openedOwners: string[] = [];
+    const socket = new RoutedSocket(
+        ids,
+        (url) => {
+            opened.push(url);
+            const handlers = new Map<string, Array<(value?: any) => void>>();
+            const dispatch = (event: string, value?: any) =>
+                handlers.get(event)?.forEach((listener) => listener(value));
+            const transport = {
+                id: "socket-" + ids.indexOf(url),
+                connected: true,
+                on(event: string, listener: (value?: any) => void) {
+                    handlers.set(event, [...(handlers.get(event) ?? []), listener]);
+                    return transport;
+                },
+                emit(event: string) {
+                    if (event === "auth:response") {
+                        if (url === ids[0]) {
+                            setTimeout(
+                                () => dispatch("error", {
+                                    code: "VOTER_STATE_LOST",
+                                    retryable: false,
+                                    message: "lost voter state",
+                                }),
+                                0,
+                            );
+                        } else {
+                            openedOwners.push(url);
+                            dispatch("auth:session", { id: "player" });
+                            dispatch("room:broadcast", {
+                                id: "room",
+                                ownerServerId: url,
+                                roomInstanceId: recovered.instance,
+                                epoch: recovered.epoch,
+                                revision: 0,
+                                users: [],
+                                bombs: [],
+                                isStart: false,
+                                migrating: false,
+                            });
+                        }
+                    }
+                    if (event === "cluster:ping") dispatch("cluster:pong");
+                    return transport;
+                },
+                disconnect() {
+                    transport.connected = false;
+                },
+            };
+            setTimeout(() => dispatch("auth:request"), 0);
+            return transport;
+        },
+        async () => "room-jwt",
+        () => true,
+        async () => "session-jwt",
+    );
+    socket.on("auth:request", () =>
+        socket.emit("auth:response", {
+            jwtToken: "room-jwt",
+            sessionToken: "session-jwt",
+        }),
+    );
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const waitForRecovery = async () => {
+        const deadline = Date.now() + 4_000;
+        while (
+            !reports.some((report) => report.url === ids[2] + "/cluster/report") ||
+            !openedOwners.includes(ids[2]) ||
+            !socket.connected
+        ) {
+            if (Date.now() >= deadline)
+                throw new Error("The fallback owner was not reached");
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+    };
+    try {
+        await Promise.race([
+            waitForRecovery(),
+            new Promise((_, reject) => {
+                timeout = setTimeout(
+                    () => reject(new Error("Recovery test timed out")),
+                    4_500,
+                );
+            }),
+        ]);
+        const workerReport = reports.find(
+            (report) => report.url === ids[1] + "/cluster/report",
+        );
+        const renderReport = reports.find(
+            (report) => report.url === ids[2] + "/cluster/report",
+        );
+        assert.ok(workerReport, "the first lower tier should be checked");
+        assert.ok(renderReport, "recovery should continue after a deleted checkpoint");
+        assert.deepEqual(renderReport.body, {
+            roomId: "room",
+            jwtToken: "room-jwt",
+            sessionToken: "session-jwt",
+            owner: ids[0],
+            revision: tombstone.revision,
+            failure: true,
+        });
+        assert.equal(openedOwners.at(-1), ids[2]);
+    } finally {
+        clearTimeout(timeout);
+        socket.disconnect();
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test("routed participant rejoins after a disconnected Socket.IO owner, but a spectator stays out", async () => {
     const originalFetch = globalThis.fetch;
     const url = "https://owner.test";
