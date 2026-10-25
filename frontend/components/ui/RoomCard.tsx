@@ -75,7 +75,7 @@ export default function RoomCard({
                             data-cursor="text"
                         >
                             <span className="font-bold font-mono">
-                                {room.items?.length ?? 0}
+                                {room.itemCount ?? room.items?.length ?? 0}
                             </span>
                             <span className="text-sm">個の単語</span>
                         </span>
