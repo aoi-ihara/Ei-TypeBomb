@@ -889,11 +889,10 @@ export class RoutedSocket {
                 });
                 socket.on("error", (error) => {
                     if (active()) {
-                        // A deleted route may have come from a replica that
-                        // has not observed a newer surviving checkpoint. If
-                        // auth finds that the chosen owner lost its voter state,
-                        // explicitly ask lower tiers to verify/promote rather
-                        // than repeatedly resolving the same tombstone.
+                        // If authentication fails after a deletion tombstone,
+                        // retain its epoch and skip this tier on the next attempt.
+                        // A lower tier can open a fresh instance from the certified
+                        // tombstone; election reports are for active instances.
                         if (
                             authenticating &&
                             error?.code === "VOTER_STATE_LOST" &&
