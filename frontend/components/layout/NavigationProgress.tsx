@@ -51,6 +51,7 @@ export default function NavigationProgress() {
     useEffect(() => {
         const handleClick = (event: MouseEvent) => {
             if (
+                event.defaultPrevented ||
                 event.button !== 0 ||
                 event.metaKey ||
                 event.ctrlKey ||
@@ -100,11 +101,11 @@ export default function NavigationProgress() {
             }
         };
 
-        document.addEventListener("click", handleClick, true);
+        document.addEventListener("click", handleClick);
         window.addEventListener("popstate", handlePopState);
 
         return () => {
-            document.removeEventListener("click", handleClick, true);
+            document.removeEventListener("click", handleClick);
             window.removeEventListener("popstate", handlePopState);
         };
     }, []);
