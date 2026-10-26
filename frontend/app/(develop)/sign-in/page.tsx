@@ -5,6 +5,7 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import { signIn } from "@/lib/auth/sign-in";
 import { PopUp } from "@/components/ui/PopUp";
 import { Turnstile } from "@marsidev/react-turnstile";
@@ -24,7 +25,7 @@ export default function SignInPage() {
     useEffect(() => {
         const getSessionInfo = async () => {
             const session = await getSession();
-            if (session) router.push("/");
+            if (session) { startNavigationProgress(); router.push("/"); }
         };
 
         getSessionInfo();
@@ -86,7 +87,7 @@ export default function SignInPage() {
             >
                 ログイン
             </Button>
-            <Button className="w-full" onClick={() => router.push("/sign-up")}>
+            <Button className="w-full" onClick={() => { startNavigationProgress(); router.push("/sign-up"); }}>
                 rcAccountを作成
             </Button>
             <PopUp show={turnstile}>
