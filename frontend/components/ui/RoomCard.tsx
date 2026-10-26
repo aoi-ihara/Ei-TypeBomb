@@ -103,7 +103,7 @@ export default function RoomCard({
                 )}
                 <Button
                     onClick={copyRoomLink}
-                    iconName={copied ? "check" : "copy"}
+                    iconName={copied ? "check" : "link"}
                     variant="text"
                     padding="middle"
                 />

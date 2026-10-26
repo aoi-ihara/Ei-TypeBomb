@@ -530,7 +530,7 @@ export default function Page({
         <Shell
             animateAppear={true}
             loading={!roomId}
-            className="flex flex-col gap-4"
+            className="flex flex-col px-4 gap-4"
             size="large"
         >
             <div className="flex mt-16 mb-4 items-center w-full">
