@@ -3,6 +3,7 @@
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 
 export default function Client({ message }: { message: string }) {
     const router = useRouter();
@@ -12,14 +13,14 @@ export default function Client({ message }: { message: string }) {
                 {message}
             </p>
             <Button
-                onClick={() => router.push("/auth/sign-in")}
+                onClick={() => { startNavigationProgress(); router.push("/auth/sign-in"); }}
                 className="w-full"
                 iconName="rotateCcw"
             >
                 もう一度試す
             </Button>
             <Button
-                onClick={() => router.push("/")}
+                onClick={() => { startNavigationProgress(); router.push("/"); }}
                 variant="text"
                 iconName="home"
             >
