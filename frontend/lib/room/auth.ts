@@ -5,6 +5,7 @@ import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
+import { getUser } from "../auth/session";
 import argon2 from "argon2";
 import { importJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWK } from "jose";
 import { cookies } from "next/headers";
@@ -102,7 +103,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase
             .from("ei_typebomb_rooms")
-            .select("id, password")
+            .select("id, password, user_id")
             .eq("id", room.id)
             .maybeSingle();
 
@@ -111,7 +112,14 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             return "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。";
         }
         if (!data) return "ルームが見つかりません。";
-        if (data.password) return "パスワードを入力してください。";
+        if (data.password) {
+            const userId = await getUser();
+            const isOwner = Boolean(userId) && data.user_id === userId;
+            if (!isOwner) {
+                if (await isRoomAuthorized(room.id)) return null;
+                return "パスワードを入力してください。";
+            }
+        }
 
         await setAuthCookie(room.id);
     }
