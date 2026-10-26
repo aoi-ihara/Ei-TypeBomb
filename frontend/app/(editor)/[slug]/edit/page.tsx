@@ -28,6 +28,7 @@ import type { LegacyWord, Room, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { notFound, useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
@@ -265,6 +266,7 @@ export default function Page({
             const result = await deleteRoom(roomId);
 
             if (result) throw result;
+            startNavigationProgress();
             router.push("/?owner=me");
         } catch (error) {
             setIsDeletingRoom(false);
@@ -468,6 +470,7 @@ export default function Page({
 
     const handlePlay = async () => {
         setShowPlayWarning(false);
+        startNavigationProgress();
         router.push("/" + slug);
     };
 
@@ -535,7 +538,7 @@ export default function Page({
         >
             <div className="flex mt-16 mb-4 items-center w-full">
                 <Button
-                    onClick={() => router.push("/?owner=me")}
+                    onClick={() => { startNavigationProgress(); router.push("/?owner=me"); }}
                     variant="text"
                     className="h-full"
                 >
