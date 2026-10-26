@@ -34,8 +34,6 @@ export default function NavigationProgress() {
             );
         });
 
-        // Navigation does not expose an exact percentage. Advance gradually
-        // and reserve 100% for the completed navigation.
         const interval = window.setInterval(() => {
             setProgress((current) => {
                 if (current >= 90) return 90;
@@ -139,14 +137,16 @@ export default function NavigationProgress() {
 
     return (
         <div
-            className={`pointer-events-none fixed inset-x-0 top-0 z-[100] h-4 w-full overflow-hidden bg-cyan-600/20 transition-opacity duration-200 ${
+            className={`pointer-events-none fixed inset-x-0 top-0 z-100 h-1 w-full overflow-hidden transition-opacity duration-200 ${
                 isVisible ? "opacity-100" : "opacity-0"
             }`}
             role={isVisible ? "progressbar" : undefined}
             aria-label="ページ読み込みの進捗"
             aria-valuemin={isVisible ? 0 : undefined}
             aria-valuemax={isVisible ? 100 : undefined}
-            aria-valuenow={isVisible ? Math.round(displayedProgress) : undefined}
+            aria-valuenow={
+                isVisible ? Math.round(displayedProgress) : undefined
+            }
             aria-hidden={!isVisible}
         >
             <div
