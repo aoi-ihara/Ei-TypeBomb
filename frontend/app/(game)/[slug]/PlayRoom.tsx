@@ -116,11 +116,6 @@ export default function PlayRoom({
             posthog.capture("display_name_set");
         }
 
-        if (alreadyAuthorized) {
-            navigateToMode(mode);
-            return;
-        }
-
         try {
             const result = await signInToRoom(
                 {
