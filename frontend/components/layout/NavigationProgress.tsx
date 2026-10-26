@@ -21,40 +21,50 @@ export default function NavigationProgress() {
         isNavigationProgressActive,
         () => false,
     );
+    const isVisible = active || visible;
+    const displayedProgress = active ? Math.max(progress, 6) : progress;
 
     useEffect(() => {
-        if (active) {
+        if (!active) return;
+
+        const revealFrame = window.requestAnimationFrame(() => {
             setVisible(true);
             setProgress((current) =>
                 current === 0 ? 6 : Math.min(current, 90),
             );
+        });
 
-            // Navigation does not expose an exact percentage. Advance
-            // gradually and reserve 100% for the completed navigation.
-            const interval = window.setInterval(() => {
-                setProgress((current) => {
-                    if (current >= 90) return 90;
-                    if (current < 20) return current + 8;
-                    if (current < 50) return current + 5;
-                    if (current < 75) return current + 2;
-                    return Math.min(current + 1, 90);
-                });
-            }, 180);
+        // Navigation does not expose an exact percentage. Advance gradually
+        // and reserve 100% for the completed navigation.
+        const interval = window.setInterval(() => {
+            setProgress((current) => {
+                if (current >= 90) return 90;
+                if (current < 20) return current + 8;
+                if (current < 50) return current + 5;
+                if (current < 75) return current + 2;
+                return Math.min(current + 1, 90);
+            });
+        }, 180);
 
-            return () => {
-                window.clearInterval(interval);
-            };
-        }
+        return () => {
+            window.cancelAnimationFrame(revealFrame);
+            window.clearInterval(interval);
+        };
+    }, [active]);
 
-        if (!visible) return;
+    useEffect(() => {
+        if (active || !visible) return;
 
-        setProgress(100);
+        const completeFrame = window.requestAnimationFrame(() => {
+            setProgress(100);
+        });
         const timeout = window.setTimeout(() => {
             setVisible(false);
             setProgress(0);
         }, 220);
 
         return () => {
+            window.cancelAnimationFrame(completeFrame);
             window.clearTimeout(timeout);
         };
     }, [active, visible]);
@@ -130,18 +140,18 @@ export default function NavigationProgress() {
     return (
         <div
             className={`pointer-events-none fixed inset-x-0 top-0 z-[100] h-4 w-full overflow-hidden bg-cyan-600/20 transition-opacity duration-200 ${
-                visible ? "opacity-100" : "opacity-0"
+                isVisible ? "opacity-100" : "opacity-0"
             }`}
-            role={visible ? "progressbar" : undefined}
+            role={isVisible ? "progressbar" : undefined}
             aria-label="ページ読み込みの進捗"
-            aria-valuemin={visible ? 0 : undefined}
-            aria-valuemax={visible ? 100 : undefined}
-            aria-valuenow={visible ? Math.round(progress) : undefined}
-            aria-hidden={!visible}
+            aria-valuemin={isVisible ? 0 : undefined}
+            aria-valuemax={isVisible ? 100 : undefined}
+            aria-valuenow={isVisible ? Math.round(displayedProgress) : undefined}
+            aria-hidden={!isVisible}
         >
             <div
                 className="h-full bg-cyan-600 transition-[width] duration-200 ease-out motion-reduce:transition-none"
-                style={{ width: `${progress}%` }}
+                style={{ width: `${displayedProgress}%` }}
             />
         </div>
     );
