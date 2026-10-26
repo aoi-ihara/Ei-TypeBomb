@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
+import NavigationProgress from "@/components/layout/NavigationProgress";
 import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
@@ -64,6 +66,9 @@ export default function RootLayout({
                 className={`${lineSeedJp.variable} ${jetbrainsMono.variable} min-h-full flex flex-col`}
             >
                 <PostHogProvider>
+                    <Suspense fallback={null}>
+                        <NavigationProgress />
+                    </Suspense>
                     <PostHogEventTracker />
                     <main className="flex flex-col h-dvh w-full items-center">
                         {children}
