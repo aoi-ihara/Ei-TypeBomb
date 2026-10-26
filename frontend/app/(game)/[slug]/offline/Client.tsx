@@ -1038,7 +1038,6 @@ export default function Client({
                         onClick={() => {
                             void flushPendingMemory().finally(() => {
                                 startNavigationProgress();
-                                startNavigationProgress();
                                 router.push("/room");
                             });
                         }}
