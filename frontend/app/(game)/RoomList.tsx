@@ -393,7 +393,6 @@ export default function RoomList({
                                 icon: "userRoundCog",
                                 onClick: () => {
                                     startNavigationProgress();
-                                    startNavigationProgress();
                                     router.push(
                                         process.env
                                             .NEXT_PUBLIC_USER_SETTINGS_URL!,
