@@ -137,7 +137,7 @@ export default function NavigationProgress() {
 
     return (
         <div
-            className={`pointer-events-none fixed inset-x-0 top-0 z-100 h-1 w-full overflow-hidden transition-opacity duration-200 ${
+            className={`pointer-events-none fixed inset-x-0 top-0 z-100 h-1 w-full overflow-hidden transition-opacity duration-(--duration-etb) ease-etb ${
                 isVisible ? "opacity-100" : "opacity-0"
             }`}
             role={isVisible ? "progressbar" : undefined}
@@ -150,7 +150,7 @@ export default function NavigationProgress() {
             aria-hidden={!isVisible}
         >
             <div
-                className="h-full bg-cyan-600 transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                className="h-full bg-cyan-600 transition-[width] duration-(--duration-etb) ease-etb motion-reduce:transition-none"
                 style={{ width: `${displayedProgress}%` }}
             />
         </div>

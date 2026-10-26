@@ -32,7 +32,7 @@ export default async function RoomPage({
     const isOwner = result.isOwner;
 
     return (
-        <Shell title={title} back="/" size="medium" animateAppear>
+        <Shell title={title} showBackButton size="medium" animateAppear>
             {room.explanation && (
                 <p className="w-full text-start" data-cursor="text">
                     {room.explanation}

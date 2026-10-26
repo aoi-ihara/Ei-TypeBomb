@@ -94,17 +94,30 @@ export default function EditorClient({
 }) {
     const router = useRouter();
 
-    
-    const [roomExplanation, setRoomExplanation] = useState(initialRoom.explanation ?? "");
+    const [roomExplanation, setRoomExplanation] = useState(
+        initialRoom.explanation ?? "",
+    );
     const [roomTitle, setRoomTitle] = useState(initialRoom.title ?? "");
-    const [roomPassword, setRoomPassword] = useState(initialRoom.password ?? "");
-    const [gameDuration, setGameDuration] = useState(initialRoom.gameDuration ?? 20);
-    const [bombCount, setBombCount] = useState<number | null>(initialRoom.bombCount ?? null);
-    const [maxPlayers, setMaxPlayers] = useState<string>(initialRoom.maxPlayers?.toString() ?? "2");
+    const [roomPassword, setRoomPassword] = useState(
+        initialRoom.password ?? "",
+    );
+    const [gameDuration, setGameDuration] = useState(
+        initialRoom.gameDuration ?? 20,
+    );
+    const [bombCount, setBombCount] = useState<number | null>(
+        initialRoom.bombCount ?? null,
+    );
+    const [maxPlayers, setMaxPlayers] = useState<string>(
+        initialRoom.maxPlayers?.toString() ?? "2",
+    );
     const roomId = initialRoom.id;
-    const [items, setItems] = useState<TypedRecallItem[] | null>(initialRoom.items ?? []);
+    const [items, setItems] = useState<TypedRecallItem[] | null>(
+        initialRoom.items ?? [],
+    );
     const [isLinkCopied, setIsLinkCopied] = useState(false);
-    const [roomLink, setRoomLink] = useState(initialRoom.link ?? initialRoom.id);
+    const [roomLink, setRoomLink] = useState(
+        initialRoom.link ?? initialRoom.id,
+    );
     const [roomLinkError, setRoomLinkError] = useState("");
     const [roomSaveError, setRoomSaveError] = useState("");
     const [showRoomCode, setShowRoomCode] = useState(false);
@@ -117,7 +130,9 @@ export default function EditorClient({
     const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
 
     const [newPassword, setNewPassword] = useState("");
-    const [isPrivate, setIsPrivate] = useState(initialRoom.isPublic === false || Boolean(initialRoom.password));
+    const [isPrivate, setIsPrivate] = useState(
+        initialRoom.isPublic === false || Boolean(initialRoom.password),
+    );
     const [confirmPassword, setConfirmPassword] = useState("");
 
     const [isExported, setIsExported] = useState(false);
@@ -274,7 +289,6 @@ export default function EditorClient({
             throw error;
         }
     };
-
 
     const handleExportWords = async () => {
         setExportError("");
@@ -508,7 +522,10 @@ export default function EditorClient({
         >
             <div className="flex mt-16 mb-4 items-center w-full">
                 <Button
-                    onClick={() => { startNavigationProgress(); router.back(); }}
+                    onClick={() => {
+                        startNavigationProgress();
+                        router.back();
+                    }}
                     variant="text"
                     className="h-full"
                 >
