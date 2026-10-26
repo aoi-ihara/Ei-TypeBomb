@@ -1,7 +1,5 @@
-"use client";
-
-import Shell from "@/components/layout/Shell";
+import ProgressSignal from "@/components/layout/ProgressSignal";
 
 export default function Loading() {
-    return <Shell loading={true} />;
+    return <ProgressSignal />;
 }
