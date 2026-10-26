@@ -44,8 +44,7 @@ export default function Shell({
                         </div>
                     )}
                     <h1
-                        className={`w-fit max-w-full text-2xl font-bold font-mono ${
-                            }`}
+                        className="w-fit max-w-full text-2xl font-bold font-mono"
                         data-cursor="text"
                     >
                         {title}
@@ -61,7 +60,7 @@ export default function Shell({
                           ? "max-w-2xl"
                           : "max-w-xs"
                 } w-full ${className} ${
-                    !loading && animateAppear && "animate-appear origin-top"
+                    animateAppear && "animate-appear origin-top"
                 }`}
             >
                 {children}
