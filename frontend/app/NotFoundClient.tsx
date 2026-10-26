@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import Button from "@/components/ui/Button";
 import Shell from "@/components/layout/Shell";
 
@@ -38,7 +39,7 @@ export default function NotFoundClient() {
             <Button
                 className="w-full"
                 variant="primary"
-                onClick={() => router.push("/")}
+                onClick={() => { startNavigationProgress(); router.push("/"); }}
             >
                 ホームに戻る
             </Button>

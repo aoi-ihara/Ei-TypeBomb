@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import MorphDialog from "@/components/ui/MorphDialog";
@@ -84,6 +85,7 @@ export default function PlayRoom({
             room_id: roomId,
             play_mode: mode,
         });
+        startNavigationProgress();
         router.push("/" + roomId + "/" + mode);
     };
 
@@ -278,7 +280,7 @@ export default function PlayRoom({
 
             {isOwner && (
                 <Button
-                    onClick={() => router.push("/" + slug + "/edit")}
+                    onClick={() => { startNavigationProgress(); router.push("/" + slug + "/edit"); }}
                     className="w-full"
                     iconName="pen"
                 >

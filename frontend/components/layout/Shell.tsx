@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "../ui/Icon";
+import ProgressSignal from "./ProgressSignal";
 
 type AuthShellProps = {
     title?: string;
@@ -20,9 +21,11 @@ export default function Shell({
     animateAppear = false,
     back,
 }: AuthShellProps) {
+    if (loading) return <ProgressSignal />;
+
     return (
         <>
-            {(title || loading) && (
+            {title && (
                 <div
                     className={`relative mt-16 mb-8 flex items-center ${back && "max-w-[calc(100vw-32px)]"} px-8`}
                 >
@@ -41,12 +44,10 @@ export default function Shell({
                         </div>
                     )}
                     <h1
-                        className={`w-fit max-w-full text-2xl font-bold font-mono ${
-                            !title && loading && "gradient-text"
-                        }`}
+                        className="w-fit max-w-full text-2xl font-bold font-mono"
                         data-cursor="text"
                     >
-                        {title ? title : "読み込み中…"}
+                        {title}
                     </h1>
                 </div>
             )}
@@ -59,21 +60,10 @@ export default function Shell({
                           ? "max-w-2xl"
                           : "max-w-xs"
                 } w-full ${className} ${
-                    !loading && animateAppear && "animate-appear origin-top"
+                    animateAppear && "animate-appear origin-top"
                 }`}
             >
-                {title && loading && (
-                    <div className="w-full flex justify-center">
-                        <div
-                            className="w-fit gradient-text font-mono font-bold"
-                            data-cursor="text"
-                        >
-                            読み込み中…
-                        </div>
-                    </div>
-                )}
-
-                {!loading && children}
+                {children}
             </div>
         </>
     );

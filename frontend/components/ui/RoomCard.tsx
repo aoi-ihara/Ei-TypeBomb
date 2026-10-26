@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import { Icon } from "./Icon";
 import Button from "./Button";
@@ -87,6 +88,7 @@ export default function RoomCard({
                 <Button
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
+                        startNavigationProgress();
                         router.push("/" + room.id);
                     }}
                     iconName="play"
@@ -95,7 +97,7 @@ export default function RoomCard({
                 />
                 {isOwner && (
                     <Button
-                        onClick={() => router.push("/" + room.id + "/edit")}
+                        onClick={() => { startNavigationProgress(); router.push("/" + room.id + "/edit"); }}
                         iconName="pen"
                         variant="text"
                         padding="middle"

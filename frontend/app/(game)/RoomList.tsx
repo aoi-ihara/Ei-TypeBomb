@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
@@ -133,6 +134,7 @@ export default function RoomList({
 
     const selectView = (nextView: View) => {
         if (nextView === "mine" && !currentUser) {
+            startNavigationProgress();
             router.push(getSignInUrl());
             return;
         }
@@ -270,6 +272,7 @@ export default function RoomList({
     const addRoom = async () => {
         if (creating) return;
         if (!currentUser) {
+            startNavigationProgress();
             router.push(getSignInUrl());
             return;
         }
@@ -280,6 +283,7 @@ export default function RoomList({
             const roomId = await createNewRoom();
             if (!roomId) throw new Error("Room creation returned no ID");
             posthog.capture("room_created");
+            startNavigationProgress();
             router.push("/" + roomId + "/edit");
         } catch (error) {
             console.error("Failed to create room:", error);
@@ -294,6 +298,7 @@ export default function RoomList({
         posthog.capture("signed_out");
         posthog.reset();
         await signOut();
+        startNavigationProgress();
         router.replace("/");
     };
 
@@ -386,11 +391,13 @@ export default function RoomList({
                             {
                                 label: "ユーザー設定",
                                 icon: "userRoundCog",
-                                onClick: () =>
+                                onClick: () => {
+                                    startNavigationProgress();
                                     router.push(
                                         process.env
                                             .NEXT_PUBLIC_USER_SETTINGS_URL!,
-                                    ),
+                                    );
+                                },
                             },
                             {
                                 label: "サインアウト",
@@ -402,7 +409,7 @@ export default function RoomList({
                 ) : (
                     <Button
                         variant="text"
-                        onClick={() => router.push(getSignInUrl())}
+                        onClick={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
                     >
                         ログイン
                     </Button>

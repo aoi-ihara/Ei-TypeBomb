@@ -3,6 +3,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import { io } from "@/lib/room/socket";
 import {
     connectionError,
@@ -1130,7 +1131,7 @@ export default function Clinet({
                 );
             }}
             onPlayAgain={handlePlayAgain}
-            onCreateRoom={() => router.push(getSignInUrl())}
+            onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
             onJoin={() => handleJoin("join_button")}
             onWatch={handleWatch}
             onStartGame={handleStartGame}

@@ -3,6 +3,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Item, Position, Room, User } from "@/type";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
@@ -1007,11 +1008,12 @@ export default function Client({
             cueSteps={activeLearningPlan?.cueSteps}
             hintDelaysMs={activeLearningPlan?.hintDelaysMs}
             onPlayAgain={startGame}
-            onCreateRoom={() => router.push(getSignInUrl())}
+            onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
             enableRemoteTypingSync={false}
             stopRecommended={stopRecommended}
             onStop={() => {
                 void flushPendingMemory().finally(() => {
+                    startNavigationProgress();
                     router.push("/" + room.id);
                 });
             }}
@@ -1034,9 +1036,10 @@ export default function Client({
                         iconName="link"
                         className="w-full"
                         onClick={() => {
-                            void flushPendingMemory().finally(() =>
-                                router.push("/room"),
-                            );
+                            void flushPendingMemory().finally(() => {
+                                startNavigationProgress();
+                                router.push("/room");
+                            });
                         }}
                     >
                         別のルームを選択
