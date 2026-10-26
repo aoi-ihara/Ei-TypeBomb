@@ -15,7 +15,7 @@ export default function NavigationProgress() {
     const locationKey = `${pathname}?${searchParams.toString()}`;
     const previousLocationKey = useRef(locationKey);
     const [visible, setVisible] = useState(false);
-    const [complete, setComplete] = useState(false);
+    const [progress, setProgress] = useState(0);
     const active = useSyncExternalStore(
         subscribeNavigationProgress,
         isNavigationProgressActive,
@@ -25,15 +25,33 @@ export default function NavigationProgress() {
     useEffect(() => {
         if (active) {
             setVisible(true);
-            setComplete(false);
-            return;
+            setProgress((current) =>
+                current === 0 ? 6 : Math.min(current, 90),
+            );
+
+            // Navigation does not expose an exact percentage. Advance
+            // gradually and reserve 100% for the completed navigation.
+            const interval = window.setInterval(() => {
+                setProgress((current) => {
+                    if (current >= 90) return 90;
+                    if (current < 20) return current + 8;
+                    if (current < 50) return current + 5;
+                    if (current < 75) return current + 2;
+                    return Math.min(current + 1, 90);
+                });
+            }, 180);
+
+            return () => {
+                window.clearInterval(interval);
+            };
         }
 
         if (!visible) return;
 
-        setComplete(true);
+        setProgress(100);
         const timeout = window.setTimeout(() => {
             setVisible(false);
+            setProgress(0);
         }, 220);
 
         return () => {
@@ -116,17 +134,15 @@ export default function NavigationProgress() {
                 visible ? "opacity-100" : "opacity-0"
             }`}
             role={visible ? "progressbar" : undefined}
-            aria-label="ページを読み込み中"
+            aria-label="ページ読み込みの進捗"
+            aria-valuemin={visible ? 0 : undefined}
+            aria-valuemax={visible ? 100 : undefined}
+            aria-valuenow={visible ? Math.round(progress) : undefined}
             aria-hidden={!visible}
         >
             <div
-                className={`h-full bg-cyan-600 transition-[width,transform] duration-200 ${
-                    complete
-                        ? "w-full translate-x-0"
-                        : visible
-                          ? "etb-progress-indeterminate w-1/3"
-                          : "w-1/3 -translate-x-full"
-                }`}
+                className="h-full bg-cyan-600 transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                style={{ width: `${progress}%` }}
             />
         </div>
     );
