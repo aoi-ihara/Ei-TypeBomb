@@ -60,6 +60,30 @@ body {
     animation: gradientMove 1.5s linear infinite;
 }
 
+.etb-progress-indeterminate {
+    animation: etb-progress-indeterminate 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes etb-progress-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+    50% {
+        transform: translateX(150%);
+    }
+    100% {
+        transform: translateX(300%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .etb-progress-indeterminate {
+        animation: none;
+        width: 100%;
+        transform: translateX(0);
+    }
+}
+
 @keyframes gradientMove {
     0% {
         background-position: 200%;
