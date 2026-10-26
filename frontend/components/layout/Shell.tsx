@@ -1,6 +1,5 @@
-import Link from "next/link";
-import { Icon } from "../ui/Icon";
 import ProgressSignal from "./ProgressSignal";
+import BackButton from "./BackButton";
 
 type AuthShellProps = {
     title?: string;
@@ -9,7 +8,7 @@ type AuthShellProps = {
     size?: "large" | "small" | "medium";
     loading?: boolean;
     animateAppear?: boolean;
-    back?: string;
+    showBackButton?: boolean;
 };
 
 export default function Shell({
@@ -19,7 +18,7 @@ export default function Shell({
     size = "medium",
     loading,
     animateAppear = false,
-    back,
+    showBackButton = false,
 }: AuthShellProps) {
     if (loading) return <ProgressSignal />;
 
@@ -27,20 +26,15 @@ export default function Shell({
         <>
             {title && (
                 <div
-                    className={`relative mt-16 mb-8 flex items-center ${back && "max-w-[calc(100vw-32px)]"} px-8`}
+                    className={`relative mt-16 mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
                 >
-                    {back && (
+                    {showBackButton && (
                         <div
                             className="absolute -left-4 top-1/2 -translate-y-1/2 rounded-lg bg-(--color-background)"
                             data-cursor="button"
                             data-cursor-shape="1"
                         >
-                            <Link
-                                href={back}
-                                className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
-                            >
-                                <Icon name="arrowLeft" />
-                            </Link>
+                            <BackButton />
                         </div>
                     )}
                     <h1
