@@ -508,7 +508,7 @@ export default function EditorClient({
         >
             <div className="flex mt-16 mb-4 items-center w-full">
                 <Button
-                    onClick={() => { startNavigationProgress(); router.push("/?owner=me"); }}
+                    onClick={() => { startNavigationProgress(); router.back(); }}
                     variant="text"
                     className="h-full"
                 >
