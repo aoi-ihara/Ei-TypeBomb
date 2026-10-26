@@ -8,7 +8,7 @@ const filePath = path.join(
     "(editor)",
     "[slug]",
     "edit",
-    "page.tsx",
+    "EditorClient.tsx",
 );
 
 const source = fs.readFileSync(filePath, "utf8");
