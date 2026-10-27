@@ -8,6 +8,8 @@ import type { Item, Position, Room, User } from "@/type";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import Button from "@/components/ui/Button";
+import GameSettings from "@/components/layout/GameSettings";
+import type { OfflineVoiceReading } from "@/lib/settings";
 import { newPositions } from "@/lib/ui/position";
 import { useFeatureFlagPayload } from "@posthog/react";
 import posthog from "posthog-js";
@@ -41,6 +43,7 @@ type Props = {
     room: Room;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
+    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const LOCAL_USER_ID = "playground-player";
@@ -152,6 +155,7 @@ export default function Client({
     room: sourceRoom,
     initialBackgroundMusic,
     initialSounDeffects,
+    initialOfflineVoiceReading,
 }: Readonly<Props>) {
     const bombDurationVariant = useFeatureFlagPayload("bomb-duration");
     const configuredBombDuration =
@@ -167,6 +171,13 @@ export default function Client({
         useBombExplosion();
 
     const [displayName, setDisplayName] = useState("あなた");
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
+    const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
+    const [offlineVoiceReading, setOfflineVoiceReading] = useState(
+        initialOfflineVoiceReading,
+    );
     const users = useMemo<User[]>(
         () => [{ id: LOCAL_USER_ID, displayName }, ...BOT_USERS],
         [displayName],
@@ -744,7 +755,7 @@ export default function Client({
         if (
             !wasAnswerRevealed &&
             successAudioRef.current &&
-            initialSounDeffects
+            soundEffects
         ) {
             successAudioRef.current.currentTime = 0;
             successAudioRef.current.volume = 1;
@@ -776,7 +787,7 @@ export default function Client({
             },
         );
     }, [
-        initialSounDeffects,
+        soundEffects,
         saveBotExposure,
         resolveTurnWithItem,
         room.id,
@@ -785,6 +796,49 @@ export default function Client({
     ]);
 
     const currentTurnUser = users[currentTurn];
+
+    useEffect(() => {
+        if (
+            !isStarted ||
+            result !== null ||
+            !currentItem ||
+            currentTurnUser?.id !== LOCAL_USER_ID ||
+            offlineVoiceReading === "none"
+        ) {
+            return;
+        }
+
+        if (
+            typeof window === "undefined" ||
+            !("speechSynthesis" in window) ||
+            typeof SpeechSynthesisUtterance === "undefined"
+        ) {
+            return;
+        }
+
+        const text =
+            offlineVoiceReading === "question"
+                ? currentItem.prompt
+                : currentItem.answer;
+        if (!text.trim()) return;
+
+        const synthesis = window.speechSynthesis;
+        synthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang =
+            offlineVoiceReading === "question" ? "ja-JP" : "en-US";
+        synthesis.speak(utterance);
+
+        return () => synthesis.cancel();
+    }, [
+        currentItem,
+        currentTurnUser?.id,
+        isStarted,
+        itemPresentationKey,
+        offlineVoiceReading,
+        result,
+    ]);
 
     const currentTurnPlan = useMemo(() => {
         if (currentTurnUser?.id !== LOCAL_USER_ID || !currentItem) {
@@ -950,7 +1004,7 @@ export default function Client({
         audioRef.current.loop = true;
 
         const startAudio = () => {
-            if (!initialBackgroundMusic || !audioRef.current) return;
+            if (!backgroundMusic || !audioRef.current) return;
 
             audioRef.current
                 .play()
@@ -977,13 +1031,53 @@ export default function Client({
             removeListeners();
             audioRef.current?.pause();
         };
-    }, [initialBackgroundMusic]);
+    }, [backgroundMusic]);
 
     const activeLearningPlan =
         currentTurnUser?.id === LOCAL_USER_ID ? currentTurnPlan : null;
 
     return (
-        <GameView
+        <>
+            <GameSettings
+                placement="top-left"
+                backgroundMusic={backgroundMusic}
+                soundEffects={soundEffects}
+                offlineVoiceReading={offlineVoiceReading}
+                onBackgroundMusicChange={(next) => {
+                    setBackgroundMusic(next);
+                    document.cookie =
+                        "background-music=" +
+                        String(next) +
+                        "; path=/; max-age=31536000; SameSite=Lax";
+                    posthog.capture("settings_changed", {
+                        setting: "background_music",
+                        value: next,
+                    });
+                }}
+                onSoundEffectsChange={(next) => {
+                    setSoundEffects(next);
+                    document.cookie =
+                        "sound-effects=" +
+                        String(next) +
+                        "; path=/; max-age=31536000; SameSite=Lax";
+                    posthog.capture("settings_changed", {
+                        setting: "sound_effects",
+                        value: next,
+                    });
+                }}
+                onOfflineVoiceReadingChange={(next) => {
+                    setOfflineVoiceReading(next);
+                    document.cookie =
+                        "offline-voice-reading=" +
+                        next +
+                        "; path=/; max-age=31536000; SameSite=Lax";
+                    posthog.capture("settings_changed", {
+                        setting: "offline_voice_reading",
+                        value: next,
+                    });
+                }}
+            />
+            <GameView
             room={memoryReady ? room : null}
             users={users}
             positions={userPositions}
@@ -1047,5 +1141,6 @@ export default function Client({
                 </>
             }
         />
+        </>
     );
 }

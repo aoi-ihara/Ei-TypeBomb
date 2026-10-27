@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getUserDetails } from "@/lib/auth/session";
 import { getMyRooms, getPublicRooms } from "@/lib/room/get";
+import { parseOfflineVoiceReading } from "@/lib/settings";
 import RoomList from "./RoomList";
 
 export default async function Page({
@@ -16,6 +17,9 @@ export default async function Page({
         cookieStore.get("background-music")?.value !== "false";
     const initialSoundEffects =
         cookieStore.get("sound-effects")?.value !== "false";
+    const initialOfflineVoiceReading = parseOfflineVoiceReading(
+        cookieStore.get("offline-voice-reading")?.value,
+    );
 
     // Query filters initialize the list when arriving from another page.
     // Keep supporting the old owner=me URL for existing bookmarks.
@@ -44,6 +48,7 @@ export default async function Page({
             currentUser={currentUser}
             initialBackgroundMusic={initialBackgroundMusic}
             initialSoundEffects={initialSoundEffects}
+            initialOfflineVoiceReading={initialOfflineVoiceReading}
         />
     );
 }
