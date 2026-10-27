@@ -388,7 +388,10 @@ export default function RoomList({
                 ) : (
                     <Button
                         variant="text"
-                        onClick={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
+                        onClick={() => {
+                            startNavigationProgress();
+                            router.push(getSignInUrl());
+                        }}
                     >
                         ログイン
                     </Button>

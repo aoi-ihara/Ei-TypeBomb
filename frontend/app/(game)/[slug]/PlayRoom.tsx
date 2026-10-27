@@ -275,7 +275,10 @@ export default function PlayRoom({
 
             {isOwner && (
                 <Button
-                    onClick={() => { startNavigationProgress(); router.push("/" + slug + "/edit"); }}
+                    onClick={() => {
+                        startNavigationProgress();
+                        router.push("/" + slug + "/edit");
+                    }}
                     className="w-full"
                     iconName="pen"
                 >

@@ -752,11 +752,7 @@ export default function Client({
         const wasAnswerRevealed =
             usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID &&
             recallProgressRef.current?.answerWasFullyRevealed === true;
-        if (
-            !wasAnswerRevealed &&
-            successAudioRef.current &&
-            soundEffects
-        ) {
+        if (!wasAnswerRevealed && successAudioRef.current && soundEffects) {
             successAudioRef.current.currentTime = 0;
             successAudioRef.current.volume = 1;
             successAudioRef.current.play().catch(() => {});
@@ -826,8 +822,7 @@ export default function Client({
         synthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang =
-            offlineVoiceReading === "question" ? "ja-JP" : "en-US";
+        utterance.lang = offlineVoiceReading === "question" ? "ja-JP" : "en-US";
         synthesis.speak(utterance);
 
         return () => synthesis.cancel();
@@ -964,9 +959,6 @@ export default function Client({
         const charDelay = clampTypingDelay(userTypingDelayRef.current);
         const initialDelay = Math.min(1000, Math.max(250, charDelay * 2.5));
 
-        // Simulate the bot pressing roman keys, not directly revealing each
-        // kana. The same read-only KanaTypingBoxes used by spectators shows
-        // the pending roman letters and animated kana conversions.
         const typingFrames = getBotTypingFrames(currentItem.answer);
         let charIndex = 0;
         let cancelled = false;
@@ -1038,45 +1030,46 @@ export default function Client({
 
     return (
         <>
-            <GameSettings
-                placement="top-left"
-                backgroundMusic={backgroundMusic}
-                soundEffects={soundEffects}
-                offlineVoiceReading={offlineVoiceReading}
-                onBackgroundMusicChange={(next) => {
-                    setBackgroundMusic(next);
-                    document.cookie =
-                        "background-music=" +
-                        String(next) +
-                        "; path=/; max-age=31536000; SameSite=Lax";
-                    posthog.capture("settings_changed", {
-                        setting: "background_music",
-                        value: next,
-                    });
-                }}
-                onSoundEffectsChange={(next) => {
-                    setSoundEffects(next);
-                    document.cookie =
-                        "sound-effects=" +
-                        String(next) +
-                        "; path=/; max-age=31536000; SameSite=Lax";
-                    posthog.capture("settings_changed", {
-                        setting: "sound_effects",
-                        value: next,
-                    });
-                }}
-                onOfflineVoiceReadingChange={(next) => {
-                    setOfflineVoiceReading(next);
-                    document.cookie =
-                        "offline-voice-reading=" +
-                        next +
-                        "; path=/; max-age=31536000; SameSite=Lax";
-                    posthog.capture("settings_changed", {
-                        setting: "offline_voice_reading",
-                        value: next,
-                    });
-                }}
-            />
+            <header className="w-full flex absolute justify-end p-4 gap-4">
+                <GameSettings
+                    backgroundMusic={backgroundMusic}
+                    soundEffects={soundEffects}
+                    offlineVoiceReading={offlineVoiceReading}
+                    onBackgroundMusicChange={(next) => {
+                        setBackgroundMusic(next);
+                        document.cookie =
+                            "background-music=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "background_music",
+                            value: next,
+                        });
+                    }}
+                    onSoundEffectsChange={(next) => {
+                        setSoundEffects(next);
+                        document.cookie =
+                            "sound-effects=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "sound_effects",
+                            value: next,
+                        });
+                    }}
+                    onOfflineVoiceReadingChange={(next) => {
+                        setOfflineVoiceReading(next);
+                        document.cookie =
+                            "offline-voice-reading=" +
+                            next +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "offline_voice_reading",
+                            value: next,
+                        });
+                    }}
+                />
+            </header>
             <GameView
                 room={memoryReady ? room : null}
                 users={users}
@@ -1102,7 +1095,10 @@ export default function Client({
                 cueSteps={activeLearningPlan?.cueSteps}
                 hintDelaysMs={activeLearningPlan?.hintDelaysMs}
                 onPlayAgain={startGame}
-                onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
+                onCreateRoom={() => {
+                    startNavigationProgress();
+                    router.push(getSignInUrl());
+                }}
                 enableRemoteTypingSync={false}
                 stopRecommended={stopRecommended}
                 onStop={() => {

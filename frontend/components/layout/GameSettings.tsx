@@ -27,18 +27,11 @@ export default function GameSettings({
     onBackgroundMusicChange,
     onSoundEffectsChange,
     onOfflineVoiceReadingChange,
-    placement = "inline",
 }: Readonly<Props>) {
     const [showSettings, setShowSettings] = useState(false);
 
     return (
-        <div
-            className={
-                placement === "top-left"
-                    ? "fixed left-4 top-4 z-20 w-18"
-                    : "w-18 shrink-0"
-            }
-        >
+        <div className={"w-18 shrink-0"}>
             <MorphDialog
                 button={
                     <Button
@@ -70,8 +63,8 @@ export default function GameSettings({
                     />
                 </div>
                 <Picker
-                    name="音声読み上げ（オフライン）"
-                    labelPrefix="音声読み上げ（オフライン）"
+                    name="音声読み上げ"
+                    labelPrefix="音声読み上げ"
                     items={voiceReadingLabels}
                     selection={voiceReadings.indexOf(offlineVoiceReading)}
                     onSelected={(index) =>
