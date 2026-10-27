@@ -1110,8 +1110,6 @@ export default function Clinet({
                 if (!updated) return;
                 cacheOnlinePendingMemory(session);
                 const nextItemId = nextOnlineRecommendation(session);
-                // This is emitted before word:success, so the socket server
-                // already has our next recommendation when the bomb returns.
                 if (nextItemId)
                     socketRef.current?.emit("item:recommend", {
                         itemId: nextItemId,
@@ -1131,7 +1129,10 @@ export default function Clinet({
                 );
             }}
             onPlayAgain={handlePlayAgain}
-            onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
+            onCreateRoom={() => {
+                startNavigationProgress();
+                router.push(getSignInUrl());
+            }}
             onJoin={() => handleJoin("join_button")}
             onWatch={handleWatch}
             onStartGame={handleStartGame}

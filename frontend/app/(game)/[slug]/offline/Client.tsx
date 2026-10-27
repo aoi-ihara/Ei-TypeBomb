@@ -8,6 +8,8 @@ import type { Item, Position, Room, User } from "@/type";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
 import Button from "@/components/ui/Button";
+import GameSettings from "@/components/layout/GameSettings";
+import type { OfflineVoiceReading } from "@/lib/settings";
 import { newPositions } from "@/lib/ui/position";
 import { useFeatureFlagPayload } from "@posthog/react";
 import posthog from "posthog-js";
@@ -41,6 +43,7 @@ type Props = {
     room: Room;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
+    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const LOCAL_USER_ID = "playground-player";
@@ -152,6 +155,7 @@ export default function Client({
     room: sourceRoom,
     initialBackgroundMusic,
     initialSounDeffects,
+    initialOfflineVoiceReading,
 }: Readonly<Props>) {
     const bombDurationVariant = useFeatureFlagPayload("bomb-duration");
     const configuredBombDuration =
@@ -167,6 +171,13 @@ export default function Client({
         useBombExplosion();
 
     const [displayName, setDisplayName] = useState("あなた");
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
+    const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
+    const [offlineVoiceReading, setOfflineVoiceReading] = useState(
+        initialOfflineVoiceReading,
+    );
     const users = useMemo<User[]>(
         () => [{ id: LOCAL_USER_ID, displayName }, ...BOT_USERS],
         [displayName],
@@ -741,11 +752,7 @@ export default function Client({
         const wasAnswerRevealed =
             usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID &&
             recallProgressRef.current?.answerWasFullyRevealed === true;
-        if (
-            !wasAnswerRevealed &&
-            successAudioRef.current &&
-            initialSounDeffects
-        ) {
+        if (!wasAnswerRevealed && successAudioRef.current && soundEffects) {
             successAudioRef.current.currentTime = 0;
             successAudioRef.current.volume = 1;
             successAudioRef.current.play().catch(() => {});
@@ -776,7 +783,7 @@ export default function Client({
             },
         );
     }, [
-        initialSounDeffects,
+        soundEffects,
         saveBotExposure,
         resolveTurnWithItem,
         room.id,
@@ -785,6 +792,48 @@ export default function Client({
     ]);
 
     const currentTurnUser = users[currentTurn];
+
+    useEffect(() => {
+        if (
+            !isStarted ||
+            result !== null ||
+            !currentItem ||
+            currentTurnUser?.id !== LOCAL_USER_ID ||
+            offlineVoiceReading === "none"
+        ) {
+            return;
+        }
+
+        if (
+            typeof window === "undefined" ||
+            !("speechSynthesis" in window) ||
+            typeof SpeechSynthesisUtterance === "undefined"
+        ) {
+            return;
+        }
+
+        const text =
+            offlineVoiceReading === "question"
+                ? currentItem.prompt
+                : currentItem.answer;
+        if (!text.trim()) return;
+
+        const synthesis = window.speechSynthesis;
+        synthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = offlineVoiceReading === "question" ? "ja-JP" : "en-US";
+        synthesis.speak(utterance);
+
+        return () => synthesis.cancel();
+    }, [
+        currentItem,
+        currentTurnUser?.id,
+        isStarted,
+        itemPresentationKey,
+        offlineVoiceReading,
+        result,
+    ]);
 
     const currentTurnPlan = useMemo(() => {
         if (currentTurnUser?.id !== LOCAL_USER_ID || !currentItem) {
@@ -910,9 +959,6 @@ export default function Client({
         const charDelay = clampTypingDelay(userTypingDelayRef.current);
         const initialDelay = Math.min(1000, Math.max(250, charDelay * 2.5));
 
-        // Simulate the bot pressing roman keys, not directly revealing each
-        // kana. The same read-only KanaTypingBoxes used by spectators shows
-        // the pending roman letters and animated kana conversions.
         const typingFrames = getBotTypingFrames(currentItem.answer);
         let charIndex = 0;
         let cancelled = false;
@@ -950,7 +996,7 @@ export default function Client({
         audioRef.current.loop = true;
 
         const startAudio = () => {
-            if (!initialBackgroundMusic || !audioRef.current) return;
+            if (!backgroundMusic || !audioRef.current) return;
 
             audioRef.current
                 .play()
@@ -977,75 +1023,120 @@ export default function Client({
             removeListeners();
             audioRef.current?.pause();
         };
-    }, [initialBackgroundMusic]);
+    }, [backgroundMusic]);
 
     const activeLearningPlan =
         currentTurnUser?.id === LOCAL_USER_ID ? currentTurnPlan : null;
 
     return (
-        <GameView
-            room={memoryReady ? room : null}
-            users={users}
-            positions={userPositions}
-            userId={LOCAL_USER_ID}
-            currentTurn={currentTurn}
-            bombStatus={bombStatus}
-            currentItem={currentItem}
-            itemPresentationKey={itemPresentationKey}
-            currentInput={currentInput}
-            isStarted={isStarted}
-            serverError={memoryError}
-            result={result}
-            lostDisplayName={lostDisplayName}
-            bombRef={bombRef}
-            explosionLayer={explosionLayer}
-            onSuccess={handleSuccess}
-            onChangeInput={handleInputChange}
-            onRecallProgress={handleRecallProgress}
-            onRecallComplete={handleRecallComplete}
-            learningMode={activeLearningPlan?.mode}
-            initialCueRatio={activeLearningPlan?.initialCueRatio}
-            cueSteps={activeLearningPlan?.cueSteps}
-            hintDelaysMs={activeLearningPlan?.hintDelaysMs}
-            onPlayAgain={startGame}
-            onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
-            enableRemoteTypingSync={false}
-            stopRecommended={stopRecommended}
-            onStop={() => {
-                void flushPendingMemory().finally(() => {
+        <>
+            <header className="w-full flex absolute justify-end p-4 gap-4">
+                <GameSettings
+                    backgroundMusic={backgroundMusic}
+                    soundEffects={soundEffects}
+                    offlineVoiceReading={offlineVoiceReading}
+                    onBackgroundMusicChange={(next) => {
+                        setBackgroundMusic(next);
+                        document.cookie =
+                            "background-music=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "background_music",
+                            value: next,
+                        });
+                    }}
+                    onSoundEffectsChange={(next) => {
+                        setSoundEffects(next);
+                        document.cookie =
+                            "sound-effects=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "sound_effects",
+                            value: next,
+                        });
+                    }}
+                    onOfflineVoiceReadingChange={(next) => {
+                        setOfflineVoiceReading(next);
+                        document.cookie =
+                            "offline-voice-reading=" +
+                            next +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "offline_voice_reading",
+                            value: next,
+                        });
+                    }}
+                />
+            </header>
+            <GameView
+                room={memoryReady ? room : null}
+                users={users}
+                positions={userPositions}
+                userId={LOCAL_USER_ID}
+                currentTurn={currentTurn}
+                bombStatus={bombStatus}
+                currentItem={currentItem}
+                itemPresentationKey={itemPresentationKey}
+                currentInput={currentInput}
+                isStarted={isStarted}
+                serverError={memoryError}
+                result={result}
+                lostDisplayName={lostDisplayName}
+                bombRef={bombRef}
+                explosionLayer={explosionLayer}
+                onSuccess={handleSuccess}
+                onChangeInput={handleInputChange}
+                onRecallProgress={handleRecallProgress}
+                onRecallComplete={handleRecallComplete}
+                learningMode={activeLearningPlan?.mode}
+                initialCueRatio={activeLearningPlan?.initialCueRatio}
+                cueSteps={activeLearningPlan?.cueSteps}
+                hintDelaysMs={activeLearningPlan?.hintDelaysMs}
+                onPlayAgain={startGame}
+                onCreateRoom={() => {
                     startNavigationProgress();
-                    router.push("/" + room.id);
-                });
-            }}
-            resultExtraActions={
-                <>
-                    {guestMode && (
-                        <p
-                            role="status"
-                            className="text-sm text-center opacity-70"
+                    router.push(getSignInUrl());
+                }}
+                enableRemoteTypingSync={false}
+                stopRecommended={stopRecommended}
+                onStop={() => {
+                    void flushPendingMemory().finally(() => {
+                        startNavigationProgress();
+                        router.push("/" + room.id);
+                    });
+                }}
+                resultExtraActions={
+                    <>
+                        {guestMode && (
+                            <p
+                                role="status"
+                                className="text-sm text-center opacity-70"
+                            >
+                                ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
+                            </p>
+                        )}
+                        {saveError && (
+                            <p role="status">
+                                学習データは保存待ちです。接続が戻ると再送します。
+                            </p>
+                        )}
+                        <Button
+                            iconName="link"
+                            className="w-full"
+                            onClick={() => {
+                                void flushPendingMemory().finally(() => {
+                                    startNavigationProgress();
+                                    router.push("/room");
+                                });
+                            }}
                         >
-                            ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
-                        </p>
-                    )}
-                    {saveError && (
-                        <p role="status">
-                            学習データは保存待ちです。接続が戻ると再送します。
-                        </p>
-                    )}
-                    <Button
-                        iconName="link"
-                        className="w-full"
-                        onClick={() => {
-                            void flushPendingMemory().finally(() => {
-                                startNavigationProgress();
-                                router.push("/room");
-                            });
-                        }}
-                    >
-                        別のルームを選択
-                    </Button>
-                </>
-            }
-        />
+                            別のルームを選択
+                        </Button>
+                    </>
+                }
+            />
+        </>
     );
 }

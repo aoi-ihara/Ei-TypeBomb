@@ -6,8 +6,8 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
-import Toggle from "@/components/ui/Toggle";
-import MorphDialog from "@/components/ui/MorphDialog";
+import GameSettings from "@/components/layout/GameSettings";
+import type { OfflineVoiceReading } from "@/lib/settings";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -32,6 +32,7 @@ type Props = {
     currentUser: CurrentUser | null;
     initialBackgroundMusic: boolean;
     initialSoundEffects: boolean;
+    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
@@ -60,16 +61,19 @@ export default function RoomList({
     currentUser,
     initialBackgroundMusic,
     initialSoundEffects,
+    initialOfflineVoiceReading,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
     const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
-    const [showSettings, setShowSettings] = useState(false);
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
+    const [offlineVoiceReading, setOfflineVoiceReading] = useState(
+        initialOfflineVoiceReading,
+    );
     const [view, setView] = useState<View>(
         initialView === "me" ? "mine" : "recommended",
     );
@@ -261,7 +265,7 @@ export default function RoomList({
         });
     }, [currentUser]);
 
-    const setCookie = (key: string, value: boolean) => {
+    const setCookie = (key: string, value: string | boolean) => {
         document.cookie =
             key +
             "=" +
@@ -319,60 +323,35 @@ export default function RoomList({
     return (
         <>
             <header className="w-full flex justify-end p-4 gap-4">
-                <div className="w-18">
-                    <MorphDialog
-                        button={
-                            <Button
-                                variant="text"
-                                onClick={() => setShowSettings(!showSettings)}
-                                iconName="settings"
-                            >
-                                設定
-                            </Button>
-                        }
-                        title="設定"
-                        alignment="vertical"
-                        open={showSettings}
-                        onClose={() => setShowSettings(false)}
-                    >
-                        <div className="flex w-full items-center justify-between pl-3">
-                            <div data-cursor="text">BGM</div>
-                            <Toggle
-                                checked={backgroundMusic}
-                                onChange={(next) => {
-                                    setBackgroundMusic(next);
-                                    setCookie("background-music", next);
-                                    posthog.capture("settings_changed", {
-                                        setting: "background_music",
-                                        value: next,
-                                    });
-                                }}
-                            />
-                        </div>
-                        <div className="flex w-full items-center justify-between pl-3">
-                            <div data-cursor="text">効果音</div>
-                            <Toggle
-                                checked={soundEffects}
-                                onChange={(next) => {
-                                    setSoundEffects(next);
-                                    setCookie("sound-effects", next);
-                                    posthog.capture("settings_changed", {
-                                        setting: "sound_effects",
-                                        value: next,
-                                    });
-                                }}
-                            />
-                        </div>
-                        <Button
-                            className="w-full"
-                            variant="primary"
-                            iconName="check"
-                            onClick={() => setShowSettings(false)}
-                        >
-                            完了
-                        </Button>
-                    </MorphDialog>
-                </div>
+                <GameSettings
+                    backgroundMusic={backgroundMusic}
+                    soundEffects={soundEffects}
+                    offlineVoiceReading={offlineVoiceReading}
+                    onBackgroundMusicChange={(next) => {
+                        setBackgroundMusic(next);
+                        setCookie("background-music", next);
+                        posthog.capture("settings_changed", {
+                            setting: "background_music",
+                            value: next,
+                        });
+                    }}
+                    onSoundEffectsChange={(next) => {
+                        setSoundEffects(next);
+                        setCookie("sound-effects", next);
+                        posthog.capture("settings_changed", {
+                            setting: "sound_effects",
+                            value: next,
+                        });
+                    }}
+                    onOfflineVoiceReadingChange={(next) => {
+                        setOfflineVoiceReading(next);
+                        setCookie("offline-voice-reading", next);
+                        posthog.capture("settings_changed", {
+                            setting: "offline_voice_reading",
+                            value: next,
+                        });
+                    }}
+                />
 
                 {currentUser ? (
                     <Menu
@@ -409,7 +388,10 @@ export default function RoomList({
                 ) : (
                     <Button
                         variant="text"
-                        onClick={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
+                        onClick={() => {
+                            startNavigationProgress();
+                            router.push(getSignInUrl());
+                        }}
                     >
                         ログイン
                     </Button>
