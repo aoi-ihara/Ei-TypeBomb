@@ -7,6 +7,7 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Item, Position, Room, User } from "@/type";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
+import type { GameNoticeProps } from "@/components/feature/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/layout/GameSettings";
 import type { OfflineVoiceReading } from "@/lib/settings";
@@ -175,9 +176,7 @@ export default function Client({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const [offlineVoiceReading, setOfflineVoiceReading] = useState(
-        initialOfflineVoiceReading,
-    );
+    const offlineVoiceReading = initialOfflineVoiceReading;
     const users = useMemo<User[]>(
         () => [{ id: LOCAL_USER_ID, displayName }, ...BOT_USERS],
         [displayName],
@@ -217,6 +216,12 @@ export default function Client({
         paused: true,
     });
     const [isStarted, setIsStarted] = useState(false);
+    const [notice, setNotice] = useState<GameNoticeProps>({
+        visible: true,
+        iconName: "keyboard",
+        title: "半角で入力してください",
+        description: "単語は日本語でも英語でも、半角で入力してください。",
+    });
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
     const [lostDisplayName, setLostDisplayName] = useState<string | null>(null);
@@ -254,6 +259,13 @@ export default function Client({
             ),
         [users],
     );
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            setNotice((current) => ({ ...current, visible: false }));
+        }, 5000);
+        return () => window.clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         console.log(bombDurationSeconds, bombDurationVariant);
@@ -1030,12 +1042,11 @@ export default function Client({
 
     return (
         <>
-            <header className="w-full flex absolute justify-end p-4 gap-4">
-                <GameSettings
-                    backgroundMusic={backgroundMusic}
-                    soundEffects={soundEffects}
-                    offlineVoiceReading={offlineVoiceReading}
-                    onBackgroundMusicChange={(next) => {
+            <GameSettings
+                placement="top-left"
+                backgroundMusic={backgroundMusic}
+                soundEffects={soundEffects}
+                onBackgroundMusicChange={(next) => {
                         setBackgroundMusic(next);
                         document.cookie =
                             "background-music=" +
@@ -1046,30 +1057,18 @@ export default function Client({
                             value: next,
                         });
                     }}
-                    onSoundEffectsChange={(next) => {
-                        setSoundEffects(next);
-                        document.cookie =
-                            "sound-effects=" +
-                            String(next) +
-                            "; path=/; max-age=31536000; SameSite=Lax";
-                        posthog.capture("settings_changed", {
-                            setting: "sound_effects",
-                            value: next,
-                        });
-                    }}
-                    onOfflineVoiceReadingChange={(next) => {
-                        setOfflineVoiceReading(next);
-                        document.cookie =
-                            "offline-voice-reading=" +
-                            next +
-                            "; path=/; max-age=31536000; SameSite=Lax";
-                        posthog.capture("settings_changed", {
-                            setting: "offline_voice_reading",
-                            value: next,
-                        });
-                    }}
-                />
-            </header>
+                onSoundEffectsChange={(next) => {
+                    setSoundEffects(next);
+                    document.cookie =
+                        "sound-effects=" +
+                        String(next) +
+                        "; path=/; max-age=31536000; SameSite=Lax";
+                    posthog.capture("settings_changed", {
+                        setting: "sound_effects",
+                        value: next,
+                    });
+                }}
+            />
             <GameView
                 room={memoryReady ? room : null}
                 users={users}
@@ -1082,6 +1081,7 @@ export default function Client({
                 currentInput={currentInput}
                 isStarted={isStarted}
                 serverError={memoryError}
+                notice={notice}
                 result={result}
                 lostDisplayName={lostDisplayName}
                 bombRef={bombRef}

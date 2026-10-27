@@ -3,35 +3,33 @@
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import MorphDialog from "@/components/ui/MorphDialog";
-import Picker from "@/components/ui/Picker";
 import Toggle from "@/components/ui/Toggle";
-import type { OfflineVoiceReading } from "@/lib/settings";
 
 type Props = {
     backgroundMusic: boolean;
     soundEffects: boolean;
-    offlineVoiceReading: OfflineVoiceReading;
     onBackgroundMusicChange: (value: boolean) => void;
     onSoundEffectsChange: (value: boolean) => void;
-    onOfflineVoiceReadingChange: (value: OfflineVoiceReading) => void;
     placement?: "inline" | "top-left";
 };
-
-const voiceReadings: OfflineVoiceReading[] = ["none", "question", "answer"];
-const voiceReadingLabels = ["なし", "問題", "回答"];
 
 export default function GameSettings({
     backgroundMusic,
     soundEffects,
-    offlineVoiceReading,
     onBackgroundMusicChange,
     onSoundEffectsChange,
-    onOfflineVoiceReadingChange,
+    placement = "inline",
 }: Readonly<Props>) {
     const [showSettings, setShowSettings] = useState(false);
 
     return (
-        <div className={"w-18 shrink-0"}>
+        <div
+            className={
+                placement === "top-left"
+                    ? "fixed left-4 top-4 z-20 w-18"
+                    : "w-18 shrink-0"
+            }
+        >
             <MorphDialog
                 button={
                     <Button
@@ -62,18 +60,6 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
-                <Picker
-                    name="音声読み上げ"
-                    labelPrefix="音声読み上げ"
-                    items={voiceReadingLabels}
-                    selection={voiceReadings.indexOf(offlineVoiceReading)}
-                    onSelected={(index) =>
-                        onOfflineVoiceReadingChange(
-                            voiceReadings[index] ?? "none",
-                        )
-                    }
-                    itemIcons={[null, null, null]}
-                />
                 <Button
                     className="w-full"
                     variant="primary"

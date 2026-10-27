@@ -7,7 +7,6 @@ import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/layout/GameSettings";
-import type { OfflineVoiceReading } from "@/lib/settings";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -32,7 +31,6 @@ type Props = {
     currentUser: CurrentUser | null;
     initialBackgroundMusic: boolean;
     initialSoundEffects: boolean;
-    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
@@ -61,7 +59,6 @@ export default function RoomList({
     currentUser,
     initialBackgroundMusic,
     initialSoundEffects,
-    initialOfflineVoiceReading,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
@@ -71,9 +68,6 @@ export default function RoomList({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
-    const [offlineVoiceReading, setOfflineVoiceReading] = useState(
-        initialOfflineVoiceReading,
-    );
     const [view, setView] = useState<View>(
         initialView === "me" ? "mine" : "recommended",
     );
@@ -265,7 +259,7 @@ export default function RoomList({
         });
     }, [currentUser]);
 
-    const setCookie = (key: string, value: string | boolean) => {
+    const setCookie = (key: string, value: boolean) => {
         document.cookie =
             key +
             "=" +
@@ -326,7 +320,6 @@ export default function RoomList({
                 <GameSettings
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
-                    offlineVoiceReading={offlineVoiceReading}
                     onBackgroundMusicChange={(next) => {
                         setBackgroundMusic(next);
                         setCookie("background-music", next);
@@ -340,14 +333,6 @@ export default function RoomList({
                         setCookie("sound-effects", next);
                         posthog.capture("settings_changed", {
                             setting: "sound_effects",
-                            value: next,
-                        });
-                    }}
-                    onOfflineVoiceReadingChange={(next) => {
-                        setOfflineVoiceReading(next);
-                        setCookie("offline-voice-reading", next);
-                        posthog.capture("settings_changed", {
-                            setting: "offline_voice_reading",
                             value: next,
                         });
                     }}
