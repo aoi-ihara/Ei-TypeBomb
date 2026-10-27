@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
+import { parseOfflineVoiceReading } from "@/lib/settings";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import { getRoomPlayInfoFromId, getRoomSummaryFromId } from "@/lib/room/get";
@@ -24,8 +26,14 @@ export default async function RoomPage({
         );
     }
 
-    const result = await getRoomSummaryFromId(slug);
+    const [result, cookieStore] = await Promise.all([
+        getRoomSummaryFromId(slug),
+        cookies(),
+    ]);
     if (!result) notFound();
+    const initialOfflineVoiceReading = parseOfflineVoiceReading(
+        cookieStore.get("offline-voice-reading")?.value,
+    );
 
     const { room } = result;
     const itemCount = result.itemCount;
@@ -84,6 +92,7 @@ export default async function RoomPage({
                 itemCount={itemCount}
                 isOwner={isOwner}
                 slug={slug}
+                initialOfflineVoiceReading={initialOfflineVoiceReading}
             />
         </Shell>
     );
