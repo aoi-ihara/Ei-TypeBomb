@@ -30,9 +30,9 @@ export default function OfflineVoicePicker({ initialValue }: Readonly<Props>) {
 
     return (
         <div className="flex w-full flex-col gap-2">
-            <div data-cursor="text">音声読み上げ（オフライン）</div>
             <Picker
-                name="音声読み上げ（オフライン）"
+                name="読み上げ（オフライン）"
+                labelPrefix="読み上げ（オフライン）"
                 items={voiceReadingLabels}
                 selection={voiceReadings.indexOf(value)}
                 onSelected={handleSelected}
