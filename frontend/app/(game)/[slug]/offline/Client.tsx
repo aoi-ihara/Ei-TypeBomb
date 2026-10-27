@@ -1047,16 +1047,16 @@ export default function Client({
                 backgroundMusic={backgroundMusic}
                 soundEffects={soundEffects}
                 onBackgroundMusicChange={(next) => {
-                        setBackgroundMusic(next);
-                        document.cookie =
-                            "background-music=" +
-                            String(next) +
-                            "; path=/; max-age=31536000; SameSite=Lax";
-                        posthog.capture("settings_changed", {
-                            setting: "background_music",
-                            value: next,
-                        });
-                    }}
+                    setBackgroundMusic(next);
+                    document.cookie =
+                        "background-music=" +
+                        String(next) +
+                        "; path=/; max-age=31536000; SameSite=Lax";
+                    posthog.capture("settings_changed", {
+                        setting: "background_music",
+                        value: next,
+                    });
+                }}
                 onSoundEffectsChange={(next) => {
                     setSoundEffects(next);
                     document.cookie =

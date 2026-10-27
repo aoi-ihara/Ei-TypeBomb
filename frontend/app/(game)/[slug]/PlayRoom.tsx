@@ -275,7 +275,9 @@ export default function PlayRoom({
                         {renderModeDialog("offline")}
                     </div>
 
-                    <OfflineVoicePicker initialValue={initialOfflineVoiceReading} />
+                    <OfflineVoicePicker
+                        initialValue={initialOfflineVoiceReading}
+                    />
                 </>
             )}
 
