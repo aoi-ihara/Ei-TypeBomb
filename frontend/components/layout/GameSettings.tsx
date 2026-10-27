@@ -69,23 +69,18 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
-                <div className="flex w-full flex-col gap-2">
-                    <div className="pl-3" data-cursor="text">
-                        音声読み上げ（オフライン）
-                    </div>
-                    <Picker
-                        name="音声読み上げ（オフライン）"
-                        labelPrefix="音声読み上げ（オフライン）"
-                        items={voiceReadingLabels}
-                        selection={voiceReadings.indexOf(offlineVoiceReading)}
-                        onSelected={(index) =>
-                            onOfflineVoiceReadingChange(
-                                voiceReadings[index] ?? "none",
-                            )
-                        }
-                        itemIcons={[null, null, null]}
-                    />
-                </div>
+                <Picker
+                    name="音声読み上げ（オフライン）"
+                    labelPrefix="音声読み上げ（オフライン）"
+                    items={voiceReadingLabels}
+                    selection={voiceReadings.indexOf(offlineVoiceReading)}
+                    onSelected={(index) =>
+                        onOfflineVoiceReadingChange(
+                            voiceReadings[index] ?? "none",
+                        )
+                    }
+                    itemIcons={[null, null, null]}
+                />
                 <Button
                     className="w-full"
                     variant="primary"

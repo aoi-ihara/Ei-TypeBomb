@@ -1078,69 +1078,69 @@ export default function Client({
                 }}
             />
             <GameView
-            room={memoryReady ? room : null}
-            users={users}
-            positions={userPositions}
-            userId={LOCAL_USER_ID}
-            currentTurn={currentTurn}
-            bombStatus={bombStatus}
-            currentItem={currentItem}
-            itemPresentationKey={itemPresentationKey}
-            currentInput={currentInput}
-            isStarted={isStarted}
-            serverError={memoryError}
-            result={result}
-            lostDisplayName={lostDisplayName}
-            bombRef={bombRef}
-            explosionLayer={explosionLayer}
-            onSuccess={handleSuccess}
-            onChangeInput={handleInputChange}
-            onRecallProgress={handleRecallProgress}
-            onRecallComplete={handleRecallComplete}
-            learningMode={activeLearningPlan?.mode}
-            initialCueRatio={activeLearningPlan?.initialCueRatio}
-            cueSteps={activeLearningPlan?.cueSteps}
-            hintDelaysMs={activeLearningPlan?.hintDelaysMs}
-            onPlayAgain={startGame}
-            onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
-            enableRemoteTypingSync={false}
-            stopRecommended={stopRecommended}
-            onStop={() => {
-                void flushPendingMemory().finally(() => {
-                    startNavigationProgress();
-                    router.push("/" + room.id);
-                });
-            }}
-            resultExtraActions={
-                <>
-                    {guestMode && (
-                        <p
-                            role="status"
-                            className="text-sm text-center opacity-70"
+                room={memoryReady ? room : null}
+                users={users}
+                positions={userPositions}
+                userId={LOCAL_USER_ID}
+                currentTurn={currentTurn}
+                bombStatus={bombStatus}
+                currentItem={currentItem}
+                itemPresentationKey={itemPresentationKey}
+                currentInput={currentInput}
+                isStarted={isStarted}
+                serverError={memoryError}
+                result={result}
+                lostDisplayName={lostDisplayName}
+                bombRef={bombRef}
+                explosionLayer={explosionLayer}
+                onSuccess={handleSuccess}
+                onChangeInput={handleInputChange}
+                onRecallProgress={handleRecallProgress}
+                onRecallComplete={handleRecallComplete}
+                learningMode={activeLearningPlan?.mode}
+                initialCueRatio={activeLearningPlan?.initialCueRatio}
+                cueSteps={activeLearningPlan?.cueSteps}
+                hintDelaysMs={activeLearningPlan?.hintDelaysMs}
+                onPlayAgain={startGame}
+                onCreateRoom={() => { startNavigationProgress(); router.push(getSignInUrl()); }}
+                enableRemoteTypingSync={false}
+                stopRecommended={stopRecommended}
+                onStop={() => {
+                    void flushPendingMemory().finally(() => {
+                        startNavigationProgress();
+                        router.push("/" + room.id);
+                    });
+                }}
+                resultExtraActions={
+                    <>
+                        {guestMode && (
+                            <p
+                                role="status"
+                                className="text-sm text-center opacity-70"
+                            >
+                                ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
+                            </p>
+                        )}
+                        {saveError && (
+                            <p role="status">
+                                学習データは保存待ちです。接続が戻ると再送します。
+                            </p>
+                        )}
+                        <Button
+                            iconName="link"
+                            className="w-full"
+                            onClick={() => {
+                                void flushPendingMemory().finally(() => {
+                                    startNavigationProgress();
+                                    router.push("/room");
+                                });
+                            }}
                         >
-                            ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
-                        </p>
-                    )}
-                    {saveError && (
-                        <p role="status">
-                            学習データは保存待ちです。接続が戻ると再送します。
-                        </p>
-                    )}
-                    <Button
-                        iconName="link"
-                        className="w-full"
-                        onClick={() => {
-                            void flushPendingMemory().finally(() => {
-                                startNavigationProgress();
-                                router.push("/room");
-                            });
-                        }}
-                    >
-                        別のルームを選択
-                    </Button>
-                </>
-            }
-        />
+                            別のルームを選択
+                        </Button>
+                    </>
+                }
+            />
         </>
     );
 }
