@@ -1042,33 +1042,6 @@ export default function Client({
 
     return (
         <>
-            <GameSettings
-                placement="top-left"
-                backgroundMusic={backgroundMusic}
-                soundEffects={soundEffects}
-                onBackgroundMusicChange={(next) => {
-                    setBackgroundMusic(next);
-                    document.cookie =
-                        "background-music=" +
-                        String(next) +
-                        "; path=/; max-age=31536000; SameSite=Lax";
-                    posthog.capture("settings_changed", {
-                        setting: "background_music",
-                        value: next,
-                    });
-                }}
-                onSoundEffectsChange={(next) => {
-                    setSoundEffects(next);
-                    document.cookie =
-                        "sound-effects=" +
-                        String(next) +
-                        "; path=/; max-age=31536000; SameSite=Lax";
-                    posthog.capture("settings_changed", {
-                        setting: "sound_effects",
-                        value: next,
-                    });
-                }}
-            />
             <GameView
                 room={memoryReady ? room : null}
                 users={users}
@@ -1137,6 +1110,34 @@ export default function Client({
                     </>
                 }
             />
+            <header className="w-full flex absolute justify-end p-4 gap-4">
+                <GameSettings
+                    backgroundMusic={backgroundMusic}
+                    soundEffects={soundEffects}
+                    onBackgroundMusicChange={(next) => {
+                        setBackgroundMusic(next);
+                        document.cookie =
+                            "background-music=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "background_music",
+                            value: next,
+                        });
+                    }}
+                    onSoundEffectsChange={(next) => {
+                        setSoundEffects(next);
+                        document.cookie =
+                            "sound-effects=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "sound_effects",
+                            value: next,
+                        });
+                    }}
+                />
+            </header>
         </>
     );
 }
