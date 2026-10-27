@@ -292,7 +292,10 @@ export default function MorphDialog({
                                                 {title}
                                             </div>
                                             {description && (
-                                                <div id={`${id}-description`}>
+                                                <div
+                                                    id={`${id}-description`}
+                                                    data-cursor="text"
+                                                >
                                                     {description}
                                                 </div>
                                             )}
