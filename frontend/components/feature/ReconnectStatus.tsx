@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Button from "@/components/ui/Button";
+import { RECONNECT_GRACE_MS } from "../../../backend/shared/session";
 
-// Matches the server's 20-second reconnect grace for a match seat.
-const RECONNECT_WAIT_SECONDS = 20;
+const RECONNECT_WAIT_SECONDS = RECONNECT_GRACE_MS / 1000;
 
 type Props = {
     reconnecting: boolean;
@@ -22,9 +22,9 @@ export default function ReconnectStatus({
     useEffect(() => {
         const startedAt = performance.now();
         const interval = setInterval(() => {
-            setElapsedSeconds(
-                Math.floor((performance.now() - startedAt) / 1000),
-            );
+            const elapsed = Math.floor((performance.now() - startedAt) / 1000);
+            setElapsedSeconds(elapsed);
+            if (elapsed >= RECONNECT_WAIT_SECONDS) clearInterval(interval);
         }, 1000);
         return () => clearInterval(interval);
     }, []);
@@ -40,11 +40,7 @@ export default function ReconnectStatus({
                 <div className="w-fit pl-4 font-bold" data-cursor="text">
                     接続できませんでした
                 </div>
-                <Button
-                    iconName="rotateCcw"
-                    variant="primary"
-                    onClick={onReload}
-                >
+                <Button variant="primary" onClick={onReload}>
                     再読み込み
                 </Button>
             </div>

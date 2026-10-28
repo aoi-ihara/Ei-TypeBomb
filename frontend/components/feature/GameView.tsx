@@ -35,7 +35,7 @@ type Props = {
     isStarted: boolean;
     isSpectator?: boolean;
     serverError?: string | null;
-    connectionFailed?: boolean;
+    connection?: "reconnecting" | "failed" | null;
     onReload?: () => void;
     notice?: GameNoticeProps;
     result: boolean | null;
@@ -81,7 +81,7 @@ export default function GameView({
     isStarted,
     isSpectator = false,
     serverError = null,
-    connectionFailed = false,
+    connection = null,
     onReload,
     notice,
     result,
@@ -109,7 +109,7 @@ export default function GameView({
 }: Readonly<Props>) {
     const currentTurnUser = users[currentTurn] as User | undefined;
     // Keep the last snapshot on screen, read-only, until the server answers.
-    const isReconnecting = room !== null && serverError !== null;
+    const isReconnecting = room !== null && connection !== null;
     const isParticipant = users.some((user) => user.id === userId);
     const hasDuplicatePrompt =
         currentItem?.type === "typed_recall" &&
@@ -236,18 +236,18 @@ export default function GameView({
             )}
 
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-16 h-full justify-end flex flex-col">
-                {onReload && (!room || serverError) && (
+                {onReload && (!room || connection) && (
                     <ReconnectStatus
-                        reconnecting={room !== null}
-                        failed={connectionFailed}
+                        reconnecting={isReconnecting}
+                        failed={connection === "failed"}
                         onReload={onReload}
                     />
                 )}
                 <div
                     inert={isReconnecting}
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
-                    {room ? (
+                    {room && !serverError ? (
                         isParticipant ? (
                             <div className="flex flex-col h-full animate-appear">
                                 <div className="flex h-full">

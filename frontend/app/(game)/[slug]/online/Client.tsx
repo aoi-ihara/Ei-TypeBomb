@@ -753,8 +753,7 @@ export default function Clinet({
                 "cluster:recovery-failed",
                 ({ code }: { code?: string }) => {
                     if (!selected || socketRef.current !== socket) return;
-                    cancelDisconnectNotice();
-                    setServerError(UNAVAILABLE_MESSAGE);
+                    // The "error" event that follows sets the failed state.
                     posthog.capture("game_connection_recovery_failed", {
                         code,
                     });
@@ -1073,10 +1072,17 @@ export default function Clinet({
         socketRef.current?.emit("room:leave");
     };
 
+    const connection =
+        serverError === null
+            ? null
+            : serverError === UNAVAILABLE_MESSAGE
+              ? "failed"
+              : "reconnecting";
+
     const handleReload = () => {
         posthog.capture("game_reload_clicked", {
             has_room: room !== null,
-            connection_failed: serverError === UNAVAILABLE_MESSAGE,
+            connection_failed: connection === "failed",
         });
         window.location.reload();
     };
@@ -1118,8 +1124,7 @@ export default function Clinet({
                 failureCount={failureCount}
                 isStarted={isStarted}
                 isSpectator={isSpectator}
-                serverError={serverError}
-                connectionFailed={serverError === UNAVAILABLE_MESSAGE}
+                connection={connection}
                 onReload={handleReload}
                 notice={notice}
                 result={result}
