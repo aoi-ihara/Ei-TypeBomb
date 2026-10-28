@@ -15,7 +15,7 @@ export default function GameNotice({
 }: Readonly<GameNoticeProps>) {
     return (
         <div
-            className={`${!visible && "opacity-0 scale-95 blur-md"} transition-all duration-(--duration-etb) ease-etb fixed top-4 z-10 right-4 ml-4 flex items-center gap-4 max-w-94 rounded-2xl bg-(--color-background-secondary) text-(--color-foreground) py-3 px-4`}
+            className={`${!visible && "opacity-0 scale-95 blur-md pointer-events-none"} transition-all duration-(--duration-etb) ease-etb fixed top-4 z-10 right-4 ml-4 flex items-center gap-4 max-w-94 rounded-2xl bg-(--color-background-secondary) text-(--color-foreground) py-3 px-4`}
             role="status"
             aria-live="polite"
             aria-hidden={!visible}

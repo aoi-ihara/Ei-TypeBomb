@@ -14,6 +14,7 @@ import { getRoomItems } from "@/lib/item";
 import GameNotice, {
     type GameNoticeProps,
 } from "@/components/feature/GameNotice";
+import ReconnectStatus from "@/components/feature/ReconnectStatus";
 
 type Props = {
     room: Room | null;
@@ -34,6 +35,8 @@ type Props = {
     isStarted: boolean;
     isSpectator?: boolean;
     serverError?: string | null;
+    connection?: "reconnecting" | "failed" | null;
+    onReload?: () => void;
     notice?: GameNoticeProps;
     result: boolean | null;
     lostDisplayName?: string | null;
@@ -78,6 +81,8 @@ export default function GameView({
     isStarted,
     isSpectator = false,
     serverError = null,
+    connection = null,
+    onReload,
     notice,
     result,
     lostDisplayName,
@@ -103,6 +108,8 @@ export default function GameView({
     onStop,
 }: Readonly<Props>) {
     const currentTurnUser = users[currentTurn] as User | undefined;
+    // Keep the last snapshot on screen, read-only, until the server answers.
+    const isReconnecting = room !== null && connection !== null;
     const isParticipant = users.some((user) => user.id === userId);
     const hasDuplicatePrompt =
         currentItem?.type === "typed_recall" &&
@@ -157,7 +164,7 @@ export default function GameView({
                     currentInput={
                         result !== null
                             ? ""
-                            : userId === currentTurnUser?.id
+                            : userId === currentTurnUser?.id && !isReconnecting
                               ? null
                               : currentInput
                     }
@@ -229,8 +236,16 @@ export default function GameView({
             )}
 
             <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-16 h-full justify-end flex flex-col">
+                {onReload && (!room || connection) && (
+                    <ReconnectStatus
+                        reconnecting={isReconnecting}
+                        failed={connection === "failed"}
+                        onReload={onReload}
+                    />
+                )}
                 <div
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    inert={isReconnecting}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room && !serverError ? (
                         isParticipant ? (
