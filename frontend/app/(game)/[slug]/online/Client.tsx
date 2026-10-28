@@ -1182,7 +1182,7 @@ export default function Clinet({
                 onStartGame={handleStartGame}
                 onLeave={handleLeave}
             />
-            <header className="w-full flex absolute justify-end p-4 gap-4">
+            <header className="w-full flex absolute justify-end p-4 gap-4 z-25">
                 <GameSettings
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
