@@ -263,6 +263,7 @@ export default function Clinet({
             process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
+        let firstSnapshotCaptured = false;
         let failoverStarted = false;
         let secondaryUnavailable = false;
         let primaryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -620,6 +621,16 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
+                    if (!firstSnapshotCaptured) {
+                        firstSnapshotCaptured = true;
+                        posthog.capture("game_first_snapshot_received", {
+                            snapshot_time_ms: Math.round(
+                                performance.now() - candidate.startedAt,
+                            ),
+                            migrating: newRoom.migrating === true,
+                            tier: candidate.tier,
+                        });
+                    }
                     cancelDisconnectNotice();
                     setServerError(
                         newRoom.migrating ? CONNECTING_MESSAGE : null,
@@ -734,6 +745,18 @@ export default function Clinet({
                         recovery_id: recoveryId,
                         from_depth: fromDepth,
                         detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
+                    });
+                },
+            );
+
+            socket.on(
+                "cluster:recovery-failed",
+                ({ code }: { code?: string }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    cancelDisconnectNotice();
+                    setServerError(UNAVAILABLE_MESSAGE);
+                    posthog.capture("game_connection_recovery_failed", {
+                        code,
                     });
                 },
             );
@@ -1050,6 +1073,14 @@ export default function Clinet({
         socketRef.current?.emit("room:leave");
     };
 
+    const handleReload = () => {
+        posthog.capture("game_reload_clicked", {
+            has_room: room !== null,
+            connection_failed: serverError === UNAVAILABLE_MESSAGE,
+        });
+        window.location.reload();
+    };
+
     const focusedBomb =
         room?.bombs?.find((bomb) => users[bomb.holder]?.id === userId) ??
         room?.bombs?.find(
@@ -1088,6 +1119,8 @@ export default function Clinet({
                 isStarted={isStarted}
                 isSpectator={isSpectator}
                 serverError={serverError}
+                connectionFailed={serverError === UNAVAILABLE_MESSAGE}
+                onReload={handleReload}
                 notice={notice}
                 result={result}
                 lostDisplayName={lostDisplayName}
