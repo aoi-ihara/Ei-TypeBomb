@@ -1110,7 +1110,7 @@ export default function Client({
                     </>
                 }
             />
-            <header className="w-full flex absolute justify-end p-4 gap-4 z-25">
+            <header className="w-full flex absolute justify-end p-4 gap-4">
                 <GameSettings
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
