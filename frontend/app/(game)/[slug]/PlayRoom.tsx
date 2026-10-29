@@ -11,6 +11,7 @@ import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
 import posthog from "posthog-js";
+import type { OfflineVoiceReading } from "@/lib/settings";
 
 type PlayMode = "online" | "offline";
 
@@ -26,6 +27,7 @@ export default function PlayRoom({
     itemCount: number;
     isOwner: boolean;
     slug: string;
+    initialOfflineVoiceReading?: OfflineVoiceReading;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
@@ -40,24 +42,19 @@ export default function PlayRoom({
 
     useEffect(() => {
         let active = true;
-
         void Promise.resolve().then(() => {
             if (!active) return;
             try {
-                setDisplayName(
-                    window.localStorage.getItem("display-name") ?? "",
-                );
+                setDisplayName(window.localStorage.getItem("display-name") ?? "");
             } catch (reason) {
                 console.error("Failed to load display name:", reason);
             }
         });
-
         if (alreadyAuthorized) {
             return () => {
                 active = false;
             };
         }
-
         getRoomStatusFromId(roomId)
             .then((result) => {
                 if (!active) return;
@@ -74,39 +71,28 @@ export default function PlayRoom({
                 setRoomLoading(false);
                 setError("ルーム情報を取得できませんでした。");
             });
-
         return () => {
             active = false;
         };
     }, [roomId, alreadyAuthorized]);
 
     const navigateToMode = (mode: PlayMode) => {
-        posthog.capture("room_entered", {
-            room_id: roomId,
-            play_mode: mode,
-        });
+        posthog.capture("room_entered", { room_id: roomId, play_mode: mode });
         startNavigationProgress();
         router.push("/" + roomId + "/" + mode);
     };
 
-    const handleSignIn = async (
-        turnstileToken: string | undefined,
-        mode: PlayMode,
-    ) => {
+    const handleSignIn = async (turnstileToken: string | undefined, mode: PlayMode) => {
         if (itemCount === 0) {
-            setError(
-                "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。",
-            );
+            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
             return;
         }
         if (mode === "online" && !displayName.trim()) {
             setError("表示名を入力してください。");
             return;
         }
-
         setJoining(mode);
         setError("");
-
         if (mode === "online") {
             try {
                 localStorage.setItem("display-name", displayName.trim());
@@ -115,21 +101,15 @@ export default function PlayRoom({
             }
             posthog.capture("display_name_set");
         }
-
         try {
             const result = await signInToRoom(
-                {
-                    id: roomId,
-                    password: showPasswordField ? roomPassword : "",
-                },
+                { id: roomId, password: showPasswordField ? roomPassword : "" },
                 turnstileToken,
             );
-
             if (result === null) {
                 navigateToMode(mode);
                 return;
             }
-
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
                 play_mode: mode,
@@ -146,16 +126,13 @@ export default function PlayRoom({
 
     const handleContinue = (mode: PlayMode) => {
         if (itemCount === 0) {
-            setError(
-                "このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。",
-            );
+            setError("このルームには単語がありません。ルームの所有者が単語を追加するまでプレイできません。");
             return;
         }
         if (mode === "online" && !displayName.trim()) {
             setError("表示名を入力してください。");
             return;
         }
-
         setError("");
         if (showPasswordField && !alreadyAuthorized) {
             setTurnstileMode(mode);
@@ -169,7 +146,6 @@ export default function PlayRoom({
         const isOnline = mode === "online";
         const title = isOnline ? "オンライン" : "オフライン";
         const isActive = activeDialog === mode;
-
         return (
             <MorphDialog
                 key={mode}
@@ -177,10 +153,7 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
-                            if (
-                                mode === "offline" &&
-                                (!showPasswordField || alreadyAuthorized)
-                            ) {
+                            if (mode === "offline" && (!showPasswordField || alreadyAuthorized)) {
                                 handleContinue(mode);
                             } else {
                                 setActiveDialog(mode);
@@ -211,15 +184,12 @@ export default function PlayRoom({
                     <Input
                         value={roomPassword}
                         type="password"
-                        onChange={(event) =>
-                            setRoomPassword(event.target.value)
-                        }
+                        onChange={(event) => setRoomPassword(event.target.value)}
                         label="ルームのパスワード"
                         disabled={joining !== null}
                         autoComplete="current-password"
                     />
                 )}
-
                 {isOnline && (
                     <Input
                         value={displayName}
@@ -229,22 +199,16 @@ export default function PlayRoom({
                         autoComplete="name"
                     />
                 )}
-
                 {error && isActive && (
-                    <p className="w-full text-sm text-red-500" role="alert">
-                        {error}
-                    </p>
+                    <p className="w-full text-sm text-red-500" role="alert">{error}</p>
                 )}
-
                 <Button
                     onClick={() => handleContinue(mode)}
                     className="w-full"
                     variant="primary"
                     disabled={
                         joining !== null ||
-                        (showPasswordField &&
-                            !alreadyAuthorized &&
-                            !roomPassword) ||
+                        (showPasswordField && !alreadyAuthorized && !roomPassword) ||
                         (isOnline && !displayName.trim())
                     }
                     loading={joining === mode}
@@ -261,18 +225,14 @@ export default function PlayRoom({
             {!roomLoading && (
                 <>
                     {itemCount === 0 && (
-                        <p className="w-full text-start text-sm opacity-70">
-                            このルームには単語がありません。
-                        </p>
+                        <p className="w-full text-start text-sm opacity-70">このルームには単語がありません。</p>
                     )}
-
                     <div className="grid w-full grid-cols-2 gap-4">
                         {renderModeDialog("online")}
                         {renderModeDialog("offline")}
                     </div>
                 </>
             )}
-
             {isOwner && (
                 <Button
                     onClick={() => {
@@ -285,13 +245,9 @@ export default function PlayRoom({
                     ルームを編集
                 </Button>
             )}
-
             {error && !activeDialog && !turnstile && (
-                <p className="w-full text-sm text-red-500" role="alert">
-                    {error}
-                </p>
+                <p className="w-full text-sm text-red-500" role="alert">{error}</p>
             )}
-
             <PopUp show={turnstile}>
                 <TurnstileChallenge
                     onSuccess={(token) => {
