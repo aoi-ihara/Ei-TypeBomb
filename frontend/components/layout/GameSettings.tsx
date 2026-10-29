@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import Button from "@/components/ui/Button";
 import MorphDialog from "@/components/ui/MorphDialog";
 import Toggle from "@/components/ui/Toggle";
+import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
 
 type Props = {
     backgroundMusic: boolean;
@@ -20,7 +22,9 @@ export default function GameSettings({
     onSoundEffectsChange,
     placement = "inline",
 }: Readonly<Props>) {
+    const pathname = usePathname();
     const [showSettings, setShowSettings] = useState(false);
+    const isOfflineGame = pathname?.endsWith("/offline") ?? false;
 
     return (
         <div
@@ -60,6 +64,7 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
+                {isOfflineGame && <OfflineVoicePicker />}
                 <Button
                     className="w-full"
                     variant="primary"
