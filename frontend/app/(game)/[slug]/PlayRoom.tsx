@@ -11,8 +11,6 @@ import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
 import posthog from "posthog-js";
-import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
-import type { OfflineVoiceReading } from "@/lib/settings";
 
 type PlayMode = "online" | "offline";
 
@@ -22,14 +20,12 @@ export default function PlayRoom({
     itemCount,
     isOwner,
     slug,
-    initialOfflineVoiceReading,
 }: {
     roomId: string;
     alreadyAuthorized: boolean;
     itemCount: number;
     isOwner: boolean;
     slug: string;
-    initialOfflineVoiceReading: OfflineVoiceReading;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
@@ -274,10 +270,6 @@ export default function PlayRoom({
                         {renderModeDialog("online")}
                         {renderModeDialog("offline")}
                     </div>
-
-                    <OfflineVoicePicker
-                        initialValue={initialOfflineVoiceReading}
-                    />
                 </>
             )}
 
