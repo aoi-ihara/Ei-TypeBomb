@@ -33,6 +33,5 @@ ALTER TABLE public.ei_typebomb_rooms
 COMMENT ON COLUMN public.ei_typebomb_rooms.visibility IS
     'Room visibility: public, unlisted, or private.';
 
--- is_public is no longer needed once visibility has been backfilled.
-ALTER TABLE public.ei_typebomb_rooms
-    DROP COLUMN is_public;
+-- Keep is_public temporarily for rollback compatibility.
+-- New application code uses visibility as the source of truth and mirrors is_public on updates.
