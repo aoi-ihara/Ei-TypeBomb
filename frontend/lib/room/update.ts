@@ -107,8 +107,12 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (shouldUpdatePassword) updateData.password = newHashedPassword;
 
+    if (validationErrors.length > 0) {
+        return validationErrors.join("\n");
+    }
+
     if (Object.keys(updateData).length === 0) {
-        return validationErrors.length > 0 ? validationErrors.join("\n") : null;
+        return null;
     }
 
     const userId = await getUser();
