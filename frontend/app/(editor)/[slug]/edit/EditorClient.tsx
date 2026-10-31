@@ -222,7 +222,7 @@ export default function EditorClient({
         roomDataRef.current = {
             roomTitle,
             roomExplanation,
-                maxPlayers,
+            maxPlayers,
             gameDuration,
             bombCount,
             items,
@@ -562,9 +562,9 @@ export default function EditorClient({
                 >
                     <div className="w-8 h-10 flex justify-center items-center">
                         {roomIsPublic ? (
-                            <Icon name="lock" />
-                        ) : (
                             <Icon name="earth" />
+                        ) : (
+                            <Icon name="lock" />
                         )}
                     </div>
                 </Button>
