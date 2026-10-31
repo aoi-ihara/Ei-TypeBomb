@@ -1112,6 +1112,11 @@ export default function Client({
                 }
             />
             <header className="w-full flex absolute justify-end p-4 gap-4">
+                <div>
+                    <OfflineVoicePicker
+                        initialValue={initialOfflineVoiceReading}
+                    />
+                </div>
                 <GameSettings
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
@@ -1138,11 +1143,6 @@ export default function Client({
                         });
                     }}
                 />
-                <div>
-                    <OfflineVoicePicker
-                        initialValue={initialOfflineVoiceReading}
-                    />
-                </div>
             </header>
         </>
     );
