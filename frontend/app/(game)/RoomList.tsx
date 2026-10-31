@@ -58,7 +58,7 @@ export default function RoomList({
     const navigationItems: {
         value: View;
         label: string;
-        iconName: "wandSparkles" | "layoutGrid" | "archive";
+        iconName: string;
     }[] = currentUser
         ? [
               {
