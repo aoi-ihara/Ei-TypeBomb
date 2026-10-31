@@ -108,7 +108,7 @@ export default function RoomList({
         if (view === "saved") {
             return rooms.filter((room) => savedRoomIds.includes(room.id));
         }
-        return rooms.filter((room) => room.isPublic);
+        return rooms.filter((room) => room.visibility === "public");
     }, [view, myRooms, rooms, savedRoomIds]);
 
     const filteredRooms = useMemo(() => {
