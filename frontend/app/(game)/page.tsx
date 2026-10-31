@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getUserDetails } from "@/lib/auth/session";
 import { getMyRooms, getPublicRooms } from "@/lib/room/get";
+import { getSavedRoomIds } from "@/lib/room/save";
 import RoomList from "./RoomList";
 
 export default async function Page({
@@ -19,9 +20,10 @@ export default async function Page({
                 ? "me"
                 : "public";
 
-    const [publicRooms, currentUser] = await Promise.all([
+    const [publicRooms, currentUser, savedRoomIds] = await Promise.all([
         getPublicRooms(),
         getUserDetails(),
+        getSavedRoomIds(),
     ]);
 
     const myRoomsResult =
@@ -33,6 +35,7 @@ export default async function Page({
             myRooms={myRoomsResult?.rooms ?? []}
             initialView={initialView}
             currentUser={currentUser}
+            initialSavedRoomIds={savedRoomIds}
         />
     );
 }

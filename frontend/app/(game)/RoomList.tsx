@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
+import { toggleSavedRoom } from "@/lib/room/save";
 import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
@@ -28,9 +29,8 @@ type Props = {
     myRooms: Room[];
     initialView: "public" | "me";
     currentUser: CurrentUser | null;
+    initialSavedRoomIds: string[];
 };
-
-const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
 
 const getViewFromSearchParams = (searchParams: URLSearchParams): View => {
     const filter = searchParams.get("filter");
@@ -44,6 +44,7 @@ export default function RoomList({
     myRooms,
     initialView,
     currentUser,
+    initialSavedRoomIds,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
@@ -53,7 +54,7 @@ export default function RoomList({
         initialView === "me" ? "mine" : "recommended",
     );
     const [keyword, setKeyword] = useState("");
-    const [savedRoomIds, setSavedRoomIds] = useState<string[]>([]);
+    const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
     const navigationItems: {
         value: View;
         label: string;
@@ -66,7 +67,7 @@ export default function RoomList({
                   iconName: "wandSparkles",
               },
               { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
-              { value: "saved", label: "保存", iconName: "archive" },
+              { value: "saved", label: "保存済み", iconName: "bookmark" },
           ]
         : [
               {
@@ -132,7 +133,9 @@ export default function RoomList({
     }, [roomsInView, keyword]);
 
     const selectView = (nextView: View) => {
-        if (nextView === "mine" && !currentUser) return;
+        if ((nextView === "mine" || nextView === "saved") && !currentUser) {
+            return;
+        }
 
         if (nextView === view) return;
 
@@ -158,7 +161,7 @@ export default function RoomList({
                 new URLSearchParams(window.location.search),
             );
 
-            if (nextView === "mine" && !currentUser) {
+            if ((nextView === "mine" || nextView === "saved") && !currentUser) {
                 setView("recommended");
                 return;
             }
@@ -170,77 +173,33 @@ export default function RoomList({
         return () => window.removeEventListener("popstate", handlePopState);
     }, [currentUser]);
 
-    useEffect(() => {
-        let active = true;
+    const toggleSavedRoomState = async (roomId: string) => {
+        if (!currentUser) return;
 
-        // Read browser storage in a deferred task instead of synchronously
-        // scheduling a state update inside the effect body.
-        void Promise.resolve()
-            .then(() => {
-                if (!active) return;
-
-                const stored = window.localStorage.getItem(
-                    SAVED_ROOMS_STORAGE_KEY,
-                );
-                if (!stored) return;
-
-                const parsed: unknown = JSON.parse(stored);
-                if (!Array.isArray(parsed)) return;
-
-                setSavedRoomIds(
-                    Array.from(
-                        new Set(
-                            parsed.filter(
-                                (value): value is string =>
-                                    typeof value === "string",
-                            ),
-                        ),
-                    ),
-                );
-            })
-            .catch((error: unknown) => {
-                console.error("Failed to load saved rooms:", error);
-            });
-
-        return () => {
-            active = false;
-        };
-    }, []);
-
-    const toggleSavedRoom = (roomId: string) => {
-        let currentSavedIds = savedRoomIds;
-
-        try {
-            const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
-            if (stored) {
-                const parsed: unknown = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                    currentSavedIds = parsed.filter(
-                        (value): value is string => typeof value === "string",
-                    );
-                }
-            }
-        } catch {}
-
-        const wasSaved = currentSavedIds.includes(roomId);
+        const wasSaved = savedRoomIds.includes(roomId);
         const nextSavedIds = wasSaved
-            ? currentSavedIds.filter((id) => id !== roomId)
-            : Array.from(new Set([...currentSavedIds, roomId]));
+            ? savedRoomIds.filter((id) => id !== roomId)
+            : Array.from(new Set([...savedRoomIds, roomId]));
 
         setSavedRoomIds(nextSavedIds);
 
-        try {
-            window.localStorage.setItem(
-                SAVED_ROOMS_STORAGE_KEY,
-                JSON.stringify(nextSavedIds),
-            );
-        } catch (error) {
-            console.error("Failed to save room list:", error);
+        const result = await toggleSavedRoom(roomId);
+        if (result.error) {
+            setSavedRoomIds((current) => {
+                if (wasSaved) {
+                    return current.includes(roomId)
+                        ? current
+                        : [...current, roomId];
+                }
+                return current.filter((id) => id !== roomId);
+            });
+            console.error(result.error);
+            return;
         }
 
         posthog.capture("room_saved_toggled", {
             room_id: roomId,
-            saved: !wasSaved,
+            saved: result.saved,
         });
     };
 
@@ -414,8 +373,11 @@ export default function RoomList({
                                     room={room}
                                     isOwner={myRoomIds.has(room.id)}
                                     isSaved={savedRoomIds.includes(room.id)}
-                                    onToggleSaved={() =>
-                                        toggleSavedRoom(room.id)
+                                    onToggleSaved={
+                                        currentUser
+                                            ? () =>
+                                                  toggleSavedRoomState(room.id)
+                                            : undefined
                                     }
                                 />
                             ))}
