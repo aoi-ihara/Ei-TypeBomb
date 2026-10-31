@@ -68,6 +68,8 @@ export const updateRoomFromId = async (room: Room) => {
             validationErrors.push("公開設定が正しくありません。");
         } else {
             updateData.visibility = room.visibility;
+            // Keep the legacy flag synchronized for safe rollback compatibility.
+            updateData.is_public = room.visibility === "public";
         }
     }
 
