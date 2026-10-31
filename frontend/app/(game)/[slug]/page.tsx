@@ -44,7 +44,7 @@ export default async function RoomPage({
             title={title}
             className="grid sm:grid-cols-2 gap-4 px-4"
             showBackButton
-            size="large"
+            size="xlarge"
             animateAppear
         >
             <div className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">

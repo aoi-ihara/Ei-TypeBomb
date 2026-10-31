@@ -266,7 +266,7 @@ export default function PlayRoom({
                 <>
                     {itemCount === 0 && (
                         <p className="w-full text-start text-sm opacity-70">
-                            このルームには単語がありません。
+                            単語がありません。
                         </p>
                     )}
 
