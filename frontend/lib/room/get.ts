@@ -244,7 +244,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public, is_unlisted",
         )
         .eq("user_id", userId);
 
@@ -265,6 +265,7 @@ export const getMyRooms = async () => {
         items: [],
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
         isPublic: room.is_public,
+        isUnlisted: room.is_unlisted,
     }));
 
     serverLog("DB", "rooms fetched", { count: rooms.length });

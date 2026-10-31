@@ -42,6 +42,7 @@ export type Room = {
     typingFocusPlayerId?: string;
     typingFocusInput?: string;
     isPublic?: boolean;
+    isUnlisted?: boolean;
 };
 
 export type User = {
