@@ -1,31 +1,40 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import posthog from "posthog-js";
 import Picker from "@/components/ui/Picker";
 import type { OfflineVoiceReading } from "@/lib/settings";
-import posthog from "posthog-js";
 
 type Props = {
     initialValue: OfflineVoiceReading;
 };
 
-const voiceReadings: OfflineVoiceReading[] = ["none", "question", "answer"];
-const voiceReadingLabels = ["なし", "問題", "回答"];
+const VOICE_READING_OPTIONS: ReadonlyArray<{
+    value: OfflineVoiceReading;
+    label: string;
+}> = [
+    { value: "none", label: "なし" },
+    { value: "question", label: "問題" },
+    { value: "answer", label: "回答" },
+];
 
 export default function OfflineVoicePicker({ initialValue }: Readonly<Props>) {
+    const router = useRouter();
     const [value, setValue] = useState(initialValue);
 
     const handleSelected = (index: number) => {
-        const nextValue = voiceReadings[index] ?? "none";
+        const nextValue = VOICE_READING_OPTIONS[index]?.value ?? "none";
         setValue(nextValue);
-        document.cookie =
-            "offline-voice-reading=" +
-            nextValue +
-            "; path=/; max-age=31536000; SameSite=Lax";
+        document.cookie = `offline-voice-reading=${nextValue}; path=/; max-age=31536000; SameSite=Lax`;
         posthog.capture("settings_changed", {
             setting: "offline_voice_reading",
             value: nextValue,
         });
+
+        // Refresh the server component so the offline game's speech setting
+        // receives the newly saved cookie without restarting the game.
+        router.refresh();
     };
 
     return (
@@ -34,10 +43,12 @@ export default function OfflineVoicePicker({ initialValue }: Readonly<Props>) {
                 name="読み上げ（オフライン）"
                 labelPrefix="読み上げ（オフライン）"
                 padding="small"
-                items={voiceReadingLabels}
-                selection={voiceReadings.indexOf(value)}
+                items={VOICE_READING_OPTIONS.map(({ label }) => label)}
+                selection={VOICE_READING_OPTIONS.findIndex(
+                    ({ value: optionValue }) => optionValue === value,
+                )}
                 onSelected={handleSelected}
-                itemIcons={[null, null, null]}
+                itemIcons={VOICE_READING_OPTIONS.map(() => null)}
             />
         </div>
     );
