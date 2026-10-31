@@ -33,5 +33,48 @@ ALTER TABLE public.ei_typebomb_rooms
 COMMENT ON COLUMN public.ei_typebomb_rooms.visibility IS
     'Room visibility: public, unlisted, or private.';
 
+-- Keep legacy clients compatible while deployments roll forward.
+-- Application code uses visibility as the source of truth; this trigger only
+-- translates writes made by older clients that still update is_public/password.
+CREATE OR REPLACE FUNCTION public.sync_ei_typebomb_room_visibility_legacy()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.is_public IS TRUE THEN
+            NEW.visibility := 'public';
+            NEW.password := NULL;
+        ELSIF NEW.password IS NOT NULL THEN
+            NEW.visibility := 'private';
+        ELSE
+            NEW.visibility := COALESCE(NEW.visibility, 'unlisted');
+        END IF;
+    ELSIF NEW.visibility IS NOT DISTINCT FROM OLD.visibility
+        AND (
+            NEW.is_public IS DISTINCT FROM OLD.is_public
+            OR NEW.password IS DISTINCT FROM OLD.password
+        )
+    THEN
+        IF NEW.is_public IS TRUE THEN
+            NEW.visibility := 'public';
+            NEW.password := NULL;
+        ELSIF NEW.password IS NULL THEN
+            NEW.visibility := 'unlisted';
+        ELSE
+            NEW.visibility := 'private';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$;
+
+CREATE TRIGGER ei_typebomb_rooms_sync_visibility_legacy
+BEFORE INSERT OR UPDATE OF is_public, password, visibility
+ON public.ei_typebomb_rooms
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_ei_typebomb_room_visibility_legacy();
+
 -- Keep is_public temporarily for rollback compatibility.
 -- New application code uses visibility as the source of truth and mirrors is_public on updates.
