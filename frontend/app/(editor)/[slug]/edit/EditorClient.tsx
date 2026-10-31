@@ -94,8 +94,7 @@ export default function EditorClient({
     initialRoom: Room;
 }) {
     const router = useRouter();
-    const initialIsPublic =
-        initialRoom.isPublic ?? !initialRoom.password;
+    const initialIsPublic = initialRoom.isPublic ?? !initialRoom.password;
 
     const [roomExplanation, setRoomExplanation] = useState(
         initialRoom.explanation ?? "",
@@ -358,9 +357,7 @@ export default function EditorClient({
     };
 
     const openVisibilitySettings = () => {
-        setVisibilitySelection(
-            roomIsPublic ? 0 : hasRoomPassword ? 2 : 1,
-        );
+        setVisibilitySelection(roomIsPublic ? 0 : hasRoomPassword ? 2 : 1);
         setNewPassword("");
         setConfirmPassword("");
         setVisibilityError("");
@@ -379,7 +376,9 @@ export default function EditorClient({
         const isPublic = visibilitySelection === 0;
 
         if (requiresPassword && !newPassword.trim()) {
-            setVisibilityError("非公開にするにはパスワードを入力してください。");
+            setVisibilityError(
+                "非公開にするにはパスワードを入力してください。",
+            );
             return;
         }
 
@@ -401,7 +400,9 @@ export default function EditorClient({
             updateError = await updateRoomFromId(request);
         } catch (error) {
             console.error("Failed to update room visibility:", error);
-            setVisibilityError("公開設定を保存できませんでした。もう一度お試しください。");
+            setVisibilityError(
+                "公開設定を保存できませんでした。もう一度お試しください。",
+            );
             return;
         } finally {
             setIsUpdatingVisibilitySettings(false);
@@ -800,23 +801,20 @@ export default function EditorClient({
                         }}
                     />
 
-                    {visibilitySelection === 2 && (
-                        <>
-                            <Input
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                label="パスワード"
-                                type="password"
-                            />
-
-                            <Input
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                label="パスワードの確認"
-                                type="password"
-                            />
-                        </>
-                    )}
+                    <Input
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        label="パスワード"
+                        type="password"
+                        disabled={visibilitySelection !== 2}
+                    />
+                    <Input
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        label="パスワードの確認"
+                        type="password"
+                        disabled={visibilitySelection !== 2}
+                    />
 
                     <div className="flex gap-4 w-full">
                         <Button
