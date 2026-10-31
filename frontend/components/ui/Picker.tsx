@@ -12,6 +12,7 @@ export type PickerProps = {
     selection: number;
     onSelected: (index: number) => void;
     itemIcons: (string | null)[];
+    padding?: "small" | "middle" | "large";
 };
 
 export default function Picker({
@@ -21,6 +22,7 @@ export default function Picker({
     selection,
     onSelected,
     itemIcons,
+    padding = "large",
 }: PickerProps) {
     const [open, setOpen] = useState(false);
     const [raised, setRaised] = useState(false);
@@ -68,9 +70,7 @@ export default function Picker({
                 Math.max(centerY, top + menuHeight / 2),
                 top + height - menuHeight / 2,
             );
-            // Tell the cursor where the menu will END UP, not where the
-            // dock currently is during its CSS transition. The cursor's
-            // existing springs animate to this destination independently.
+
             dock.dataset.morphCursorX = String(open ? x : centerX);
             dock.dataset.morphCursorY = String(open ? y : centerY);
             dock.style.transform = open
@@ -167,7 +167,7 @@ export default function Picker({
             >
                 <Button
                     iconName="chevronsUpDown"
-                    padding="large"
+                    padding={padding}
                     className="w-full"
                 >
                     <span>{triggerLabel}</span>
@@ -210,7 +210,7 @@ export default function Picker({
                                     setOpen(true);
                                 }}
                                 aria-haspopup="menu"
-                                padding="large"
+                                padding={padding}
                                 alignment="left"
                                 aria-expanded={open}
                                 aria-controls={menuId}

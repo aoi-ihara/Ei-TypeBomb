@@ -424,7 +424,7 @@ export default function RoomList({
                             iconName="plus"
                             className="w-fit shrink-0"
                         >
-                            ルームを作成
+                            新規作成
                         </Button>
                     </div>
 
@@ -456,26 +456,7 @@ export default function RoomList({
                             ))}
                         </div>
                     ) : (
-                        <div className="rounded-xl bg-(--color-background-secondary) px-6 py-12 text-center">
-                            <p className="font-semibold">
-                                {keyword.trim()
-                                    ? "検索結果がありません"
-                                    : view === "mine"
-                                      ? "まだルームがありません"
-                                      : view === "saved"
-                                        ? "保存したルームはありません"
-                                        : "公開ルームはまだありません"}
-                            </p>
-                            <p className="mt-2 text-sm opacity-60">
-                                {keyword.trim()
-                                    ? "別のキーワードで検索してみてください。"
-                                    : view === "mine"
-                                      ? "ルームを作成して、単語リストを準備しましょう。"
-                                      : view === "saved"
-                                        ? "気になるルームの「保存」を押すと、ここに表示されます。"
-                                        : "公開されたルームがここに表示されます。"}
-                            </p>
-                        </div>
+                        <div>ルームが見つかりません。</div>
                     )}
                 </Shell>
             </div>

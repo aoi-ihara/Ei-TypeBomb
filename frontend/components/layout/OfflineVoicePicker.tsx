@@ -33,6 +33,7 @@ export default function OfflineVoicePicker({ initialValue }: Readonly<Props>) {
             <Picker
                 name="読み上げ（オフライン）"
                 labelPrefix="読み上げ（オフライン）"
+                padding="small"
                 items={voiceReadingLabels}
                 selection={voiceReadings.indexOf(value)}
                 onSelected={handleSelected}

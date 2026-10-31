@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
-import { parseOfflineVoiceReading } from "@/lib/settings";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import { getRoomPlayInfoFromId, getRoomSummaryFromId } from "@/lib/room/get";
@@ -26,28 +25,31 @@ export default async function RoomPage({
         );
     }
 
-    const [result, cookieStore] = await Promise.all([
-        getRoomSummaryFromId(slug),
-        cookies(),
-    ]);
+    const [result] = await Promise.all([getRoomSummaryFromId(slug), cookies()]);
     if (!result) notFound();
-    const initialOfflineVoiceReading = parseOfflineVoiceReading(
-        cookieStore.get("offline-voice-reading")?.value,
-    );
 
     const { room } = result;
     const itemCount = result.itemCount;
     const isOwner = result.isOwner;
 
     return (
-        <Shell title={title} showBackButton size="medium" animateAppear>
-            {room.explanation && (
-                <p className="w-full text-start" data-cursor="text">
-                    {room.explanation}
-                </p>
-            )}
-
+        <Shell
+            title={title}
+            className="grid sm:grid-cols-2 gap-4 px-4"
+            showBackButton
+            size="xlarge"
+            animateAppear
+        >
             <div className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+                {room.explanation && (
+                    <div
+                        className="line-clamp-3 wrap-anywhere"
+                        data-cursor="text"
+                    >
+                        {room.explanation}
+                    </div>
+                )}
+
                 <div className="flex items-end gap-2 font-bold">
                     <Icon name={room.isPublic ? "earth" : "lock"} />
                     <span
@@ -92,7 +94,6 @@ export default async function RoomPage({
                 itemCount={itemCount}
                 isOwner={isOwner}
                 slug={slug}
-                initialOfflineVoiceReading={initialOfflineVoiceReading}
             />
         </Shell>
     );

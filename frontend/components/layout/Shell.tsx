@@ -5,7 +5,7 @@ type AuthShellProps = {
     title?: string;
     children?: React.ReactNode;
     className?: string;
-    size?: "large" | "small" | "medium";
+    size?: "small" | "medium" | "large" | "xlarge";
     loading?: boolean;
     animateAppear?: boolean;
     showBackButton?: boolean;
@@ -48,11 +48,13 @@ export default function Shell({
 
             <div
                 className={`pb-[50vh] ${
-                    size === "medium"
-                        ? "max-w-md"
-                        : size === "large"
-                          ? "max-w-2xl"
-                          : "max-w-xs"
+                    size == "small"
+                        ? "max-w-xs"
+                        : size === "medium"
+                          ? "max-w-md"
+                          : size === "large"
+                            ? "max-w-2xl"
+                            : "max-w-4xl"
                 } w-full ${className} ${
                     animateAppear && "animate-appear origin-top"
                 }`}

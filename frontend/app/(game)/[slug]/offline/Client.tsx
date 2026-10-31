@@ -39,6 +39,7 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
+import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
 
 type Props = {
     room: Room;
@@ -1111,6 +1112,11 @@ export default function Client({
                 }
             />
             <header className="w-full flex absolute justify-end p-4 gap-4">
+                <div>
+                    <OfflineVoicePicker
+                        initialValue={initialOfflineVoiceReading}
+                    />
+                </div>
                 <GameSettings
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
