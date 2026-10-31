@@ -6,7 +6,6 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
-import GameSettings from "@/components/layout/GameSettings";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -29,8 +28,6 @@ type Props = {
     myRooms: Room[];
     initialView: "public" | "me";
     currentUser: CurrentUser | null;
-    initialBackgroundMusic: boolean;
-    initialSoundEffects: boolean;
 };
 
 const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
@@ -57,17 +54,11 @@ export default function RoomList({
     myRooms,
     initialView,
     currentUser,
-    initialBackgroundMusic,
-    initialSoundEffects,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
     const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
-    const [backgroundMusic, setBackgroundMusic] = useState(
-        initialBackgroundMusic,
-    );
-    const [soundEffects, setSoundEffects] = useState(initialSoundEffects);
     const [view, setView] = useState<View>(
         initialView === "me" ? "mine" : "recommended",
     );
@@ -259,14 +250,6 @@ export default function RoomList({
         });
     }, [currentUser]);
 
-    const setCookie = (key: string, value: boolean) => {
-        document.cookie =
-            key +
-            "=" +
-            String(value) +
-            "; path=/; max-age=31536000; SameSite=Lax";
-    };
-
     const addRoom = async () => {
         if (creating) return;
         if (!currentUser) {
@@ -317,27 +300,7 @@ export default function RoomList({
     return (
         <>
             <header className="w-full flex justify-end p-4 gap-4">
-                <GameSettings
-                    backgroundMusic={backgroundMusic}
-                    soundEffects={soundEffects}
-                    onBackgroundMusicChange={(next) => {
-                        setBackgroundMusic(next);
-                        setCookie("background-music", next);
-                        posthog.capture("settings_changed", {
-                            setting: "background_music",
-                            value: next,
-                        });
-                    }}
-                    onSoundEffectsChange={(next) => {
-                        setSoundEffects(next);
-                        setCookie("sound-effects", next);
-                        posthog.capture("settings_changed", {
-                            setting: "sound_effects",
-                            value: next,
-                        });
-                    }}
-                />
-
+                {" "}
                 {currentUser ? (
                     <Menu
                         name="ユーザーアクション"

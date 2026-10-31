@@ -8,17 +8,8 @@ export default async function Page({
 }: {
     searchParams: Promise<{ filter?: string; owner?: string }>;
 }) {
-    const [{ filter, owner }, cookieStore] = await Promise.all([
-        searchParams,
-        cookies(),
-    ]);
-    const initialBackgroundMusic =
-        cookieStore.get("background-music")?.value !== "false";
-    const initialSoundEffects =
-        cookieStore.get("sound-effects")?.value !== "false";
+    const [{ filter, owner }] = await Promise.all([searchParams, cookies()]);
 
-    // Query filters initialize the list when arriving from another page.
-    // Keep supporting the old owner=me URL for existing bookmarks.
     const initialView =
         filter === "mine"
             ? "me"
@@ -42,8 +33,6 @@ export default async function Page({
             myRooms={myRoomsResult?.rooms ?? []}
             initialView={initialView}
             currentUser={currentUser}
-            initialBackgroundMusic={initialBackgroundMusic}
-            initialSoundEffects={initialSoundEffects}
         />
     );
 }
