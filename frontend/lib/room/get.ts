@@ -128,7 +128,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     const [{ data, error }, userId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
-            .select("id, title, user_id, password, items")
+            .select("id, title, user_id, password, explanation, is_public, items")
             .eq("id", id)
             .maybeSingle(),
         getUser(),
@@ -157,11 +157,37 @@ export const getRoomPlayInfoFromId = async (id: string) => {
         requiresPassword,
         authorized,
         title: canViewDetails ? data.title : undefined,
+        explanation: canViewDetails ? data.explanation : undefined,
+        isPublic: data.is_public,
         itemCount: canViewDetails
             ? Array.isArray(data.items)
                 ? data.items.length
                 : 0
             : 0,
+    };
+};
+
+export const getRoomMetadataFromId = async (id: string) => {
+    if (!isUUID(id, 4)) return null;
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("title, explanation, is_public, password")
+        .eq("id", id)
+        .maybeSingle();
+
+    if (error) {
+        serverError("failed to fetch room metadata", error, "DB");
+        return null;
+    }
+    if (!data) return null;
+
+    return {
+        title: data.title,
+        explanation: data.explanation,
+        isPublic: data.is_public,
+        hasPassword: Boolean(data.password),
     };
 };
 
