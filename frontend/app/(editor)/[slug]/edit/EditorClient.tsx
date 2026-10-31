@@ -43,6 +43,7 @@ import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
 import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
+import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 
 const EXAMPLES = [
@@ -93,14 +94,16 @@ export default function EditorClient({
     initialRoom: Room;
 }) {
     const router = useRouter();
+    const initialIsPublic = initialRoom.isPublic ?? !initialRoom.password;
 
     const [roomExplanation, setRoomExplanation] = useState(
         initialRoom.explanation ?? "",
     );
     const [roomTitle, setRoomTitle] = useState(initialRoom.title ?? "");
-    const [roomPassword, setRoomPassword] = useState(
-        initialRoom.password ?? "",
+    const [hasRoomPassword, setHasRoomPassword] = useState(
+        Boolean(initialRoom.password),
     );
+    const [roomIsPublic, setRoomIsPublic] = useState(initialIsPublic);
     const [gameDuration, setGameDuration] = useState(
         initialRoom.gameDuration ?? 20,
     );
@@ -129,8 +132,8 @@ export default function EditorClient({
     const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
 
     const [newPassword, setNewPassword] = useState("");
-    const [isPrivate, setIsPrivate] = useState(
-        initialRoom.isPublic === false || Boolean(initialRoom.password),
+    const [visibilitySelection, setVisibilitySelection] = useState(
+        initialIsPublic ? 0 : initialRoom.password ? 2 : 1,
     );
     const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -206,7 +209,6 @@ export default function EditorClient({
     const roomDataRef = useRef({
         roomTitle,
         roomExplanation,
-        roomPassword,
         maxPlayers,
         gameDuration,
         bombCount,
@@ -219,7 +221,6 @@ export default function EditorClient({
         roomDataRef.current = {
             roomTitle,
             roomExplanation,
-            roomPassword,
             maxPlayers,
             gameDuration,
             bombCount,
@@ -230,7 +231,6 @@ export default function EditorClient({
     }, [
         roomTitle,
         roomExplanation,
-        roomPassword,
         maxPlayers,
         gameDuration,
         bombCount,
@@ -356,6 +356,14 @@ export default function EditorClient({
         setShowImportInput(false);
     };
 
+    const openVisibilitySettings = () => {
+        setVisibilitySelection(roomIsPublic ? 0 : hasRoomPassword ? 2 : 1);
+        setNewPassword("");
+        setConfirmPassword("");
+        setVisibilityError("");
+        setShowVisibilitySettings(true);
+    };
+
     const handleVisibilityUpdate = async () => {
         setVisibilityError("");
 
@@ -364,33 +372,57 @@ export default function EditorClient({
             return;
         }
 
-        if (newPassword !== confirmPassword && isPrivate) {
+        const requiresPassword = visibilitySelection === 2;
+        const isPublic = visibilitySelection === 0;
+
+        if (requiresPassword && !newPassword.trim()) {
+            setVisibilityError(
+                "非公開にするにはパスワードを入力してください。",
+            );
+            return;
+        }
+
+        if (requiresPassword && newPassword !== confirmPassword) {
             setVisibilityError("パスワードが一致しません。");
             return;
         }
 
-        console.log(slug);
-
         const request: Room = {
             id: slug,
-            password: isPrivate ? newPassword : null,
-            isPublic: !isPrivate,
+            password: requiresPassword ? newPassword : null,
+            isPublic,
         };
 
         setIsUpdatingVisibilitySettings(true);
-        const updateError = await updateRoomFromId(request);
-        setIsUpdatingVisibilitySettings(false);
+        let updateError: string | null = null;
 
-        if (updateError) setVisibilityError(updateError);
-        else {
-            posthog.capture("room_visibility_changed", {
-                room_id: slug,
-                is_private: isPrivate,
-            });
-
-            setRoomPassword(isPrivate ? "" : newPassword);
-            setShowVisibilitySettings(false);
+        try {
+            updateError = await updateRoomFromId(request);
+        } catch (error) {
+            console.error("Failed to update room visibility:", error);
+            setVisibilityError(
+                "公開設定を保存できませんでした。もう一度お試しください。",
+            );
+            return;
+        } finally {
+            setIsUpdatingVisibilitySettings(false);
         }
+
+        if (updateError) {
+            setVisibilityError(updateError);
+            return;
+        }
+
+        posthog.capture("room_visibility_changed", {
+            room_id: slug,
+            is_private: requiresPassword,
+            is_public: isPublic,
+            visibility: ["public", "unlisted", "private"][visibilitySelection],
+        });
+
+        setRoomIsPublic(isPublic);
+        setHasRoomPassword(requiresPassword);
+        setShowVisibilitySettings(false);
     };
 
     const saveRoomData = (): Promise<boolean> => {
@@ -525,23 +557,15 @@ export default function EditorClient({
                     </div>
                 </Button>
                 <Button
-                    onClick={() => {
-                        if (roomPassword) setIsPrivate(true);
-                        else setIsPrivate(false);
-
-                        setNewPassword("");
-                        setConfirmPassword("");
-
-                        setShowVisibilitySettings(true);
-                    }}
+                    onClick={openVisibilitySettings}
                     variant="text"
                     className="h-full"
                 >
                     <div className="w-8 h-10 flex justify-center items-center">
-                        {roomPassword ? (
-                            <Icon name="lock" />
-                        ) : (
+                        {roomIsPublic ? (
                             <Icon name="earth" />
+                        ) : (
+                            <Icon name="lock" />
                         )}
                     </div>
                 </Button>
@@ -750,15 +774,7 @@ export default function EditorClient({
                 <MorphDialog
                     button={
                         <Button
-                            onClick={() => {
-                                if (roomPassword) setIsPrivate(true);
-                                else setIsPrivate(false);
-
-                                setNewPassword("");
-                                setConfirmPassword("");
-
-                                setShowVisibilitySettings(true);
-                            }}
+                            onClick={openVisibilitySettings}
                             className="w-full"
                             iconName="eye"
                         >
@@ -771,38 +787,33 @@ export default function EditorClient({
                     size="middle"
                     onClose={() => setShowVisibilitySettings(false)}
                 >
-                    <div className="w-full pl-2 items-center flex justify-between">
-                        <div data-cursor="text">ルームを非公開に設定する</div>
-                        <div data-cursor="button" className="rounded-full flex">
-                            <button
-                                className={`w-16 ${isPrivate ? "bg-cyan-600" : "bg-(--color-background-secondary)"} h-8 rounded-full p-1 transition-all duration-(--duration-etb) ease-etb active:scale-95`}
-                                onClick={() => {
-                                    const next = !isPrivate;
+                    <Selection
+                        items={["公開", "限定公開", "非公開"]}
+                        selection={visibilitySelection}
+                        onSelected={(index) => {
+                            setVisibilitySelection(index);
+                            setVisibilityError("");
 
-                                    setIsPrivate(next);
-                                }}
-                            >
-                                <div
-                                    className={`h-6 w-8 rounded-full bg-(--color-foreground) ${isPrivate && "ml-6"} transition-all duration-(--duration-etb) ease-etb`}
-                                ></div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <Input
-                        value={newPassword}
-                        disabled={!isPrivate}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        label="パスワード"
-                        type="password"
+                            if (index !== 2) {
+                                setNewPassword("");
+                                setConfirmPassword("");
+                            }
+                        }}
                     />
 
                     <Input
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        label="パスワード"
+                        type="password"
+                        disabled={visibilitySelection !== 2}
+                    />
+                    <Input
                         value={confirmPassword}
-                        disabled={!isPrivate}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         label="パスワードの確認"
                         type="password"
+                        disabled={visibilitySelection !== 2}
                     />
 
                     <div className="flex gap-4 w-full">
