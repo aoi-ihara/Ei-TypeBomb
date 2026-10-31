@@ -51,13 +51,25 @@ export default async function RoomPage({
                 )}
 
                 <div className="flex items-end gap-2 font-bold">
-                    <Icon name={room.isPublic ? "earth" : "lock"} />
+                    <Icon
+                        name={
+                            room.visibility === "public"
+                                ? "earth"
+                                : room.visibility === "unlisted"
+                                  ? "link"
+                                  : "lock"
+                        }
+                    />
                     <span
                         className="flex gap-1 items-center"
                         data-cursor="text"
                     >
                         <span className="font-bold font-mono">
-                            {room.isPublic ? "共有" : "非公開"}
+                            {room.visibility === "public"
+                                ? "公開"
+                                : room.visibility === "unlisted"
+                                  ? "限定公開"
+                                  : "非公開"}
                         </span>
                     </span>
                 </div>

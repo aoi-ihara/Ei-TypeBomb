@@ -38,7 +38,15 @@ export default function RoomCard({
         <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary)">
             <div className="flex flex-col gap-4">
                 <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
-                    <Icon name={room.isPublic ? "earth" : "lock"} />
+                    <Icon
+                        name={
+                            room.visibility === "public"
+                                ? "earth"
+                                : room.visibility === "unlisted"
+                                  ? "link"
+                                  : "lock"
+                        }
+                    />
                     <h2
                         className="min-w-0 flex-1 truncate font-bold"
                         data-cursor="text"

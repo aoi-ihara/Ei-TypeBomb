@@ -49,7 +49,7 @@ export const prepareRoomJoin = async (link: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("id, password")
+        .select("id, visibility")
         .eq("link", link)
         .maybeSingle();
 
@@ -61,7 +61,7 @@ export const prepareRoomJoin = async (link: string) => {
     }
     if (!data) return null;
 
-    if (!data.password) {
+    if (data.visibility !== "private") {
         await setAuthCookie(data.id);
         return { id: data.id, requiresPassword: false };
     }
@@ -103,7 +103,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase
             .from("ei_typebomb_rooms")
-            .select("id, password, user_id")
+            .select("id, visibility, user_id")
             .eq("id", room.id)
             .maybeSingle();
 
@@ -112,7 +112,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             return "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。";
         }
         if (!data) return "ルームが見つかりません。";
-        if (data.password) {
+        if (data.visibility === "private") {
             const userId = await getUser();
             const isOwner = Boolean(userId) && data.user_id === userId;
             if (!isOwner) {

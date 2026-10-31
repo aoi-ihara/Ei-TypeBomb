@@ -24,7 +24,12 @@ import {
     isAllowedTypingAnswer,
     exportAnswerPairs,
 } from "@/lib/room/importWords";
-import type { LegacyWord, Room, TypedRecallItem } from "@/type";
+import type {
+    LegacyWord,
+    Room,
+    RoomVisibility,
+    TypedRecallItem,
+} from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
@@ -45,6 +50,12 @@ import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
+
+const VISIBILITY_OPTIONS: RoomVisibility[] = [
+    "public",
+    "unlisted",
+    "private",
+];
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -94,16 +105,13 @@ export default function EditorClient({
     initialRoom: Room;
 }) {
     const router = useRouter();
-    const initialIsPublic = initialRoom.isPublic ?? !initialRoom.password;
-
     const [roomExplanation, setRoomExplanation] = useState(
         initialRoom.explanation ?? "",
     );
     const [roomTitle, setRoomTitle] = useState(initialRoom.title ?? "");
-    const [hasRoomPassword, setHasRoomPassword] = useState(
-        Boolean(initialRoom.password),
+    const [roomVisibility, setRoomVisibility] = useState<RoomVisibility>(
+        initialRoom.visibility ?? "unlisted",
     );
-    const [roomIsPublic, setRoomIsPublic] = useState(initialIsPublic);
     const [gameDuration, setGameDuration] = useState(
         initialRoom.gameDuration ?? 20,
     );
@@ -132,9 +140,8 @@ export default function EditorClient({
     const [showVisibilitySettings, setShowVisibilitySettings] = useState(false);
 
     const [newPassword, setNewPassword] = useState("");
-    const [visibilitySelection, setVisibilitySelection] = useState(
-        initialIsPublic ? 0 : initialRoom.password ? 2 : 1,
-    );
+    const [visibilitySelection, setVisibilitySelection] =
+        useState<RoomVisibility>(initialRoom.visibility ?? "unlisted");
     const [confirmPassword, setConfirmPassword] = useState("");
 
     const [isExported, setIsExported] = useState(false);
@@ -357,7 +364,7 @@ export default function EditorClient({
     };
 
     const openVisibilitySettings = () => {
-        setVisibilitySelection(roomIsPublic ? 0 : hasRoomPassword ? 2 : 1);
+        setVisibilitySelection(roomVisibility);
         setNewPassword("");
         setConfirmPassword("");
         setVisibilityError("");
@@ -372,25 +379,29 @@ export default function EditorClient({
             return;
         }
 
-        const requiresPassword = visibilitySelection === 2;
-        const isPublic = visibilitySelection === 0;
+        const isPrivate = visibilitySelection === "private";
+        const shouldSetPassword = isPrivate && Boolean(newPassword.trim());
 
-        if (requiresPassword && !newPassword.trim()) {
+        if (isPrivate && roomVisibility !== "private" && !shouldSetPassword) {
             setVisibilityError(
                 "非公開にするにはパスワードを入力してください。",
             );
             return;
         }
 
-        if (requiresPassword && newPassword !== confirmPassword) {
+        if (shouldSetPassword && newPassword !== confirmPassword) {
             setVisibilityError("パスワードが一致しません。");
             return;
         }
 
         const request: Room = {
             id: slug,
-            password: requiresPassword ? newPassword : null,
-            isPublic,
+            visibility: visibilitySelection,
+            ...(shouldSetPassword
+                ? { password: newPassword }
+                : isPrivate
+                  ? {}
+                  : { password: null }),
         };
 
         setIsUpdatingVisibilitySettings(true);
@@ -415,13 +426,12 @@ export default function EditorClient({
 
         posthog.capture("room_visibility_changed", {
             room_id: slug,
-            is_private: requiresPassword,
-            is_public: isPublic,
-            visibility: ["public", "unlisted", "private"][visibilitySelection],
+            is_private: isPrivate,
+            is_public: visibilitySelection === "public",
+            visibility: visibilitySelection,
         });
 
-        setRoomIsPublic(isPublic);
-        setHasRoomPassword(requiresPassword);
+        setRoomVisibility(visibilitySelection);
         setShowVisibilitySettings(false);
     };
 
@@ -562,8 +572,10 @@ export default function EditorClient({
                     className="h-full"
                 >
                     <div className="w-8 h-10 flex justify-center items-center">
-                        {roomIsPublic ? (
+                        {roomVisibility === "public" ? (
                             <Icon name="earth" />
+                        ) : roomVisibility === "unlisted" ? (
+                            <Icon name="link" />
                         ) : (
                             <Icon name="lock" />
                         )}
@@ -789,9 +801,11 @@ export default function EditorClient({
                 >
                     <Selection
                         items={["公開", "限定公開", "非公開"]}
-                        selection={visibilitySelection}
+                        selection={VISIBILITY_OPTIONS.indexOf(visibilitySelection)}
                         onSelected={(index) => {
-                            setVisibilitySelection(index);
+                            setVisibilitySelection(
+                                VISIBILITY_OPTIONS[index] ?? "unlisted",
+                            );
                             setVisibilityError("");
 
                             if (index !== 2) {
@@ -806,14 +820,14 @@ export default function EditorClient({
                         onChange={(e) => setNewPassword(e.target.value)}
                         label="パスワード"
                         type="password"
-                        disabled={visibilitySelection !== 2}
+                        disabled={visibilitySelection !== "private"}
                     />
                     <Input
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         label="パスワードの確認"
                         type="password"
-                        disabled={visibilitySelection !== 2}
+                        disabled={visibilitySelection !== "private"}
                     />
 
                     <div className="flex gap-4 w-full">

@@ -20,7 +20,7 @@ export default function Selection({
         <div className="relative flex w-full rounded-2xl bg-(--color-background-secondary) p-2">
             <div
                 className={`pointer-events-none absolute inset-y-2 rounded-lg bg-cyan-600 transition-all duration-(--duration-etb) ease-etb ${
-                    isPressed ? "scale-95" : ""
+                    isPressed && "scale-95"
                 }`}
                 style={{
                     left: `calc(0.5rem + ${selection} * ((100% - 1rem) / ${items.length}))`,
@@ -29,21 +29,24 @@ export default function Selection({
             />
 
             {items.map((item, index) => (
-                <Button
+                <div
                     key={item}
-                    className="z-10 w-full"
-                    variant="text"
-                    cursor={index === selection ? "0" : "1"}
-                    padding="small"
-                    onClick={() => onSelected(index)}
-                    onPointerDown={() => {
-                        if (index === selection) setIsPressed(true);
-                    }}
-                    onPointerUp={() => setIsPressed(false)}
-                    onPointerCancel={() => setIsPressed(false)}
+                    className="z-10 rounded-lg w-full"
+                    data-cursor="button"
+                    data-cursor-shape={index === selection ? "0" : "1"}
                 >
-                    {item}
-                </Button>
+                    <button
+                        className={`w-full p-1.5 font-bold rounded-lg transition-all duration-(--duration-etb) ease-etb active:scale-95 ${index === selection && "text-white"}`}
+                        onClick={() => onSelected(index)}
+                        onPointerDown={() => {
+                            if (index === selection) setIsPressed(true);
+                        }}
+                        onPointerUp={() => setIsPressed(false)}
+                        onPointerCancel={() => setIsPressed(false)}
+                    >
+                        {item}
+                    </button>
+                </div>
             ))}
         </div>
     );

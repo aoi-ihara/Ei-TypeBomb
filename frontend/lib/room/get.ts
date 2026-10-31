@@ -31,7 +31,7 @@ export const getRoomStatusFromId = async (id: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("id, password")
+        .select("id, visibility")
         .eq("id", id)
         .maybeSingle();
 
@@ -41,7 +41,7 @@ export const getRoomStatusFromId = async (id: string) => {
     }
     if (!data) return null;
 
-    return Boolean(data.password);
+    return data.visibility === "private";
 };
 
 export const getPublicRooms = async (): Promise<Room[]> => {
@@ -49,9 +49,9 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public",
+            "id, title, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
         )
-        .eq("is_public", true)
+        .eq("visibility", "public")
         .order("updated_at", { ascending: false });
 
     if (error) {
@@ -70,7 +70,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         updatedAt: room.updated_at,
         items: [],
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
-        isPublic: room.is_public,
+        visibility: room.visibility,
     }));
 };
 
@@ -82,7 +82,7 @@ export const getRoomSummaryFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, game_duration, is_public",
+                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -97,7 +97,9 @@ export const getRoomSummaryFromId = async (id: string) => {
 
     const isOwner = data.user_id === userId;
     const authorized =
-        isOwner || !data.password || (await isRoomAuthorized(id));
+        isOwner ||
+        data.visibility !== "private" ||
+        (await isRoomAuthorized(id));
     if (!authorized) return null;
 
     const room: Room = {
@@ -111,7 +113,7 @@ export const getRoomSummaryFromId = async (id: string) => {
         updatedAt: data.updated_at,
         items: [],
         itemCount: Array.isArray(data.items) ? data.items.length : 0,
-        isPublic: data.is_public,
+        visibility: data.visibility,
     };
 
     return {
@@ -128,7 +130,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     const [{ data, error }, userId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
-            .select("id, title, user_id, password, explanation, is_public, items")
+            .select("id, title, user_id, explanation, visibility, items")
             .eq("id", id)
             .maybeSingle(),
         getUser(),
@@ -146,7 +148,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
         };
     }
 
-    const requiresPassword = Boolean(data.password);
+    const requiresPassword = data.visibility === "private";
     const isOwner = data.user_id === userId;
     const authorized =
         isOwner || !requiresPassword || (await isRoomAuthorized(id));
@@ -158,7 +160,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
         authorized,
         title: canViewDetails ? data.title : undefined,
         explanation: canViewDetails ? data.explanation : undefined,
-        isPublic: data.is_public,
+        visibility: data.visibility,
         itemCount: canViewDetails
             ? Array.isArray(data.items)
                 ? data.items.length
@@ -173,7 +175,7 @@ export const getRoomMetadataFromId = async (id: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("title, explanation, is_public, password")
+        .select("title, explanation, visibility")
         .eq("id", id)
         .maybeSingle();
 
@@ -186,8 +188,7 @@ export const getRoomMetadataFromId = async (id: string) => {
     return {
         title: data.title,
         explanation: data.explanation,
-        isPublic: data.is_public,
-        hasPassword: Boolean(data.password),
+        visibility: data.visibility,
     };
 };
 
@@ -198,7 +199,7 @@ export const getRoomFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, bomb_count, password, created_at, updated_at, items, link, game_duration, is_public",
+                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -226,13 +227,12 @@ export const getRoomFromId = async (id: string) => {
         maxPlayers: data.max_players,
         bombCount: data.bomb_count ?? null,
         gameDuration: data.game_duration ?? 20,
-        password: data.password,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
         items: data.items,
         itemCount: Array.isArray(data.items) ? data.items.length : 0,
         link: data.link,
-        isPublic: data.is_public,
+        visibility: data.visibility,
     } as Room;
 };
 
@@ -244,7 +244,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, is_public",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
         )
         .eq("user_id", userId);
 
@@ -264,7 +264,7 @@ export const getMyRooms = async () => {
         updatedAt: room.updated_at,
         items: [],
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
-        isPublic: room.is_public,
+        visibility: room.visibility,
     }));
 
     serverLog("DB", "rooms fetched", { count: rooms.length });
