@@ -189,15 +189,21 @@ test("single JSON object is an explicit question-to-answer mapping", () => {
     );
 });
 
-test("duplicate prompts cannot be silently lost during JSON object export", () => {
-    assert.throws(
-        () =>
-            exportAnswerPairs([
-                { prompt: "ねこ", answer: "cat" },
-                { prompt: "ねこ", answer: "kitten" },
-            ]),
-        /重複/,
-    );
+test("duplicate prompts are preserved during JSON export", () => {
+    const exported = exportAnswerPairs([
+        { prompt: "ねこ", answer: "cat" },
+        { prompt: "ねこ", answer: "kitten" },
+    ]);
+
+    assert.deepEqual(JSON.parse(exported), [
+        { question: "ねこ", answer: "cat" },
+        { question: "ねこ", answer: "kitten" },
+    ]);
+    assert.deepEqual(parseImportedPairs(exported), [
+        { jp: "ねこ", en: "cat" },
+        { jp: "ねこ", en: "kitten" },
+    ]);
+
     assert.deepEqual(
         parseImportedPairs(
             exportAnswerPairs([
