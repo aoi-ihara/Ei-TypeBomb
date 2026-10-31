@@ -6,7 +6,7 @@ ALTER TABLE public.ei_typebomb_rooms
 -- Empty passwords are treated as unset, matching the application's previous Boolean(password) check.
 UPDATE public.ei_typebomb_rooms
 SET password = NULL
-WHERE password = '';
+WHERE password = '' OR is_public IS TRUE;
 
 UPDATE public.ei_typebomb_rooms
 SET visibility = CASE
