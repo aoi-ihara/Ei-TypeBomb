@@ -119,7 +119,6 @@ export default function EditorClient({
         initialRoom.link ?? initialRoom.id,
     );
     const [roomLinkError, setRoomLinkError] = useState("");
-    const [roomSaveError, setRoomSaveError] = useState("");
     const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
@@ -352,7 +351,6 @@ export default function EditorClient({
         }
 
         const newItems = [...importedItems, ...items];
-        setRoomSaveError("");
         setItems(newItems);
 
         setImportData("");
@@ -436,17 +434,12 @@ export default function EditorClient({
                 };
                 const error = await updateRoomFromId(updatedRoom);
                 if (error) {
-                    setRoomSaveError(error);
                     return false;
                 }
-                setRoomSaveError("");
                 setRoomLinkError("");
                 return true;
             } catch (error) {
                 console.error("Failed to save room:", error);
-                setRoomSaveError(
-                    "ルームを保存できませんでした。もう一度お試しください。",
-                );
                 return false;
             }
         });
@@ -458,7 +451,6 @@ export default function EditorClient({
     };
 
     const handlePlay = async () => {
-        setShowPlayWarning(false);
         startNavigationProgress();
         router.push("/" + slug);
     };
@@ -1163,15 +1155,6 @@ export default function EditorClient({
                             </div>
                         )}
                     </Collapsible>
-                    {roomSaveError && (
-                        <div
-                            className="text-red-500 mb-4"
-                            role="alert"
-                            data-cursor="text"
-                        >
-                            {roomSaveError}
-                        </div>
-                    )}
                     <div ref={itemListRef} className="flex flex-col gap-4">
                         <DndContext
                             sensors={sensors}
@@ -1251,9 +1234,6 @@ export default function EditorClient({
                                                                               }
                                                                             : currentItem,
                                                                 );
-                                                            setRoomSaveError(
-                                                                "",
-                                                            );
                                                             setItems(newItems);
                                                         }}
                                                     />
@@ -1332,7 +1312,7 @@ export default function EditorClient({
                             alignment="vertical"
                         >
                             <Button
-                                onClick={() => void handlePlay()}
+                                onClick={() => handlePlay()}
                                 iconName="play"
                                 disabled={isStartingPlay}
                                 variant="primary"
