@@ -801,7 +801,7 @@ export default function EditorClient({
                 >
                     <Selection
                         items={["公開", "限定公開", "非公開"]}
-                                        selection={VISIBILITY_OPTIONS.indexOf(visibilitySelection)}
+                        selection={VISIBILITY_OPTIONS.indexOf(visibilitySelection)}
                         onSelected={(index) => {
                             setVisibilitySelection(
                                 VISIBILITY_OPTIONS[index] ?? "unlisted",
