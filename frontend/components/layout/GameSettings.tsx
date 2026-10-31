@@ -27,14 +27,14 @@ export default function GameSettings({
             className={
                 placement === "top-left"
                     ? "fixed left-4 top-4 z-20 w-18"
-                    : "w-18 shrink-0"
+                    : "w-20 shrink-0"
             }
         >
             <MorphDialog
                 button={
                     <Button
-                        variant="text"
                         onClick={() => setShowSettings(!showSettings)}
+                        padding="small"
                         iconName="settings"
                         className="w-full"
                     >

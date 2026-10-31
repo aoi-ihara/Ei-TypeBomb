@@ -235,7 +235,7 @@ export default function GameView({
                 </div>
             )}
 
-            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-16 h-full justify-end flex flex-col">
+            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col">
                 {onReload && (!room || connection) && (
                     <ReconnectStatus
                         reconnecting={isReconnecting}

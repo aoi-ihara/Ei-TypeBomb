@@ -39,7 +39,6 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
-import Picker from "@/components/ui/Picker";
 import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
 
 type Props = {
@@ -1140,7 +1139,9 @@ export default function Client({
                     }}
                 />
                 <div>
-                    <OfflineVoicePicker initialValue={"none"} />
+                    <OfflineVoicePicker
+                        initialValue={initialOfflineVoiceReading}
+                    />
                 </div>
             </header>
         </>
