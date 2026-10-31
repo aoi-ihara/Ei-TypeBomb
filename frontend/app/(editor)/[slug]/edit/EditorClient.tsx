@@ -94,6 +94,8 @@ export default function EditorClient({
     initialRoom: Room;
 }) {
     const router = useRouter();
+    const initialIsPublic =
+        initialRoom.isPublic ?? !initialRoom.password;
 
     const [roomExplanation, setRoomExplanation] = useState(
         initialRoom.explanation ?? "",
@@ -102,9 +104,7 @@ export default function EditorClient({
     const [hasRoomPassword, setHasRoomPassword] = useState(
         Boolean(initialRoom.password),
     );
-    const [roomIsPublic, setRoomIsPublic] = useState(
-        initialRoom.isPublic !== false,
-    );
+    const [roomIsPublic, setRoomIsPublic] = useState(initialIsPublic);
     const [gameDuration, setGameDuration] = useState(
         initialRoom.gameDuration ?? 20,
     );
@@ -134,11 +134,7 @@ export default function EditorClient({
 
     const [newPassword, setNewPassword] = useState("");
     const [visibilitySelection, setVisibilitySelection] = useState(
-        initialRoom.isPublic === false
-            ? initialRoom.password
-                ? 2
-                : 1
-            : 0,
+        initialIsPublic ? 0 : initialRoom.password ? 2 : 1,
     );
     const [confirmPassword, setConfirmPassword] = useState("");
 
