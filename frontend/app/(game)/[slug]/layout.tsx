@@ -24,7 +24,7 @@ export async function generateMetadata({
     return {
         title,
         description,
-        robots: room.isPublic
+        robots: room.visibility === "public"
             ? undefined
             : {
                   index: false,
