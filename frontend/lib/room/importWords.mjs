@@ -201,13 +201,12 @@ export function parseImportedPairs(source) {
 
 export function exportAnswerPairs(items) {
     const pairs = {};
+    const duplicatePrompts = [];
+
     for (const item of items) {
-        // A JSON object cannot represent two distinct answers for one key.
-        // Fail rather than silently discard data.
         if (Object.hasOwn(pairs, item.prompt)) {
-            throw new Error(
-                `問題文「${item.prompt}」が重複しています。JSONでは同じ問題文を2件書き出せません。`,
-            );
+            duplicatePrompts.push(item.prompt);
+            continue;
         }
         Object.defineProperty(pairs, item.prompt, {
             value: item.answer,
@@ -216,5 +215,19 @@ export function exportAnswerPairs(items) {
             writable: true,
         });
     }
+
+    // JSON objects cannot represent duplicate keys without losing data.
+    // Fall back to the historical array format when duplicate prompts exist.
+    if (duplicatePrompts.length > 0) {
+        return JSON.stringify(
+            items.map(({ prompt, answer }) => ({
+                question: prompt,
+                answer,
+            })),
+            null,
+            4,
+        );
+    }
+
     return JSON.stringify(pairs, null, 4);
 }
