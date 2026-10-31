@@ -16,7 +16,13 @@ export const createNewRoom = async () => {
 
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .insert({ id: uuid, user_id: userId, link: uuid, items: [], visibility: "unlisted" })
+        .insert({
+            id: uuid,
+            user_id: userId,
+            link: uuid,
+            items: [],
+            visibility: "unlisted",
+        })
         .select("id")
         .single();
 
