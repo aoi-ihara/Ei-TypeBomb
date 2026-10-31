@@ -39,7 +39,7 @@ COMMENT ON COLUMN public.ei_typebomb_rooms.visibility IS
 CREATE OR REPLACE FUNCTION public.sync_ei_typebomb_room_visibility_legacy()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $visibility_migration$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         IF NEW.is_public IS TRUE THEN
@@ -68,7 +68,7 @@ BEGIN
 
     RETURN NEW;
 END;
-$;
+$visibility_migration$;
 
 CREATE TRIGGER ei_typebomb_rooms_sync_visibility_legacy
 BEFORE INSERT OR UPDATE OF is_public, password, visibility
