@@ -97,7 +97,9 @@ export const getRoomSummaryFromId = async (id: string) => {
 
     const isOwner = data.user_id === userId;
     const authorized =
-        isOwner || data.visibility !== "private" || (await isRoomAuthorized(id));
+        isOwner ||
+        data.visibility !== "private" ||
+        (await isRoomAuthorized(id));
     if (!authorized) return null;
 
     const room: Room = {
