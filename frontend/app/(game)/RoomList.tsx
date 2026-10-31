@@ -67,7 +67,7 @@ export default function RoomList({
                   iconName: "wandSparkles",
               },
               { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
-              { value: "saved", label: "保存", iconName: "archive" },
+              { value: "saved", label: "保存済み", iconName: "bookmark" },
           ]
         : [
               {
@@ -161,10 +161,7 @@ export default function RoomList({
                 new URLSearchParams(window.location.search),
             );
 
-            if (
-                (nextView === "mine" || nextView === "saved") &&
-                !currentUser
-            ) {
+            if ((nextView === "mine" || nextView === "saved") && !currentUser) {
                 setView("recommended");
                 return;
             }
@@ -378,7 +375,8 @@ export default function RoomList({
                                     isSaved={savedRoomIds.includes(room.id)}
                                     onToggleSaved={
                                         currentUser
-                                            ? () => toggleSavedRoomState(room.id)
+                                            ? () =>
+                                                  toggleSavedRoomState(room.id)
                                             : undefined
                                     }
                                 />
