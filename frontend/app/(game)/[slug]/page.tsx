@@ -40,14 +40,23 @@ export default async function RoomPage({
     const isOwner = result.isOwner;
 
     return (
-        <Shell title={title} showBackButton size="medium" animateAppear>
-            {room.explanation && (
-                <p className="w-full text-start" data-cursor="text">
-                    {room.explanation}
-                </p>
-            )}
-
+        <Shell
+            title={title}
+            className="grid sm:grid-cols-2 gap-4 px-4"
+            showBackButton
+            size="large"
+            animateAppear
+        >
             <div className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+                {room.explanation && (
+                    <div
+                        className="line-clamp-3 wrap-anywhere"
+                        data-cursor="text"
+                    >
+                        {room.explanation}
+                    </div>
+                )}
+
                 <div className="flex items-end gap-2 font-bold">
                     <Icon name={room.isPublic ? "earth" : "lock"} />
                     <span

@@ -290,7 +290,7 @@ export default function PlayRoom({
                     className="w-full"
                     iconName="pen"
                 >
-                    ルームを編集
+                    編集
                 </Button>
             )}
 

@@ -156,7 +156,6 @@ export default function EditorClient({
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-    const [isStartingPlay, setIsStartingPlay] = useState(false);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -1298,7 +1297,6 @@ export default function EditorClient({
                                         else setShowPlayWarning(true);
                                     }}
                                     iconName="play"
-                                    loading={isStartingPlay}
                                     className="w-full"
                                     variant="primary"
                                 >
@@ -1314,7 +1312,6 @@ export default function EditorClient({
                             <Button
                                 onClick={() => handlePlay()}
                                 iconName="play"
-                                disabled={isStartingPlay}
                                 variant="primary"
                                 className="w-full"
                             >
