@@ -24,7 +24,12 @@ import {
     isAllowedTypingAnswer,
     exportAnswerPairs,
 } from "@/lib/room/importWords";
-import type { LegacyWord, Room, RoomVisibility, TypedRecallItem } from "@/type";
+import type {
+    LegacyWord,
+    Room,
+    RoomVisibility,
+    TypedRecallItem,
+} from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
@@ -45,6 +50,12 @@ import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
+
+const VISIBILITY_OPTIONS: RoomVisibility[] = [
+    "public",
+    "unlisted",
+    "private",
+];
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -790,10 +801,10 @@ export default function EditorClient({
                 >
                     <Selection
                         items={["公開", "限定公開", "非公開"]}
-                        selection={["public", "unlisted", "private"].indexOf(visibilitySelection)}
+                                        selection={VISIBILITY_OPTIONS.indexOf(visibilitySelection)}
                         onSelected={(index) => {
                             setVisibilitySelection(
-                                (["public", "unlisted", "private"] as RoomVisibility[])[index] ?? "unlisted",
+                                VISIBILITY_OPTIONS[index] ?? "unlisted",
                             );
                             setVisibilityError("");
 
