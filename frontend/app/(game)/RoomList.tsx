@@ -32,16 +32,6 @@ type Props = {
 
 const SAVED_ROOMS_STORAGE_KEY = "ei-typebomb:saved-rooms:v1";
 
-const navigationItems: {
-    value: View;
-    label: string;
-    iconName: "wandSparkles" | "layoutGrid" | "archive";
-}[] = [
-    { value: "recommended", label: "おすすめ", iconName: "wandSparkles" },
-    { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
-    { value: "saved", label: "保存", iconName: "archive" },
-];
-
 const getViewFromSearchParams = (searchParams: URLSearchParams): View => {
     const filter = searchParams.get("filter");
     if (filter === "mine") return "mine";
@@ -64,6 +54,27 @@ export default function RoomList({
     );
     const [keyword, setKeyword] = useState("");
     const [savedRoomIds, setSavedRoomIds] = useState<string[]>([]);
+    const navigationItems: {
+        value: View;
+        label: string;
+        iconName: "wandSparkles" | "layoutGrid" | "archive";
+    }[] = currentUser
+        ? [
+              {
+                  value: "recommended",
+                  label: "おすすめ",
+                  iconName: "wandSparkles",
+              },
+              { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
+              { value: "saved", label: "保存", iconName: "archive" },
+          ]
+        : [
+              {
+                  value: "recommended",
+                  label: "おすすめ",
+                  iconName: "wandSparkles",
+              },
+          ];
 
     const rooms = useMemo(() => {
         const roomsById = new Map<string, Room>();
@@ -72,7 +83,6 @@ export default function RoomList({
             roomsById.set(room.id, room);
         }
 
-        // Prefer the owner's copy when a room appears in both lists.
         for (const room of myRooms) {
             roomsById.set(room.id, {
                 ...room,
@@ -122,11 +132,7 @@ export default function RoomList({
     }, [roomsInView, keyword]);
 
     const selectView = (nextView: View) => {
-        if (nextView === "mine" && !currentUser) {
-            startNavigationProgress();
-            router.push(getSignInUrl());
-            return;
-        }
+        if (nextView === "mine" && !currentUser) return;
 
         if (nextView === view) return;
 
@@ -204,8 +210,6 @@ export default function RoomList({
     const toggleSavedRoom = (roomId: string) => {
         let currentSavedIds = savedRoomIds;
 
-        // Re-read storage to avoid overwriting saved rooms if this is clicked
-        // before the initial effect has finished.
         try {
             const stored = window.localStorage.getItem(SAVED_ROOMS_STORAGE_KEY);
             if (stored) {
@@ -216,9 +220,7 @@ export default function RoomList({
                     );
                 }
             }
-        } catch {
-            // Continue with in-memory state if storage is unavailable.
-        }
+        } catch {}
 
         const wasSaved = currentSavedIds.includes(roomId);
         const nextSavedIds = wasSaved
