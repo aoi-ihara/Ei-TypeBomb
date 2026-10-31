@@ -63,14 +63,21 @@ export const updateRoomFromId = async (room: Room) => {
         else updateData.game_duration = room.gameDuration;
     }
 
-    if (room.isPublic !== undefined) {
-        updateData.is_public = room.isPublic;
+    if (room.visibility !== undefined) {
+        if (!["public", "unlisted", "private"].includes(room.visibility)) {
+            validationErrors.push("公開設定が正しくありません。");
+        } else {
+            updateData.visibility = room.visibility;
+        }
     }
 
     let shouldUpdatePassword = false;
     let newHashedPassword: string | null | undefined;
 
-    if (room.password !== undefined && room.password !== null) {
+    if (room.visibility === "public" || room.visibility === "unlisted") {
+        shouldUpdatePassword = true;
+        newHashedPassword = null;
+    } else if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
         if (validatorResult) validationErrors.push(validatorResult);
         else {
@@ -118,9 +125,13 @@ export const updateRoomFromId = async (room: Room) => {
 
     if (updateError) {
         console.error(updateError);
-        return updateError.code === "23505"
-            ? "このリンクはすでに使用されています。"
-            : "ルームを保存できませんでした。もう一度お試しください。";
+        if (updateError.code === "23505") {
+            return "このリンクはすでに使用されています。";
+        }
+        if (updateError.code === "23514") {
+            return "公開設定とパスワードの組み合わせが正しくありません。";
+        }
+        return "ルームを保存できませんでした。もう一度お試しください。";
     }
     if (!data) return "ルームが見つからないか、アクセス権限がありません。";
 
