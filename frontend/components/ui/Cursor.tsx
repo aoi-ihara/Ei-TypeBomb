@@ -275,7 +275,21 @@ function CustomCursor() {
     useEffect(() => {
         let timeoutId: number;
 
-        const observer = new MutationObserver(() => {
+        const observer = new MutationObserver((mutations) => {
+            const shapeChanged = mutations.some(
+                (mutation) =>
+                    mutation.type === "attributes" &&
+                    mutation.attributeName === "data-cursor-shape",
+            );
+
+            if (shapeChanged) {
+                // Keep cursor shape changes in sync with the selected background.
+                window.clearTimeout(timeoutId);
+                handleMouseMove(mouse.current.x, mouse.current.y);
+                return;
+            }
+
+            // Keep structural DOM updates debounced to avoid unnecessary refreshes.
             window.clearTimeout(timeoutId);
             timeoutId = window.setTimeout(() => {
                 handleMouseMove(mouse.current.x, mouse.current.y);
@@ -284,6 +298,8 @@ function CustomCursor() {
 
         observer.observe(document.body, {
             childList: true,
+            attributes: true,
+            attributeFilter: ["data-cursor-shape"],
             subtree: true,
         });
 
