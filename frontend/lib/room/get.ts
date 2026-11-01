@@ -13,6 +13,13 @@ import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
 
+type PublicRoomRecommendationRow = {
+    room_id: string;
+    play_count: number | string | null;
+    recent_play_count: number | string | null;
+    save_count: number | string | null;
+};
+
 export const getRoomFromLink = async (link: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
@@ -96,7 +103,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
 
     const statsByRoomId = new Map<string, RoomRecommendationStats>(
         (recommendationRows ?? []).map(
-            (row) =>
+            (row: PublicRoomRecommendationRow) =>
                 [
                     row.room_id,
                     {
