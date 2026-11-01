@@ -24,11 +24,11 @@ The room editor was substantially consolidated and expanded after the original P
 | `settings_changed`                 | User toggled background music or sound effects                     | `app/(game)/settings/Settings.tsx`             |
 | `room_editor_opened`               | User opened a specific room editor                                 | `components/analytics/PostHogEventTracker.tsx` |
 | `room_visibility_settings_opened`  | User opened the room visibility settings from the editor           | `components/analytics/PostHogEventTracker.tsx` |
-| `room_visibility_changed`          | User successfully changed room visibility (public/private)         | `app/(editor)/my-rooms/[slug]/page.tsx`        |
+| `room_visibility_changed`          | User successfully changed room visibility (public/private)         | `app/(editor)/my-rooms/[link]/page.tsx`        |
 | `room_qr_opened`                   | User opened the room QR code view                                  | `components/analytics/PostHogEventTracker.tsx` |
-| `room_code_copied`                 | User copied the room invite link in the room editor                | `app/(editor)/my-rooms/[slug]/page.tsx`        |
+| `room_code_copied`                 | User copied the room invite link in the room editor                | `app/(editor)/my-rooms/[link]/page.tsx`        |
 | `room_updated`                     | Server: room settings or words were saved                          | `lib/room/update.ts`                           |
-| `word_added`                       | User manually added a word in the editor                           | `app/(editor)/my-rooms/[slug]/page.tsx`        |
+| `word_added`                       | User manually added a word in the editor                           | `app/(editor)/my-rooms/[link]/page.tsx`        |
 | `word_deleted`                     | User deleted an individual word in the editor                      | `components/analytics/PostHogEventTracker.tsx` |
 | `words_reordered`                  | User reordered words with drag and drop                            | `components/analytics/PostHogEventTracker.tsx` |
 | `words_exported`                   | User copied the room's word list as JSON                           | `components/analytics/PostHogEventTracker.tsx` |
@@ -38,7 +38,7 @@ The room editor was substantially consolidated and expanded after the original P
 | `words_import_succeeded`           | JSON import was accepted and the editor closed the import controls | `components/analytics/PostHogEventTracker.tsx` |
 | `words_import_failed`              | JSON import validation failed                                      | `components/analytics/PostHogEventTracker.tsx` |
 | `words_import_cancelled`           | User cancelled the JSON import controls                            | `components/analytics/PostHogEventTracker.tsx` |
-| `words_imported_and_added`         | Existing import handler event kept for dashboard compatibility     | `app/(editor)/my-rooms/[slug]/page.tsx`        |
+| `words_imported_and_added`         | Existing import handler event kept for dashboard compatibility     | `app/(editor)/my-rooms/[link]/page.tsx`        |
 | `word_generation_opened`           | User opened the AI word generation controls                        | `components/analytics/PostHogEventTracker.tsx` |
 | `word_generation_example_selected` | User selected a suggested generation theme                         | `components/analytics/PostHogEventTracker.tsx` |
 | `word_generation_requested`        | User submitted an AI word generation request                       | `components/analytics/PostHogEventTracker.tsx` |

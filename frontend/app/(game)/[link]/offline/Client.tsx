@@ -1078,7 +1078,7 @@ export default function Client({
                 onStop={() => {
                     void flushPendingMemory().finally(() => {
                         startNavigationProgress();
-                        router.push("/" + room.id);
+                        router.push("/" + (room.link ?? room.id));
                     });
                 }}
                 resultExtraActions={

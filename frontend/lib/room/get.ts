@@ -20,6 +20,54 @@ type PublicRoomRecommendationRow = {
     save_count: number | string | null;
 };
 
+export const getRoomRouteFromLink = async (link: string) => {
+    if (!link) return null;
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, link")
+        .eq("link", link)
+        .maybeSingle();
+
+    if (error) {
+        serverError("failed to resolve room route from link", error, "DB");
+        return null;
+    }
+    if (data) {
+        return {
+            id: data.id as string,
+            link: (data.link as string | null) ?? data.id,
+        };
+    }
+
+    // Keep previously shared /<ROOM ID> URLs working during the migration.
+    if (!isUUID(link, 4)) return null;
+
+    const { data: legacyRoom, error: legacyError } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, link")
+        .eq("id", link)
+        .maybeSingle();
+
+    if (legacyError) {
+        serverError("failed to resolve legacy room URL", legacyError, "DB");
+        return null;
+    }
+    if (!legacyRoom) return null;
+
+    return {
+        id: legacyRoom.id as string,
+        link: (legacyRoom.link as string | null) ?? legacyRoom.id,
+    };
+};
+
+export const getRoomMetadataFromLink = async (link: string) => {
+    const route = await getRoomRouteFromLink(link);
+    if (!route) return null;
+    return getRoomMetadataFromId(route.id);
+};
+
 export const getRoomFromLink = async (link: string) => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
@@ -60,7 +108,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
+            "id, title, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
         )
         .eq("visibility", "public")
         .order("updated_at", { ascending: false });
@@ -81,6 +129,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         updatedAt: room.updated_at,
         items: [],
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
+        link: room.link,
         visibility: room.visibility,
     }));
 
@@ -126,7 +175,7 @@ export const getRoomSummaryFromId = async (id: string) => {
         supabase
             .from("ei_typebomb_rooms")
             .select(
-                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
+                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
             )
             .eq("id", id)
             .maybeSingle(),
@@ -159,6 +208,7 @@ export const getRoomSummaryFromId = async (id: string) => {
         updatedAt: data.updated_at,
         items,
         itemCount: items.length,
+        link: data.link,
         visibility: data.visibility,
     };
 
@@ -176,7 +226,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
     const [{ data, error }, userId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
-            .select("id, title, user_id, explanation, visibility, items")
+            .select("id, title, user_id, explanation, visibility, items, link")
             .eq("id", id)
             .maybeSingle(),
         getUser(),
@@ -207,6 +257,7 @@ export const getRoomPlayInfoFromId = async (id: string) => {
         title: canViewDetails ? data.title : undefined,
         explanation: canViewDetails ? data.explanation : undefined,
         visibility: data.visibility,
+        link: data.link,
         itemCount: canViewDetails
             ? Array.isArray(data.items)
                 ? data.items.length
@@ -301,7 +352,7 @@ export const getMyRooms = async () => {
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, game_duration, visibility",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
         )
         .eq("user_id", userId);
 
@@ -321,6 +372,7 @@ export const getMyRooms = async () => {
         updatedAt: room.updated_at,
         items: [],
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
+        link: room.link,
         visibility: room.visibility,
     }));
 
