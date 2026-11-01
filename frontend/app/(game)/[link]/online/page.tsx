@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Client from "./Client";
 import { parseETBClusterConfig } from "@/lib/room/clusterConfig";
-import { getPlaygroundRoom } from "@/lib/room/playground";
+import { getPlaygroundRoomRoute } from "@/lib/room/playground";
 
 export default async function OnlinePlayPage({
     params,
@@ -10,7 +10,7 @@ export default async function OnlinePlayPage({
     params: Promise<{ link: string }>;
 }) {
     const { link } = await params;
-    const room = await getPlaygroundRoom();
+    const room = await getPlaygroundRoomRoute();
     if (!room) redirect("/" + link);
 
     const canonicalLink = room.link ?? room.id;

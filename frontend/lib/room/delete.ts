@@ -12,33 +12,21 @@ export const deleteRoom = async (roomId: string) => {
 
     const supabase = await createAdminClient();
 
-    const { data, error: selectError } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("user_id")
-        .eq("id", roomId)
-        .maybeSingle();
-
-    if (selectError) {
-        console.error(selectError);
-        return "ルーム情報を取得できませんでした。もう一度お試しください。";
-    }
-
-    if (!data) {
-        return "ルームが見つかりません。";
-    }
-
-    if (data.user_id !== userId) {
-        return "このルームへのアクセス権限がありません。";
-    }
-
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .delete()
-        .eq("id", roomId);
+        .eq("id", roomId)
+        .eq("user_id", userId)
+        .select("id")
+        .maybeSingle();
 
     if (error) {
         console.error(error);
         return "ルームを削除できませんでした。もう一度お試しください。";
+    }
+
+    if (!data) {
+        return "ルームが見つからないか、削除する権限がありません。";
     }
 
     const posthog = getPostHogClient();

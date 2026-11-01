@@ -488,7 +488,6 @@ export default function EditorClient({
     };
 
     const handlePlay = async () => {
-        if (!(await saveRoomData())) return;
         startNavigationProgress();
         router.push("/" + roomLink);
     };
@@ -682,11 +681,6 @@ export default function EditorClient({
                     {validateLink(roomLink) && (
                         <div className="text-red-500" data-cursor="text">
                             {validateLink(roomLink)}
-                        </div>
-                    )}
-                    {roomLinkError && (
-                        <div className="text-red-500" data-cursor="text">
-                            {roomLinkError}
                         </div>
                     )}
                 </div>

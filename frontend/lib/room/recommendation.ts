@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { Room } from "@/type";
 
 export type RoomRecommendationStats = {
@@ -29,6 +31,9 @@ const hashToUnitInterval = (value: string): number => {
  * Rank public rooms using inexpensive, explainable signals:
  * popularity, recent activity, room freshness, content completeness, and
  * a small deterministic daily exploration score.
+ *
+ * This module is server-only because recommendation statistics are resolved
+ * before the ordered room list is passed to the client.
  */
 export const rankPublicRooms = <T extends RecommendableRoom>(
     rooms: T[],

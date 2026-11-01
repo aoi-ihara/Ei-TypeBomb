@@ -1,12 +1,7 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
-import {
-    getRoomPlayInfoFromId,
-    getRoomRouteFromLink,
-    getRoomSummaryFromId,
-} from "@/lib/room/get";
+import { getRoomPageDataFromLink } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
 
@@ -16,30 +11,23 @@ export default async function RoomPage({
     params: Promise<{ link: string }>;
 }) {
     const { link } = await params;
-    const route = await getRoomRouteFromLink(link);
-    if (!route) notFound();
-    if (link !== route.link) redirect("/" + route.link);
+    const result = await getRoomPageDataFromLink(link);
+    if (!result) notFound();
+    if (link !== result.link) redirect("/" + result.link);
 
-    const playInfo = await getRoomPlayInfoFromId(route.id);
-    if (!playInfo?.exists) notFound();
-
-    const title = playInfo.title || "ルーム";
-
-    if (playInfo.requiresPassword && !playInfo.authorized) {
+    if (result.requiresPassword && !result.authorized) {
         return (
             <Shell title="パスワードを入力" size="medium" animateAppear>
-                <RoomPasswordGate roomId={route.id} />
+                <RoomPasswordGate roomId={result.id} />
             </Shell>
         );
     }
 
-    const [result] = await Promise.all([getRoomSummaryFromId(route.id), cookies()]);
-    if (!result) notFound();
+    if (!result.room) notFound();
 
-    const { room } = result;
-    const itemCount = result.itemCount;
+    const { room, itemCount, isOwner } = result;
+    const title = room.title || "ルーム";
     const items = room.items ?? [];
-    const isOwner = result.isOwner;
 
     return (
         <Shell
@@ -110,9 +98,9 @@ export default async function RoomPage({
             </section>
 
             <PlayRoom
-                roomId={route.id}
-                link={route.link}
-                alreadyAuthorized={playInfo.authorized}
+                roomId={result.id}
+                link={result.link}
+                alreadyAuthorized={result.authorized}
                 itemCount={itemCount}
                 isOwner={isOwner}
             />
