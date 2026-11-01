@@ -43,7 +43,7 @@ export default function Bomb({ bombStatus, shaking = true }: Props) {
 
     return (
         <span
-            className="block w-8 h-8"
+            className="bomb-shake block w-8 h-8"
             style={{ animation: shakeAnimation }}
         >
             <svg
