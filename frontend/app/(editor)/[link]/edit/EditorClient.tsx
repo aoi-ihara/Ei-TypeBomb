@@ -496,6 +496,14 @@ export default function EditorClient({
         router.push("/" + roomLink);
     };
 
+    const handleOpenRoomCode = async () => {
+        if (!items?.length) {
+            setShowQrWarning(true);
+            return;
+        }
+        if (await saveRoomData()) setShowRoomCode(true);
+    };
+
     useEffect(() => {
         if (!isLoadedRef.current || !roomId || items === null) return;
 
@@ -697,11 +705,7 @@ export default function EditorClient({
                                 className="w-fit shrink-0"
                                 padding="large"
                                 iconName="qrCode"
-                                onClick={() => {
-                                    if (items && items.length !== 0)
-                                        setShowRoomCode(true);
-                                    else setShowQrWarning(true);
-                                }}
+                                onClick={handleOpenRoomCode}
                                 variant="primary"
                             />
                         }
@@ -712,9 +716,11 @@ export default function EditorClient({
                         alignment="vertical"
                     >
                         <Button
-                            onClick={() => {
-                                setShowRoomCode(true);
-                                setShowQrWarning(false);
+                            onClick={async () => {
+                                if (await saveRoomData()) {
+                                    setShowRoomCode(true);
+                                    setShowQrWarning(false);
+                                }
                             }}
                             iconName="qrCode"
                             variant="primary"
