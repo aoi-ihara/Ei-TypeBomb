@@ -219,11 +219,14 @@ export const getRoomMetadataFromId = async (id: string) => {
     if (!isUUID(id, 4)) return null;
 
     const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select("title, explanation, visibility")
-        .eq("id", id)
-        .maybeSingle();
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select("title, explanation, visibility, user_id")
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
 
     if (error) {
         serverError("failed to fetch room metadata", error, "DB");
@@ -231,9 +234,17 @@ export const getRoomMetadataFromId = async (id: string) => {
     }
     if (!data) return null;
 
+    const isOwner = data.user_id === userId;
+    const canViewDetails =
+        data.visibility !== "private" ||
+        isOwner ||
+        (await isRoomAuthorized(id));
+
     return {
-        title: data.title,
-        explanation: data.explanation,
+        // Never send private room details to an unauthenticated browser,
+        // including through Next.js-generated page and social metadata.
+        title: canViewDetails ? data.title : null,
+        explanation: canViewDetails ? data.explanation : null,
         visibility: data.visibility,
     };
 };
