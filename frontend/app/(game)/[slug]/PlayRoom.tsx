@@ -259,18 +259,10 @@ export default function PlayRoom({
     return (
         <div className="flex w-full flex-col gap-4">
             {!roomLoading && (
-                <>
-                    {itemCount === 0 && (
-                        <p className="w-full text-start text-sm opacity-70">
-                            単語がありません。
-                        </p>
-                    )}
-
-                    <div className="grid w-full grid-cols-2 gap-4">
-                        {renderModeDialog("online")}
-                        {renderModeDialog("offline")}
-                    </div>
-                </>
+                <div className="grid w-full grid-cols-2 gap-4">
+                    {renderModeDialog("online")}
+                    {renderModeDialog("offline")}
+                </div>
             )}
 
             {isOwner && (
