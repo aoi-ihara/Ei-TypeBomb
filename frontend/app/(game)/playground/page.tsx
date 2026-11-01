@@ -3,5 +3,5 @@ import { getPlaygroundRoom } from "@/lib/room/playground";
 
 export default async function LegacyPlaygroundRoute() {
     const room = await getPlaygroundRoom();
-    redirect(room ? "/" + room.id + "/offline" : "/");
+    redirect(room ? "/" + (room.link ?? room.id) + "/offline" : "/");
 }

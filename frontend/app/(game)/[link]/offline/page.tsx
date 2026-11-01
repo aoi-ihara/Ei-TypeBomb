@@ -7,15 +7,21 @@ import { parseOfflineVoiceReading } from "@/lib/settings";
 export default async function OfflinePlayPage({
     params,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ link: string }>;
 }) {
-    const { slug } = await params;
+    const { link } = await params;
     const [cookieStore, room] = await Promise.all([
         cookies(),
         getPlaygroundRoom(),
     ]);
 
-    if (!room || room.id !== slug) redirect("/" + slug);
+    if (!room) redirect("/" + link);
+
+    const canonicalLink = room.link ?? room.id;
+    if (link !== canonicalLink) {
+        if (link === room.id) redirect("/" + canonicalLink + "/offline");
+        redirect("/" + link);
+    }
 
     const backgroundMusic =
         cookieStore.get("background-music")?.value !== "false";

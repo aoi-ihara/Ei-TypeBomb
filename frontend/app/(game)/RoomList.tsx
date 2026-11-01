@@ -120,7 +120,7 @@ export default function RoomList({
         return roomsInView.filter((room) => {
             if (!query) return true;
 
-            const searchableText = [room.id, room.title, room.explanation]
+            const searchableText = [room.link, room.id, room.title, room.explanation]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase();
@@ -219,11 +219,11 @@ export default function RoomList({
         setCreating(true);
         setCreateError("");
         try {
-            const roomId = await createNewRoom();
-            if (!roomId) throw new Error("Room creation returned no ID");
+            const roomLink = await createNewRoom();
+            if (!roomLink) throw new Error("Room creation returned no link");
             posthog.capture("room_created");
             startNavigationProgress();
-            router.push("/" + roomId + "/edit");
+            router.push("/" + roomLink + "/edit");
         } catch (error) {
             console.error("Failed to create room:", error);
             setCreateError(

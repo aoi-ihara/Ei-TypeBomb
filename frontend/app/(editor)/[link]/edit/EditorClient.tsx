@@ -89,10 +89,10 @@ function SortableItem({
 }
 
 export default function EditorClient({
-    slug,
+    link,
     initialRoom,
 }: {
-    slug: string;
+    link: string;
     initialRoom: Room;
 }) {
     const router = useRouter();
@@ -113,6 +113,7 @@ export default function EditorClient({
         initialRoom.maxPlayers?.toString() ?? "2",
     );
     const roomId = initialRoom.id;
+    const savedRouteLinkRef = useRef(link);
     const [items, setItems] = useState<TypedRecallItem[] | null>(
         initialRoom.items ?? [],
     );
@@ -304,21 +305,8 @@ export default function EditorClient({
         }
     };
 
-    const handleCopyRoomLink = async () => {
-        const joinLink = new URL(
-            "/" + slug,
-            process.env.NEXT_PUBLIC_JOIN_LINK!,
-        ).toString();
-        await navigator.clipboard.writeText(joinLink);
-        posthog.capture("room_code_copied", { room_id: slug });
-        setIsLinkCopied(true);
-        setTimeout(() => {
-            setIsLinkCopied(false);
-        }, 3000);
-    };
-
     const handleImportWords = async () => {
-        posthog.capture("words_imported_and_added", { room_id: slug });
+        posthog.capture("words_imported_and_added", { room_id: roomId });
 
         setImportError("");
 
@@ -365,7 +353,7 @@ export default function EditorClient({
     const handleVisibilityUpdate = async () => {
         setVisibilityError("");
 
-        if (!slug) {
+        if (!roomId) {
             console.error("Room ID is required.");
             return;
         }
@@ -386,7 +374,7 @@ export default function EditorClient({
         }
 
         const request: Room = {
-            id: slug,
+            id: roomId,
             visibility: visibilitySelection,
             ...(shouldSetPassword
                 ? { password: newPassword }
@@ -416,7 +404,7 @@ export default function EditorClient({
         }
 
         posthog.capture("room_visibility_changed", {
-            room_id: slug,
+            room_id: roomId,
             is_private: isPrivate,
             is_public: visibilitySelection === "public",
             visibility: visibilitySelection,
@@ -469,6 +457,10 @@ export default function EditorClient({
                     return false;
                 }
                 setRoomLinkError("");
+                if (roomLink !== savedRouteLinkRef.current) {
+                    savedRouteLinkRef.current = roomLink;
+                    router.replace("/" + roomLink + "/edit");
+                }
                 return true;
             } catch (error) {
                 console.error("Failed to save room:", error);
@@ -482,9 +474,27 @@ export default function EditorClient({
         return attempt;
     };
 
+    const handleCopyRoomLink = async () => {
+        const joinLink = new URL(
+            "/" + roomLink,
+            process.env.NEXT_PUBLIC_JOIN_LINK!,
+        ).toString();
+        await navigator.clipboard.writeText(joinLink);
+        posthog.capture("room_code_copied", { room_id: roomId });
+        setIsLinkCopied(true);
+        setTimeout(() => {
+            setIsLinkCopied(false);
+        }, 3000);
+    };
+
     const handlePlay = async () => {
+        if (!(await saveRoomData())) return;
         startNavigationProgress();
-        router.push("/" + slug);
+        router.push("/" + roomLink);
+    };
+
+    const handleOpenRoomCode = async () => {
+        setShowRoomCode(true);
     };
 
     useEffect(() => {
@@ -660,13 +670,13 @@ export default function EditorClient({
                         label="招待リンク"
                         font="mono"
                         type="url"
-                        inputClassName="pl-19.5"
+                        inputClassName="pl-7.5"
                         className={`transition-all w-full duration-(--duration-etb) ease-etb`}
                         value={roomLink}
                         disableLabelAnimation={true}
                     >
                         <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
-                            /join/
+                            /
                         </div>
                     </Input>
                     {validateLink(roomLink) && (
@@ -688,11 +698,7 @@ export default function EditorClient({
                                 className="w-fit shrink-0"
                                 padding="large"
                                 iconName="qrCode"
-                                onClick={() => {
-                                    if (items && items.length !== 0)
-                                        setShowRoomCode(true);
-                                    else setShowQrWarning(true);
-                                }}
+                                onClick={handleOpenRoomCode}
                                 variant="primary"
                             />
                         }
@@ -703,9 +709,11 @@ export default function EditorClient({
                         alignment="vertical"
                     >
                         <Button
-                            onClick={() => {
-                                setShowRoomCode(true);
-                                setShowQrWarning(false);
+                            onClick={async () => {
+                                if (await saveRoomData()) {
+                                    setShowRoomCode(true);
+                                    setShowQrWarning(false);
+                                }
                             }}
                             iconName="qrCode"
                             variant="primary"
@@ -1362,7 +1370,7 @@ export default function EditorClient({
                 <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={new URL(
-                            "/" + slug,
+                            "/" + roomLink,
                             process.env.NEXT_PUBLIC_JOIN_LINK!,
                         ).toString()}
                         size={256}

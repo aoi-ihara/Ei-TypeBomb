@@ -20,13 +20,13 @@ export default function PlayRoom({
     alreadyAuthorized,
     itemCount,
     isOwner,
-    slug,
+    link,
 }: {
     roomId: string;
     alreadyAuthorized: boolean;
     itemCount: number;
     isOwner: boolean;
-    slug: string;
+    link: string;
 }) {
     const router = useRouter();
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
@@ -88,7 +88,7 @@ export default function PlayRoom({
             play_mode: mode,
         });
         startNavigationProgress();
-        router.push("/" + roomId + "/" + mode);
+        router.push("/" + link + "/" + mode);
     };
 
     const handleSignIn = async (
@@ -271,7 +271,7 @@ export default function PlayRoom({
                 <Button
                     onClick={() => {
                         startNavigationProgress();
-                        router.push("/" + slug + "/edit");
+                        router.push("/" + link + "/edit");
                     }}
                     className="w-full"
                     iconName="pen"

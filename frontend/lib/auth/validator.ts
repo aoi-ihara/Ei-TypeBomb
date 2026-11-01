@@ -179,6 +179,28 @@ export const validateLink = (link?: string) => {
         return "リンクには半角英小文字、数字、ピリオド、ハイフンのみ使用できます。";
     }
 
+    const reservedLinks = new Set([
+        "auth",
+        "display-name",
+        "favicon.ico",
+        "game",
+        "game-demo",
+        "join",
+        "manifest.json",
+        "my-rooms",
+        "playground",
+        "robots.txt",
+        "room",
+        "selection",
+        "server-health",
+        "server-url",
+        "sign-in",
+        "sitemap.xml",
+    ]);
+    if (reservedLinks.has(link)) {
+        return "このリンクは使用できません。別のリンクを入力してください。";
+    }
+
     return null;
 };
 
