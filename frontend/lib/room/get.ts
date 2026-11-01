@@ -95,14 +95,17 @@ export const getPublicRooms = async (): Promise<Room[]> => {
     }
 
     const statsByRoomId = new Map<string, RoomRecommendationStats>(
-        (recommendationRows ?? []).map((row) => [
-            row.room_id,
-            {
-                playCount: Number(row.play_count ?? 0),
-                recentPlayCount: Number(row.recent_play_count ?? 0),
-                saveCount: Number(row.save_count ?? 0),
-            },
-        ]),
+        (recommendationRows ?? []).map(
+            (row) =>
+                [
+                    row.room_id,
+                    {
+                        playCount: Number(row.play_count ?? 0),
+                        recentPlayCount: Number(row.recent_play_count ?? 0),
+                        saveCount: Number(row.save_count ?? 0),
+                    },
+                ] as const,
+        ),
     );
 
     return rankPublicRooms(rooms, statsByRoomId);
