@@ -30,6 +30,7 @@ export default async function RoomPage({
 
     const { room } = result;
     const itemCount = result.itemCount;
+    const items = room.items ?? [];
     const isOwner = result.isOwner;
 
     return (
@@ -40,7 +41,7 @@ export default async function RoomPage({
             size="xlarge"
             animateAppear
         >
-            <div className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+            <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
                 {room.explanation && (
                     <div
                         className="line-clamp-3 wrap-anywhere"
@@ -98,7 +99,7 @@ export default async function RoomPage({
                         <span className="opacity-50 text-sm">個の単語</span>
                     </span>
                 </div>
-            </div>
+            </section>
 
             <PlayRoom
                 roomId={slug}
@@ -107,6 +108,34 @@ export default async function RoomPage({
                 isOwner={isOwner}
                 slug={slug}
             />
+
+            <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+                {items.length > 0 ? (
+                    items.map((item, index) => (
+                        <div
+                            key={item.id}
+                            className={`grid grid-cols-2 ${index !== 0 && "border-t border-(--color-border) pt-4"}`}
+                        >
+                            <span
+                                className="w-full line-clamp-1"
+                                data-cursor="text"
+                            >
+                                {item.prompt}
+                            </span>
+                            <span
+                                className="w-full line-clamp-1"
+                                data-cursor="text"
+                            >
+                                {item.answer}
+                            </span>
+                        </div>
+                    ))
+                ) : (
+                    <p className="opacity-50" data-cursor="text">
+                        単語がありません。
+                    </p>
+                )}
+            </section>
         </Shell>
     );
 }

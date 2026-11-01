@@ -4,7 +4,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { isRoomAuthorized } from "./auth";
-import type { Room } from "@/type";
+import type { Item, Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
@@ -102,6 +102,8 @@ export const getRoomSummaryFromId = async (id: string) => {
         (await isRoomAuthorized(id));
     if (!authorized) return null;
 
+    const items = Array.isArray(data.items) ? (data.items as Item[]) : [];
+
     const room: Room = {
         id: data.id,
         title: data.title,
@@ -111,14 +113,14 @@ export const getRoomSummaryFromId = async (id: string) => {
         gameDuration: data.game_duration ?? 20,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
-        items: [],
-        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        items,
+        itemCount: items.length,
         visibility: data.visibility,
     };
 
     return {
         room,
-        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        itemCount: items.length,
         isOwner,
     };
 };

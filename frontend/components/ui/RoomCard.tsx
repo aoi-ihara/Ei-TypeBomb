@@ -58,10 +58,10 @@ export default function RoomCard({
                             }
                         />
                         <h2
-                            className="min-w-0 flex-1 truncate font-bold font-mono"
+                            className={`min-w-0 flex-1 truncate font-bold font-mono  ${!room.title && "italic opacity-50"}`}
                             data-cursor="text"
                         >
-                            {room.title || "無題のルーム"}
+                            {room.title || "タイトルなし"}
                         </h2>
                     </div>
 
