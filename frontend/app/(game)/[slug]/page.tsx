@@ -30,6 +30,7 @@ export default async function RoomPage({
 
     const { room } = result;
     const itemCount = result.itemCount;
+    const items = room.items ?? [];
     const isOwner = result.isOwner;
 
     return (
@@ -107,6 +108,41 @@ export default async function RoomPage({
                 isOwner={isOwner}
                 slug={slug}
             />
+
+            <section className="flex w-full flex-col gap-3 rounded-lg bg-(--color-background-secondary) p-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="font-bold">単語一覧</h2>
+                    <span className="font-mono text-sm opacity-50">
+                        {items.length} 個
+                    </span>
+                </div>
+
+                {items.length > 0 ? (
+                    <>
+                        <div className="grid grid-cols-2 gap-3 text-xs opacity-50">
+                            <span>日本語</span>
+                            <span>英語</span>
+                        </div>
+                        <ul className="max-h-80 overflow-y-auto">
+                            {items.map((item) => (
+                                <li
+                                    key={item.id}
+                                    className="grid grid-cols-2 gap-3 border-t border-black/5 py-2 text-sm dark:border-white/10"
+                                >
+                                    <span className="min-w-0 wrap-anywhere">
+                                        {item.prompt}
+                                    </span>
+                                    <span className="min-w-0 wrap-anywhere">
+                                        {item.answer}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </>
+                ) : (
+                    <p className="text-sm opacity-50">単語がありません。</p>
+                )}
+            </section>
         </Shell>
     );
 }
