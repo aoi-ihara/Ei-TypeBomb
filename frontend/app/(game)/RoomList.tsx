@@ -91,11 +91,8 @@ export default function RoomList({
             });
         }
 
-        return Array.from(roomsById.values()).sort(
-            (a, b) =>
-                new Date(b.updatedAt ?? 0).getTime() -
-                new Date(a.updatedAt ?? 0).getTime(),
-        );
+        // Keep the server-provided recommendation order for public rooms.
+        return Array.from(roomsById.values());
     }, [publicRooms, myRooms, currentUser?.id]);
 
     const myRoomIds = useMemo(
@@ -104,7 +101,13 @@ export default function RoomList({
     );
 
     const roomsInView = useMemo(() => {
-        if (view === "mine") return myRooms;
+        if (view === "mine") {
+            return [...myRooms].sort(
+                (a, b) =>
+                    new Date(b.updatedAt ?? 0).getTime() -
+                    new Date(a.updatedAt ?? 0).getTime(),
+            );
+        }
         if (view === "saved") {
             return rooms.filter((room) => savedRoomIds.includes(room.id));
         }
@@ -114,22 +117,16 @@ export default function RoomList({
     const filteredRooms = useMemo(() => {
         const query = keyword.trim().toLowerCase();
 
-        return roomsInView
-            .filter((room) => {
-                if (!query) return true;
+        return roomsInView.filter((room) => {
+            if (!query) return true;
 
-                const searchableText = [room.id, room.title, room.explanation]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
+            const searchableText = [room.id, room.title, room.explanation]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
 
-                return searchableText.includes(query);
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.updatedAt ?? 0).getTime() -
-                    new Date(a.updatedAt ?? 0).getTime(),
-            );
+            return searchableText.includes(query);
+        });
     }, [roomsInView, keyword]);
 
     const selectView = (nextView: View) => {

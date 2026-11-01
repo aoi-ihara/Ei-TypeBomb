@@ -5,9 +5,20 @@ import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { isRoomAuthorized } from "./auth";
 import type { Item, Room } from "@/type";
+import {
+    rankPublicRooms,
+    type RoomRecommendationStats,
+} from "./recommendation";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
+
+type PublicRoomRecommendationRow = {
+    room_id: string;
+    play_count: number | string | null;
+    recent_play_count: number | string | null;
+    save_count: number | string | null;
+};
 
 export const getRoomFromLink = async (link: string) => {
     const supabase = await createAdminClient();
@@ -59,7 +70,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         return [];
     }
 
-    return data.map((room) => ({
+    const rooms: Room[] = data.map((room) => ({
         id: room.id,
         title: room.title,
         explanation: room.explanation,
@@ -72,6 +83,39 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         itemCount: Array.isArray(room.items) ? room.items.length : 0,
         visibility: room.visibility,
     }));
+
+    if (rooms.length === 0) return rooms;
+
+    const { data: recommendationRows, error: recommendationError } =
+        await supabase.rpc(
+            "get_ei_typebomb_public_room_recommendation_stats",
+            { p_room_ids: rooms.map((room) => room.id) },
+        );
+
+    if (recommendationError) {
+        // Keep the room list usable before the recommendation migration is applied.
+        serverError(
+            "failed to fetch public room recommendation stats",
+            recommendationError,
+            "DB",
+        );
+    }
+
+    const statsByRoomId = new Map<string, RoomRecommendationStats>(
+        (recommendationRows ?? []).map(
+            (row: PublicRoomRecommendationRow) =>
+                [
+                    row.room_id,
+                    {
+                        playCount: Number(row.play_count ?? 0),
+                        recentPlayCount: Number(row.recent_play_count ?? 0),
+                        saveCount: Number(row.save_count ?? 0),
+                    },
+                ] as const,
+        ),
+    );
+
+    return rankPublicRooms(rooms, statsByRoomId);
 };
 
 export const getRoomSummaryFromId = async (id: string) => {
