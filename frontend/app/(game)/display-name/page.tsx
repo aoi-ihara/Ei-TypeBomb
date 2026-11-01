@@ -1,62 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getPlaygroundRoom } from "@/lib/room/playground";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import Button from "@/components/ui/Button";
-import posthog from "posthog-js";
-import Input from "@/components/ui/Input";
-
-export default function Loading() {
-    const [showCursor, setShowCursor] = useState(true);
-    const [displayName, setDisplayName] = useState("");
-
-    const router = useRouter();
-
-    const handleContinue = () => {
-        localStorage.setItem("display-name", displayName);
-        posthog.capture("display_name_set");
-        router.push("/game");
-    };
-
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        return () => {
-            clearInterval(intervalId);
-        };
-    }, []);
-
-    return (
-        <div className="flex flex-col w-full max-w-md px-4 gap-4 items-center pt-16">
-            <div className="flex items-end mb-4">
-                <h1 className="font-bold text-2xl" data-cursor="text">
-                    表示名を入力
-                </h1>
-                <div
-                    className={`w-3 h-1 mb-1 ml-1 bg-cyan-600 ${!showCursor && "opacity-0"}`}
-                />
-            </div>
-            <div data-cursor="text" className="w-full rounded-2xl">
-                <Input
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    label="表示名"
-                />
-            </div>
-
-            <Button
-                onClick={() => {
-                    if (displayName) handleContinue();
-                }}
-                className="w-full"
-                variant="primary"
-                disabled={!displayName}
-                iconName="arrowRight"
-            >
-                続ける
-            </Button>
-        </div>
-    );
+export default async function LegacyDisplayNameRoute() {
+    const room = await getPlaygroundRoom();
+    redirect(room ? "/" + room.id : "/");
 }

@@ -13,11 +13,11 @@ const GENERATION_EXAMPLES = new Set([
 ]);
 
 function isRoomEditorPath(pathname: string) {
-    return /^\/my-rooms\/[^/]+$/.test(pathname);
+    return /^\/[^/]+\/edit$/.test(pathname);
 }
 
 function getRoomId(pathname: string) {
-    return pathname.split("/").at(-1);
+    return pathname.split("/")[1];
 }
 
 function isFeaturePanelElement(element: Element | null) {
@@ -54,16 +54,6 @@ export default function PostHogEventTracker() {
             const inRoomEditor = isRoomEditorPath(currentPathname);
             const inFeaturePanel = isFeaturePanelElement(button);
             const roomId = getRoomId(currentPathname);
-
-            if (currentPathname === "/" && text === "プレイ") {
-                posthog.capture("play_clicked");
-                return;
-            }
-
-            if (currentPathname === "/room" && text === "デモをプレイ") {
-                posthog.capture("demo_started");
-                return;
-            }
 
             if (inRoomEditor && icon === "qrCode") {
                 posthog.capture("room_qr_opened", { room_id: roomId });

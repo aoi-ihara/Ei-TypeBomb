@@ -10,17 +10,21 @@ type ButtonProps = Pick<
 > & {
     children?: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    onPointerDown?: React.MouseEventHandler<HTMLButtonElement>;
+    onPointerUp?: React.MouseEventHandler<HTMLButtonElement>;
+    onPointerCancel?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
     loading?: boolean;
     loadingText?: string;
     className?: string;
     type?: "button" | "submit" | "reset";
     variant?: ButtonVariant;
-    padding?: "small" | "middle" | "large";
+    padding?: "xsmall" | "small" | "middle" | "large";
     iconName?: IconName;
     alignment?: "left" | "center";
     value?: string;
     name?: string;
+    cursor?: "0" | "1" | "2";
 };
 
 const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
@@ -34,7 +38,7 @@ const variantStyles = (
     disabled: boolean,
 ) => {
     return variant === "text"
-        ? `${!loading && "underline"} w-fit flex rounded-md active:no-underline active:scale-95`
+        ? `w-full flex rounded-md active:scale-95`
         : variant === "default" || loading
           ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
           : variant === "danger"
@@ -45,28 +49,32 @@ const variantStyles = (
 export default function Button({
     children,
     onClick,
+    onPointerDown,
+    onPointerUp,
+    onPointerCancel,
     disabled = false,
     loading = false,
     loadingText = "読み込み中…",
     className = "w-fit",
     type = "button",
     variant = "default",
-    padding = "middle",
+    padding = variant === "text" ? "small" : "middle",
     iconName,
     alignment = "center",
     value,
     name,
+    cursor = disabled || loading ? "2" : variant === "text" ? "1" : "0",
     ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
-        variant === "text"
-            ? `gap-1 py-0.5 ${iconName ? "pl-0.5" : "pl-1"} ${children ? "pr-1.5" : "pr-0.5"}`
+        variant === "text" && padding === "xsmall"
+            ? `gap-1 py-0.5 ${iconName ? "pl-0.5" : "pl-1.5"} ${children ? "pr-1.5" : "pr-0.5"}`
             : padding === "small"
               ? `rounded-lg ${iconName ? "pl-1.5" : "pl-2"} ${children ? "pr-2" : "pr-1.5"} py-1.5 gap-1`
               : padding === "middle"
                 ? `rounded-lg ${iconName ? "pl-3" : "pl-4"} ${children ? "pr-4" : "pr-3"} py-3 gap-2`
-                : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4.5 gap-3`;
+                : `rounded-lg ${iconName ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4.5 gap-2`;
 
     const autoPlayAgain = children === "もう一度プレイ";
     const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -106,15 +114,16 @@ export default function Button({
         <div
             className={`rounded-lg ${className}`}
             data-cursor="button"
-            data-cursor-shape={
-                disabled || loading ? "2" : variant === "text" ? "1" : "0"
-            }
+            data-cursor-shape={cursor}
         >
             <button
                 ref={buttonRef}
                 {...ariaProps}
                 type={type}
                 onClick={handleClick}
+                onPointerDown={onPointerDown}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel}
                 disabled={disabled}
                 value={value}
                 name={name}

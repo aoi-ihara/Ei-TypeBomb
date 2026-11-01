@@ -22,12 +22,15 @@ export type GameBomb = {
     hintLength?: number;
 };
 export type GameLoser = { id: string; displayName?: string };
+export type RoomVisibility = "public" | "unlisted" | "private";
+
 export type Room = {
     id: string;
     userId?: string;
     title?: string;
     explanation?: string;
     items?: Item[];
+    itemCount?: number;
     maxPlayers?: number;
     bombCount?: number | null;
     gameDuration?: number;
@@ -40,7 +43,7 @@ export type Room = {
     losers?: GameLoser[];
     typingFocusPlayerId?: string;
     typingFocusInput?: string;
-    isPublic?: boolean;
+    visibility?: RoomVisibility;
 };
 
 export type User = {

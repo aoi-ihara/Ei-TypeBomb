@@ -5,8 +5,9 @@ import type { Room } from "@/type";
 import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
+import { getUser } from "../auth/session";
 import argon2 from "argon2";
-import { importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
+import { importJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWK } from "jose";
 import { cookies } from "next/headers";
 import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 
@@ -16,13 +17,39 @@ export const getAuthToken = async () => {
     return authToken;
 };
 
+export const isRoomAuthorized = async (roomId: string) => {
+    if (!isUUID(roomId, 4)) return false;
+
+    const token = await getAuthToken();
+    if (!token) return false;
+
+    try {
+        const jwk = JSON.parse(process.env.JWT_PUBLIC_KEY!) as JWK;
+        const publicKey = await importJWK(jwk, "ES256");
+        const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+            algorithms: ["ES256"],
+            issuer: "ei-typebomb",
+            audience: "authenticated",
+            requiredClaims: ["exp", "iat"],
+        });
+
+        return (
+            protectedHeader.kid === process.env.JWT_KEY_ID &&
+            payload.role === "authenticated" &&
+            payload.id === roomId
+        );
+    } catch {
+        return false;
+    }
+};
+
 export const prepareRoomJoin = async (link: string) => {
     if (!link) return null;
 
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
-        .select("id, password")
+        .select("id, visibility")
         .eq("link", link)
         .maybeSingle();
 
@@ -34,7 +61,7 @@ export const prepareRoomJoin = async (link: string) => {
     }
     if (!data) return null;
 
-    if (!data.password) {
+    if (data.visibility !== "private") {
         await setAuthCookie(data.id);
         return { id: data.id, requiresPassword: false };
     }
@@ -76,7 +103,7 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase
             .from("ei_typebomb_rooms")
-            .select("id, password")
+            .select("id, visibility, user_id")
             .eq("id", room.id)
             .maybeSingle();
 
@@ -85,7 +112,14 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             return "ルーム情報を取得できませんでした。しばらくしてから再度お試しください。";
         }
         if (!data) return "ルームが見つかりません。";
-        if (data.password) return "パスワードを入力してください。";
+        if (data.visibility === "private") {
+            const userId = await getUser();
+            const isOwner = Boolean(userId) && data.user_id === userId;
+            if (!isOwner) {
+                if (await isRoomAuthorized(room.id)) return null;
+                return "パスワードを入力してください。";
+            }
+        }
 
         await setAuthCookie(room.id);
     }

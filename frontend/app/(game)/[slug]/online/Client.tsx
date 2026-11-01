@@ -3,6 +3,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import { io } from "@/lib/room/socket";
 import {
     connectionError,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/room/connectionLogger";
 import { useBombExplosion } from "@/components/feature/BombExplosion";
 import GameView from "@/components/feature/GameView";
+import GameSettings from "@/components/layout/GameSettings";
 import type { GameNoticeProps } from "@/components/feature/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
 import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
@@ -86,6 +88,10 @@ export default function Clinet({
     const [isStarted, setIsStarted] = useState<boolean>(false);
     const router = useRouter();
     const [isSpectator, setIsSpectator] = useState<boolean>(false);
+    const [backgroundMusic, setBackgroundMusic] = useState(
+        initialBackgroundMusic,
+    );
+    const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
     const [notice, setNotice] = useState<GameNoticeProps>({
         visible: false,
         iconName: "globeOff",
@@ -257,6 +263,7 @@ export default function Clinet({
             process.env.NEXT_PUBLIC_DISTRIBUTED_ROOMS === "true";
 
         let selected = false;
+        let firstSnapshotCaptured = false;
         let failoverStarted = false;
         let secondaryUnavailable = false;
         let primaryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -614,6 +621,16 @@ export default function Clinet({
                     },
                 ) => {
                     if (!selected || socketRef.current !== socket) return;
+                    if (!firstSnapshotCaptured) {
+                        firstSnapshotCaptured = true;
+                        posthog.capture("game_first_snapshot_received", {
+                            snapshot_time_ms: Math.round(
+                                performance.now() - candidate.startedAt,
+                            ),
+                            migrating: newRoom.migrating === true,
+                            tier: candidate.tier,
+                        });
+                    }
                     cancelDisconnectNotice();
                     setServerError(
                         newRoom.migrating ? CONNECTING_MESSAGE : null,
@@ -728,6 +745,17 @@ export default function Clinet({
                         recovery_id: recoveryId,
                         from_depth: fromDepth,
                         detection_heartbeat_age_ms: detectionHeartbeatAgeMs,
+                    });
+                },
+            );
+
+            socket.on(
+                "cluster:recovery-failed",
+                ({ code }: { code?: string }) => {
+                    if (!selected || socketRef.current !== socket) return;
+                    // The "error" event that follows sets the failed state.
+                    posthog.capture("game_connection_recovery_failed", {
+                        code,
                     });
                 },
             );
@@ -936,7 +964,7 @@ export default function Clinet({
             return;
         }
 
-        if (!initialSounDeffects) return;
+        if (!soundEffects) return;
 
         const audio = blipAudioRef.current;
         if (audio) {
@@ -948,7 +976,7 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [users?.length, initialSounDeffects]);
+    }, [users?.length, soundEffects]);
 
     const isFirstBombRender = useRef(true);
     useEffect(() => {
@@ -957,7 +985,7 @@ export default function Clinet({
             return;
         }
 
-        if (!initialSounDeffects) return;
+        if (!soundEffects) return;
 
         const audio = powerupAudioRef.current;
         if (audio) {
@@ -969,14 +997,14 @@ export default function Clinet({
                     console.log("Audio playback prevented by browser policy."),
                 );
         }
-    }, [bombStatus, initialSounDeffects]);
+    }, [bombStatus, soundEffects]);
 
     useEffect(() => {
         audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
         audioRef.current.loop = true;
 
         const startAudio = () => {
-            if (initialBackgroundMusic && audioRef.current) {
+            if (backgroundMusic && audioRef.current) {
                 audioRef.current
                     .play()
                     .then(() => {
@@ -1007,7 +1035,7 @@ export default function Clinet({
                 audioRef.current.pause();
             }
         };
-    }, [router, initialBackgroundMusic, initialSounDeffects]);
+    }, [backgroundMusic]);
 
     const handleJoin = (source: "join_button" | "play_again") => {
         connectionLog("CONNECTION", "Room join requested", { reason: source });
@@ -1044,6 +1072,21 @@ export default function Clinet({
         socketRef.current?.emit("room:leave");
     };
 
+    const connection =
+        serverError === null
+            ? null
+            : serverError === UNAVAILABLE_MESSAGE
+              ? "failed"
+              : "reconnecting";
+
+    const handleReload = () => {
+        posthog.capture("game_reload_clicked", {
+            has_room: room !== null,
+            connection_failed: connection === "failed",
+        });
+        window.location.reload();
+    };
+
     const focusedBomb =
         room?.bombs?.find((bomb) => users[bomb.holder]?.id === userId) ??
         room?.bombs?.find(
@@ -1057,84 +1100,116 @@ export default function Clinet({
         : currentItem;
 
     return (
-        <GameView
-            room={room}
-            users={users}
-            positions={userPositions}
-            userId={userId}
-            currentTurn={focusedBomb?.holder ?? currentTurn}
-            bombStatus={focusedBomb?.status ?? bombStatus ?? 0}
-            currentItem={focusedItem}
-            itemPresentationKey={
-                focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
-            }
-            currentInput={currentInput}
-            remoteHintLength={
-                hintLengths[focusedBomb?.id ?? ""] ??
-                focusedBomb?.hintLength ??
-                0
-            }
-            onHintChange={(length) =>
-                socketRef.current?.emit("hint:update", { length })
-            }
-            failureCount={failureCount}
-            isStarted={isStarted}
-            isSpectator={isSpectator}
-            serverError={serverError}
-            notice={notice}
-            result={result}
-            lostDisplayName={lostDisplayName}
-            loserNames={loserNames}
-            loserIds={room?.losers?.map((loser) => loser.id)}
-            bombs={room?.bombs}
-            enableRemoteTypingSync={false}
-            bombRef={bombRef}
-            explosionLayer={explosionLayer}
-            onRecallComplete={(observation: RecallObservation) => {
-                if (
-                    !focusedItem ||
-                    !focusedBomb ||
-                    !userId ||
-                    users[focusedBomb.holder]?.id !== userId ||
-                    !observation.success
-                )
-                    return;
-                const session = onlineMemoryRef.current;
-                if (!session || session.roomId !== room?.id) return;
-                const updated = recordOnlineRecall(
-                    session,
-                    focusedItem.id,
-                    observation,
-                );
-                if (!updated) return;
-                cacheOnlinePendingMemory(session);
-                const nextItemId = nextOnlineRecommendation(session);
-                // This is emitted before word:success, so the socket server
-                // already has our next recommendation when the bomb returns.
-                if (nextItemId)
-                    socketRef.current?.emit("item:recommend", {
-                        itemId: nextItemId,
-                    });
-                void flushOnlineMemory();
-            }}
-            onSuccess={() => {
-                console.log("Success! Emitting to server...");
-                posthog.capture("word_succeeded");
-                socketRef.current?.emit("word:success");
-            }}
-            onChangeInput={(input, failed) => {
-                const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
-                socketRef.current?.emit(
-                    "currentInput",
-                    failed ? { input: value, failed: true } : value,
-                );
-            }}
-            onPlayAgain={handlePlayAgain}
-            onCreateRoom={() => router.push(getSignInUrl())}
-            onJoin={() => handleJoin("join_button")}
-            onWatch={handleWatch}
-            onStartGame={handleStartGame}
-            onLeave={handleLeave}
-        />
+        <>
+            <GameView
+                room={room}
+                users={users}
+                positions={userPositions}
+                userId={userId}
+                currentTurn={focusedBomb?.holder ?? currentTurn}
+                bombStatus={focusedBomb?.status ?? bombStatus ?? 0}
+                currentItem={focusedItem}
+                itemPresentationKey={
+                    focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
+                }
+                currentInput={currentInput}
+                remoteHintLength={
+                    hintLengths[focusedBomb?.id ?? ""] ??
+                    focusedBomb?.hintLength ??
+                    0
+                }
+                onHintChange={(length) =>
+                    socketRef.current?.emit("hint:update", { length })
+                }
+                failureCount={failureCount}
+                isStarted={isStarted}
+                isSpectator={isSpectator}
+                connection={connection}
+                onReload={handleReload}
+                notice={notice}
+                result={result}
+                lostDisplayName={lostDisplayName}
+                loserNames={loserNames}
+                loserIds={room?.losers?.map((loser) => loser.id)}
+                bombs={room?.bombs}
+                enableRemoteTypingSync={false}
+                bombRef={bombRef}
+                explosionLayer={explosionLayer}
+                onRecallComplete={(observation: RecallObservation) => {
+                    if (
+                        !focusedItem ||
+                        !focusedBomb ||
+                        !userId ||
+                        users[focusedBomb.holder]?.id !== userId ||
+                        !observation.success
+                    )
+                        return;
+                    const session = onlineMemoryRef.current;
+                    if (!session || session.roomId !== room?.id) return;
+                    const updated = recordOnlineRecall(
+                        session,
+                        focusedItem.id,
+                        observation,
+                    );
+                    if (!updated) return;
+                    cacheOnlinePendingMemory(session);
+                    const nextItemId = nextOnlineRecommendation(session);
+                    if (nextItemId)
+                        socketRef.current?.emit("item:recommend", {
+                            itemId: nextItemId,
+                        });
+                    void flushOnlineMemory();
+                }}
+                onSuccess={() => {
+                    console.log("Success! Emitting to server...");
+                    posthog.capture("word_succeeded");
+                    socketRef.current?.emit("word:success");
+                }}
+                onChangeInput={(input, failed) => {
+                    const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
+                    socketRef.current?.emit(
+                        "currentInput",
+                        failed ? { input: value, failed: true } : value,
+                    );
+                }}
+                onPlayAgain={handlePlayAgain}
+                onCreateRoom={() => {
+                    startNavigationProgress();
+                    router.push(getSignInUrl());
+                }}
+                onJoin={() => handleJoin("join_button")}
+                onWatch={handleWatch}
+                onStartGame={handleStartGame}
+                onLeave={handleLeave}
+            />
+            <header className="w-full flex absolute justify-end p-4 gap-4">
+                <GameSettings
+                    backgroundMusic={backgroundMusic}
+                    soundEffects={soundEffects}
+                    onBackgroundMusicChange={(next) => {
+                        setBackgroundMusic(next);
+                        document.cookie =
+                            "background-music=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "background_music",
+                            value: next,
+                        });
+                    }}
+                    onSoundEffectsChange={(next) => {
+                        setSoundEffects(next);
+                        document.cookie =
+                            "sound-effects=" +
+                            String(next) +
+                            "; path=/; max-age=31536000; SameSite=Lax";
+                        posthog.capture("settings_changed", {
+                            setting: "sound_effects",
+                            value: next,
+                        });
+                    }}
+                />
+            </header>
+        </>
     );
 }

@@ -121,6 +121,15 @@ export class RoutedSocket {
     private currentOwnerUrl?: string;
     private routedRevision?: number;
     private routedInstance?: string;
+    // Keep a deletion epoch as a fence while trying lower tiers. A stale ACTIVE
+    // snapshot from another replica must not resurrect an older room instance.
+    private tombstoneRoute?: {
+        roomId: string;
+        epoch: number;
+        revision: number;
+        instance: string;
+        failedOwner?: string;
+    };
     private failure?: { owner: string; revision: number };
     private deliveredResults = new Set<string>();
     private pending = new Map<
@@ -189,6 +198,17 @@ export class RoutedSocket {
     private dispatch(event: string, data?: unknown) {
         for (const listener of this.listeners.get(event) ?? []) listener(data);
     }
+    private acceptsTombstoneRoute(ownership?: Ownership | null) {
+        const tombstone = this.tombstoneRoute;
+        if (!tombstone) return true;
+        return !!ownership && (
+            ownership.epoch > tombstone.epoch ||
+            (ownership.epoch === tombstone.epoch &&
+                ownership.lifecycle === "DELETED" &&
+                ownership.instance === tombstone.instance)
+        );
+    }
+
     private recordServerTiming(header: string | null) {
         if (!this.recoveryDiagnostics || !header) return;
         const keys: Record<
@@ -421,6 +441,8 @@ export class RoutedSocket {
                         }
                         if (response.ok) {
                             const value = await response.json();
+                            if (!this.acceptsTombstoneRoute(value.ownership))
+                                throw new Error("Route conflicts with a newer deletion tombstone");
                             if (
                                 this.meta &&
                                 !acceptsRoomRoute(this.meta, value.ownership)
@@ -559,6 +581,8 @@ export class RoutedSocket {
                                         "Routing endpoint unavailable",
                                     );
                                 const value = await response.json();
+                                if (!this.acceptsTombstoneRoute(value.ownership))
+                                    throw new Error("Route conflicts with a newer deletion tombstone");
                                 if (
                                     this.meta &&
                                     !acceptsRoomRoute(
@@ -657,8 +681,21 @@ export class RoutedSocket {
                 (a, b) => a.depth - b.depth,
             );
             if (own?.lifecycle === "DELETED") {
-                // The certified tombstone ends the old incarnation. A new
-                // page must not demand its retired checkpoint from a fresh tier.
+                // Do not send the retired instance as expectedInstance. Keep
+                // its epoch as a fence and remember any tier that failed to
+                // reopen it, so the next attempt can start at a lower tier.
+                const previousTombstone = this.tombstoneRoute;
+                this.tombstoneRoute = {
+                    roomId: own.roomId,
+                    epoch: own.epoch,
+                    revision: own.revision,
+                    instance: own.instance,
+                    ...(previousTombstone?.epoch === own.epoch &&
+                    previousTombstone.instance === own.instance &&
+                    previousTombstone.failedOwner
+                        ? { failedOwner: previousTombstone.failedOwner }
+                        : {}),
+                };
                 this.meta = undefined;
                 this.routedInstance = undefined;
                 this.routedRevision = undefined;
@@ -667,16 +704,25 @@ export class RoutedSocket {
                 this.joinedRoom = false;
                 this.rejoinOnSnapshot = false;
             } else if (own) {
+                this.tombstoneRoute = undefined;
                 this.roomId = own.roomId;
                 this.routedRevision = own.revision;
                 this.routedInstance = own.instance;
+            } else {
+                this.tombstoneRoute = undefined;
             }
             // Try certified tiers in priority order for fresh/deleted rooms.
             // A reachable backup can initialize its own signed cohort when
             // higher tiers are unavailable.
+            const failedTombstoneOwner = this.tombstoneRoute?.failedOwner;
+            const failedTombstoneDepth = failedTombstoneOwner
+                ? ordered.find((server) => server.id === failedTombstoneOwner)?.depth
+                : undefined;
             const candidates =
                 !own || own.lifecycle === "DELETED"
-                    ? ordered
+                    ? failedTombstoneDepth === undefined
+                        ? ordered
+                        : ordered.filter((server) => server.depth > failedTombstoneDepth)
                     : ordered.filter((server) => server.id === own.owner);
             for (const server of candidates) {
                 if (attempt !== this.attempt || this.stopped) return this;
@@ -843,6 +889,25 @@ export class RoutedSocket {
                 });
                 socket.on("error", (error) => {
                     if (active()) {
+                        // If authentication fails after a deletion tombstone,
+                        // retain its epoch and skip this tier on the next attempt.
+                        // A lower tier can open a fresh instance from the certified
+                        // tombstone; election reports are for active instances.
+                        if (
+                            authenticating &&
+                            error?.code === "VOTER_STATE_LOST" &&
+                            this.tombstoneRoute
+                        ) {
+                            this.roomId = this.tombstoneRoute.roomId;
+                            this.tombstoneRoute = {
+                                ...this.tombstoneRoute,
+                                failedOwner: server.id,
+                            };
+                            // This was a DELETED route, so ask another tier to
+                            // open a fresh instance instead of trying to elect
+                            // from an unrelated/retired checkpoint via /report.
+                            this.failure = undefined;
+                        }
                         connectionError(
                             "CONNECTION",
                             "Server returned an error",
@@ -930,6 +995,16 @@ export class RoutedSocket {
                     const previous = this.meta;
                     if (previous && !acceptsRoomSnapshot(previous, room))
                         return;
+                    if (
+                        this.tombstoneRoute &&
+                        room.epoch <= this.tombstoneRoute.epoch
+                    )
+                        return;
+                    if (
+                        this.tombstoneRoute &&
+                        room.epoch > this.tombstoneRoute.epoch
+                    )
+                        this.tombstoneRoute = undefined;
                     if (!room.migrating) this.recoveryFailures = 0;
                     this.lastReply = performance.now();
                     if (

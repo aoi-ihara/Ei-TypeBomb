@@ -88,7 +88,9 @@ export default function Dialog({
                             </div>
 
                             {description && (
-                                <div id="dialog-description">{description}</div>
+                                <div id="dialog-description" data-cursor="text">
+                                    {description}
+                                </div>
                             )}
                         </div>
 
