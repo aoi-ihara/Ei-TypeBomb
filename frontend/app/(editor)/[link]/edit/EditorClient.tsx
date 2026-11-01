@@ -684,11 +684,6 @@ export default function EditorClient({
                             {validateLink(roomLink)}
                         </div>
                     )}
-                    {roomLinkError && (
-                        <div className="text-red-500" data-cursor="text">
-                            {roomLinkError}
-                        </div>
-                    )}
                 </div>
 
                 <div className="w-16">

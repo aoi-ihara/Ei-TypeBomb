@@ -91,7 +91,6 @@ export default function RoomList({
             });
         }
 
-        // Keep the server-provided recommendation order for public rooms.
         return Array.from(roomsById.values());
     }, [publicRooms, myRooms, currentUser?.id]);
 
@@ -120,7 +119,12 @@ export default function RoomList({
         return roomsInView.filter((room) => {
             if (!query) return true;
 
-            const searchableText = [room.link, room.id, room.title, room.explanation]
+            const searchableText = [
+                room.link,
+                room.id,
+                room.title,
+                room.explanation,
+            ]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase();
@@ -258,7 +262,6 @@ export default function RoomList({
     return (
         <>
             <header className="w-full flex justify-end p-4 gap-4">
-                {" "}
                 {currentUser ? (
                     <Menu
                         name="ユーザーアクション"

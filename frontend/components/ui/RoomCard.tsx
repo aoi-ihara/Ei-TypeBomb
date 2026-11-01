@@ -38,16 +38,18 @@ export default function RoomCard({
     return (
         <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary)">
             <div
-                onClick={() => {
-                    posthog.capture("play_clicked", { room_id: room.id });
-                    startNavigationProgress();
-                    router.push("/" + roomLink);
-                }}
                 className="rounded-lg h-full"
                 data-cursor="button"
                 data-cursor-shape="1"
             >
-                <div className="flex flex-col h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95">
+                <button
+                    className="flex flex-col h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
+                    onClick={() => {
+                        posthog.capture("play_clicked", { room_id: room.id });
+                        startNavigationProgress();
+                        router.push("/" + roomLink);
+                    }}
+                >
                     <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
                         <Icon
                             name={
@@ -101,7 +103,7 @@ export default function RoomCard({
                             </span>
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
 
             <div className="mt-auto flex flex-wrap items-center justify-end">
