@@ -43,7 +43,7 @@ export default function RoomCard({
                 data-cursor-shape="1"
             >
                 <button
-                    className="flex flex-col h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
+                    className="flex flex-col items-start h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
                         startNavigationProgress();
