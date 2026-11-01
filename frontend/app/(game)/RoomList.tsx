@@ -118,15 +118,15 @@ export default function RoomList({
         const query = keyword.trim().toLowerCase();
 
         return roomsInView.filter((room) => {
-                if (!query) return true;
+            if (!query) return true;
 
-                const searchableText = [room.id, room.title, room.explanation]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
+            const searchableText = [room.id, room.title, room.explanation]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
 
-                return searchableText.includes(query);
-            });
+            return searchableText.includes(query);
+        });
     }, [roomsInView, keyword]);
 
     const selectView = (nextView: View) => {
