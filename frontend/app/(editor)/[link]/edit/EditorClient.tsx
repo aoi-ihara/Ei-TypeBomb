@@ -488,7 +488,6 @@ export default function EditorClient({
     };
 
     const handlePlay = async () => {
-        if (!(await saveRoomData())) return;
         startNavigationProgress();
         router.push("/" + roomLink);
     };
