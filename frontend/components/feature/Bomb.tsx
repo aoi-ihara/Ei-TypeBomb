@@ -51,7 +51,9 @@ export default function Bomb({ bombStatus, shaking = true }: Props) {
                 style={
                     bombShakeDuration === null
                         ? undefined
-                        : { animationDuration: bombShakeDuration }
+                        : {
+                              "--bomb-shake-duration": bombShakeDuration,
+                          }
                 }
             >
                 <path
