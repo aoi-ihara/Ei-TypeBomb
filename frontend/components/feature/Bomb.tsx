@@ -36,25 +36,23 @@ export default function Bomb({ bombStatus, shaking = true }: Props) {
     const style = bombStyles[styleIndex];
     const bombShakeDuration =
         bombStatus === 0 ? null : `${Math.max(100, 700 - bombStatus * 150)}ms`;
+    const shakeAnimation =
+        !shaking || bombShakeDuration === null
+            ? undefined
+            : `bombShake ${bombShakeDuration} ease-in-out infinite`;
 
     return (
-        <svg
-            width="32"
-            height="32"
-            viewBox="0 0 128 128"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ filter: `drop-shadow(0 0 6px ${style.glow})` }}
-            className="transition-colors duration-(--duration-etb) ease-etb"
+        <span
+            className="block w-8 h-8"
+            style={{ animation: shakeAnimation }}
         >
-            <g
-                className={!shaking || bombShakeDuration === null ? "" : "bomb-shake"}
-                style={
-                    bombShakeDuration === null
-                        ? undefined
-                        : {
-                              "--bomb-shake-duration": bombShakeDuration,
-                          }
-                }
+            <svg
+                width="32"
+                height="32"
+                viewBox="0 0 128 128"
+                xmlns="http://www.w3.org/2000/svg"
+                style={{ filter: `drop-shadow(0 0 6px ${style.glow})` }}
+                className="transition-colors duration-(--duration-etb) ease-etb"
             >
                 <path
                     fill="none"
@@ -71,7 +69,7 @@ export default function Bomb({ bombStatus, shaking = true }: Props) {
                     d="M 95.835754 43.140877 C 101.60791 51.293633 105 61.250687 105 72 C 105 99.614235 82.614235 122 55 122 C 27.385763 122 5 99.614235 5 72 C 5 44.385765 27.385763 22 55 22 C 57.070099 22 59.110813 22.125801 61.114918 22.370178 L 66.844559 12.446152 C 69.053696 8.619812 73.946419 7.308807 77.772758 9.517952 L 98.950966 21.745193 C 102.777306 23.95433 104.088303 28.847054 101.87"
                     className="transition-colors duration-(--duration-etb) ease-etb"
                 />
-            </g>
-        </svg>
+            </svg>
+        </span>
     );
 }
