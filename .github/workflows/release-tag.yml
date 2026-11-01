@@ -15,6 +15,18 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
+            - name: Validate release notes
+              env:
+                  PR_BODY: ${{ github.event.pull_request.body }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+
+                  if [ -z "${PR_BODY//[[:space:]]/}" ]; then
+                    echo "The merged production PR must have a non-empty description because it is used as the GitHub Release notes."
+                    exit 1
+                  fi
+
             - name: Checkout merge commit
               uses: actions/checkout@v4
               with:
@@ -121,9 +133,13 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
                   VERSION: ${{ steps.version.outputs.version }}
+                  PR_BODY: ${{ github.event.pull_request.body }}
               run: |
                   set -euo pipefail
+
+                  printf '%s' "$PR_BODY" > release-notes.md
+
                   gh release create "$VERSION" \
                     --target "${{ github.event.pull_request.merge_commit_sha }}" \
                     --title "$VERSION" \
-                    --generate-notes
+                    --notes-file release-notes.md
