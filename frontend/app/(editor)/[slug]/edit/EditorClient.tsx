@@ -24,12 +24,7 @@ import {
     isAllowedTypingAnswer,
     exportAnswerPairs,
 } from "@/lib/room/importWords";
-import type {
-    LegacyWord,
-    Room,
-    RoomVisibility,
-    TypedRecallItem,
-} from "@/type";
+import type { LegacyWord, Room, RoomVisibility, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
@@ -51,11 +46,7 @@ import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 
-const VISIBILITY_OPTIONS: RoomVisibility[] = [
-    "public",
-    "unlisted",
-    "private",
-];
+const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
 
 const EXAMPLES = [
     "高校1年生の定期テストの単語",
@@ -801,7 +792,9 @@ export default function EditorClient({
                 >
                     <Selection
                         items={["公開", "限定公開", "非公開"]}
-                        selection={VISIBILITY_OPTIONS.indexOf(visibilitySelection)}
+                        selection={VISIBILITY_OPTIONS.indexOf(
+                            visibilitySelection,
+                        )}
                         onSelected={(index) => {
                             setVisibilitySelection(
                                 VISIBILITY_OPTIONS[index] ?? "unlisted",
@@ -1196,7 +1189,8 @@ export default function EditorClient({
                                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
                                                 <div className="flex flex-col gap-4">
                                                     <Input
-                                                        label="問題文"
+                                                        label="問題"
+                                                        font="mono"
                                                         value={item.prompt}
                                                         onChange={(e) => {
                                                             const newItems =
