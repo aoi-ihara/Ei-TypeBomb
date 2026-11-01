@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getRoomMetadataFromId } from "@/lib/room/get";
+import { getRoomMetadataFromLink } from "@/lib/room/get";
 
 const DEFAULT_DESCRIPTION =
     "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。";
@@ -7,10 +7,10 @@ const DEFAULT_DESCRIPTION =
 export async function generateMetadata({
     params,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ link: string }>;
 }): Promise<Metadata> {
-    const { slug } = await params;
-    const room = await getRoomMetadataFromId(slug);
+    const { link } = await params;
+    const room = await getRoomMetadataFromLink(link);
 
     if (!room) {
         return {};

@@ -6,7 +6,7 @@ const filePath = path.join(
     "..",
     "app",
     "(editor)",
-    "[slug]",
+    "[link]",
     "edit",
     "EditorClient.tsx",
 );

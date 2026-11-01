@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 export default async function LegacyRoomEditorRoute({
     params,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ link: string }>;
 }) {
-    const { slug } = await params;
-    redirect("/" + slug + "/edit");
+    const { link } = await params;
+    redirect("/" + link + "/edit");
 }

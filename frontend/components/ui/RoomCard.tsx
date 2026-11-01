@@ -21,10 +21,11 @@ export default function RoomCard({
 }) {
     const router = useRouter();
     const [copied, setCopied] = useState(false);
+    const roomLink = room.link ?? room.id;
 
     const copyRoomLink = async () => {
         try {
-            const path = "/" + room.id;
+            const path = "/" + roomLink;
             await navigator.clipboard.writeText(window.location.origin + path);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 2000);
@@ -40,7 +41,7 @@ export default function RoomCard({
                 onClick={() => {
                     posthog.capture("play_clicked", { room_id: room.id });
                     startNavigationProgress();
-                    router.push("/" + room.id);
+                    router.push("/" + roomLink);
                 }}
                 className="rounded-lg h-full"
                 data-cursor="button"
@@ -108,7 +109,7 @@ export default function RoomCard({
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
                         startNavigationProgress();
-                        router.push("/" + room.id);
+                        router.push("/" + roomLink);
                     }}
                     iconName="play"
                     variant="text"
@@ -118,7 +119,7 @@ export default function RoomCard({
                     <Button
                         onClick={() => {
                             startNavigationProgress();
-                            router.push("/" + room.id + "/edit");
+                            router.push("/" + roomLink + "/edit");
                         }}
                         iconName="pen"
                         variant="text"

@@ -7,11 +7,17 @@ import { getPlaygroundRoom } from "@/lib/room/playground";
 export default async function OnlinePlayPage({
     params,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ link: string }>;
 }) {
-    const { slug } = await params;
+    const { link } = await params;
     const room = await getPlaygroundRoom();
-    if (!room || room.id !== slug) redirect("/" + slug);
+    if (!room) redirect("/" + link);
+
+    const canonicalLink = room.link ?? room.id;
+    if (link !== canonicalLink) {
+        if (link === room.id) redirect("/" + canonicalLink + "/online");
+        redirect("/" + link);
+    }
 
     const cookieStore = await cookies();
     const backgroundMusic =

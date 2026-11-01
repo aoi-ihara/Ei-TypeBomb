@@ -23,7 +23,7 @@ export const createNewRoom = async () => {
             items: [],
             visibility: "unlisted",
         })
-        .select("id")
+        .select("id, link")
         .single();
 
     if (error) {
@@ -31,7 +31,7 @@ export const createNewRoom = async () => {
         return null;
     }
 
-    if (!data.id) return null;
+    if (!data.id || !data.link) return null;
 
     after(async () => {
         const posthog = getPostHogClient();
@@ -43,5 +43,5 @@ export const createNewRoom = async () => {
         await posthog.shutdown();
     });
 
-    return data.id;
+    return data.link;
 };

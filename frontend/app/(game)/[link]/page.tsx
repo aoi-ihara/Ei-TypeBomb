@@ -1,18 +1,26 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
-import { getRoomPlayInfoFromId, getRoomSummaryFromId } from "@/lib/room/get";
+import {
+    getRoomPlayInfoFromId,
+    getRoomRouteFromLink,
+    getRoomSummaryFromId,
+} from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
 
 export default async function RoomPage({
     params,
 }: {
-    params: Promise<{ slug: string }>;
+    params: Promise<{ link: string }>;
 }) {
-    const { slug } = await params;
-    const playInfo = await getRoomPlayInfoFromId(slug);
+    const { link } = await params;
+    const route = await getRoomRouteFromLink(link);
+    if (!route) notFound();
+    if (link !== route.link) redirect("/" + route.link);
+
+    const playInfo = await getRoomPlayInfoFromId(route.id);
     if (!playInfo?.exists) notFound();
 
     const title = playInfo.title || "ルーム";
@@ -20,12 +28,12 @@ export default async function RoomPage({
     if (playInfo.requiresPassword && !playInfo.authorized) {
         return (
             <Shell title="パスワードを入力" size="medium" animateAppear>
-                <RoomPasswordGate roomId={slug} />
+                <RoomPasswordGate roomId={route.id} />
             </Shell>
         );
     }
 
-    const [result] = await Promise.all([getRoomSummaryFromId(slug), cookies()]);
+    const [result] = await Promise.all([getRoomSummaryFromId(route.id), cookies()]);
     if (!result) notFound();
 
     const { room } = result;
@@ -102,11 +110,11 @@ export default async function RoomPage({
             </section>
 
             <PlayRoom
-                roomId={slug}
+                roomId={route.id}
+                link={route.link}
                 alreadyAuthorized={playInfo.authorized}
                 itemCount={itemCount}
                 isOwner={isOwner}
-                slug={slug}
             />
 
             <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
