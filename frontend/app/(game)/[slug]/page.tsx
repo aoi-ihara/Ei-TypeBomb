@@ -114,7 +114,7 @@ export default async function RoomPage({
                     items.map((item, index) => (
                         <div
                             key={item.id}
-                            className={`grid grid-cols-2 ${index !== 0 && "border-t border-(--color-border) pt-4"}`}
+                            className={`grid font-mono grid-cols-2 ${index !== 0 && "border-t border-(--color-border) pt-4"}`}
                         >
                             <span
                                 className="w-full line-clamp-1"
