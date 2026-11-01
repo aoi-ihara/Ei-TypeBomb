@@ -10,6 +10,7 @@ import { PopUp } from "@/components/ui/PopUp";
 import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
+import { recordRoomPlay } from "@/lib/room/analytics";
 import posthog from "posthog-js";
 
 type PlayMode = "online" | "offline";
@@ -80,7 +81,8 @@ export default function PlayRoom({
         };
     }, [roomId, alreadyAuthorized]);
 
-    const navigateToMode = (mode: PlayMode) => {
+    const navigateToMode = async (mode: PlayMode) => {
+        await recordRoomPlay(roomId, mode);
         posthog.capture("room_entered", {
             room_id: roomId,
             play_mode: mode,
@@ -126,7 +128,7 @@ export default function PlayRoom({
             );
 
             if (result === null) {
-                navigateToMode(mode);
+                await navigateToMode(mode);
                 return;
             }
 
