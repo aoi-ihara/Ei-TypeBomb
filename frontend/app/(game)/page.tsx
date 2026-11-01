@@ -1,4 +1,5 @@
-import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { getUserDetails } from "@/lib/auth/session";
 import { getMyRooms, getPublicRooms } from "@/lib/room/get";
 import { getSavedRoomIds } from "@/lib/room/save";
@@ -9,7 +10,7 @@ export default async function Page({
 }: {
     searchParams: Promise<{ filter?: string; owner?: string }>;
 }) {
-    const [{ filter, owner }] = await Promise.all([searchParams, cookies()]);
+    const { filter, owner } = await searchParams;
 
     const initialView =
         filter === "mine"
@@ -20,14 +21,17 @@ export default async function Page({
                 ? "me"
                 : "public";
 
-    const [publicRooms, currentUser, savedRoomIds] = await Promise.all([
-        getPublicRooms(),
-        getUserDetails(),
-        getSavedRoomIds(),
-    ]);
+    const [publicRooms, currentUser, savedRoomIds, myRoomsResult] =
+        await Promise.all([
+            getPublicRooms(),
+            getUserDetails(),
+            getSavedRoomIds(),
+            getMyRooms(),
+        ]);
 
-    const myRoomsResult =
-        currentUser || initialView === "me" ? await getMyRooms() : null;
+    if (!currentUser && initialView === "me") {
+        redirect(getSignInUrl());
+    }
 
     return (
         <RoomList
