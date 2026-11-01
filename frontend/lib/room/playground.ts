@@ -7,18 +7,14 @@ import type { Room } from "@/type";
 import { createAdminClient } from "@/lib/db/server";
 import { serverError } from "@/lib/server-console";
 
-export const getPlaygroundRoom = async (): Promise<Room | null> => {
+const getPlaygroundRoomId = async (): Promise<string | null> => {
     const cookieStore = await cookies();
     const token = cookieStore.get("jwt_token")?.value;
     if (!token) return null;
 
-    let roomId: string;
-
     try {
         const jwk = JSON.parse(process.env.JWT_PUBLIC_KEY!) as JWK;
-
         const publicKey = await importJWK(jwk, "ES256");
-
         const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
             algorithms: ["ES256"],
         });
@@ -31,10 +27,45 @@ export const getPlaygroundRoom = async (): Promise<Room | null> => {
             return null;
         }
 
-        roomId = payload.id;
+        return payload.id;
     } catch {
         return null;
     }
+};
+
+/**
+ * Resolve the current playground route without downloading its word list.
+ * Online play loads the canonical room snapshot from its game server.
+ */
+export const getPlaygroundRoomRoute = async (): Promise<
+    Pick<Room, "id" | "link"> | null
+> => {
+    const roomId = await getPlaygroundRoomId();
+    if (!roomId) return null;
+
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, link, item_count")
+        .eq("id", roomId)
+        .maybeSingle();
+
+    if (error) {
+        serverError("failed to fetch playground room route", error, "DB");
+        return null;
+    }
+
+    if (!data || Number(data.item_count ?? 0) === 0) return null;
+
+    return {
+        id: data.id,
+        link: data.link,
+    };
+};
+
+export const getPlaygroundRoom = async (): Promise<Room | null> => {
+    const roomId = await getPlaygroundRoomId();
+    if (!roomId) return null;
 
     const supabase = await createAdminClient();
     const { data, error } = await supabase
