@@ -14,7 +14,10 @@ export const recordRoomPlay = async (
     roomId: string,
     playMode: RoomPlayMode,
 ): Promise<void> => {
-    if (!isUUID(roomId, 4) || (playMode !== "online" && playMode !== "offline")) {
+    if (
+        !isUUID(roomId, 4) ||
+        (playMode !== "online" && playMode !== "offline")
+    ) {
         return;
     }
 
@@ -31,7 +34,10 @@ export const recordRoomPlay = async (
             .maybeSingle();
 
         if (roomError) {
-            console.error("Failed to check room visibility for play event:", roomError);
+            console.error(
+                "Failed to check room visibility for play event:",
+                roomError,
+            );
             return;
         }
 
