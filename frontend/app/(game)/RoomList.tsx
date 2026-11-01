@@ -91,11 +91,8 @@ export default function RoomList({
             });
         }
 
-        return Array.from(roomsById.values()).sort(
-            (a, b) =>
-                new Date(b.updatedAt ?? 0).getTime() -
-                new Date(a.updatedAt ?? 0).getTime(),
-        );
+        // Keep the server-provided recommendation order for public rooms.
+        return Array.from(roomsById.values());
     }, [publicRooms, myRooms, currentUser?.id]);
 
     const myRoomIds = useMemo(
@@ -104,7 +101,13 @@ export default function RoomList({
     );
 
     const roomsInView = useMemo(() => {
-        if (view === "mine") return myRooms;
+        if (view === "mine") {
+            return [...myRooms].sort(
+                (a, b) =>
+                    new Date(b.updatedAt ?? 0).getTime() -
+                    new Date(a.updatedAt ?? 0).getTime(),
+            );
+        }
         if (view === "saved") {
             return rooms.filter((room) => savedRoomIds.includes(room.id));
         }
@@ -124,12 +127,7 @@ export default function RoomList({
                     .toLowerCase();
 
                 return searchableText.includes(query);
-            })
-            .sort(
-                (a, b) =>
-                    new Date(b.updatedAt ?? 0).getTime() -
-                    new Date(a.updatedAt ?? 0).getTime(),
-            );
+            });
     }, [roomsInView, keyword]);
 
     const selectView = (nextView: View) => {
