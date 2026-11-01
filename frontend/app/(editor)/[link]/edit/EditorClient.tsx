@@ -475,9 +475,6 @@ export default function EditorClient({
     };
 
     const handleCopyRoomLink = async () => {
-        const saved = await saveRoomData();
-        if (!saved) return;
-
         const joinLink = new URL(
             "/" + roomLink,
             process.env.NEXT_PUBLIC_JOIN_LINK!,
@@ -497,11 +494,7 @@ export default function EditorClient({
     };
 
     const handleOpenRoomCode = async () => {
-        if (!items?.length) {
-            setShowQrWarning(true);
-            return;
-        }
-        if (await saveRoomData()) setShowRoomCode(true);
+        setShowRoomCode(true);
     };
 
     useEffect(() => {
@@ -677,7 +670,7 @@ export default function EditorClient({
                         label="招待リンク"
                         font="mono"
                         type="url"
-                        inputClassName="pl-19.5"
+                        inputClassName="pl-7.5"
                         className={`transition-all w-full duration-(--duration-etb) ease-etb`}
                         value={roomLink}
                         disableLabelAnimation={true}
