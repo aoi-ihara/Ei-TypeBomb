@@ -1,4 +1,6 @@
 "use server";
+
+import { cache } from "react";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -13,8 +15,17 @@ import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
 
-type PublicRoomRecommendationRow = {
-    room_id: string;
+type PublicRoomRpcRow = {
+    id: string;
+    title: string | null;
+    explanation: string | null;
+    max_players: number | null;
+    bomb_count: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+    link: string | null;
+    game_duration: number | null;
+    item_count: number | null;
     play_count: number | string | null;
     recent_play_count: number | string | null;
     save_count: number | string | null;
@@ -62,10 +73,96 @@ export const getRoomRouteFromLink = async (link: string) => {
     };
 };
 
+const ROOM_PAGE_COLUMNS =
+    "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility";
+
+// React cache shares this result between generateMetadata and the page render.
+const getCachedRoomPageDataFromLink = cache(async (link: string) => {
+    if (!link) return null;
+
+    const supabase = await createAdminClient();
+    const [{ data: roomData, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select(ROOM_PAGE_COLUMNS)
+            .eq("link", link)
+            .maybeSingle(),
+        getUser(),
+    ]);
+
+    if (error) {
+        serverError("failed to fetch room page data", error, "DB");
+        return null;
+    }
+
+    let data = roomData;
+    if (!data && isUUID(link, 4)) {
+        const { data: legacyRoom, error: legacyError } = await supabase
+            .from("ei_typebomb_rooms")
+            .select(ROOM_PAGE_COLUMNS)
+            .eq("id", link)
+            .maybeSingle();
+
+        if (legacyError) {
+            serverError("failed to fetch legacy room page data", legacyError, "DB");
+            return null;
+        }
+        data = legacyRoom;
+    }
+
+    if (!data) return null;
+
+    const isOwner = data.user_id === userId;
+    const requiresPassword = data.visibility === "private";
+    const authorized =
+        isOwner || !requiresPassword || (await isRoomAuthorized(data.id));
+    const canViewDetails = !requiresPassword || authorized;
+    const items = Array.isArray(data.items) ? (data.items as Item[]) : [];
+
+    const room: Room | null = canViewDetails
+        ? {
+              id: data.id,
+              title: data.title,
+              userId: data.user_id,
+              explanation: data.explanation,
+              maxPlayers: data.max_players,
+              bombCount: data.bomb_count ?? null,
+              gameDuration: data.game_duration ?? 20,
+              createdAt: data.created_at,
+              updatedAt: data.updated_at,
+              items,
+              itemCount: items.length,
+              link: data.link ?? undefined,
+              visibility: data.visibility,
+          }
+        : null;
+
+    return {
+        id: data.id,
+        link: data.link ?? data.id,
+        title: canViewDetails ? data.title : undefined,
+        visibility: data.visibility,
+        requiresPassword,
+        authorized,
+        isOwner,
+        room,
+        itemCount: canViewDetails ? items.length : 0,
+    };
+});
+
+export const getRoomPageDataFromLink = async (link: string) =>
+    getCachedRoomPageDataFromLink(link);
+
 export const getRoomMetadataFromLink = async (link: string) => {
-    const route = await getRoomRouteFromLink(link);
-    if (!route) return null;
-    return getRoomMetadataFromId(route.id);
+    const result = await getCachedRoomPageDataFromLink(link);
+    if (!result) return null;
+
+    return {
+        // Private room details are never exposed through page or social metadata.
+        title: result.title ?? null,
+        explanation: result.room?.explanation ?? null,
+        visibility: result.visibility,
+    };
 };
 
 export const getRoomFromLink = async (link: string) => {
@@ -105,63 +202,40 @@ export const getRoomStatusFromId = async (id: string) => {
 
 export const getPublicRooms = async (): Promise<Room[]> => {
     const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select(
-            "id, title, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
-        )
-        .eq("visibility", "public")
-        .order("updated_at", { ascending: false });
+    const { data, error } = await supabase.rpc("get_ei_typebomb_public_rooms");
 
     if (error) {
         serverError("failed to fetch public rooms", error, "DB");
         return [];
     }
 
-    const rooms: Room[] = data.map((room) => ({
-        id: room.id,
-        title: room.title,
-        explanation: room.explanation,
-        maxPlayers: room.max_players,
-        bombCount: room.bomb_count ?? null,
-        gameDuration: room.game_duration ?? 20,
-        createdAt: room.created_at,
-        updatedAt: room.updated_at,
+    const rows = Array.isArray(data)
+        ? (data as unknown as PublicRoomRpcRow[])
+        : [];
+    const rooms: Room[] = rows.map((row) => ({
+        id: row.id,
+        title: row.title ?? undefined,
+        explanation: row.explanation ?? undefined,
+        maxPlayers: row.max_players ?? 2,
+        bombCount: row.bomb_count ?? null,
+        gameDuration: row.game_duration ?? 20,
+        createdAt: row.created_at ?? undefined,
+        updatedAt: row.updated_at ?? undefined,
         items: [],
-        itemCount: Array.isArray(room.items) ? room.items.length : 0,
-        link: room.link,
-        visibility: room.visibility,
+        itemCount: Number(row.item_count ?? 0),
+        link: row.link ?? undefined,
+        visibility: "public",
     }));
 
-    if (rooms.length === 0) return rooms;
-
-    const { data: recommendationRows, error: recommendationError } =
-        await supabase.rpc(
-            "get_ei_typebomb_public_room_recommendation_stats",
-            { p_room_ids: rooms.map((room) => room.id) },
-        );
-
-    if (recommendationError) {
-        // Keep the room list usable before the recommendation migration is applied.
-        serverError(
-            "failed to fetch public room recommendation stats",
-            recommendationError,
-            "DB",
-        );
-    }
-
     const statsByRoomId = new Map<string, RoomRecommendationStats>(
-        (recommendationRows ?? []).map(
-            (row: PublicRoomRecommendationRow) =>
-                [
-                    row.room_id,
-                    {
-                        playCount: Number(row.play_count ?? 0),
-                        recentPlayCount: Number(row.recent_play_count ?? 0),
-                        saveCount: Number(row.save_count ?? 0),
-                    },
-                ] as const,
-        ),
+        rows.map((row) => [
+            row.id,
+            {
+                playCount: Number(row.play_count ?? 0),
+                recentPlayCount: Number(row.recent_play_count ?? 0),
+                saveCount: Number(row.save_count ?? 0),
+            },
+        ]),
     );
 
     return rankPublicRooms(rooms, statsByRoomId);
@@ -346,19 +420,19 @@ export const getRoomFromId = async (id: string) => {
 
 export const getMyRooms = async () => {
     const userId = await getUser();
-    if (!userId) redirect(getSignInUrl());
+    if (!userId) return null;
 
     const supabase = await createAdminClient();
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility",
+            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, item_count, link, game_duration, visibility",
         )
         .eq("user_id", userId);
 
     if (error) {
         serverError("failed to fetch user's rooms", error, "DB");
-        return;
+        return null;
     }
 
     const rooms: Room[] = data.map((room) => ({
@@ -371,11 +445,11 @@ export const getMyRooms = async () => {
         createdAt: room.created_at,
         updatedAt: room.updated_at,
         items: [],
-        itemCount: Array.isArray(room.items) ? room.items.length : 0,
-        link: room.link,
+        itemCount: Number(room.item_count ?? 0),
+        link: room.link ?? undefined,
         visibility: room.visibility,
     }));
 
     serverLog("DB", "rooms fetched", { count: rooms.length });
-    return { userId: userId, rooms: rooms };
+    return { userId, rooms };
 };

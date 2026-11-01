@@ -1,12 +1,13 @@
 "use server";
 
+import { cache } from "react";
 import { createClient } from "@/lib/db/server";
 import { isOAuthEnabled, oauthCookieNames } from "@/lib/auth/oauth-config";
 import { cookies } from "next/headers";
 import { getOAuthAccessToken } from "@/lib/auth/oauth-session";
 import { serverError } from "@/lib/server-console";
 
-async function currentUser() {
+const currentUser = cache(async () => {
     const supabase = await createClient();
     const token = isOAuthEnabled() ? await getOAuthAccessToken() : null;
 
@@ -22,7 +23,7 @@ async function currentUser() {
         return null;
     }
     return data.user ?? null;
-}
+});
 
 export const getSession = async () => {
     if (isOAuthEnabled()) {

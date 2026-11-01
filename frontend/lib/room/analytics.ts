@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { getUser } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/db/server";
 import isUUID from "validator/es/lib/isUUID";
@@ -21,41 +22,28 @@ export const recordRoomPlay = async (
         return;
     }
 
-    try {
-        const [userId, supabase] = await Promise.all([
-            getUser(),
-            createAdminClient(),
-        ]);
+    after(async () => {
+        try {
+            const [userId, supabase] = await Promise.all([
+                getUser(),
+                createAdminClient(),
+            ]);
 
-        const { data: room, error: roomError } = await supabase
-            .from("ei_typebomb_rooms")
-            .select("visibility")
-            .eq("id", roomId)
-            .maybeSingle();
-
-        if (roomError) {
-            console.error(
-                "Failed to check room visibility for play event:",
-                roomError,
+            const { error } = await supabase.rpc(
+                "record_ei_typebomb_room_play",
+                {
+                    p_room_id: roomId,
+                    p_user_id: userId,
+                    p_play_mode: playMode,
+                },
             );
-            return;
-        }
 
-        if (room?.visibility !== "public") return;
-
-        const { error } = await supabase
-            .from("ei_typebomb_room_play_events")
-            .insert({
-                room_id: roomId,
-                user_id: userId,
-                play_mode: playMode,
-            });
-
-        if (error) {
+            if (error) {
+                console.error("Failed to record room play:", error);
+            }
+        } catch (error) {
+            // Analytics must never prevent a player from entering a room.
             console.error("Failed to record room play:", error);
         }
-    } catch (error) {
-        // Analytics must never prevent a player from entering a room.
-        console.error("Failed to record room play:", error);
-    }
+    });
 };
