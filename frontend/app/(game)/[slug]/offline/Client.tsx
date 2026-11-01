@@ -1082,33 +1082,18 @@ export default function Client({
                     });
                 }}
                 resultExtraActions={
-                    <>
-                        {guestMode && (
-                            <p
-                                role="status"
-                                className="text-sm text-center opacity-70"
-                            >
-                                ゲストプレイ中：学習データはこのブラウザに保存されます。ブラウザのデータを削除すると失われ、他の端末には同期されません。
-                            </p>
-                        )}
-                        {saveError && (
-                            <p role="status">
-                                学習データは保存待ちです。接続が戻ると再送します。
-                            </p>
-                        )}
-                        <Button
-                            iconName="link"
-                            className="w-full"
-                            onClick={() => {
-                                void flushPendingMemory().finally(() => {
-                                    startNavigationProgress();
-                                    router.push("/room");
-                                });
-                            }}
-                        >
-                            別のルームを選択
-                        </Button>
-                    </>
+                    <Button
+                        iconName="link"
+                        className="w-full"
+                        onClick={() => {
+                            void flushPendingMemory().finally(() => {
+                                startNavigationProgress();
+                                router.push("/");
+                            });
+                        }}
+                    >
+                        別のルームを選択
+                    </Button>
                 }
             />
             <header className="w-full flex absolute justify-end p-4 gap-4">
