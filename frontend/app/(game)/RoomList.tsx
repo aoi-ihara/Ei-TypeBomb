@@ -117,8 +117,7 @@ export default function RoomList({
     const filteredRooms = useMemo(() => {
         const query = keyword.trim().toLowerCase();
 
-        return roomsInView
-            .filter((room) => {
+        return roomsInView.filter((room) => {
                 if (!query) return true;
 
                 const searchableText = [room.id, room.title, room.explanation]
