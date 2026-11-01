@@ -1,3 +1,6 @@
+import { useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
+
 type Props = {
     bombStatus: number;
     shaking?: boolean;
@@ -5,58 +8,48 @@ type Props = {
 
 export default function Bomb({ bombStatus, shaking = true }: Props) {
     const bombStyles = [
-        {
-            body: "#111111",
-            fuse: "#7f1d1d",
-            glow: "rgba(255,255,255,0.25)",
-        },
-        {
-            body: "#222222",
-            fuse: "#dc2626",
-            glow: "rgba(251,146,60,0.5)",
-        },
-        {
-            body: "#5b3a29",
-            fuse: "#f97316",
-            glow: "rgba(251,146,60,0.8)",
-        },
-        {
-            body: "#7f1d1d",
-            fuse: "#facc15",
-            glow: "rgba(250,204,21,1)",
-        },
-        {
-            body: "#dc2626",
-            fuse: "#fde047",
-            glow: "rgba(255,80,80,1)",
-        },
+        { body: "#111111", fuse: "#7f1d1d", glow: "rgba(255,255,255,0.25)" },
+        { body: "#222222", fuse: "#dc2626", glow: "rgba(251,146,60,0.5)" },
+        { body: "#5b3a29", fuse: "#f97316", glow: "rgba(251,146,60,0.8)" },
+        { body: "#7f1d1d", fuse: "#facc15", glow: "rgba(250,204,21,1)" },
+        { body: "#dc2626", fuse: "#fde047", glow: "rgba(255,80,80,1)" },
     ];
 
     const styleIndex = Math.min(Math.max(0, bombStatus), bombStyles.length - 1);
     const style = bombStyles[styleIndex];
+    const shakeRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const element = shakeRef.current;
+        if (!element || !shaking || bombStatus === 0) return;
+
+        element.classList.remove("bomb-shake");
+        void element.offsetWidth;
+        element.classList.add("bomb-shake");
+    }, [bombStatus, shaking]);
+
     const bombShakeDuration =
-        bombStatus === 0 ? null : `${Math.max(100, 700 - bombStatus * 150)}ms`;
+        bombStatus === 0 ? "0ms" : `${Math.max(100, 700 - bombStatus * 150)}ms`;
 
     return (
         <div
-            className={`bomb-shake-wrapper ${!shaking || bombShakeDuration === null ? "" : "bomb-shake"}`}
+            ref={shakeRef}
+            className="bomb-shake-wrapper"
             style={{
                 width: 32,
                 height: 32,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                "--bomb-shake-duration": bombShakeDuration ?? "0ms",
-            } as React.CSSProperties}
+                "--bomb-shake-duration": bombShakeDuration,
+            } as CSSProperties}
         >
             <svg
                 width="32"
                 height="32"
                 viewBox="0 0 128 128"
                 xmlns="http://www.w3.org/2000/svg"
-                style={{
-                    filter: `drop-shadow(0 0 6px ${style.glow})`,
-                }}
+                style={{ filter: `drop-shadow(0 0 6px ${style.glow})` }}
                 className="transition-colors duration-(--duration-etb) ease-etb"
             >
                 <path
@@ -67,7 +60,6 @@ export default function Bomb({ bombStatus, shaking = true }: Props) {
                     d="M 89 17 C 89 17 98.633644 0.72097 109 10 C 121.635551 21.310211 103.181946 45.948578 108 52 C 114.241898 59.839752 123 53 123 53"
                     className="transition-colors duration-(--duration-etb) ease-etb"
                 />
-
                 <path
                     fill={style.body}
                     fillRule="evenodd"
