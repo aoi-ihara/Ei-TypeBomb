@@ -51,11 +51,22 @@ body { @apply bg-(--color-background) text-(--color-foreground) font-sans flex f
 @keyframes bombBounce { 0% { transform: scale(1); } 30% { transform: scale(1.6); } 60% { transform: scale(0.85); } 100% { transform: scale(1); } }
 .bomb-shake { animation: bombShake var(--bomb-shake-duration) ease-in-out infinite; }
 @keyframes bombShake {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    25% { transform: translateX(-1.5px) rotate(-2deg); }
-    75% { transform: translateX(1.5px) rotate(2deg); }
+    0%,
+    100% {
+        transform: translateX(0) rotate(0deg);
+    }
+    25% {
+        transform: translateX(-1.5px) rotate(-2deg);
+    }
+    75% {
+        transform: translateX(1.5px) rotate(2deg);
+    }
 }
-@media (prefers-reduced-motion: reduce) { .bomb-shake { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+    .bomb-shake {
+        animation: none !important;
+    }
+}
 .wrong-answer { animation: wrongAnswer var(--duration-etb, 400ms) var(--ease-etb, ease-out); }
 @keyframes wrongAnswer { 0% { transform: translateX(-10px); } 15% { transform: translateX(10px); } 30% { transform: translateX(-10px); } 45% { transform: translateX(10px); } 60% { transform: translateX(-10px); } 100% { transform: translateX(0); } }
 
