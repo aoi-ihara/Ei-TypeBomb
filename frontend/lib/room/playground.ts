@@ -59,7 +59,7 @@ export const getPlaygroundRoomRoute = async (): Promise<
 
     return {
         id: data.id,
-        link: data.link,
+        link: data.link ?? data.id,
     };
 };
 
