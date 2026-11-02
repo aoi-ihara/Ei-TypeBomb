@@ -45,7 +45,7 @@ export default async function RoomPage({
                     </div>
                 )}
 
-                <RoomShareActions link={result.link} />
+                <RoomShareActions link={result.link} roomId={result.id} />
 
                 <div className="flex items-end gap-2 font-bold">
                     <Icon
