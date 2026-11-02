@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getRoomFromId, getRoomRouteFromLink } from "@/lib/room/get";
 import type { Room } from "@/type";
+import EditorActionMigration from "./EditorActionMigration";
 import EditorClient from "./EditorClient";
 
 export default async function Page({
@@ -17,5 +18,14 @@ export default async function Page({
 
     if (!room) notFound();
 
-    return <EditorClient key={route.link} link={route.link} initialRoom={room} />;
+    return (
+        <>
+            <EditorClient
+                key={route.link}
+                link={route.link}
+                initialRoom={room}
+            />
+            <EditorActionMigration />
+        </>
+    );
 }
