@@ -44,11 +44,14 @@ export default function EditorActionMigration() {
                 migratedPlayButton = playButton.cloneNode(
                     true,
                 ) as HTMLButtonElement;
+                migratedPlayButton.className = qrButton.className;
                 migratedPlayButton.removeAttribute("data-cursor");
                 migratedPlayButton.setAttribute(
                     "data-migrated-play-button",
                     "true",
                 );
+                migratedPlayButton.setAttribute("aria-label", "プレイ");
+                migratedPlayButton.title = "プレイ";
                 migratedPlayButton.addEventListener("click", () => {
                     playButton.click();
                 });
