@@ -6,14 +6,23 @@ import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
 import Dialog from "@/components/ui/Dialog";
 
-export default function RoomShareActions({ link }: { link: string }) {
+export default function RoomShareActions({
+    link,
+    roomId,
+}: {
+    link: string;
+    roomId: string;
+}) {
     const [isCopied, setIsCopied] = useState(false);
     const [showQrCode, setShowQrCode] = useState(false);
-    const roomUrl = new URL("/" + link, process.env.NEXT_PUBLIC_JOIN_LINK!).toString();
+    const roomUrl = new URL(
+        "/" + link,
+        process.env.NEXT_PUBLIC_JOIN_LINK!,
+    ).toString();
 
     const handleCopy = async () => {
         await navigator.clipboard.writeText(roomUrl);
-        posthog.capture("room_code_copied");
+        posthog.capture("room_code_copied", { room_id: roomId });
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 3000);
     };
@@ -48,8 +57,14 @@ export default function RoomShareActions({ link }: { link: string }) {
                 alignment="vertical"
             >
                 <div className="flex flex-col items-center gap-6">
-                    <QRCodeSVG value={roomUrl} size={256} />
-                    <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-2xl wrap-anywhere">
+                    <QRCodeSVG
+                        value={roomUrl}
+                        size={256}
+                        fgColor="var(--color-foreground)"
+                        bgColor="var(--color-background)"
+                        className="text-(--color-foreground)"
+                    />
+                    <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl wrap-anywhere">
                         {link}
                     </div>
                     <Button
