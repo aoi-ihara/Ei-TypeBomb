@@ -4,6 +4,7 @@ import { Icon } from "@/components/ui/Icon";
 import { getRoomPageDataFromLink } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
+import RoomShareActions from "./RoomShareActions";
 
 export default async function RoomPage({
     params,
@@ -39,13 +40,12 @@ export default async function RoomPage({
         >
             <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
                 {room.explanation && (
-                    <div
-                        className="line-clamp-3 wrap-anywhere"
-                        data-cursor="text"
-                    >
+                    <div className="line-clamp-3 wrap-anywhere" data-cursor="text">
                         {room.explanation}
                     </div>
                 )}
+
+                <RoomShareActions link={result.link} />
 
                 <div className="flex items-end gap-2 font-bold">
                     <Icon
@@ -57,10 +57,7 @@ export default async function RoomPage({
                                   : "lock"
                         }
                     />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
+                    <span className="flex gap-1 items-center" data-cursor="text">
                         <span className="font-bold font-mono">
                             {room.visibility === "public"
                                 ? "公開"
@@ -73,24 +70,16 @@ export default async function RoomPage({
 
                 <div className="flex items-end gap-2">
                     <Icon name="usersRound" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
+                    <span className="flex gap-1 items-center" data-cursor="text">
                         <span className="opacity-50 text-sm">最大</span>
-                        <span className="font-bold font-mono">
-                            {room.maxPlayers ?? 2}
-                        </span>
+                        <span className="font-bold font-mono">{room.maxPlayers ?? 2}</span>
                         <span className="opacity-50 text-sm">人</span>
                     </span>
                 </div>
 
                 <div className="flex items-end gap-2">
                     <Icon name="playingCardsFan" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
+                    <span className="flex gap-1 items-center" data-cursor="text">
                         <span className="font-bold font-mono">{itemCount}</span>
                         <span className="opacity-50 text-sm">個の単語</span>
                     </span>
@@ -112,16 +101,10 @@ export default async function RoomPage({
                             key={item.id}
                             className={`grid font-mono grid-cols-2 ${index !== 0 && "border-t border-(--color-border) pt-4"}`}
                         >
-                            <span
-                                className="w-full line-clamp-1"
-                                data-cursor="text"
-                            >
+                            <span className="w-full line-clamp-1" data-cursor="text">
                                 {item.prompt}
                             </span>
-                            <span
-                                className="w-full line-clamp-1"
-                                data-cursor="text"
-                            >
+                            <span className="w-full line-clamp-1" data-cursor="text">
                                 {item.answer}
                             </span>
                         </div>
