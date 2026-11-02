@@ -4,7 +4,7 @@
 
 ## Coverage and selection
 
-A session starts with a Fisher–Yates shuffle of **every** room item, including all previously learned or graduated items. BOT turns do not consume this queue or increment user question indices. Every first-cycle item is selected once unless its own answer calls for a retry. Fast unaided answers produce no retry; 20 and 100 such words therefore take 20 and 100 user answers to cover.
+A session starts with a Fisher–Yates shuffle of **every** room item, including all previously learned or graduated items. If recall history exists, the first user selection stably orders previously reviewed items by ascending predicted retrievability `R`, with difficulty breaking ties; items without an independent review history remain in their shuffled order after reviewed items. With no review history, the first cycle remains fully random. Every first-cycle item is still selected once unless its own answer calls for a retry. BOT turns do not consume this queue or increment user question indices. Fast unaided answers produce no retry; 20 and 100 such words therefore take 20 and 100 user answers to cover.
 
 Selection applies constraints before preferences:
 
@@ -12,7 +12,7 @@ Selection applies constraints before preferences:
 2. On odd user turns, advance the cycle. A pending retry item cannot be selected before its earliest turn, even through the cycle.
 3. On even turns, serve the eligible retry with the earliest deadline.
 4. If no retry is eligible, advance the cycle on that turn as well.
-5. When the queue empties, start another full shuffle. Words are ordered by continuous ascending retrievability `R`, with higher difficulty breaking ties; no word is excluded. A retry that is also in the current cycle satisfies both obligations.
+5. When the queue empties, start another full shuffle. Previously reviewed words are ordered by ascending retrievability `R`, with higher difficulty breaking ties; words without review history remain in shuffled order after them. No word is excluded. A retry that is also in the current cycle satisfies both obligations.
 
 There is no active-four gate, graduation prerequisite, fixed sequence of cue successes, additive priority lottery, or 12-presentation history used for fairness. Previously serialized `learning_state` is accepted for compatibility, ignored for selection, and cleared on the next user observation.
 
@@ -46,15 +46,15 @@ Observations retain final correctness, first-attempt correctness, incorrect-char
 | Observation                                         | Memory evidence                   | Session retry                       |
 | --------------------------------------------------- | --------------------------------- | ----------------------------------- |
 | Fast, correct, unaided, no errors                   | strong recall                     | none                                |
-| One promptly corrected typo / ordinary clear answer | recall                            | none                                |
-| Slow or multiple errors / light hints               | weak recall                       | confirmation                        |
+| Correct, unaided answer after more thought or self-correction | recall                  | none                                |
+| Light hints                                           | weak recall                       | confirmation                        |
 | Cue ratio ≥ 0.4                                     | weak recall                       | short                               |
 | Incorrect final answer / full answer revealed       | insufficient evidence             | short                               |
 | Answer exposed less than 3 seconds before prompt    | insufficient independent evidence | confirmation; never a retry success |
 
-The fast threshold is first key within 2.5 seconds and total time ≤ 2 seconds + 1.5 × expected typing time. Ordinary recall allows ≤ 1 incorrect input and ≤ 6 seconds + 2 × expected typing time. Expected typing time uses answer length and the user's sampled character interval (220 ms initially). Learning probes start without letter hints. After a 6-second stall, a suggestion appears without revealing any answer. Learners can request one unresolved non-space character at a time; the last unresolved character is never automatically revealed. The first hint pauses bomb pressure for the remainder of the question. Full reveal shows the answer and meaning, with a confirmation button instead of mandatory copying. These thresholds and cue ratios are product hypotheses.
+The fast label uses first key within 2.5 seconds and total time ≤ 2 seconds + 1.5 × expected typing time. A correct, independent, unaided answer remains recall even when it takes longer or includes self-corrected input errors; latency and incorrect-input count are performance signals, not standalone reasons for a forced retry. Expected typing time uses answer length and the user's sampled character interval (220 ms initially). Learning probes start without letter hints. After a 6-second stall, a suggestion appears without revealing any answer. Learners can request one unresolved non-space character at a time; the last unresolved character is never automatically revealed. The first hint pauses bomb pressure for the remainder of the question. Full reveal shows the answer and meaning, with a confirmation button instead of mandatory copying. These thresholds and cue ratios are product hypotheses.
 
-The long-term model is **not FSRS**. First independent clear recall seeds stability at 0.30 days (weak recall: 0.18 days) instead of leaving it at 0.15; recent-exposure successes receive no gain. These values and the existing 0.5 retention-gain coefficient are uncalibrated hypotheses requiring delayed-recall experiments.  `R = exp(-elapsedDays / S)` makes S the days until predicted retrievability is approximately 36.8%. Fast and ordinary clear recalls use the same conservative stability gain; speed primarily reduces session repetition. A corrected typo receives no failure penalty. An unsuccessful final answer or full reveal uses `S × 0.8`, bounded below by 0.12. Recent-exposure successes do not increase S or shift the last independently evaluated review date. Coefficients are not fitted to human retention data.
+The long-term model is **not FSRS**. First independent clear recall seeds stability at 0.30 days (weak recall: 0.18 days) instead of leaving it at 0.15; recent-exposure successes receive no gain. These values and the existing 0.5 retention-gain coefficient are uncalibrated hypotheses requiring delayed-recall experiments.  `R = exp(-elapsedDays / S)` makes S the days until predicted retrievability is approximately 36.8%. Fast and ordinary clear recalls use the same conservative stability gain. Retrieval latency and incorrect-input counts are retained for analysis but do not independently reduce stability or schedule a forced retry. A corrected typo receives no failure penalty. An unsuccessful final answer or full reveal uses `S × 0.8`, bounded below by 0.12. Recent-exposure successes do not increase S or shift the last independently evaluated review date. Coefficients are not fitted to human retention data.
 
 ## BOT and saving
 
