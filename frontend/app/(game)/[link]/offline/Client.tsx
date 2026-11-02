@@ -599,7 +599,8 @@ export default function Client({
                 model_version: MEMORY_MODEL_VERSION,
                 predicted_retrievability_before:
                     predictedRetrievabilityBefore,
-                memory_stability_before: freshestMemory[item.id]?.stability ?? null,
+                memory_stability_before:
+                    freshestMemory[item.id]?.stability ?? null,
                 memory_difficulty_before:
                     freshestMemory[item.id]?.difficulty ?? null,
                 memory_review_count_before:

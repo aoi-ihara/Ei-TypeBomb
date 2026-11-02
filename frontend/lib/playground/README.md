@@ -4,7 +4,7 @@
 
 ## Coverage and selection
 
-A session starts with a Fisher–Yates shuffle of **every** room item, including all previously learned or graduated items. If recall history exists, the first user selection stably orders previously reviewed items by ascending predicted retrievability `R`, with difficulty breaking ties; items without an independent review history remain in their shuffled order after reviewed items. With no review history, the first cycle remains fully random. Every first-cycle item is still selected once unless its own answer calls for a retry. BOT turns do not consume this queue or increment user question indices. Fast unaided answers produce no retry; 20 and 100 such words therefore take 20 and 100 user answers to cover.
+A session starts with a Fisher–Yates shuffle of **every** room item, including all previously learned or graduated items. If recall history exists, the first user selection stably orders previously reviewed items by ascending predicted retrievability `R`, with difficulty breaking ties; items with no recorded review history remain in their shuffled order after reviewed items. With no review history, the first cycle remains fully random. Every first-cycle item is still selected once unless its own answer calls for a retry. BOT turns do not consume this queue or increment user question indices. Fast unaided answers produce no retry; 20 and 100 such words therefore take 20 and 100 user answers to cover.
 
 Selection applies constraints before preferences:
 
