@@ -1,7 +1,7 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v6-continuous-priority";
+export const MEMORY_MODEL_VERSION = "playground-v7-memory-aware-initial-cycle";
 const INITIAL_ENCODING_STABILITY = 0.15;
 // Uncalibrated hypotheses, measured in days.
 export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
@@ -12,7 +12,6 @@ export const RECENT_EXPOSURE_MS = 3_000;
 export const HEAVY_CUE_RATIO = 0.4;
 export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
-export const SLOW_READING_ALLOWANCE_MS = 6_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
 export type SchedulerReason = "cycle" | "retry" | "long_term_due";
@@ -149,21 +148,14 @@ export const evaluateRecall = (
             reason: null,
             independent,
         };
-    // One promptly corrected typo is not a recall failure.
-    if (
-        errors <= 1 &&
-        observation.elapsedMs <= SLOW_READING_ALLOWANCE_MS + expected * 2
-    )
-        return {
-            memoryEvidence: "recall",
-            retryNeed: "none",
-            reason: null,
-            independent,
-        };
+
+    // A final unaided correct answer is still successful retrieval. Latency
+    // and input errors describe typing performance; they must not turn a
+    // successful recall into a forced retry or reduce its memory gain.
     return {
-        memoryEvidence: "weak_recall",
-        retryNeed: "confirm",
-        reason: "uncertain_recall",
+        memoryEvidence: "recall",
+        retryNeed: "none",
+        reason: null,
         independent,
     };
 };
