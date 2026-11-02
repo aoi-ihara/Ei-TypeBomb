@@ -33,7 +33,6 @@ export default function RoomShareActions({
                 <Button
                     onClick={() => setShowQrCode(true)}
                     variant="primary"
-                    padding="large"
                     iconName="qrCode"
                     className="w-full"
                 >
@@ -42,7 +41,6 @@ export default function RoomShareActions({
                 <Button
                     onClick={handleCopy}
                     variant="primary"
-                    padding="large"
                     iconName={isCopied ? "check" : "copy"}
                     className="w-full"
                 >
@@ -50,33 +48,34 @@ export default function RoomShareActions({
                 </Button>
             </div>
 
-            <Dialog
-                open={showQrCode}
-                onClose={() => setShowQrCode(false)}
-                title="ルームのQRコード"
-                alignment="vertical"
+            <div
+                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
+                    !showQrCode &&
+                    "opacity-0 scale-95 blur-md pointer-events-none"
+                } z-1000 transition-all overlay duration-(--duration-etb) ease-etb`}
+                onClick={() => setShowQrCode(false)}
+                inert={!showQrCode}
             >
-                <div className="flex flex-col items-center gap-6">
+                <div className="font-extrabold text-cyan-600 text-2xl">
+                    Ei-TypeBomb
+                </div>
+                <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
                     <QRCodeSVG
                         value={roomUrl}
                         size={256}
                         fgColor="var(--color-foreground)"
                         bgColor="var(--color-background)"
-                        className="text-(--color-foreground)"
+                        className="text-(--color-foreground) md:shrink-0"
                     />
-                    <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl wrap-anywhere">
-                        {link}
+                    <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
+                    <div className="flex items-center justify-center">
+                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl">
+                            {roomUrl}
+                        </div>
                     </div>
-                    <Button
-                        onClick={() => setShowQrCode(false)}
-                        iconName="check"
-                        variant="primary"
-                        className="w-full"
-                    >
-                        閉じる
-                    </Button>
                 </div>
-            </Dialog>
+                <div className="opacity-50">escまたはクリックで戻る。</div>
+            </div>
         </>
     );
 }
