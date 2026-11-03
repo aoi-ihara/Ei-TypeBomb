@@ -202,6 +202,7 @@ export default function Client({
     const schedulerRef = useRef<SchedulerState | null>(null);
     const exposureGapAtStartRef = useRef<number | null>(null);
     const expectedTypingAtStartRef = useRef(0);
+    const predictedRetrievabilityAtPromptRef = useRef<number | null>(null);
     const authenticatedUserIdRef = useRef<string | null>(null);
     const [memoryReady, setMemoryReady] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
