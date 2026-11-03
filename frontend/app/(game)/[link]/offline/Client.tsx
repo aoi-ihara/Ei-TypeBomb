@@ -1109,6 +1109,65 @@ export default function Client({
                 itemPresentationKey={itemPresentationKey}
                 currentInput={currentInput}
                 isStarted={isStarted}
+                preGameContent={memoryReady && showInstructions ? (
+                    <div
+                        className="flex h-full w-full max-w-xl flex-col justify-center gap-4 px-3 py-4 sm:gap-5 sm:px-6"
+                        role="region"
+                        aria-labelledby="offline-instructions-title"
+                    >
+                        <div className="flex flex-col gap-2 text-center">
+                            <div className="text-xs font-bold tracking-wide text-cyan-600">
+                                OFFLINE PLAY
+                            </div>
+                            <h1
+                                id="offline-instructions-title"
+                                className="text-xl font-bold sm:text-2xl"
+                            >
+                                プレイ前に確認
+                            </h1>
+                            <p className="text-sm sm:text-base">
+                                オフラインプレイでは、次のルールで入力します。
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:gap-3">
+                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
+                                <p className="font-bold">
+                                    ⌨️ 半角英数字で入力
+                                </p>
+                                <p className="text-sm leading-relaxed">
+                                    英語は半角英字で、日本語の単語はローマ字入力（半角英字）で入力します。入力モードを「半角英数」に切り替えてください。
+                                </p>
+                            </div>
+                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
+                                <p className="font-bold">
+                                    💡 スペースキーを2回連続で押す
+                                </p>
+                                <p className="text-sm leading-relaxed">
+                                    回答中にスペースキーを2回連続で押すと、答えをすべて表示できます。
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <Button
+                                className="w-full"
+                                variant="primary"
+                                onClick={startFromInstructions}
+                                disabled={!memoryReady || items.length === 0}
+                            >
+                                ゲームを開始
+                            </Button>
+                            <p className="text-center text-sm">
+                                または{" "}
+                                <kbd className="rounded bg-(--color-background) px-2 py-1 font-mono">
+                                    Space
+                                </kbd>{" "}
+                                キーを押して開始
+                            </p>
+                        </div>
+                    </div>
+                ) : undefined}
                 serverError={memoryError}
                 notice={notice}
                 result={result}
@@ -1151,68 +1210,7 @@ export default function Client({
                     </Button>
                 }
             />
-            {memoryReady && showInstructions && (
-                <div
-                    className="fixed inset-0 z-30 flex items-center justify-center bg-(--color-background)/90 px-4 py-6 backdrop-blur-sm"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="offline-instructions-title"
-                >
-                    <div className="animate-appear flex w-full max-w-xl flex-col gap-6 rounded-2xl border border-(--color-border) bg-(--color-background-secondary) p-6 shadow-xl sm:p-8">
-                        <div className="flex flex-col gap-2">
-                            <div className="text-sm font-bold tracking-wide text-cyan-600">
-                                OFFLINE PLAY
-                            </div>
-                            <h1
-                                id="offline-instructions-title"
-                                className="text-2xl font-bold"
-                            >
-                                プレイ前に確認
-                            </h1>
-                            <p>
-                                オフラインプレイでは、次のルールで入力します。
-                            </p>
-                        </div>
 
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-4">
-                                <p className="font-bold">
-                                    ⌨️ 半角英数字で入力
-                                </p>
-                                <p className="text-sm leading-relaxed">
-                                    英語は半角英字で、日本語の単語はローマ字入力（半角英字）で入力します。入力モードを「半角英数」に切り替えてください。
-                                </p>
-                            </div>
-                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-4">
-                                <p className="font-bold">
-                                    💡 スペースキーを2回連続で押す
-                                </p>
-                                <p className="text-sm leading-relaxed">
-                                    回答中にスペースキーを2回連続で押すと、答えをすべて表示できます。
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            <Button
-                                className="w-full"
-                                variant="primary"
-                                onClick={startFromInstructions}
-                                disabled={!memoryReady || items.length === 0}
-                            >
-                                ゲームを開始
-                            </Button>
-                            <p className="text-center text-sm">
-                                または{" "}
-                                <kbd className="rounded bg-(--color-background) px-2 py-1 font-mono">
-                                    Space
-                                </kbd>{" "}
-                                キーを押して開始
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
             <header className="w-full flex absolute justify-end p-4 gap-4">
                 <div>
                     <OfflineVoicePicker
