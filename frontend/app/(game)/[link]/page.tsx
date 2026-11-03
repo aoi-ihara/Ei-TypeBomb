@@ -48,29 +48,6 @@ export default async function RoomPage({
                             {room.explanation}
                         </div>
                     )}
-                    <div className="flex items-end gap-2 font-bold">
-                        <Icon
-                            name={
-                                room.visibility === "public"
-                                    ? "earth"
-                                    : room.visibility === "unlisted"
-                                      ? "link"
-                                      : "lock"
-                            }
-                        />
-                        <span
-                            className="flex gap-1 items-center"
-                            data-cursor="text"
-                        >
-                            <span className="font-bold font-mono">
-                                {room.visibility === "public"
-                                    ? "公開"
-                                    : room.visibility === "unlisted"
-                                      ? "限定公開"
-                                      : "非公開"}
-                            </span>
-                        </span>
-                    </div>
                     <div className="flex items-end gap-2">
                         <Icon name="usersRound" />
                         <span
@@ -94,6 +71,29 @@ export default async function RoomPage({
                                 {itemCount}
                             </span>
                             <span className="opacity-50 text-sm">個の単語</span>
+                        </span>
+                    </div>
+                    <div className="flex items-end gap-2 font-bold">
+                        <Icon
+                            name={
+                                room.visibility === "public"
+                                    ? "earth"
+                                    : room.visibility === "unlisted"
+                                      ? "link"
+                                      : "lock"
+                            }
+                        />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="font-bold font-mono">
+                                {room.visibility === "public"
+                                    ? "公開"
+                                    : room.visibility === "unlisted"
+                                      ? "限定公開"
+                                      : "非公開"}
+                            </span>
                         </span>
                     </div>
                 </div>
