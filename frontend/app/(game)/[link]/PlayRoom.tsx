@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import startNavigationProgress from "@/lib/navigation-progress";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import MorphDialog from "@/components/ui/MorphDialog";
