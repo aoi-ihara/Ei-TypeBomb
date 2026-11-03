@@ -32,6 +32,7 @@ export default function PlayRoom({
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
+    const [displayName, setDisplayName] = useState("");
     const [activeDialog, setActiveDialog] = useState<PlayMode | null>(null);
     const [joining, setJoining] = useState<PlayMode | null>(null);
     const [turnstile, setTurnstile] = useState(false);
@@ -40,6 +41,17 @@ export default function PlayRoom({
 
     useEffect(() => {
         let active = true;
+
+        void Promise.resolve().then(() => {
+            if (!active) return;
+            try {
+                setDisplayName(
+                    window.localStorage.getItem("display-name") ?? "",
+                );
+            } catch (reason) {
+                console.error("Failed to load display name:", reason);
+            }
+        });
 
         if (alreadyAuthorized) {
             return () => {
@@ -89,9 +101,22 @@ export default function PlayRoom({
             );
             return;
         }
+        if (mode === "online" && !displayName.trim()) {
+            setError("表示名を入力してください。");
+            return;
+        }
 
         setJoining(mode);
         setError("");
+
+        if (mode === "online") {
+            try {
+                localStorage.setItem("display-name", displayName.trim());
+            } catch (reason) {
+                console.error("Failed to save display name:", reason);
+            }
+            posthog.capture("display_name_set");
+        }
 
         try {
             const result = await signInToRoom(
@@ -128,6 +153,10 @@ export default function PlayRoom({
             );
             return;
         }
+        if (mode === "online" && !displayName.trim()) {
+            setError("表示名を入力してください。");
+            return;
+        }
 
         setError("");
         if (showPasswordField && !alreadyAuthorized) {
@@ -150,7 +179,10 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
-                            if (!showPasswordField || alreadyAuthorized) {
+                            if (
+                                mode === "offline" &&
+                                (!showPasswordField || alreadyAuthorized)
+                            ) {
                                 handleContinue(mode);
                             } else {
                                 setActiveDialog(mode);
@@ -165,7 +197,13 @@ export default function PlayRoom({
                     </Button>
                 }
                 title={title}
-                description="パスワードを入力してください。"
+                description={
+                    isOnline
+                        ? showPasswordField && !alreadyAuthorized
+                            ? "表示名とパスワードを入力してください。"
+                            : "表示名を入力してください。"
+                        : "パスワードを入力してください。"
+                }
                 alignment="vertical"
                 size="middle"
                 open={isActive}
@@ -184,6 +222,16 @@ export default function PlayRoom({
                     />
                 )}
 
+                {isOnline && (
+                    <Input
+                        value={displayName}
+                        onChange={(event) => setDisplayName(event.target.value)}
+                        label="表示名"
+                        disabled={joining !== null}
+                        autoComplete="name"
+                    />
+                )}
+
                 {error && isActive && (
                     <p className="w-full text-sm text-red-500" role="alert">
                         {error}
@@ -198,7 +246,8 @@ export default function PlayRoom({
                         joining !== null ||
                         (showPasswordField &&
                             !alreadyAuthorized &&
-                            !roomPassword)
+                            !roomPassword) ||
+                        (isOnline && !displayName.trim())
                     }
                     loading={joining === mode}
                     iconName="arrowRight"
