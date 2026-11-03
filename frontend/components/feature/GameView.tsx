@@ -43,6 +43,7 @@ type Props = {
     bombRef?: Ref<HTMLDivElement>;
     explosionLayer?: ReactNode;
     resultExtraActions?: ReactNode;
+    preGameContent?: ReactNode;
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     onPlayAgain: () => void;
@@ -89,6 +90,7 @@ export default function GameView({
     bombRef,
     explosionLayer,
     resultExtraActions,
+    preGameContent,
     onSuccess,
     onChangeInput,
     onPlayAgain,
@@ -245,7 +247,7 @@ export default function GameView({
                 )}
                 <div
                     inert={isReconnecting}
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room && !serverError ? (
                         isParticipant ? (
@@ -254,6 +256,8 @@ export default function GameView({
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
                                             activeGame
+                                        ) : preGameContent ? (
+                                            preGameContent
                                         ) : (
                                             <>
                                                 <div
