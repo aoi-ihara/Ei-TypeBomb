@@ -18,7 +18,6 @@ export function useBombExplosion() {
     const playedRef = useRef(false);
     const [explosion, setExplosion] = useState<Explosion | null>(null);
 
-    // Capture before game:end is followed by a room reset or a layout change.
     const explode = useCallback(() => {
         const bomb = bombRef.current;
         if (!bomb || playedRef.current) return;
