@@ -1180,7 +1180,7 @@ export default function Client({
                                     ⌨️ 半角英数字で入力
                                 </p>
                                 <p className="text-sm leading-relaxed">
-                                    英語は半角英字で、日本語はローマ字を半角英字で入力します。入力モードを「半角英数」に切り替えてください。
+                                    英語は半角英字で、日本語の単語はローマ字入力（半角英字）で入力します。入力モードを「半角英数」に切り替えてください。
                                 </p>
                             </div>
                             <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-4">
@@ -1188,7 +1188,7 @@ export default function Client({
                                     💡 スペースキーを2回連続で押す
                                 </p>
                                 <p className="text-sm leading-relaxed">
-                                    プレイ中にスペースキーを2回連続で押すと、答えのヒントを表示できます。
+                                    回答中にスペースキーを2回連続で押すと、答えをすべて表示できます。
                                 </p>
                             </div>
                         </div>
