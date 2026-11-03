@@ -111,7 +111,7 @@ export default function Selection({
                             width === "full"
                                 ? "w-full"
                                 : "w-auto whitespace-nowrap",
-                            "p-1.5 font-bold rounded-lg transition-all duration-(--duration-etb) ease-etb active:scale-95",
+                            "py-1.5 px-2.5 font-bold rounded-lg transition-all duration-(--duration-etb) ease-etb active:scale-95",
                             index === selection ? "text-white" : "",
                         ]
                             .filter(Boolean)
