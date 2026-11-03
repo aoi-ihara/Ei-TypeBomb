@@ -13,6 +13,7 @@ export type PickerProps = {
     onSelected: (index: number) => void;
     itemIcons: (string | null)[];
     padding?: "small" | "middle" | "large";
+    width?: "fit" | "full";
 };
 
 export default function Picker({
@@ -23,6 +24,7 @@ export default function Picker({
     onSelected,
     itemIcons,
     padding = "large",
+    width = "full",
 }: PickerProps) {
     const [open, setOpen] = useState(false);
     const [raised, setRaised] = useState(false);
@@ -153,22 +155,23 @@ export default function Picker({
     const label = items[selection] ?? name;
     const triggerLabel = labelPrefix ? `${labelPrefix}: ${label}` : label;
     const showIcon = !itemIcons.every((item) => item === null || item === "");
+    const widthClass = width === "fit" ? "w-fit" : "w-full";
 
     return (
         <div
-            className={`relative inline-block shrink-0 w-full align-middle ${raised ? "z-50" : "z-0"}`}
+            className={`relative inline-block shrink-0 ${widthClass} align-middle ${raised ? "z-50" : "z-0"}`}
             data-picker
         >
             <div
                 ref={sizeRef}
-                className="invisible w-full"
+                className={`invisible ${widthClass}`}
                 aria-hidden="true"
                 inert
             >
                 <Button
                     iconName="chevronsUpDown"
                     padding={padding}
-                    className="w-full"
+                    className={widthClass}
                 >
                     <span>{triggerLabel}</span>
                 </Button>
@@ -201,10 +204,10 @@ export default function Picker({
                         if (!open) setRaised(false);
                     }}
                     first={
-                        <div ref={triggerRef} className="w-full">
+                        <div ref={triggerRef} className={widthClass}>
                             <Button
                                 iconName="chevronsUpDown"
-                                className="w-full"
+                                className={widthClass}
                                 onClick={() => {
                                     setRaised(true);
                                     setOpen(true);
