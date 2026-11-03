@@ -219,6 +219,7 @@ export default function Client({
         paused: true,
     });
     const [isStarted, setIsStarted] = useState(false);
+    const [showInstructions, setShowInstructions] = useState(true);
     const [notice, setNotice] = useState<GameNoticeProps>({
         visible: true,
         iconName: "keyboard",
@@ -465,7 +466,7 @@ export default function Client({
         setCurrentTurn(turnIndex);
     }, []);
 
-    const startGame = useCallback(() => {
+    const startGame = useCallback((countdownDurationMs = 3000) => {
         if (!memoryReady || items.length === 0) return;
 
         if (countdownTimerRef.current) {
@@ -488,12 +489,22 @@ export default function Client({
             Math.random() * usersRef.current.length,
         );
 
-        countdownTimerRef.current = setTimeout(() => {
+        const revealFirstItem = () => {
             const resolved = resolveTurnWithItem(requestedFirstTurn);
             setTrackedTurn(resolved.turnIndex);
             setTrackedItem(resolved.item);
             countdownTimerRef.current = null;
-        }, 3000);
+        };
+
+        if (countdownDurationMs <= 0) {
+            revealFirstItem();
+            return;
+        }
+
+        countdownTimerRef.current = setTimeout(
+            revealFirstItem,
+            countdownDurationMs,
+        );
     }, [
         items.length,
         resolveTurnWithItem,
@@ -514,18 +525,62 @@ export default function Client({
         };
     }, []);
 
-    useEffect(() => {
-        if (!memoryReady || initialGameStartedRef.current) {
+    const startFromInstructions = useCallback(() => {
+        if (
+            !memoryReady ||
+            items.length === 0 ||
+            initialGameStartedRef.current
+        ) {
             return;
         }
 
         initialGameStartedRef.current = true;
+        setShowInstructions(false);
         posthog.capture("playground_game_started", {
             room_id: room.id,
             player_count: users.length,
         });
-        startGame();
-    }, [memoryReady, room.id, startGame, users.length]);
+
+        // The instruction screen replaces the initial three-second start screen.
+        startGame(0);
+    }, [items.length, memoryReady, room.id, startGame, users.length]);
+
+    useEffect(() => {
+        if (
+            !memoryReady ||
+            !showInstructions ||
+            initialGameStartedRef.current
+        ) {
+            return;
+        }
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (
+                initialGameStartedRef.current ||
+                (event.code !== "Space" && event.key !== " ") ||
+                event.repeat ||
+                event.isComposing
+            ) {
+                return;
+            }
+
+            const target = event.target;
+            if (
+                target instanceof HTMLElement &&
+                target.closest(
+                    "button, input, textarea, select, [contenteditable='true']",
+                )
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            startFromInstructions();
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [memoryReady, showInstructions, startFromInstructions]);
 
     const updateLocalMemory = useCallback(
         (item: Item, observation: RecallObservation) => {
@@ -1072,6 +1127,65 @@ export default function Client({
                 itemPresentationKey={itemPresentationKey}
                 currentInput={currentInput}
                 isStarted={isStarted}
+                preGameContent={memoryReady && showInstructions ? (
+                    <div
+                        className="flex h-full w-full max-w-xl flex-col justify-center gap-4 px-3 py-4 sm:gap-5 sm:px-6"
+                        role="region"
+                        aria-labelledby="offline-instructions-title"
+                    >
+                        <div className="flex flex-col gap-2 text-center">
+                            <div className="text-xs font-bold tracking-wide text-cyan-600">
+                                OFFLINE PLAY
+                            </div>
+                            <h1
+                                id="offline-instructions-title"
+                                className="text-xl font-bold sm:text-2xl"
+                            >
+                                プレイ前に確認
+                            </h1>
+                            <p className="text-sm sm:text-base">
+                                オフラインプレイでは、次のルールで入力します。
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:gap-3">
+                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
+                                <p className="font-bold">
+                                    ⌨️ 半角英数字で入力
+                                </p>
+                                <p className="text-sm leading-relaxed">
+                                    英語は半角英字で、日本語の単語はローマ字入力（半角英字）で入力します。入力モードを「半角英数」に切り替えてください。
+                                </p>
+                            </div>
+                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
+                                <p className="font-bold">
+                                    💡 スペースキーを2回連続で押す
+                                </p>
+                                <p className="text-sm leading-relaxed">
+                                    回答中にスペースキーを2回連続で押すと、答えをすべて表示できます。
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <Button
+                                className="w-full"
+                                variant="primary"
+                                onClick={startFromInstructions}
+                                disabled={!memoryReady || items.length === 0}
+                            >
+                                ゲームを開始
+                            </Button>
+                            <p className="text-center text-sm">
+                                または{" "}
+                                <kbd className="rounded bg-(--color-background) px-2 py-1 font-mono">
+                                    Space
+                                </kbd>{" "}
+                                キーを押して開始
+                            </p>
+                        </div>
+                    </div>
+                ) : undefined}
                 serverError={memoryError}
                 notice={notice}
                 result={result}
