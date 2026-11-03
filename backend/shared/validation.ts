@@ -3,12 +3,10 @@ import type { Room } from "./types";
 export class ClientError extends Error {}
 export const MAX_DISPLAY_NAME_LENGTH = 50;
 export const MAX_CURRENT_INPUT_LENGTH = 32;
-const DEFAULT_DISPLAY_NAME = "プレイヤー";
 export function validateDisplayName(value: unknown): string {
-    if (value === undefined || value === null || value === "")
-        return DEFAULT_DISPLAY_NAME;
     if (
         typeof value !== "string" ||
+        !value.length ||
         value.length > MAX_DISPLAY_NAME_LENGTH ||
         /[\p{Cc}\p{Cf}]/u.test(value)
     ) {
