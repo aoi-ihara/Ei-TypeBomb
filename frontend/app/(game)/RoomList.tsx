@@ -73,7 +73,6 @@ export default function RoomList({
               {
                   value: "recommended",
                   label: "おすすめ",
-                  iconName: "wandSparkles",
               },
           ];
 
