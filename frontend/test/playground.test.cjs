@@ -210,6 +210,67 @@ test("graduated/high stability rows participate in every complete shuffle cycle"
             20,
         );
 });
+test("the first cycle reviews due words before untouched words", () => {
+    const ids = ["untouched", "recent", "due", "hard-due"];
+    const state = scheduler.createScheduler(ids, rng(19));
+    const dueAt = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+    const recentAt = new Date(now.getTime() - 60_000).toISOString();
+    const memories = {
+        due: {
+            ...initial("due"),
+            stability: 1,
+            difficulty: 4,
+            lastReviewedAt: dueAt,
+        },
+        "hard-due": {
+            ...initial("hard-due"),
+            stability: 1,
+            difficulty: 9,
+            lastReviewedAt: dueAt,
+        },
+        recent: {
+            ...initial("recent"),
+            stability: 1,
+            difficulty: 10,
+            lastReviewedAt: recentAt,
+        },
+    };
+    const order = [];
+    for (let i = 0; i < ids.length; i++) {
+        const selected = scheduler.chooseNextUserItem(
+            state,
+            memories,
+            rng(30 + i),
+            now.getTime(),
+        );
+        order.push(selected.itemId);
+        if (i === 0) assert.equal(selected.reason, "long_term_due");
+        scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    }
+    assert.deepEqual(order, ["hard-due", "due", "recent", "untouched"]);
+    assert.equal(state.initialPriorityApplied, true);
+});
+
+test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
+    const state = scheduler.createScheduler(
+        ["a", "b", "c", "d", "e"],
+        rng(23),
+    );
+    const shuffled = [...state.cycleQueue];
+    const order = [];
+    for (let i = 0; i < shuffled.length; i++) {
+        const selected = scheduler.chooseNextUserItem(
+            state,
+            {},
+            rng(40 + i),
+            now.getTime(),
+        );
+        order.push(selected.itemId);
+        scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    }
+    assert.deepEqual(order, shuffled);
+});
+
 test("one failed word returns inside each promised window without delaying coverage", () => {
     const result = simulate(20, {
         kind: (id) => (id === "0" ? "fail" : "fast"),
@@ -309,6 +370,21 @@ test("light corrected typo is distinct from a fully revealed answer", () => {
     assert(apply(current, typo).stability >= current.stability);
     assert(apply(current, full).stability < current.stability);
 });
+test("slow unaided correctness and typing errors do not become recall failures", () => {
+    const slow = observation({
+        firstAttemptCorrect: false,
+        incorrectInputCount: 8,
+        attemptCount: 9,
+        recallLatencyMs: 15_000,
+        elapsedMs: 60_000,
+    });
+    const evaluation = memory.evaluateRecall(slow);
+    assert.equal(evaluation.memoryEvidence, "recall");
+    assert.equal(evaluation.retryNeed, "none");
+    assert.equal(evaluation.independent, true);
+    assert.equal(apply({ ...initial(), stability: 5 }, slow).stability, 5);
+});
+
 test("recent BOT exposure supplies no independent recall or long-term gain", () => {
     const current = { ...initial(), stability: 5 };
     const exposed = memory.recordAnswerExposure(current, now);

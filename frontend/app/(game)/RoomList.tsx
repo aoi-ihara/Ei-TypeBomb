@@ -15,6 +15,7 @@ import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Image from "next/image";
+import Header from "@/components/layout/Header";
 
 type CurrentUser = {
     id: string;
@@ -261,7 +262,7 @@ export default function RoomList({
 
     return (
         <>
-            <header className="w-full flex justify-end p-4 gap-4">
+            <Header>
                 {currentUser ? (
                     <Menu
                         name="ユーザーアクション"
@@ -305,7 +306,7 @@ export default function RoomList({
                         ログイン
                     </Button>
                 )}
-            </header>
+            </Header>
 
             <div className="items-center mb-4 rounded-lg overflow-clip">
                 <Image
@@ -325,6 +326,7 @@ export default function RoomList({
                         <Button
                             key={item.value}
                             className="w-fit shrink-0"
+                            padding="small"
                             variant={
                                 view === item.value ? "primary" : "default"
                             }
