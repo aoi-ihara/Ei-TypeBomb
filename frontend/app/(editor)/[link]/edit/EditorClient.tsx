@@ -626,7 +626,7 @@ export default function EditorClient({
                 <div className="w-full flex flex-col gap-4">
                     <Input
                         onChange={(e) => setRoomLink(e.target.value)}
-                        label="招待リンク"
+                        label="リンク"
                         font="mono"
                         type="url"
                         inputClassName="pl-7.5"
