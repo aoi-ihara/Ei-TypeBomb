@@ -37,6 +37,7 @@ export type SchedulerState = {
     userAnswered: Record<string, number>;
     botShown: Record<string, number>;
     lastBotItem: string | null;
+    initialPriorityApplied: boolean;
     current: Selection | null;
 };
 const shuffle = (ids: string[], random: () => number) => {
@@ -46,6 +47,34 @@ const shuffle = (ids: string[], random: () => number) => {
         [result[i], result[j]] = [result[j], result[i]];
     }
     return result;
+};
+const hasRecallHistory = (memory: ItemMemoryState | undefined) =>
+    Boolean(
+        memory &&
+        memory.reviewCount > 0 &&
+        memory.lastReviewedAt &&
+        Number.isFinite(Date.parse(memory.lastReviewedAt)),
+    );
+const compareMemoryPriority = (
+    a: string,
+    b: string,
+    memories: Record<string, ItemMemoryState>,
+    now: number,
+) => {
+    const aMemory = memories[a];
+    const bMemory = memories[b];
+    const aHasHistory = hasRecallHistory(aMemory);
+    const bHasHistory = hasRecallHistory(bMemory);
+
+    // A never-reviewed word has no meaningful retrievability prediction.
+    // Review known words first, then introduce untouched words in shuffled order.
+    if (aHasHistory !== bHasHistory) return aHasHistory ? -1 : 1;
+    if (!aHasHistory || !bHasHistory) return 0;
+
+    const retrievabilityDifference =
+        getRetrievability(aMemory, now) - getRetrievability(bMemory, now);
+    if (retrievabilityDifference !== 0) return retrievabilityDifference;
+    return (bMemory?.difficulty ?? 5) - (aMemory?.difficulty ?? 5);
 };
 export const createScheduler = (
     ids: string[],
@@ -62,6 +91,7 @@ export const createScheduler = (
         userAnswered: {},
         botShown: {},
         lastBotItem: null,
+        initialPriorityApplied: false,
         current: null,
     };
 };
@@ -141,17 +171,22 @@ export const chooseNextUserItem = (
 ): Selection | null => {
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current; // Idempotent until the answer is recorded.
+    if (!state.initialPriorityApplied) {
+        // The initial queue is already Fisher–Yates shuffled. A stable sort
+        // preserves that randomness for ties while bringing reviewed, due
+        // words forward on returning sessions.
+        state.cycleQueue = state.cycleQueue.sort((a, b) =>
+            compareMemoryPriority(a, b, memories, now),
+        );
+        state.initialPriorityApplied = true;
+    }
     if (state.cycleQueue.length === 0) {
         state.cycle++;
-        // Stable sort preserves shuffled ties; all items remain in each cycle.
-        // Smaller predicted recall comes first, with difficulty breaking ties.
-        state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) => {
-            const difference =
-                getRetrievability(memories[a], now) -
-                getRetrievability(memories[b], now);
-            if (difference !== 0) return difference;
-            return (memories[b]?.difficulty ?? 5) - (memories[a]?.difficulty ?? 5);
-        });
+        // Every cycle still includes every room item. Randomized ties prevent
+        // equal-priority words from becoming a fixed sequence.
+        state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
+            compareMemoryPriority(a, b, memories, now),
+        );
     }
     const turn = state.turn + 1;
     const eligible = Object.values(state.retries)
@@ -181,7 +216,8 @@ export const chooseNextUserItem = (
         retry: entry,
         reason: entry
             ? "retry"
-            : state.cycle > 1 && getRetrievability(memories[itemId], now) < 0.8
+            : hasRecallHistory(memories[itemId]) &&
+                getRetrievability(memories[itemId], now) < 0.8
               ? "long_term_due"
               : "cycle",
     };

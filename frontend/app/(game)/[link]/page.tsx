@@ -4,6 +4,7 @@ import { Icon } from "@/components/ui/Icon";
 import { getRoomPageDataFromLink } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
+import RoomShareActions from "./RoomShareActions";
 
 export default async function RoomPage({
     params,
@@ -37,64 +38,66 @@ export default async function RoomPage({
             size="xlarge"
             animateAppear
         >
-            <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
-                {room.explanation && (
-                    <div
-                        className="line-clamp-3 wrap-anywhere"
-                        data-cursor="text"
-                    >
-                        {room.explanation}
+            <section className="w-full flex-col flex gap-4">
+                <div className="flex w-full p-4 flex-col gap-4 rounded-lg bg-(--color-background-secondary)">
+                    {room.explanation && (
+                        <div
+                            className="line-clamp-3 wrap-anywhere"
+                            data-cursor="text"
+                        >
+                            {room.explanation}
+                        </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                        <Icon name="usersRound" />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="opacity-50 text-sm">最大</span>
+                            <span className="font-bold font-mono">
+                                {room.maxPlayers ?? 2}
+                            </span>
+                            <span className="opacity-50 text-sm">人</span>
+                        </span>
                     </div>
-                )}
-
-                <div className="flex items-end gap-2 font-bold">
-                    <Icon
-                        name={
-                            room.visibility === "public"
-                                ? "earth"
-                                : room.visibility === "unlisted"
-                                  ? "link"
-                                  : "lock"
-                        }
-                    />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
-                        <span className="font-bold font-mono">
-                            {room.visibility === "public"
-                                ? "公開"
-                                : room.visibility === "unlisted"
-                                  ? "限定公開"
-                                  : "非公開"}
+                    <div className="flex items-end gap-2">
+                        <Icon name="playingCardsFan" />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="font-bold font-mono">
+                                {itemCount}
+                            </span>
+                            <span className="opacity-50 text-sm">個の単語</span>
                         </span>
-                    </span>
-                </div>
-
-                <div className="flex items-end gap-2">
-                    <Icon name="usersRound" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
-                        <span className="opacity-50 text-sm">最大</span>
-                        <span className="font-bold font-mono">
-                            {room.maxPlayers ?? 2}
+                    </div>
+                    <div className="flex items-end gap-2 font-bold">
+                        <Icon
+                            name={
+                                room.visibility === "public"
+                                    ? "earth"
+                                    : room.visibility === "unlisted"
+                                      ? "link"
+                                      : "lock"
+                            }
+                        />
+                        <span
+                            className="flex gap-1 items-center"
+                            data-cursor="text"
+                        >
+                            <span className="font-bold font-mono">
+                                {room.visibility === "public"
+                                    ? "公開"
+                                    : room.visibility === "unlisted"
+                                      ? "限定公開"
+                                      : "非公開"}
+                            </span>
                         </span>
-                        <span className="opacity-50 text-sm">人</span>
-                    </span>
+                    </div>
                 </div>
-
-                <div className="flex items-end gap-2">
-                    <Icon name="playingCardsFan" />
-                    <span
-                        className="flex gap-1 items-center"
-                        data-cursor="text"
-                    >
-                        <span className="font-bold font-mono">{itemCount}</span>
-                        <span className="opacity-50 text-sm">個の単語</span>
-                    </span>
-                </div>
+                <RoomShareActions link={result.link} roomId={result.id} />
             </section>
 
             <PlayRoom

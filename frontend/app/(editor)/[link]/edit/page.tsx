@@ -17,5 +17,11 @@ export default async function Page({
 
     if (!room) notFound();
 
-    return <EditorClient key={route.link} link={route.link} initialRoom={room} />;
+    return (
+        <EditorClient
+            key={route.link}
+            link={route.link}
+            initialRoom={room}
+        />
+    );
 }

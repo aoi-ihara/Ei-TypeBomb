@@ -325,6 +325,7 @@ export default function RoomList({
                         <Button
                             key={item.value}
                             className="w-fit shrink-0"
+                            padding="small"
                             variant={
                                 view === item.value ? "primary" : "default"
                             }

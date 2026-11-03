@@ -16,7 +16,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import {
@@ -29,7 +29,6 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
-import { QRCodeSVG } from "qrcode.react";
 import {
     validateExplanation,
     validateLink,
@@ -117,12 +116,10 @@ export default function EditorClient({
     const [items, setItems] = useState<TypedRecallItem[] | null>(
         initialRoom.items ?? [],
     );
-    const [isLinkCopied, setIsLinkCopied] = useState(false);
     const [roomLink, setRoomLink] = useState(
         initialRoom.link ?? initialRoom.id,
     );
     const [roomLinkError, setRoomLinkError] = useState("");
-    const [showRoomCode, setShowRoomCode] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
@@ -150,28 +147,12 @@ export default function EditorClient({
     const [visibilityError, setVisibilityError] = useState("");
     const [isUpdatingVisibilitySettings, setIsUpdatingVisibilitySettings] =
         useState(false);
-    const [showCopyWarning, setShowCopyWarning] = useState(false);
-    const [showQrWarning, setShowQrWarning] = useState(false);
     const [showPlayWarning, setShowPlayWarning] = useState(false);
 
     const isLoadedRef = useRef(true);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                setShowRoomCode(false);
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -474,26 +455,9 @@ export default function EditorClient({
         return attempt;
     };
 
-    const handleCopyRoomLink = async () => {
-        const joinLink = new URL(
-            "/" + roomLink,
-            process.env.NEXT_PUBLIC_JOIN_LINK!,
-        ).toString();
-        await navigator.clipboard.writeText(joinLink);
-        posthog.capture("room_code_copied", { room_id: roomId });
-        setIsLinkCopied(true);
-        setTimeout(() => {
-            setIsLinkCopied(false);
-        }, 3000);
-    };
-
     const handlePlay = async () => {
         startNavigationProgress();
         router.push("/" + roomLink);
-    };
-
-    const handleOpenRoomCode = async () => {
-        setShowRoomCode(true);
     };
 
     useEffect(() => {
@@ -542,10 +506,6 @@ export default function EditorClient({
             }
         };
     }, []);
-
-    useLayoutEffect(() => {
-        window.dispatchEvent(new Event("morphcursorchange"));
-    }, [showRoomCode]);
 
     return (
         <Shell
@@ -666,7 +626,7 @@ export default function EditorClient({
                 <div className="w-full flex flex-col gap-4">
                     <Input
                         onChange={(e) => setRoomLink(e.target.value)}
-                        label="招待リンク"
+                        label="リンク"
                         font="mono"
                         type="url"
                         inputClassName="pl-7.5"
@@ -690,75 +650,32 @@ export default function EditorClient({
                         button={
                             <Button
                                 className="w-fit shrink-0"
-                                padding="large"
-                                iconName="qrCode"
-                                onClick={handleOpenRoomCode}
-                                variant="primary"
-                            />
-                        }
-                        open={showQrWarning}
-                        onClose={() => setShowQrWarning(false)}
-                        title="ルームに単語がありません"
-                        description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
-                        alignment="vertical"
-                    >
-                        <Button
-                            onClick={async () => {
-                                if (await saveRoomData()) {
-                                    setShowRoomCode(true);
-                                    setShowQrWarning(false);
-                                }
-                            }}
-                            iconName="qrCode"
-                            variant="primary"
-                            className="w-full"
-                        >
-                            QRコードを表示
-                        </Button>
-                        <Button
-                            onClick={() => setShowQrWarning(false)}
-                            iconName="x"
-                            className="w-full"
-                        >
-                            キャンセル
-                        </Button>
-                    </MorphDialog>
-                </div>
-
-                <div className="w-16">
-                    <MorphDialog
-                        button={
-                            <Button
-                                className="w-fit shrink-0"
                                 onClick={() => {
                                     if (items && items.length !== 0)
-                                        handleCopyRoomLink();
-                                    else setShowCopyWarning(true);
+                                        void handlePlay();
+                                    else setShowPlayWarning(true);
                                 }}
                                 variant="primary"
                                 padding="large"
-                                iconName={isLinkCopied ? "check" : "copy"}
+                                iconName="play"
                             />
                         }
-                        open={showCopyWarning}
-                        onClose={() => setShowCopyWarning(false)}
+                        open={showPlayWarning}
+                        onClose={() => setShowPlayWarning(false)}
                         title="ルームに単語がありません"
                         description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
                         alignment="vertical"
                     >
                         <Button
-                            onClick={() => {
-                                handleCopyRoomLink();
-                                setShowCopyWarning(false);
-                            }}
-                            iconName="copy"
+                            onClick={() => handlePlay()}
+                            iconName="play"
                             variant="primary"
                             className="w-full"
                         >
-                            コピー
+                            プレイ
                         </Button>
                         <Button
-                            onClick={() => setShowCopyWarning(false)}
+                            onClick={() => setShowPlayWarning(false)}
                             iconName="x"
                             className="w-full"
                         >
@@ -1309,78 +1226,9 @@ export default function EditorClient({
                                 ))}
                             </SortableContext>
                         </DndContext>
-                        <MorphDialog
-                            button={
-                                <Button
-                                    onClick={() => {
-                                        if (items && items.length !== 0)
-                                            void handlePlay();
-                                        else setShowPlayWarning(true);
-                                    }}
-                                    iconName="play"
-                                    className="w-full"
-                                    variant="primary"
-                                >
-                                    プレイ
-                                </Button>
-                            }
-                            open={showPlayWarning}
-                            onClose={() => setShowPlayWarning(false)}
-                            title="ルームに単語がありません"
-                            description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
-                            alignment="vertical"
-                        >
-                            <Button
-                                onClick={() => handlePlay()}
-                                iconName="play"
-                                variant="primary"
-                                className="w-full"
-                            >
-                                プレイ
-                            </Button>
-                            <Button
-                                onClick={() => setShowPlayWarning(false)}
-                                iconName="x"
-                                className="w-full"
-                            >
-                                キャンセル
-                            </Button>
-                        </MorphDialog>
                     </div>
                 </div>
             )}
-
-            <div
-                className={`w-full h-full flex justify-center px-8 md:px-16 gap-8 md:gap-16 items-center flex-col fixed top-0 left-0 bg-(--color-background) ${
-                    !showRoomCode &&
-                    "opacity-0 scale-95 blur-md pointer-events-none"
-                } z-1000 transition-all overlay duration-(--duration-etb) ease-etb`}
-                onClick={() => setShowRoomCode(false)}
-                inert={!showRoomCode}
-            >
-                <div className="font-extrabold text-cyan-600 text-2xl">
-                    Ei-TypeBomb
-                </div>
-                <div className="w-full bg-(--color-background) gap-8 md:gap-16 flex flex-col lg:flex-row justify-center items-center">
-                    <QRCodeSVG
-                        value={new URL(
-                            "/" + roomLink,
-                            process.env.NEXT_PUBLIC_JOIN_LINK!,
-                        ).toString()}
-                        size={256}
-                        fgColor="var(--color-foreground)"
-                        bgColor="var(--color-background)"
-                        className="text-(--color-foreground) md:shrink-0"
-                    />
-                    <div className="w-64 lg:w-0.5 h-0.5 lg:h-64 bg-(--color-border) shrink-0"></div>
-                    <div className="flex items-center justify-center">
-                        <div className="font-bold bg-(--color-background-secondary) px-4 py-2 rounded-lg font-mono text-center tracking-wider leading-normal text-3xl sm:text-4xl">
-                            {roomLink}
-                        </div>
-                    </div>
-                </div>
-                <div className="opacity-50">escまたはクリックで戻る。</div>
-            </div>
 
             <div
                 className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-(--duration-etb) ease-etb`}

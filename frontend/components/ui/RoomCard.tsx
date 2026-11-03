@@ -36,7 +36,7 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary)">
+        <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
             <div
                 className="rounded-lg h-full"
                 data-cursor="button"

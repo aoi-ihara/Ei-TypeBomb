@@ -20,6 +20,7 @@ import {
     createTurnPlan,
     shouldRecommendStop,
     evaluateRecall,
+    getRetrievability,
     recordAnswerExposure,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
@@ -390,6 +391,10 @@ export default function Client({
                 usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
             if (local) {
                 const memory = memoryByItemRef.current[item.id];
+                predictedRetrievabilityAtPromptRef.current =
+                    memory && memory.reviewCount > 0 && memory.lastReviewedAt
+                        ? getRetrievability(memory)
+                        : null;
                 const exposure =
                     memory?.lastPresentedAt ?? memory?.lastReviewedAt;
                 // Measure before answering: a long typing delay does not undo a BOT preview.
@@ -399,6 +404,7 @@ export default function Client({
                 expectedTypingAtStartRef.current =
                     item.answer.length * userTypingDelayRef.current;
             } else {
+                predictedRetrievabilityAtPromptRef.current = null;
                 if (schedulerRef.current)
                     recordBotPresentation(schedulerRef.current, item.id);
                 saveBotExposure(item);
@@ -602,6 +608,9 @@ export default function Client({
                 expectedTypingMs: expectedTypingAtStartRef.current,
                 schedulerReason: selected?.reason ?? "cycle",
             };
+            const predictedRetrievabilityBefore =
+                predictedRetrievabilityAtPromptRef.current;
+            predictedRetrievabilityAtPromptRef.current = null;
             const evaluation = evaluateRecall(evidence);
             if (scheduler) recordUserAnswer(scheduler, evaluation);
             const freshestMemory = authenticatedUserIdRef.current
@@ -643,6 +652,14 @@ export default function Client({
                 source: "user",
                 expected_typing_ms: evidence.expectedTypingMs,
                 model_version: MEMORY_MODEL_VERSION,
+                predicted_retrievability_before:
+                    predictedRetrievabilityBefore,
+                memory_stability_before:
+                    freshestMemory[item.id]?.stability ?? null,
+                memory_difficulty_before:
+                    freshestMemory[item.id]?.difficulty ?? null,
+                memory_review_count_before:
+                    freshestMemory[item.id]?.reviewCount ?? 0,
                 scheduler_reason: evidence.schedulerReason,
                 scheduler_turn: selected?.turn,
                 scheduler_cycle: selected?.cycle,
