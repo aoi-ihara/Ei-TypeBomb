@@ -41,6 +41,7 @@ import {
 } from "@/lib/playground/memory-client";
 import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
 import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
+import { Icon } from "@/components/ui/Icon";
 
 type Props = {
     room: Room;
@@ -202,10 +203,8 @@ export default function Client({
     const exposureGapAtStartRef = useRef<number | null>(null);
     const expectedTypingAtStartRef = useRef(0);
     const predictedRetrievabilityAtPromptRef = useRef<number | null>(null);
-    const [saveError, setSaveError] = useState(false);
     const authenticatedUserIdRef = useRef<string | null>(null);
     const [memoryReady, setMemoryReady] = useState(false);
-    const [guestMode, setGuestMode] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
@@ -312,7 +311,6 @@ export default function Client({
                 );
                 memoryByItemRef.current = saved;
                 setMemoryByItem(saved);
-                setGuestMode(true);
                 setMemoryReady(true);
                 return;
             }
@@ -466,53 +464,56 @@ export default function Client({
         setCurrentTurn(turnIndex);
     }, []);
 
-    const startGame = useCallback((countdownDurationMs = 3000) => {
-        if (!memoryReady || items.length === 0) return;
+    const startGame = useCallback(
+        (countdownDurationMs = 3000) => {
+            if (!memoryReady || items.length === 0) return;
 
-        if (countdownTimerRef.current) {
-            clearTimeout(countdownTimerRef.current);
-        }
+            if (countdownTimerRef.current) {
+                clearTimeout(countdownTimerRef.current);
+            }
 
-        if (sessionStartedAtRef.current === 0)
-            sessionStartedAtRef.current = Date.now();
-        resetExplosion();
-        setIsStarted(true);
-        setBombStatus(0);
-        bombStageProgressRef.current = 0;
-        setCurrentInput("");
-        setResult(null);
-        setLostDisplayName(null);
-        setStopRecommended(false);
-        setTrackedItem(null);
+            if (sessionStartedAtRef.current === 0)
+                sessionStartedAtRef.current = Date.now();
+            resetExplosion();
+            setIsStarted(true);
+            setBombStatus(0);
+            bombStageProgressRef.current = 0;
+            setCurrentInput("");
+            setResult(null);
+            setLostDisplayName(null);
+            setStopRecommended(false);
+            setTrackedItem(null);
 
-        const requestedFirstTurn = Math.floor(
-            Math.random() * usersRef.current.length,
-        );
+            const requestedFirstTurn = Math.floor(
+                Math.random() * usersRef.current.length,
+            );
 
-        const revealFirstItem = () => {
-            const resolved = resolveTurnWithItem(requestedFirstTurn);
-            setTrackedTurn(resolved.turnIndex);
-            setTrackedItem(resolved.item);
-            countdownTimerRef.current = null;
-        };
+            const revealFirstItem = () => {
+                const resolved = resolveTurnWithItem(requestedFirstTurn);
+                setTrackedTurn(resolved.turnIndex);
+                setTrackedItem(resolved.item);
+                countdownTimerRef.current = null;
+            };
 
-        if (countdownDurationMs <= 0) {
-            revealFirstItem();
-            return;
-        }
+            if (countdownDurationMs <= 0) {
+                revealFirstItem();
+                return;
+            }
 
-        countdownTimerRef.current = setTimeout(
-            revealFirstItem,
-            countdownDurationMs,
-        );
-    }, [
-        items.length,
-        resolveTurnWithItem,
-        memoryReady,
-        resetExplosion,
-        setTrackedItem,
-        setTrackedTurn,
-    ]);
+            countdownTimerRef.current = setTimeout(
+                revealFirstItem,
+                countdownDurationMs,
+            );
+        },
+        [
+            items.length,
+            resolveTurnWithItem,
+            memoryReady,
+            resetExplosion,
+            setTrackedItem,
+            setTrackedTurn,
+        ],
+    );
 
     useEffect(() => {
         successAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -652,8 +653,7 @@ export default function Client({
                 source: "user",
                 expected_typing_ms: evidence.expectedTypingMs,
                 model_version: MEMORY_MODEL_VERSION,
-                predicted_retrievability_before:
-                    predictedRetrievabilityBefore,
+                predicted_retrievability_before: predictedRetrievabilityBefore,
                 memory_stability_before:
                     freshestMemory[item.id]?.stability ?? null,
                 memory_difficulty_before:
@@ -725,10 +725,8 @@ export default function Client({
                             pendingMemoryRef.current.delete(synced.itemId);
                     }
                     cachePendingMemory();
-                    setSaveError(false);
                 } catch (error) {
                     console.error("Failed to sync playground memory", error);
-                    setSaveError(true);
                     posthog.capture("playground_memory_sync_failed", {
                         room_id: room.id,
                     });
@@ -1127,65 +1125,54 @@ export default function Client({
                 itemPresentationKey={itemPresentationKey}
                 currentInput={currentInput}
                 isStarted={isStarted}
-                preGameContent={memoryReady && showInstructions ? (
-                    <div
-                        className="flex h-full w-full max-w-xl flex-col justify-center gap-4 px-3 py-4 sm:gap-5 sm:px-6"
-                        role="region"
-                        aria-labelledby="offline-instructions-title"
-                    >
-                        <div className="flex flex-col gap-2 text-center">
-                            <div className="text-xs font-bold tracking-wide text-cyan-600">
-                                OFFLINE PLAY
+                preGameContent={
+                    memoryReady && showInstructions ? (
+                        <div
+                            className="flex flex-col gap-4 px-2"
+                            role="region"
+                            aria-labelledby="offline-instructions-title"
+                        >
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-2">
+                                    <span className="shrink-0">
+                                        <Icon name="keyboard" />
+                                    </span>
+                                    <span data-cursor="text">
+                                        単語は英語でも日本語でも、
+                                        <strong>半角</strong>
+                                        で入力してください。
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <span className="shrink-0">
+                                        <Icon name="lightbulb" />
+                                    </span>
+                                    <span data-cursor="text">
+                                        オフラインプレイの場合は、
+                                        <strong>スペースキーを2回押す</strong>
+                                        と解答を見ることができます。
+                                    </span>
+                                </div>
                             </div>
-                            <h1
-                                id="offline-instructions-title"
-                                className="text-xl font-bold sm:text-2xl"
-                            >
-                                プレイ前に確認
-                            </h1>
-                            <p className="text-sm sm:text-base">
-                                オフラインプレイでは、次のルールで入力します。
-                            </p>
-                        </div>
 
-                        <div className="flex flex-col gap-2 sm:gap-3">
-                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
-                                <p className="font-bold">
-                                    ⌨️ 半角英数字で入力
-                                </p>
-                                <p className="text-sm leading-relaxed">
-                                    英語は半角英字で、日本語の単語はローマ字入力（半角英字）で入力します。入力モードを「半角英数」に切り替えてください。
-                                </p>
-                            </div>
-                            <div className="flex flex-col gap-1 rounded-xl bg-(--color-background) p-3 sm:p-4">
-                                <p className="font-bold">
-                                    💡 スペースキーを2回連続で押す
-                                </p>
-                                <p className="text-sm leading-relaxed">
-                                    回答中にスペースキーを2回連続で押すと、答えをすべて表示できます。
+                            <div className="flex flex-col gap-4">
+                                <Button
+                                    className="w-full"
+                                    variant="primary"
+                                    iconName="play"
+                                    onClick={startFromInstructions}
+                                    loading={!memoryReady}
+                                    disabled={items.length === 0}
+                                >
+                                    ゲームを開始
+                                </Button>
+                                <p className="text-center opacity-50">
+                                    またはスペースキーを押して開始。
                                 </p>
                             </div>
                         </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Button
-                                className="w-full"
-                                variant="primary"
-                                onClick={startFromInstructions}
-                                disabled={!memoryReady || items.length === 0}
-                            >
-                                ゲームを開始
-                            </Button>
-                            <p className="text-center text-sm">
-                                または{" "}
-                                <kbd className="rounded bg-(--color-background) px-2 py-1 font-mono">
-                                    Space
-                                </kbd>{" "}
-                                キーを押して開始
-                            </p>
-                        </div>
-                    </div>
-                ) : undefined}
+                    ) : undefined
+                }
                 serverError={memoryError}
                 notice={notice}
                 result={result}
