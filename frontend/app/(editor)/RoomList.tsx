@@ -6,6 +6,7 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
+import Picker from "@/components/ui/Picker";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -317,24 +318,25 @@ export default function RoomList({
             </div>
 
             <div className="flex flex-col w-full items-center gap-4">
-                <div
-                    aria-label="ルームカテゴリ"
-                    className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
-                >
-                    {navigationItems.map((item) => (
-                        <Button
-                            key={item.value}
-                            className="w-fit shrink-0"
-                            variant={
-                                view === item.value ? "primary" : "default"
-                            }
-                            onClick={() => selectView(item.value)}
-                            iconName={item.iconName}
-                            alignment="left"
-                        >
-                            {item.label}
-                        </Button>
-                    ))}
+                <div className="w-full flex justify-center px-4">
+                    <Picker
+                        name="ルームカテゴリ"
+                        items={navigationItems.map((item) => item.label)}
+                        selection={Math.max(
+                            0,
+                            navigationItems.findIndex(
+                                (item) => item.value === view,
+                            ),
+                        )}
+                        onSelected={(index) =>
+                            selectView(navigationItems[index].value)
+                        }
+                        itemIcons={navigationItems.map(
+                            (item) => item.iconName,
+                        )}
+                        padding="middle"
+                        width="fit"
+                    />
                 </div>
 
                 <Shell size="large">
