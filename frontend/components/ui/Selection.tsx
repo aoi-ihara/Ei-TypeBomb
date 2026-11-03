@@ -40,7 +40,8 @@ export default function Selection({
             };
 
             setIndicator((current) =>
-                current?.left === nextIndicator.left &&
+                current !== null &&
+                current.left === nextIndicator.left &&
                 current.width === nextIndicator.width
                     ? current
                     : nextIndicator,
