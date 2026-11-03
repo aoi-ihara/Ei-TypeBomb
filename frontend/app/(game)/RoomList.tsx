@@ -60,16 +60,14 @@ export default function RoomList({
     const navigationItems: {
         value: View;
         label: string;
-        iconName: string;
     }[] = currentUser
         ? [
               {
                   value: "recommended",
                   label: "おすすめ",
-                  iconName: "wandSparkles",
               },
-              { value: "mine", label: "自分のルーム", iconName: "layoutGrid" },
-              { value: "saved", label: "保存済み", iconName: "bookmark" },
+              { value: "mine", label: "自分のルーム" },
+              { value: "saved", label: "保存済み" },
           ]
         : [
               {
