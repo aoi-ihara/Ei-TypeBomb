@@ -539,10 +539,17 @@ export default function Client({
     }, [items.length, memoryReady, room.id, startGame, users.length]);
 
     useEffect(() => {
-        if (!memoryReady || initialGameStartedRef.current) return;
+        if (
+            !memoryReady ||
+            !showInstructions ||
+            initialGameStartedRef.current
+        ) {
+            return;
+        }
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (
+                initialGameStartedRef.current ||
                 (event.code !== "Space" && event.key !== " ") ||
                 event.repeat ||
                 event.isComposing
@@ -566,7 +573,7 @@ export default function Client({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [memoryReady, startFromInstructions]);
+    }, [memoryReady, showInstructions, startFromInstructions]);
 
     const updateLocalMemory = useCallback(
         (item: Item, observation: RecallObservation) => {
