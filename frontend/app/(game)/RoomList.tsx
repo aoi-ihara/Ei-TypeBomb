@@ -6,6 +6,7 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
+import Selection from "@/components/ui/Selection";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -322,21 +323,20 @@ export default function RoomList({
                     aria-label="ルームカテゴリ"
                     className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
                 >
-                    {navigationItems.map((item) => (
-                        <Button
-                            key={item.value}
-                            className="w-fit shrink-0"
-                            padding="small"
-                            variant={
-                                view === item.value ? "primary" : "default"
-                            }
-                            onClick={() => selectView(item.value)}
-                            iconName={item.iconName}
-                            alignment="left"
-                        >
-                            {item.label}
-                        </Button>
-                    ))}
+                    <Selection
+                        items={navigationItems.map((item) => item.label)}
+                        selection={Math.max(
+                            0,
+                            navigationItems.findIndex(
+                                (item) => item.value === view,
+                            ),
+                        )}
+                        onSelected={(index) => {
+                            const selectedItem = navigationItems[index];
+                            if (selectedItem) selectView(selectedItem.value);
+                        }}
+                        width="fit"
+                    />
                 </div>
 
                 <Shell size="large">
