@@ -47,6 +47,7 @@ import {
     Send,
     PlayingCardsFan,
     BookmarkOff,
+    Lightbulb,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -97,6 +98,7 @@ const icons: Record<string, LucideIcon> = {
     send: Send,
     playingCardsFan: PlayingCardsFan,
     bookmarkOff: BookmarkOff,
+    lightbulb: Lightbulb,
 };
 
 export type IconName = keyof typeof icons;
