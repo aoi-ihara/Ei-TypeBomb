@@ -12,7 +12,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
         <header className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
             <div className="rounded-lg" data-cursor="button">
                 <button
-                    className="items-center rounded-lg overflow-clip flex pl-1 pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
+                    className="items-center rounded-lg gap-2 flex pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                     onClick={() => {
                         startNavigationProgress();
                         router.push("/");
@@ -21,6 +21,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                     <Image
                         src="/favicon.svg"
                         alt="page-logo"
+                        className="rounded-lg"
                         width={36}
                         height={36}
                     />
