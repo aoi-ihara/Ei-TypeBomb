@@ -49,6 +49,8 @@ export default function Selection({
 
         updateIndicator();
 
+        if (typeof ResizeObserver === "undefined") return;
+
         const observer = new ResizeObserver(updateIndicator);
         if (containerRef.current) observer.observe(containerRef.current);
         itemRefs.current.forEach((item) => {
@@ -61,19 +63,32 @@ export default function Selection({
     return (
         <div
             ref={containerRef}
-            className={\`relative flex rounded-2xl bg-(--color-background-secondary) p-2 \${width === "full" ? "w-full" : "w-fit"}\`}
+            className={[
+                "relative flex rounded-2xl bg-(--color-background-secondary) p-2",
+                width === "full" ? "w-full" : "w-fit",
+            ].join(" ")}
         >
             <div
-                className={\`pointer-events-none absolute inset-y-2 rounded-lg bg-cyan-600 transition-all duration-(--duration-etb) ease-etb \${isPressed && "scale-95"} \${width === "fit" && !indicator ? "opacity-0" : ""}\`}
+                className={[
+                    "pointer-events-none absolute inset-y-2 rounded-lg bg-cyan-600 transition-all duration-(--duration-etb) ease-etb",
+                    isPressed ? "scale-95" : "",
+                    width === "fit" && !indicator ? "opacity-0" : "",
+                ]
+                    .filter(Boolean)
+                    .join(" ")}
                 style={{
                     left:
                         width === "full"
-                            ? \`calc(0.5rem + \${selection} * ((100% - 1rem) / \${items.length}))\`
-                            : \`\${indicator?.left ?? 0}px\`,
+                            ? "calc(0.5rem + " +
+                              selection +
+                              " * ((100% - 1rem) / " +
+                              items.length +
+                              "))"
+                            : (indicator?.left ?? 0) + "px",
                     width:
                         width === "full"
-                            ? \`calc((100% - 1rem) / \${items.length})\`
-                            : \`\${indicator?.width ?? 0}px\`,
+                            ? "calc((100% - 1rem) / " + items.length + ")"
+                            : (indicator?.width ?? 0) + "px",
                 }}
             />
 
@@ -83,12 +98,23 @@ export default function Selection({
                     ref={(element) => {
                         itemRefs.current[index] = element;
                     }}
-                    className={\`z-10 rounded-lg \${width === "full" ? "w-full" : "w-fit shrink-0"}\`}
+                    className={[
+                        "z-10 rounded-lg",
+                        width === "full" ? "w-full" : "w-fit shrink-0",
+                    ].join(" ")}
                     data-cursor="button"
                     data-cursor-shape={index === selection ? "0" : "1"}
                 >
                     <button
-                        className={\`\${width === "full" ? "w-full" : "w-auto whitespace-nowrap"} p-1.5 font-bold rounded-lg transition-all duration-(--duration-etb) ease-etb active:scale-95 \${index === selection && "text-white"}\`}
+                        className={[
+                            width === "full"
+                                ? "w-full"
+                                : "w-auto whitespace-nowrap",
+                            "p-1.5 font-bold rounded-lg transition-all duration-(--duration-etb) ease-etb active:scale-95",
+                            index === selection ? "text-white" : "",
+                        ]
+                            .filter(Boolean)
+                            .join(" ")}
                         onClick={() => onSelected(index)}
                         onPointerDown={() => {
                             if (index === selection) setIsPressed(true);
