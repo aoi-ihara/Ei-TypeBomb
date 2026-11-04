@@ -1,8 +1,10 @@
+"use client";
+
 import ProgressSignal from "./ProgressSignal";
-import BackButton from "./BackButton";
 import { Icon } from "../ui/Icon";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
+import Link from "next/link";
 
 type AuthShellProps = {
     title?: string;
@@ -41,19 +43,24 @@ export default function Shell({
                             data-cursor="button"
                             data-cursor-shape="1"
                         >
-                            <button
-                                onClick={() => {
-                                    startNavigationProgress();
-                                    if (backLink) {
-                                        router.push(backLink);
-                                    } else {
+                            {backLink ? (
+                                <Link
+                                    href={backLink}
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
+                                >
+                                    <Icon name="arrowLeft" />
+                                </Link>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        startNavigationProgress();
                                         router.back();
-                                    }
-                                }}
-                                className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
-                            >
-                                <Icon name="arrowLeft" />
-                            </button>
+                                    }}
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
+                                >
+                                    <Icon name="arrowLeft" />
+                                </button>
+                            )}
                         </div>
                     )}
                     <h1
