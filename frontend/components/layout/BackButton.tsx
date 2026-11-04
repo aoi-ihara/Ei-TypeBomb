@@ -8,14 +8,5 @@ export default function BackButton() {
     const router = useRouter();
 
     return (
-        <button
-            onClick={() => {
-                startNavigationProgress();
-                router.back();
-            }}
-            className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
-        >
-            <Icon name="arrowLeft" />
-        </button>
     );
 }

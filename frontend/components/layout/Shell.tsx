@@ -1,5 +1,8 @@
 import ProgressSignal from "./ProgressSignal";
 import BackButton from "./BackButton";
+import { Icon } from "../ui/Icon";
+import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
 
 type AuthShellProps = {
     title?: string;
@@ -9,6 +12,7 @@ type AuthShellProps = {
     loading?: boolean;
     animateAppear?: boolean;
     showBackButton?: boolean;
+    backLink?: string;
 };
 
 export default function Shell({
@@ -19,7 +23,10 @@ export default function Shell({
     loading,
     animateAppear = false,
     showBackButton = false,
+    backLink,
 }: AuthShellProps) {
+    const router = useRouter();
+
     if (loading) return <ProgressSignal />;
 
     return (
@@ -34,7 +41,19 @@ export default function Shell({
                             data-cursor="button"
                             data-cursor-shape="1"
                         >
-                            <BackButton />
+                            <button
+                                onClick={() => {
+                                    startNavigationProgress();
+                                    if (backLink) {
+                                        router.push(backLink);
+                                    } else {
+                                        router.back();
+                                    }
+                                }}
+                                className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
+                            >
+                                <Icon name="arrowLeft" />
+                            </button>
                         </div>
                     )}
                     <h1
