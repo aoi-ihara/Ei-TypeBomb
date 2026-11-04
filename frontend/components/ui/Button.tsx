@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";
+import Link from "next/link";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
@@ -25,6 +26,7 @@ type ButtonProps = Pick<
     value?: string;
     name?: string;
     cursor?: "0" | "1" | "2";
+    href?: string;
 };
 
 const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
@@ -64,6 +66,7 @@ export default function Button({
     value,
     name,
     cursor = disabled || loading ? "2" : variant === "text" ? "1" : "0",
+    href,
     ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
@@ -109,6 +112,46 @@ export default function Button({
 
         onClick?.(event);
     };
+
+    if (href) {
+        return (
+            <div
+                className={`rounded-lg ${className}`}
+                data-cursor="button"
+                data-cursor-shape={cursor}
+            >
+                <Link
+                    href={href}
+                    {...ariaProps}
+                    type={type}
+                    className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
+                >
+                    {iconName && (!loading || !children) && (
+                        <Icon
+                            name={
+                                loading && !children ? "loaderCircle" : iconName
+                            }
+                            className={
+                                loading && !children
+                                    ? "animate-spin"
+                                    : undefined
+                            }
+                            size={24}
+                        />
+                    )}
+                    {children && (
+                        <div
+                            className={`transition-all duration-(--duration-etb) ease-etb ${
+                                loading ? "gradient-text w-fit" : ""
+                            }`}
+                        >
+                            {loading ? loadingText : children}
+                        </div>
+                    )}
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div
