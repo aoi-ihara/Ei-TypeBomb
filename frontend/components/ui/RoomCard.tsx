@@ -8,7 +8,6 @@ import { Icon } from "./Icon";
 import Button from "./Button";
 import posthog from "posthog-js";
 import Link from "next/link";
-import LinkButton from "./Link";
 
 export default function RoomCard({
     room,
@@ -92,7 +91,6 @@ export default function RoomCard({
                                 <span className="text-sm">人</span>
                             </span>
                         </div>
-
                         <div className="flex items-end gap-2 opacity-50">
                             <Icon name="playingCardsFan" />
                             <span
@@ -113,6 +111,12 @@ export default function RoomCard({
                 <Button
                     href={`/${roomLink}`}
                     iconName="play"
+                    variant="text"
+                    padding="middle"
+                />
+                <Button
+                    href={`/${roomLink}/edit`}
+                    iconName="pen"
                     variant="text"
                     padding="middle"
                 />
