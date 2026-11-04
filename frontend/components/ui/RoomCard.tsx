@@ -117,17 +117,6 @@ export default function RoomCard({
                     variant="text"
                     padding="middle"
                 />
-                {isOwner && (
-                    <Button
-                        onClick={() => {
-                            startNavigationProgress();
-                            router.push("/" + roomLink + "/edit");
-                        }}
-                        iconName="pen"
-                        variant="text"
-                        padding="middle"
-                    />
-                )}
                 <Button
                     onClick={copyRoomLink}
                     iconName={copied ? "check" : "link"}
