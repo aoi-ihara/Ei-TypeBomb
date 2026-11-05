@@ -3,6 +3,8 @@ export type LegacyWord = {
     en: string;
 };
 
+export type View = "recommended" | "mine" | "saved";
+
 export type TypedRecallItem = {
     id: string;
     type: "typed_recall";

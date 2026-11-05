@@ -1,5 +1,10 @@
+"use client";
+
 import ProgressSignal from "./ProgressSignal";
-import BackButton from "./BackButton";
+import { Icon } from "../ui/Icon";
+import { useRouter } from "next/navigation";
+import { startNavigationProgress } from "@/lib/navigation-progress";
+import Link from "next/link";
 
 type AuthShellProps = {
     title?: string;
@@ -9,6 +14,7 @@ type AuthShellProps = {
     loading?: boolean;
     animateAppear?: boolean;
     showBackButton?: boolean;
+    backLink?: string;
 };
 
 export default function Shell({
@@ -19,14 +25,17 @@ export default function Shell({
     loading,
     animateAppear = false,
     showBackButton = false,
+    backLink,
 }: AuthShellProps) {
+    const router = useRouter();
+
     if (loading) return <ProgressSignal />;
 
     return (
-        <>
+        <div className="flex flex-col gap-4 items-center w-full">
             {title && (
                 <div
-                    className={`relative mt-16 mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
+                    className={`relative mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
                 >
                     {showBackButton && (
                         <div
@@ -34,7 +43,24 @@ export default function Shell({
                             data-cursor="button"
                             data-cursor-shape="1"
                         >
-                            <BackButton />
+                            {backLink ? (
+                                <Link
+                                    href={backLink}
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
+                                >
+                                    <Icon name="arrowLeft" />
+                                </Link>
+                            ) : (
+                                <button
+                                    onClick={() => {
+                                        startNavigationProgress();
+                                        router.back();
+                                    }}
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
+                                >
+                                    <Icon name="arrowLeft" />
+                                </button>
+                            )}
                         </div>
                     )}
                     <h1
@@ -61,6 +87,6 @@ export default function Shell({
             >
                 {children}
             </div>
-        </>
+        </div>
     );
 }
