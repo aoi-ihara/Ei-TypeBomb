@@ -7,6 +7,7 @@ import type { Room } from "@/type";
 import { Icon } from "./Icon";
 import Button from "./Button";
 import posthog from "posthog-js";
+import Link from "next/link";
 
 export default function RoomCard({
     room,
@@ -42,13 +43,14 @@ export default function RoomCard({
                 data-cursor="button"
                 data-cursor-shape="1"
             >
-                <button
+                <Link
                     className="flex flex-col items-start h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
                         startNavigationProgress();
                         router.push("/" + roomLink);
                     }}
+                    href={`/${roomLink}`}
                 >
                     <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
                         <Icon
@@ -89,7 +91,6 @@ export default function RoomCard({
                                 <span className="text-sm">人</span>
                             </span>
                         </div>
-
                         <div className="flex items-end gap-2 opacity-50">
                             <Icon name="playingCardsFan" />
                             <span
@@ -103,31 +104,22 @@ export default function RoomCard({
                             </span>
                         </div>
                     </div>
-                </button>
+                </Link>
             </div>
 
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
-                    onClick={() => {
-                        posthog.capture("play_clicked", { room_id: room.id });
-                        startNavigationProgress();
-                        router.push("/" + roomLink);
-                    }}
+                    href={`/${roomLink}`}
                     iconName="play"
                     variant="text"
                     padding="middle"
                 />
-                {isOwner && (
-                    <Button
-                        onClick={() => {
-                            startNavigationProgress();
-                            router.push("/" + roomLink + "/edit");
-                        }}
-                        iconName="pen"
-                        variant="text"
-                        padding="middle"
-                    />
-                )}
+                <Button
+                    href={`/${roomLink}/edit`}
+                    iconName="pen"
+                    variant="text"
+                    padding="middle"
+                />
                 <Button
                     onClick={copyRoomLink}
                     iconName={copied ? "check" : "link"}

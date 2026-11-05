@@ -40,6 +40,7 @@ export default async function RoomPage({
                 showBackButton
                 size="xlarge"
                 animateAppear
+                backLink="/"
             >
                 <section className="w-full flex-col flex gap-4">
                     <div className="flex w-full p-4 flex-col gap-4 rounded-lg bg-(--color-background-secondary)">

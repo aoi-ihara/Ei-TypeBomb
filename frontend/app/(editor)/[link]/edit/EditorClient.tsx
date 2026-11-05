@@ -45,6 +45,7 @@ import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 import Header from "@/components/layout/Header";
+import Link from "next/link";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
 
@@ -518,10 +519,7 @@ export default function EditorClient({
             >
                 <div className="flex mt-16 mb-4 items-center w-full">
                     <Button
-                        onClick={() => {
-                            startNavigationProgress();
-                            router.back();
-                        }}
+                        href={`/${roomLink}`}
                         variant="text"
                         className="h-full"
                     >
