@@ -9,7 +9,6 @@ export default async function Page({
 }) {
     const { filter, owner } = await searchParams;
 
-    // Keep previously shared category URLs working while using canonical routes.
     if (filter === "mine" || owner === "me") redirect("/mini");
     if (filter === "saved") redirect("/saved");
 

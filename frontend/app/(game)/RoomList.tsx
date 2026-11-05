@@ -51,19 +51,35 @@ export default function RoomList({
     const navigationItems: {
         value: View;
         label: string;
+        url: string;
+        iconName: string;
     }[] = currentUser
         ? [
               {
                   value: "recommended",
                   label: "おすすめ",
+                  url: "/",
+                  iconName: "wandSparkles",
               },
-              { value: "mine", label: "自分のルーム" },
-              { value: "saved", label: "保存済み" },
+              {
+                  value: "mine",
+                  label: "自分のルーム",
+                  url: "/mine",
+                  iconName: "user",
+              },
+              {
+                  value: "saved",
+                  label: "保存済み",
+                  url: "/saved",
+                  iconName: "bookmark",
+              },
           ]
         : [
               {
                   value: "recommended",
                   label: "おすすめ",
+                  url: "/",
+                  iconName: "wandSparkles",
               },
           ];
 
@@ -132,7 +148,7 @@ export default function RoomList({
 
         const paths: Record<View, string> = {
             recommended: "/",
-            mine: "/mini",
+            mine: "/mine",
             saved: "/saved",
         };
 
@@ -273,36 +289,31 @@ export default function RoomList({
                 )}
             </Header>
 
-            <div className="items-center mb-4 rounded-lg overflow-clip">
-                <Image
-                    src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
-                    alt="page-logo"
-                    width={150}
-                    height={150}
-                />
-            </div>
-
-            <div className="flex flex-col w-full items-center gap-4">
-                <div
-                    aria-label="ルームカテゴリ"
-                    className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
-                >
-                    <Selection
-                        items={navigationItems.map((item) => item.label)}
-                        selection={Math.max(
-                            0,
-                            navigationItems.findIndex(
-                                (item) => item.value === view,
-                            ),
-                        )}
-                        onSelected={(index) => {
-                            const selectedItem = navigationItems[index];
-                            if (selectedItem) selectView(selectedItem.value);
-                        }}
-                        width="fit"
-                    />
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
+                <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll">
+                    {navigationItems.map((item, index) => (
+                        <Button
+                            href={item.url}
+                            padding="small"
+                            className="sm:w-full shrink-0 w-fit"
+                            alignment="left"
+                            iconName={item.iconName}
+                            key={item.label}
+                            variant={
+                                Math.max(
+                                    0,
+                                    navigationItems.findIndex(
+                                        (item) => item.value === view,
+                                    ),
+                                ) === index
+                                    ? "primary"
+                                    : "default"
+                            }
+                        >
+                            {item.label}
+                        </Button>
+                    ))}
                 </div>
-
                 <Shell size="large">
                     <div className="flex w-full flex-wrap items-center justify-between gap-4">
                         <h1 className="text-2xl font-bold" data-cursor="text">
@@ -311,6 +322,7 @@ export default function RoomList({
                         <Button
                             onClick={addRoom}
                             loading={creating}
+                            variant="primary"
                             iconName="plus"
                             className="w-fit shrink-0"
                         >

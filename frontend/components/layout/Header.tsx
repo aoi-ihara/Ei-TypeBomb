@@ -1,15 +1,11 @@
 "use client";
 
-import { startNavigationProgress } from "@/lib/navigation-progress";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import React from "react";
 import Button from "../ui/Button";
 import Link from "next/link";
 
 export default function Header({ children }: { children?: React.ReactNode }) {
-    const router = useRouter();
-
     return (
         <header className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
             <div className="flex gap-4">
@@ -30,12 +26,6 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                         </span>
                     </Link>
                 </div>
-                <Button href="/?filter=mine" variant="text" iconName="user">
-                    自分のルーム
-                </Button>
-                <Button href="/?filter=mine" variant="text" iconName="user">
-                    自分のルーム
-                </Button>
             </div>
             {children}
         </header>
