@@ -241,11 +241,6 @@ export default function RoomList({
                         }
                         items={[
                             {
-                                label: "自分のルーム",
-                                icon: "layoutGrid",
-                                onClick: () => selectView("mine"),
-                            },
-                            {
                                 label: "ユーザー設定",
                                 icon: "userRoundCog",
                                 onClick: () => {
