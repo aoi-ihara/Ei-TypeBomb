@@ -29,16 +29,9 @@ type View = "recommended" | "mine" | "saved";
 type Props = {
     publicRooms: Room[];
     myRooms: Room[];
-    initialView: "public" | "me";
+    initialView: View;
     currentUser: CurrentUser | null;
     initialSavedRoomIds: string[];
-};
-
-const getViewFromSearchParams = (searchParams: URLSearchParams): View => {
-    const filter = searchParams.get("filter");
-    if (filter === "mine") return "mine";
-    if (filter === "saved") return "saved";
-    return "recommended";
 };
 
 export default function RoomList({
@@ -52,9 +45,7 @@ export default function RoomList({
     const [creating, setCreating] = useState(false);
     const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
-    const [view, setView] = useState<View>(
-        initialView === "me" ? "mine" : "recommended",
-    );
+    const view = initialView;
     const [keyword, setKeyword] = useState("");
     const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
     const navigationItems: {
@@ -139,39 +130,15 @@ export default function RoomList({
 
         if (nextView === view) return;
 
-        setView(nextView);
-
-        const url = new URL(window.location.href);
-        if (nextView === "recommended") {
-            url.searchParams.delete("filter");
-        } else {
-            url.searchParams.set("filter", nextView);
-        }
-
-        window.history.pushState(
-            window.history.state,
-            "",
-            url.pathname + (url.search ? url.search : ""),
-        );
-    };
-
-    useEffect(() => {
-        const handlePopState = () => {
-            const nextView = getViewFromSearchParams(
-                new URLSearchParams(window.location.search),
-            );
-
-            if ((nextView === "mine" || nextView === "saved") && !currentUser) {
-                setView("recommended");
-                return;
-            }
-
-            setView(nextView);
+        const paths: Record<View, string> = {
+            recommended: "/",
+            mine: "/mini",
+            saved: "/saved",
         };
 
-        window.addEventListener("popstate", handlePopState);
-        return () => window.removeEventListener("popstate", handlePopState);
-    }, [currentUser]);
+        startNavigationProgress();
+        router.push(paths[nextView]);
+    };
 
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;

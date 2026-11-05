@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSignInUrl } from "@/lib/auth/sign-in-url";
-import { getUserDetails } from "@/lib/auth/session";
-import { getMyRooms, getPublicRooms } from "@/lib/room/get";
-import { getSavedRoomIds } from "@/lib/room/save";
+import { getRoomListData } from "./room-list-data";
 import RoomList from "./RoomList";
 
 export default async function Page({
@@ -12,34 +9,11 @@ export default async function Page({
 }) {
     const { filter, owner } = await searchParams;
 
-    const initialView =
-        filter === "mine"
-            ? "me"
-            : filter === "public"
-              ? "public"
-              : owner === "me"
-                ? "me"
-                : "public";
+    // Keep previously shared category URLs working while using canonical routes.
+    if (filter === "mine" || owner === "me") redirect("/mini");
+    if (filter === "saved") redirect("/saved");
 
-    const [publicRooms, currentUser, savedRoomIds, myRoomsResult] =
-        await Promise.all([
-            getPublicRooms(),
-            getUserDetails(),
-            getSavedRoomIds(),
-            getMyRooms(),
-        ]);
+    const roomListData = await getRoomListData();
 
-    if (!currentUser && initialView === "me") {
-        redirect(getSignInUrl());
-    }
-
-    return (
-        <RoomList
-            publicRooms={publicRooms}
-            myRooms={myRoomsResult?.rooms ?? []}
-            initialView={initialView}
-            currentUser={currentUser}
-            initialSavedRoomIds={savedRoomIds}
-        />
-    );
+    return <RoomList {...roomListData} initialView="recommended" />;
 }
