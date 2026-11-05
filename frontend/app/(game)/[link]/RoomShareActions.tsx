@@ -4,7 +4,6 @@ import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
-import Dialog from "@/components/ui/Dialog";
 
 export default function RoomShareActions({
     link,
@@ -44,7 +43,7 @@ export default function RoomShareActions({
                     iconName={isCopied ? "check" : "copy"}
                     className="w-full"
                 >
-                    {isCopied ? "コピーしました" : "リンクをコピー"}
+                    リンク
                 </Button>
             </div>
 

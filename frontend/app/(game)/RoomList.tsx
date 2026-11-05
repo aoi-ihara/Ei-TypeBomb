@@ -6,7 +6,6 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
-import Selection from "@/components/ui/Selection";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -15,8 +14,9 @@ import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
-import Image from "next/image";
 import Header from "@/components/layout/Header";
+import { View } from "@/type";
+import RoomNavigation from "./RoomNavigation";
 
 type CurrentUser = {
     id: string;
@@ -24,21 +24,12 @@ type CurrentUser = {
     displayName: string | null;
 };
 
-type View = "recommended" | "mine" | "saved";
-
 type Props = {
     publicRooms: Room[];
     myRooms: Room[];
-    initialView: "public" | "me";
+    initialView: View;
     currentUser: CurrentUser | null;
     initialSavedRoomIds: string[];
-};
-
-const getViewFromSearchParams = (searchParams: URLSearchParams): View => {
-    const filter = searchParams.get("filter");
-    if (filter === "mine") return "mine";
-    if (filter === "saved") return "saved";
-    return "recommended";
 };
 
 export default function RoomList({
@@ -50,29 +41,42 @@ export default function RoomList({
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
-    const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
-    const [view, setView] = useState<View>(
-        initialView === "me" ? "mine" : "recommended",
-    );
+    const view = initialView;
     const [keyword, setKeyword] = useState("");
     const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
     const navigationItems: {
         value: View;
         label: string;
+        url: string;
+        iconName: string;
     }[] = currentUser
         ? [
               {
                   value: "recommended",
                   label: "おすすめ",
+                  url: "/",
+                  iconName: "wandSparkles",
               },
-              { value: "mine", label: "自分のルーム" },
-              { value: "saved", label: "保存済み" },
+              {
+                  value: "mine",
+                  label: "自分のルーム",
+                  url: "/mine",
+                  iconName: "user",
+              },
+              {
+                  value: "saved",
+                  label: "保存済み",
+                  url: "/saved",
+                  iconName: "bookmark",
+              },
           ]
         : [
               {
                   value: "recommended",
                   label: "おすすめ",
+                  url: "/",
+                  iconName: "wandSparkles",
               },
           ];
 
@@ -139,39 +143,15 @@ export default function RoomList({
 
         if (nextView === view) return;
 
-        setView(nextView);
-
-        const url = new URL(window.location.href);
-        if (nextView === "recommended") {
-            url.searchParams.delete("filter");
-        } else {
-            url.searchParams.set("filter", nextView);
-        }
-
-        window.history.pushState(
-            window.history.state,
-            "",
-            url.pathname + (url.search ? url.search : ""),
-        );
-    };
-
-    useEffect(() => {
-        const handlePopState = () => {
-            const nextView = getViewFromSearchParams(
-                new URLSearchParams(window.location.search),
-            );
-
-            if ((nextView === "mine" || nextView === "saved") && !currentUser) {
-                setView("recommended");
-                return;
-            }
-
-            setView(nextView);
+        const paths: Record<View, string> = {
+            recommended: "/",
+            mine: "/mine",
+            saved: "/saved",
         };
 
-        window.addEventListener("popstate", handlePopState);
-        return () => window.removeEventListener("popstate", handlePopState);
-    }, [currentUser]);
+        startNavigationProgress();
+        router.push(paths[nextView]);
+    };
 
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;
@@ -244,16 +224,6 @@ export default function RoomList({
         router.replace("/");
     };
 
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        return () => {
-            clearInterval(intervalId);
-        };
-    }, []);
-
     const viewTitle =
         navigationItems.find((item) => item.value === view)?.label ??
         "おすすめ";
@@ -306,57 +276,27 @@ export default function RoomList({
                 )}
             </Header>
 
-            <div className="items-center mb-4 rounded-lg overflow-clip">
-                <Image
-                    src={showCursor ? "/favicon.svg" : "/favicon-2.svg"}
-                    alt="page-logo"
-                    width={150}
-                    height={150}
-                />
-            </div>
-
-            <div className="flex flex-col w-full items-center gap-4">
-                <div
-                    aria-label="ルームカテゴリ"
-                    className="w-full flex shrink-0 no-scrollbar overflow-x-scroll gap-4 px-[calc(max(50dvw-336px,0px)+16px)]"
-                >
-                    <Selection
-                        items={navigationItems.map((item) => item.label)}
-                        selection={Math.max(
-                            0,
-                            navigationItems.findIndex(
-                                (item) => item.value === view,
-                            ),
-                        )}
-                        onSelected={(index) => {
-                            const selectedItem = navigationItems[index];
-                            if (selectedItem) selectView(selectedItem.value);
-                        }}
-                        width="fit"
-                    />
-                </div>
-
-                <Shell size="large">
-                    <div className="flex w-full flex-wrap items-center justify-between gap-4">
-                        <h1 className="text-2xl font-bold" data-cursor="text">
-                            {viewTitle}
-                        </h1>
+            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
+                <Shell size="large" title={viewTitle}>
+                    <div className="flex w-full items-center justify-between gap-4">
+                        <Input
+                            value={keyword}
+                            onChange={(event) => setKeyword(event.target.value)}
+                            label="ルームを検索"
+                            autoComplete="off"
+                        />
                         <Button
                             onClick={addRoom}
                             loading={creating}
+                            padding="large"
+                            variant="primary"
                             iconName="plus"
                             className="w-fit shrink-0"
                         >
                             新規作成
                         </Button>
                     </div>
-
-                    <Input
-                        value={keyword}
-                        onChange={(event) => setKeyword(event.target.value)}
-                        label="ルームを検索"
-                        autoComplete="off"
-                    />
 
                     {createError && (
                         <p className="text-red-500" role="alert">

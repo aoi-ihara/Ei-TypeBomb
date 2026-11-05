@@ -104,7 +104,11 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
             .maybeSingle();
 
         if (legacyError) {
-            serverError("failed to fetch legacy room page data", legacyError, "DB");
+            serverError(
+                "failed to fetch legacy room page data",
+                legacyError,
+                "DB",
+            );
             return null;
         }
         data = legacyRoom;
@@ -158,7 +162,6 @@ export const getRoomMetadataFromLink = async (link: string) => {
     if (!result) return null;
 
     return {
-        // Private room details are never exposed through page or social metadata.
         title: result.title ?? null,
         explanation: result.room?.explanation ?? null,
         visibility: result.visibility,
