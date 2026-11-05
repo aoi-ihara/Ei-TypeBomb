@@ -31,7 +31,6 @@ export default function RoomShareActions({
             <div className="flex gap-4 w-full">
                 <Button
                     onClick={() => setShowQrCode(true)}
-                    variant="primary"
                     iconName="qrCode"
                     className="w-full"
                 >
@@ -39,7 +38,6 @@ export default function RoomShareActions({
                 </Button>
                 <Button
                     onClick={handleCopy}
-                    variant="primary"
                     iconName={isCopied ? "check" : "copy"}
                     className="w-full"
                 >
