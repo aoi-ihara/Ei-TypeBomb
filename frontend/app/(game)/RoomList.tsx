@@ -6,7 +6,6 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomCard from "@/components/ui/RoomCard";
 import Button from "@/components/ui/Button";
-import Selection from "@/components/ui/Selection";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
@@ -15,16 +14,15 @@ import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
-import Image from "next/image";
 import Header from "@/components/layout/Header";
+import { View } from "@/type";
+import RoomNavigation from "./RoomNavigation";
 
 type CurrentUser = {
     id: string;
     email: string | null;
     displayName: string | null;
 };
-
-type View = "recommended" | "mine" | "saved";
 
 type Props = {
     publicRooms: Room[];
@@ -43,7 +41,6 @@ export default function RoomList({
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
-    const [showCursor, setShowCursor] = useState(true);
     const [createError, setCreateError] = useState("");
     const view = initialView;
     const [keyword, setKeyword] = useState("");
@@ -227,16 +224,6 @@ export default function RoomList({
         router.replace("/");
     };
 
-    useEffect(() => {
-        const intervalId = setInterval(() => {
-            setShowCursor((prev) => !prev);
-        }, 500);
-
-        return () => {
-            clearInterval(intervalId);
-        };
-    }, []);
-
     const viewTitle =
         navigationItems.find((item) => item.value === view)?.label ??
         "おすすめ";
@@ -289,39 +276,20 @@ export default function RoomList({
                 )}
             </Header>
 
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
-                <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll">
-                    {navigationItems.map((item, index) => (
-                        <Button
-                            href={item.url}
-                            padding="small"
-                            className="sm:w-full shrink-0 w-fit"
-                            alignment="left"
-                            iconName={item.iconName}
-                            key={item.label}
-                            variant={
-                                Math.max(
-                                    0,
-                                    navigationItems.findIndex(
-                                        (item) => item.value === view,
-                                    ),
-                                ) === index
-                                    ? "primary"
-                                    : "default"
-                            }
-                        >
-                            {item.label}
-                        </Button>
-                    ))}
-                </div>
-                <Shell size="large">
-                    <div className="flex w-full flex-wrap items-center justify-between gap-4">
-                        <h1 className="text-2xl font-bold" data-cursor="text">
-                            {viewTitle}
-                        </h1>
+            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
+                <Shell size="large" title={viewTitle}>
+                    <div className="flex w-full items-center justify-between gap-4">
+                        <Input
+                            value={keyword}
+                            onChange={(event) => setKeyword(event.target.value)}
+                            label="ルームを検索"
+                            autoComplete="off"
+                        />
                         <Button
                             onClick={addRoom}
                             loading={creating}
+                            padding="large"
                             variant="primary"
                             iconName="plus"
                             className="w-fit shrink-0"
@@ -329,13 +297,6 @@ export default function RoomList({
                             新規作成
                         </Button>
                     </div>
-
-                    <Input
-                        value={keyword}
-                        onChange={(event) => setKeyword(event.target.value)}
-                        label="ルームを検索"
-                        autoComplete="off"
-                    />
 
                     {createError && (
                         <p className="text-red-500" role="alert">

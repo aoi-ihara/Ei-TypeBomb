@@ -32,10 +32,10 @@ export default function Shell({
     if (loading) return <ProgressSignal />;
 
     return (
-        <>
+        <div className="flex flex-col gap-4 items-center w-full">
             {title && (
                 <div
-                    className={`relative mt-16 mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
+                    className={`relative mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
                 >
                     {showBackButton && (
                         <div
@@ -46,7 +46,7 @@ export default function Shell({
                             {backLink ? (
                                 <Link
                                     href={backLink}
-                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
                                 >
                                     <Icon name="arrowLeft" />
                                 </Link>
@@ -56,7 +56,7 @@ export default function Shell({
                                         startNavigationProgress();
                                         router.back();
                                     }}
-                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95"
+                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
                                 >
                                     <Icon name="arrowLeft" />
                                 </button>
@@ -87,6 +87,6 @@ export default function Shell({
             >
                 {children}
             </div>
-        </>
+        </div>
     );
 }
