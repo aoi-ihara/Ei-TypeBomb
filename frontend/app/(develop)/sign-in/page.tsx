@@ -12,6 +12,7 @@ import { Turnstile } from "@marsidev/react-turnstile";
 import { useEffect } from "react";
 import { getSession } from "@/lib/auth/session";
 import posthog from "posthog-js";
+import Header from "@/components/layout/Header";
 
 export default function SignInPage() {
     const [email, setEmail] = useState("");
@@ -25,7 +26,10 @@ export default function SignInPage() {
     useEffect(() => {
         const getSessionInfo = async () => {
             const session = await getSession();
-            if (session) { startNavigationProgress(); router.push("/"); }
+            if (session) {
+                startNavigationProgress();
+                router.push("/");
+            }
         };
 
         getSessionInfo();
@@ -48,58 +52,67 @@ export default function SignInPage() {
     };
 
     return (
-        <Shell title="ログイン">
-            <Input
-                value={email}
-                font="mono"
-                type="email"
-                label="メールアドレス"
-                disabled={loading}
-                onChange={(e) => {
-                    setEmail(e.target.value);
-                }}
-            />
-            <Input
-                value={password}
-                font="mono"
-                type="password"
-                label="パスワード"
-                disabled={loading}
-                onChange={(e) => {
-                    setPassword(e.target.value);
-                }}
-            />
-            {error && (
-                <a className="text-red-500" data-cursor="text">
-                    {error}
-                </a>
-            )}
-            <Button
-                onClick={() => {
-                    setLoading(true);
-                    setError("");
-                    setTurnstile(true);
-                }}
-                padding="middle"
-                loading={loading}
-                className="w-full"
-                variant="primary"
-            >
-                ログイン
-            </Button>
-            <Button className="w-full" onClick={() => { startNavigationProgress(); router.push("/sign-up"); }}>
-                rcAccountを作成
-            </Button>
-            <PopUp show={turnstile}>
-                <Turnstile
-                    options={{ language: "ja" }}
-                    siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
-                    onSuccess={(turnstileToken: string) => {
-                        setTurnstile(false);
-                        handleSignIn(email, password, turnstileToken);
+        <>
+            <Header />
+            <Shell title="ログイン">
+                <Input
+                    value={email}
+                    font="mono"
+                    type="email"
+                    label="メールアドレス"
+                    disabled={loading}
+                    onChange={(e) => {
+                        setEmail(e.target.value);
                     }}
                 />
-            </PopUp>
-        </Shell>
+                <Input
+                    value={password}
+                    font="mono"
+                    type="password"
+                    label="パスワード"
+                    disabled={loading}
+                    onChange={(e) => {
+                        setPassword(e.target.value);
+                    }}
+                />
+                {error && (
+                    <a className="text-red-500" data-cursor="text">
+                        {error}
+                    </a>
+                )}
+                <Button
+                    onClick={() => {
+                        setLoading(true);
+                        setError("");
+                        setTurnstile(true);
+                    }}
+                    padding="middle"
+                    loading={loading}
+                    className="w-full"
+                    variant="primary"
+                >
+                    ログイン
+                </Button>
+                <Button
+                    className="w-full"
+                    onClick={() => {
+                        startNavigationProgress();
+                        router.push("/sign-up");
+                    }}
+                >
+                    rcAccountを作成
+                </Button>
+                <PopUp show={turnstile}>
+                    <Turnstile
+                        options={{ language: "ja" }}
+                        siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+                        onSuccess={(turnstileToken: string) => {
+                            setTurnstile(false);
+                            handleSignIn(email, password, turnstileToken);
+                        }}
+                    />
+                </PopUp>
+            </Shell>
+        </>
     );
 }
