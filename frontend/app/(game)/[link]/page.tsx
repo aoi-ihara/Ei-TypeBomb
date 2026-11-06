@@ -40,7 +40,7 @@ export default async function RoomPage({
                 <RoomNavigation isSignedIn={authorized} />
                 <Shell
                     title={title}
-                    className="grid sm:grid-cols-2 gap-4 px-4"
+                    className="grid lg:grid-cols-2 gap-4 px-4"
                     showBackButton
                     size="xlarge"
                 >
@@ -123,7 +123,7 @@ export default async function RoomPage({
                         isOwner={isOwner}
                     />
 
-                    <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) p-4">
+                    <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) px-4 py-3">
                         {items.length > 0 ? (
                             items.map((item, index) => (
                                 <div
@@ -145,8 +145,8 @@ export default async function RoomPage({
                                 </div>
                             ))
                         ) : (
-                            <p className="opacity-50" data-cursor="text">
-                                単語がありません。
+                            <p className="opacity-50 italic" data-cursor="text">
+                                単語なし
                             </p>
                         )}
                     </section>

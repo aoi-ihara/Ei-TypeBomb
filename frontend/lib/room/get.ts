@@ -203,45 +203,98 @@ export const getRoomStatusFromId = async (id: string) => {
     return data.visibility === "private";
 };
 
-export const getPublicRooms = async (): Promise<Room[]> => {
-    const supabase = await createAdminClient();
-    const { data, error } = await supabase.rpc("get_ei_typebomb_public_rooms");
+const PUBLIC_ROOMS_CACHE_TTL_MS = 2 * 60 * 1000;
+const PUBLIC_ROOMS_STALE_IF_ERROR_MS = 10 * 60 * 1000;
 
-    if (error) {
-        serverError("failed to fetch public rooms", error, "DB");
-        return [];
+let publicRoomsCache:
+    | { rooms: Room[]; expiresAt: number; staleUntil: number }
+    | null = null;
+let publicRoomsRequest: Promise<Room[]> | null = null;
+
+// Return fresh objects so callers cannot mutate the process-wide cache.
+const clonePublicRooms = (rooms: Room[]): Room[] =>
+    rooms.map((room) => ({ ...room, items: [...(room.items ?? [])] }));
+
+export const getPublicRooms = async (): Promise<Room[]> => {
+    const now = Date.now();
+
+    if (publicRoomsCache && now < publicRoomsCache.expiresAt) {
+        return clonePublicRooms(publicRoomsCache.rooms);
     }
 
-    const rows = Array.isArray(data)
-        ? (data as unknown as PublicRoomRpcRow[])
-        : [];
-    const rooms: Room[] = rows.map((row) => ({
-        id: row.id,
-        title: row.title ?? undefined,
-        explanation: row.explanation ?? undefined,
-        maxPlayers: row.max_players ?? 2,
-        bombCount: row.bomb_count ?? null,
-        gameDuration: row.game_duration ?? 20,
-        createdAt: row.created_at ?? undefined,
-        updatedAt: row.updated_at ?? undefined,
-        items: [],
-        itemCount: Number(row.item_count ?? 0),
-        link: row.link ?? undefined,
-        visibility: "public",
-    }));
+    if (publicRoomsRequest) {
+        return clonePublicRooms(await publicRoomsRequest);
+    }
 
-    const statsByRoomId = new Map<string, RoomRecommendationStats>(
-        rows.map((row) => [
-            row.id,
-            {
-                playCount: Number(row.play_count ?? 0),
-                recentPlayCount: Number(row.recent_play_count ?? 0),
-                saveCount: Number(row.save_count ?? 0),
-            },
-        ]),
-    );
+    const request = (async (): Promise<Room[]> => {
+        const supabase = await createAdminClient();
+        const { data, error } = await supabase.rpc(
+            "get_ei_typebomb_public_rooms",
+        );
 
-    return rankPublicRooms(rooms, statsByRoomId);
+        if (error) {
+            serverError("failed to fetch public rooms", error, "DB");
+
+            if (publicRoomsCache && Date.now() < publicRoomsCache.staleUntil) {
+                return publicRoomsCache.rooms;
+            }
+
+            return [];
+        }
+
+        const rows = Array.isArray(data)
+            ? (data as unknown as PublicRoomRpcRow[])
+            : [];
+        const rooms: Room[] = rows.map((row) => ({
+            id: row.id,
+            title: row.title ?? undefined,
+            explanation: row.explanation ?? undefined,
+            maxPlayers: row.max_players ?? 2,
+            bombCount: row.bomb_count ?? null,
+            gameDuration: row.game_duration ?? 20,
+            createdAt: row.created_at ?? undefined,
+            updatedAt: row.updated_at ?? undefined,
+            items: [],
+            itemCount: Number(row.item_count ?? 0),
+            link: row.link ?? undefined,
+            visibility: "public",
+        }));
+
+        const statsByRoomId = new Map<string, RoomRecommendationStats>(
+            rows.map((row) => [
+                row.id,
+                {
+                    playCount: Number(row.play_count ?? 0),
+                    recentPlayCount: Number(row.recent_play_count ?? 0),
+                    saveCount: Number(row.save_count ?? 0),
+                },
+            ]),
+        );
+
+        const rankedRooms = rankPublicRooms(rooms, statsByRoomId);
+        const fetchedAt = Date.now();
+
+        publicRoomsCache = {
+            rooms: rankedRooms,
+            expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
+            staleUntil:
+                fetchedAt +
+                PUBLIC_ROOMS_CACHE_TTL_MS +
+                PUBLIC_ROOMS_STALE_IF_ERROR_MS,
+        };
+
+        return rankedRooms;
+    })();
+
+    publicRoomsRequest = request;
+
+    try {
+        return clonePublicRooms(await request);
+    } finally {
+        if (publicRoomsRequest === request) {
+            publicRoomsRequest = null;
+        }
+    }
 };
 
 export const getRoomSummaryFromId = async (id: string) => {
