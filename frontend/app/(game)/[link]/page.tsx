@@ -40,7 +40,7 @@ export default async function RoomPage({
                 <RoomNavigation isSignedIn={authorized} />
                 <Shell
                     title={title}
-                    className="grid sm:grid-cols-2 gap-4 px-4"
+                    className="grid lg:grid-cols-2 gap-4 px-4"
                     showBackButton
                     size="xlarge"
                 >
