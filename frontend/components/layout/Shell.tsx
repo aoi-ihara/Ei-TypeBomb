@@ -32,7 +32,7 @@ export default function Shell({
     if (loading) return <ProgressSignal />;
 
     return (
-        <div className="flex flex-col gap-4 items-center w-full">
+        <div className="flex flex-col items-center w-full">
             {title && (
                 <div
                     className={`relative mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
