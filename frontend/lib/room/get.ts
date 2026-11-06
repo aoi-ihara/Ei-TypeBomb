@@ -213,7 +213,7 @@ let publicRoomsRequest: Promise<Room[]> | null = null;
 
 // Return fresh objects so callers cannot mutate the process-wide cache.
 const clonePublicRooms = (rooms: Room[]): Room[] =>
-    rooms.map((room) => ({ ...room, items: [...room.items] }));
+    rooms.map((room) => ({ ...room, items: [...(room.items ?? [])] }));
 
 export const getPublicRooms = async (): Promise<Room[]> => {
     const now = Date.now();
