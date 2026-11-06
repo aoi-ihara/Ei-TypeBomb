@@ -27,7 +27,7 @@ export default function TermsOfUsePage() {
                 size="large"
                 className="flex flex-col px-4 gap-8"
             >
-                <Section heading="これはテストです。">Hello</Section>
+                <Section heading="Hello World">Hello</Section>
             </Shell>
         </>
     );
