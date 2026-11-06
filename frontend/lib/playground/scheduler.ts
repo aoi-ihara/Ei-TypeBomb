@@ -6,8 +6,8 @@ import {
 } from "./memory";
 
 // Product hypotheses. Turns count USER questions only, never BOT presentations.
-export const SHORT_RETRY_GAP = 3;
-export const CONFIRM_RETRY_GAP = 6;
+export const SHORT_RETRY_GAP = 5;
+export const CONFIRM_RETRY_GAP = 8;
 export const RETRY_WINDOW_WIDTH = 3;
 export const CYCLE_STRIDE = 2;
 export const REQUIRED_RETRY_SUCCESSES = 2;
