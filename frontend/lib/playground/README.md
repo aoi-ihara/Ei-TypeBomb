@@ -22,14 +22,14 @@ All constants below are **product hypotheses**, not experimentally established o
 
 | Constant                   | Value | Meaning                                                           |
 | -------------------------- | ----: | ----------------------------------------------------------------- |
-| `SHORT_RETRY_GAP`          |     3 | Earliest retry after failure/heavy support/uncertainty            |
-| `CONFIRM_RETRY_GAP`        |     6 | Earliest next confirmation after successful retry                 |
+| `SHORT_RETRY_GAP`          |     5 | Earliest retry after failure/heavy support/uncertainty            |
+| `CONFIRM_RETRY_GAP`        |     8 | Earliest next confirmation after successful retry                 |
 | `RETRY_WINDOW_WIDTH`       |     3 | Minimum width before reservation/collision handling               |
 | `CYCLE_STRIDE`             |     2 | Odd turns reserved for coverage; even turns available for retries |
 | `REQUIRED_RETRY_SUCCESSES` |     2 | Independent, sufficiently clear successes to finish a retry       |
 | `BOT_LOOKAHEAD`            |     3 | Near-future cycle targets protected from BOT exposure             |
 
-At answered turn `q`, earliest is `q + min(gap, N)`, where N is the number of distinct room items. Thus gap 3 means two intervening user questions. Capping the gap at N avoids deadlock in one- and two-item rooms. Success extends the gap from 3 to 6; renewed failure resets the success count and uses the short gap again. Repeated failures do not multiply the interval.
+At answered turn `q`, earliest is `q + min(gap, N)`, where N is the number of distinct room items. Thus gap 5 means four intervening user questions in rooms with at least five distinct items; gap 8 means seven intervening questions before a confirmation retry. Capping the gap at N avoids deadlock in small rooms. A successful retry extends the gap from 5 to 8; renewed failure resets the success count and uses the short gap again. Repeated failures do not multiply the interval.
 
 Each entry reserves a distinct even `latestTurn`, starting at or after `earliestTurn + RETRY_WINDOW_WIDTH`. Collisions move the reservation to the next free even slot. Earlier service is allowed only at/after earliest. Selected entries are removed; the next answer either completes or creates a new retry obligation. Deadlines of waiting entries are never silently extended.
 
