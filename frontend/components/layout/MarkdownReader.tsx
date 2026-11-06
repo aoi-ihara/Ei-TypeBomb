@@ -46,7 +46,7 @@ export function MarkdownReader({
                             ),
                             ol: ({ children }) => (
                                 <ol
-                                    className="list-decimal list-outside ml-6 my-2 flex flex-col gap-2"
+                                    className="list-decimal list-outside ml-8 my-2 flex flex-col gap-2"
                                     data-cursor="text"
                                 >
                                     {children}
@@ -54,7 +54,7 @@ export function MarkdownReader({
                             ),
                             ul: ({ children }) => (
                                 <ul
-                                    className="list-disc list-outside ml-6 my-2 flex flex-col gap-2"
+                                    className="list-disc list-outside ml-8 my-2 flex flex-col gap-2"
                                     data-cursor="text"
                                 >
                                     {children}
