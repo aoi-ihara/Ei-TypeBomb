@@ -1,5 +1,5 @@
 @reference "tailwindcss"
 
-h1 {
-    @apply font-bold font-mono text-xl;
+h2 {
+    @apply font-bold font-mono text-xl pb-8;
 }
