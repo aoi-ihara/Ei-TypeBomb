@@ -43,9 +43,9 @@ export default function Shell({
                             variant="text"
                             iconName="arrowLeft"
                             padding="small"
-                            href={backLink}
+                            href={backLink ?? undefined}
                             onClick={
-                                backLink
+                                !backLink
                                     ? () => {
                                           router.back();
                                       }
