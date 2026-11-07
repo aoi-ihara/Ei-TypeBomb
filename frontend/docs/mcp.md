@@ -1,10 +1,10 @@
-# ETB MCP Server
+# Ei-TypeBomb MCP Server
 
-ETB exposes a remote MCP Streamable HTTP endpoint:
+Ei-TypeBomb exposes a remote MCP Streamable HTTP endpoint:
 
 `https://ei-typebomb.com/api/mcp`
 
-The first version exposes room management tools and keeps the existing ETB
+The first version exposes room management tools and keeps the existing Ei-TypeBomb
 frontend unchanged.
 
 ## OAuth 2.1 authentication
@@ -27,7 +27,7 @@ clients.
 The server validates each Bearer token using the Supabase project's public
 JWKS. It checks the signature, issuer, expiry, asymmetric signing algorithm,
 authenticated role, subject, OAuth client ID, and the exact MCP resource
-audience. Tokens issued for the normal ETB website login have the regular
+audience. Tokens issued for the normal Ei-TypeBomb website login have the regular
 `authenticated` audience and are intentionally rejected by the MCP endpoint.
 The website's existing sign-in flow is not changed.
 
@@ -56,8 +56,8 @@ Authentication settings:
    website, and redirect URI.
 
 Supabase's built-in OAuth scopes (`openid`, `email`, `profile`, and `phone`)
-describe identity claims; they are not ETB room permissions. The MCP resource
-indicator binds the access token to ETB, while the user's explicit OAuth grant
+describe identity claims; they are not Ei-TypeBomb room permissions. The MCP resource
+indicator binds the access token to Ei-TypeBomb, while the user's explicit OAuth grant
 authorizes the client.
 
 **Consent UI limitation:** Supabase's `getAuthorizationDetails()` response
@@ -69,10 +69,10 @@ redirect target and warns users to approve only clients they recognize and
 trust. Configure OAuth client names and website URIs so users can identify the
 application. Do not rely on OAuth scopes as a description of MCP capabilities.
 
-**Important:** `rcAccount` is shared with the existing ETB website login and
+**Important:** `rcAccount` is shared with the existing Ei-TypeBomb website login and
 other OAuth clients. Do not change its global authorization path or token hooks
 without reviewing every client that uses this project. The repository includes
-an ETB consent page at `/oauth/consent`; use it as the authorization path only
+an Ei-TypeBomb consent page at `/oauth/consent`; use it as the authorization path only
 if it is appropriate for all applications using the shared OAuth server. If
 another shared consent UI already exists, keep using that UI and ensure it
 shows the requesting client identity and redirect target accurately.
@@ -96,7 +96,7 @@ https://ei-typebomb.com/api/mcp
 
 A compatible MCP client will discover OAuth metadata, register (when dynamic
 client registration is enabled), open the sign-in/consent flow, and obtain or
-refresh its own tokens. Do not copy an ETB website session token into the MCP
+refresh its own tokens. Do not copy an Ei-TypeBomb website session token into the MCP
 client.
 
 No new Vercel environment variables are required. The issuer and resource URL
@@ -104,7 +104,7 @@ are defined in server-side code.
 
 ## Tools
 
-- `create_room`: creates a normal ETB room owned by the authenticated user.
+- `create_room`: creates a normal Ei-TypeBomb room owned by the authenticated user.
 - `get_room`: reads an owned room by its ID or share link.
 - `update_room`: updates the supplied settings of an owned room.
 
@@ -132,5 +132,5 @@ curl -i https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp
 
 An unauthenticated MCP request should return `401 Unauthorized` and a
 `WWW-Authenticate` header containing the metadata URL. A token issued for
-the normal ETB website audience should also be rejected; only a token issued
+the normal Ei-TypeBomb website audience should also be rejected; only a token issued
 for the MCP resource is accepted.
