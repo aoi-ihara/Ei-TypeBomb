@@ -1,5 +1,3 @@
-"use server";
-
 import { createClient } from "@/lib/db/server";
 import { redirect } from "next/navigation";
 
@@ -48,10 +46,12 @@ async function decideAuthorization(formData: FormData, decision: "approve" | "de
 }
 
 async function approveAuthorization(formData: FormData) {
+    "use server";
     await decideAuthorization(formData, "approve");
 }
 
 async function denyAuthorization(formData: FormData) {
+    "use server";
     await decideAuthorization(formData, "deny");
 }
 
