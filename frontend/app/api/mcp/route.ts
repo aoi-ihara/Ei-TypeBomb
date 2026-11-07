@@ -127,7 +127,7 @@ const tools = [
     {
         name: "create_room",
         description:
-            "認証中のユーザーのETBルームを作成します。作成後は通常のETBルームとして利用できます。",
+            "認証中のユーザーのEi-TypeBombルームを作成します。作成後はEi-TypeBombで通常どおり利用できます。",
         inputSchema: {
             type: "object",
             properties: roomProperties,
