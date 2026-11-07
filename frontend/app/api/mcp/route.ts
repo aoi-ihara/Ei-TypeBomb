@@ -1,4 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import {
+    authenticateMcpRequest,
+    unauthorizedMcpResponse,
+} from "@/lib/mcp/oauth";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/db/server";
 import { hashPassword } from "@/lib/auth/hash";
@@ -226,22 +229,6 @@ function validateRoomPatch(input: JsonRecord): {
     return { patch, error: null };
 }
 
-async function authenticate(request: NextRequest) {
-    const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!token) return null;
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anonKey) throw new Error("Supabase Auth configuration is missing");
-
-    const supabase = createClient(url, anonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return null;
-    return data.user;
-}
-
 function presentRoom(room: JsonRecord): JsonRecord {
     const { password, ...safeRoom } = room;
     return { ...safeRoom, has_password: Boolean(password) };
@@ -342,6 +329,9 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
 }
 
 export async function POST(request: NextRequest) {
+    const principal = await authenticateMcpRequest(request);
+    if (!principal) return unauthorizedMcpResponse(request);
+
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
         return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
@@ -387,7 +377,7 @@ export async function POST(request: NextRequest) {
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: { name: "ei-typebomb", version: "1.0.0" },
                 instructions:
-                    "ETBのルームを管理するMCPサーバーです。操作対象は認証中のユーザーが所有するルームに限られます。",
+                    "ETBのルームを管理するMCPサーバーです。OAuthで認証されたユーザー本人が所有するルームだけを操作できます。",
             },
             protocolVersion,
         );
@@ -408,29 +398,9 @@ export async function POST(request: NextRequest) {
         return jsonRpcError(id, -32602, "Invalid params");
     }
 
-    let user;
-    try {
-        user = await authenticate(request);
-    } catch (error) {
-        console.error("MCP authentication configuration error", error);
-        return jsonRpcError(id, -32603, "Authentication is unavailable", 503);
-    }
-    if (!user) {
-        return NextResponse.json(
-            { jsonrpc: "2.0", id, error: { code: -32001, message: "Unauthorized" } },
-            {
-                status: 401,
-                headers: {
-                    "Cache-Control": "no-store",
-                    "WWW-Authenticate": 'Bearer realm="Ei-TypeBomb MCP"',
-                },
-            },
-        );
-    }
-
     const args = isRecord(params.arguments) ? params.arguments : {};
     try {
-        const result = await callTool(params.name, args, user.id);
+        const result = await callTool(params.name, args, principal.userId);
         return jsonRpc(id, result);
     } catch (error) {
         console.error("MCP tool execution failed", error);
@@ -438,14 +408,20 @@ export async function POST(request: NextRequest) {
     }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const principal = await authenticateMcpRequest(request);
+    if (!principal) return unauthorizedMcpResponse(request);
+
     return new NextResponse(null, {
         status: 405,
         headers: { Allow: "POST", "Cache-Control": "no-store" },
     });
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+    const principal = await authenticateMcpRequest(request);
+    if (!principal) return unauthorizedMcpResponse(request);
+
     return new NextResponse(null, {
         status: 405,
         headers: { Allow: "POST", "Cache-Control": "no-store" },
