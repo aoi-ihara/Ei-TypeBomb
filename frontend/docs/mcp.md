@@ -52,28 +52,22 @@ Authentication settings:
    is reachable.
 4. The configured authorization path is reachable and requires the user to
    approve or deny each client grant.
-5. The consent UI clearly displays the requesting client's registered name and
-   redirect URI, and explains what account/resource access is being granted.
+5. The consent UI clearly displays the requesting client's registered name,
+   website, and redirect URI.
 
 Supabase's built-in OAuth scopes (`openid`, `email`, `profile`, and `phone`)
 describe identity claims; they are not ETB room permissions. The MCP resource
 indicator binds the access token to ETB, while the user's explicit OAuth grant
-authorizes the client. The OAuth consent response does not expose the MCP
-resource or a separate list of MCP tool permissions to the shared consent page.
-For that reason, the registered OAuth client's **description must explicitly
-identify the service and list its capabilities**.
+authorizes the client.
 
-For the ETB MCP client, use a description equivalent to:
-
-> Ei-TypeBomb MCP server. Can create ETB rooms, read settings for rooms you own,
-> and update settings for rooms you own. It cannot access rooms owned by other
-> users.
-
-The consent page displays this registered description next to the client name.
-If the description is missing, the page warns that the service's operations
-cannot be verified. Users should not approve a client whose purpose or
-capabilities are unclear. Do not treat `openid`, `email`, or `profile` as
-descriptions of the MCP tools.
+**Consent UI limitation:** Supabase's `getAuthorizationDetails()` response
+exposes the OAuth client's name, website URI, redirect URI, and requested
+identity scopes, but does not expose the MCP resource indicator or a separate
+list of MCP tool permissions. The consent page therefore must not claim that
+these scopes describe room access. It displays the client identity and
+redirect target and warns users to approve only clients they recognize and
+trust. Configure OAuth client names and website URIs so users can identify the
+application. Do not rely on OAuth scopes as a description of MCP capabilities.
 
 **Important:** `rcAccount` is shared with the existing ETB website login and
 other OAuth clients. Do not change its global authorization path or token hooks
@@ -81,7 +75,7 @@ without reviewing every client that uses this project. The repository includes
 an ETB consent page at `/oauth/consent`; use it as the authorization path only
 if it is appropriate for all applications using the shared OAuth server. If
 another shared consent UI already exists, keep using that UI and ensure it
-shows the requesting client and requested resource accurately.
+shows the requesting client identity and redirect target accurately.
 
 Keep the existing `RC_HUB_OAUTH_CLIENT_ID` web login client working: it does
 not request the MCP resource and its tokens must continue to use the normal

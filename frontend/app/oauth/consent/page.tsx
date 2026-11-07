@@ -104,7 +104,6 @@ export default async function OAuthConsentPage({
 
     const details = data;
     const clientName = details.client?.name?.trim() || "名称未設定のアプリ";
-    const clientDescription = details.client?.description?.trim();
     const requestedScopes = (details.scope ?? "")
         .split(/\s+/)
         .filter(Boolean);
@@ -119,25 +118,20 @@ export default async function OAuthConsentPage({
                     アクセスを許可しますか？
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                    次のアプリが、Supabaseアカウント認証を要求しています。許可する前に、アプリ名と接続先サービスの説明を確認してください。
+                    次のアプリが、Supabaseアカウント認証を要求しています。許可する前に、アプリ名、ウェブサイト、リダイレクト先を確認してください。
                 </p>
 
                 <section className="mt-7 rounded-2xl bg-neutral-50 p-5 dark:bg-neutral-900">
                     <h2 className="text-lg font-semibold">{clientName}</h2>
-                    {clientDescription ? (
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                            {clientDescription}
-                        </p>
-                    ) : (
-                        <p className="mt-2 text-sm leading-6 text-red-700 dark:text-red-400">
-                            このアプリの説明が登録されていないため、接続先サービスで可能になる操作を確認できません。内容を確認できない場合は許可しないでください。
-                        </p>
-                    )}
-                    {details.client?.uri && (
+                    {details.client?.uri ? (
                         <div className="mt-3">
                             <p className="text-xs text-neutral-500">アプリのウェブサイト</p>
                             <p className="mt-1 break-all text-sm">{details.client.uri}</p>
                         </div>
+                    ) : (
+                        <p className="mt-3 text-sm leading-6 text-red-700 dark:text-red-400">
+                            アプリのウェブサイトが登録されていません。接続先を確認できない場合は許可しないでください。
+                        </p>
                     )}
                     <div className="mt-4">
                         <p className="text-xs text-neutral-500">リダイレクト先</p>
@@ -148,7 +142,7 @@ export default async function OAuthConsentPage({
                 <section className="mt-6">
                     <h2 className="text-sm font-semibold">OAuthで要求された情報</h2>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                        以下はSupabaseアカウントから共有される情報の範囲です。これらのスコープだけでは、接続先サービスで実行できる操作は分かりません。操作内容は上のアプリ説明と接続先サービスの公式情報で確認してください。
+                        以下はSupabaseアカウントから共有される情報の範囲です。これらのスコープだけでは、接続先サービスで実行できる操作やMCPリソースは分かりません。アプリ名とウェブサイトに心当たりがあり、接続先を信頼できる場合にのみ許可してください。
                     </p>
                     {requestedScopes.length > 0 ? (
                         <ul className="mt-3 list-inside list-disc text-sm text-neutral-500">
@@ -192,7 +186,7 @@ export default async function OAuthConsentPage({
                     </form>
                 </div>
                 <p className="mt-5 text-xs leading-5 text-neutral-500">
-                    心当たりのないアプリや、説明とリダイレクト先が一致しないアプリからのリクエストは許可しないでください。許可後も、Supabaseアカウントの認可済みアプリからアクセスを取り消せます。
+                    心当たりのないアプリや、ウェブサイトとリダイレクト先が一致しないアプリからのリクエストは許可しないでください。許可後も、Supabaseアカウントの認可済みアプリからアクセスを取り消せます。
                 </p>
             </div>
         </main>
