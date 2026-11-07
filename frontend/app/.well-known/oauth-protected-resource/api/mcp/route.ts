@@ -16,6 +16,7 @@ export async function GET() {
         },
         {
             headers: {
+                "Access-Control-Allow-Origin": "*",
                 "Cache-Control": "public, max-age=300",
             },
         },
