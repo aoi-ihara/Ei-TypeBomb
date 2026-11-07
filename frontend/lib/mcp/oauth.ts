@@ -5,6 +5,7 @@ import {
 } from "@/lib/auth/oauth-config";
 
 export const MCP_RESOURCE = "https://ei-typebomb.com/api/mcp";
+export const MCP_AUTHORIZATION_SERVER = OAUTH_ISSUER;
 export const MCP_PROTECTED_RESOURCE_METADATA_URL =
     "https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp";
 
