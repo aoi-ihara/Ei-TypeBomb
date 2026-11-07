@@ -364,10 +364,13 @@ export async function POST(request: NextRequest) {
     }
 
     const id = typeof body.id === "string" || typeof body.id === "number" ? body.id : null;
-    const isNotification = id === null && !("id" in body);
+    const isNotification = !("id" in body);
 
-    if (body.method === "notifications/initialized" || isNotification) {
+    if (isNotification) {
         return new NextResponse(null, { status: 202, headers: { "Cache-Control": "no-store" } });
+    }
+    if (id === null) {
+        return jsonRpcError(null, -32600, "Invalid Request", 400);
     }
 
     if (body.method === "initialize") {
