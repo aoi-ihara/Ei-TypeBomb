@@ -519,29 +519,23 @@ export default function EditorClient({
             >
                 <div className="flex mt-16 mb-4 items-center w-full">
                     <Button
+                        variant="text"
+                        iconName="arrowLeft"
+                        padding="small"
                         href={`/${roomLink}`}
-                        variant="text"
-                        className="h-full"
-                    >
-                        <div className="w-8 h-10 flex justify-center items-center">
-                            <Icon name="arrowLeft" />
-                        </div>
-                    </Button>
+                    />
                     <Button
-                        onClick={openVisibilitySettings}
                         variant="text"
-                        className="h-full"
-                    >
-                        <div className="w-8 h-10 flex justify-center items-center">
-                            {roomVisibility === "public" ? (
-                                <Icon name="earth" />
-                            ) : roomVisibility === "unlisted" ? (
-                                <Icon name="link" />
-                            ) : (
-                                <Icon name="lock" />
-                            )}
-                        </div>
-                    </Button>
+                        iconName={
+                            roomVisibility === "public"
+                                ? "earth"
+                                : roomVisibility === "unlisted"
+                                  ? "link"
+                                  : "lock"
+                        }
+                        padding="small"
+                        onClick={openVisibilitySettings}
+                    />
                     <input
                         className="w-full outline-none text-2xl font-bold font-mono"
                         value={roomTitle}

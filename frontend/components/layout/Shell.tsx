@@ -5,6 +5,7 @@ import { Icon } from "../ui/Icon";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import Link from "next/link";
+import Button from "../ui/Button";
 
 type AuthShellProps = {
     title?: string;
@@ -37,31 +38,20 @@ export default function Shell({
                 <div
                     className={`relative mb-8 flex items-center ${showBackButton && "max-w-[calc(100vw-32px)]"} px-8`}
                 >
-                    {showBackButton && (
-                        <div
-                            className="absolute -left-4 top-1/2 -translate-y-1/2 rounded-lg bg-(--color-background)"
-                            data-cursor="button"
-                            data-cursor-shape="1"
-                        >
-                            {backLink ? (
-                                <Link
-                                    href={backLink}
-                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
-                                >
-                                    <Icon name="arrowLeft" />
-                                </Link>
-                            ) : (
-                                <button
-                                    onClick={() => {
-                                        startNavigationProgress();
-                                        router.back();
-                                    }}
-                                    className="duration-(--duration-etb) ease-etb p-3 flex active:scale-95 cursor-pointer"
-                                >
-                                    <Icon name="arrowLeft" />
-                                </button>
-                            )}
-                        </div>
+                    {(showBackButton || backLink) && (
+                        <Button
+                            variant="text"
+                            iconName="arrowLeft"
+                            padding="small"
+                            href={backLink}
+                            onClick={
+                                backLink
+                                    ? () => {
+                                          router.back();
+                                      }
+                                    : undefined
+                            }
+                        />
                     )}
                     <h1
                         className="w-fit max-w-full text-2xl font-bold font-mono"
