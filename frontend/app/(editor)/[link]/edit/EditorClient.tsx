@@ -46,6 +46,7 @@ import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 import Header from "@/components/layout/Header";
 import Link from "next/link";
+import RoomNavigation from "@/app/(game)/RoomNavigation";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
 
@@ -121,7 +122,6 @@ export default function EditorClient({
     const [roomLink, setRoomLink] = useState(
         initialRoom.link ?? initialRoom.id,
     );
-    const [roomLinkError, setRoomLinkError] = useState("");
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [isDeletingRoom, setIsDeletingRoom] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
@@ -414,14 +414,12 @@ export default function EditorClient({
 
             const linkError = validateLink(roomLink);
             if (linkError) {
-                setRoomLinkError(linkError);
                 return false;
             }
 
             try {
                 const existingRoomId = await getRoomFromLink(roomLink);
                 if (existingRoomId && existingRoomId !== roomId) {
-                    setRoomLinkError("このリンクはすでに使用されています。");
                     return false;
                 }
 
@@ -439,7 +437,6 @@ export default function EditorClient({
                 if (error) {
                     return false;
                 }
-                setRoomLinkError("");
                 if (roomLink !== savedRouteLinkRef.current) {
                     savedRouteLinkRef.current = roomLink;
                     router.replace("/" + roomLink + "/edit");
@@ -512,764 +509,808 @@ export default function EditorClient({
     return (
         <>
             <Header />
-            <Shell
-                animateAppear={true}
-                className="flex flex-col px-4 gap-4"
-                size="large"
-            >
-                <div className="flex mt-16 mb-4 items-center w-full">
-                    <Button
-                        variant="text"
-                        iconName="arrowLeft"
-                        padding="small"
-                        href={`/${roomLink}`}
-                    />
-                    <Button
-                        variant="text"
-                        iconName={
-                            roomVisibility === "public"
-                                ? "earth"
-                                : roomVisibility === "unlisted"
-                                  ? "link"
-                                  : "lock"
-                        }
-                        padding="small"
-                        onClick={openVisibilitySettings}
-                    />
-                    <input
-                        className="w-full outline-none text-2xl font-bold font-mono"
-                        value={roomTitle}
-                        placeholder="ルーム名"
-                        data-cursor="text"
-                        onChange={(e) => setRoomTitle(e.target.value)}
-                    />
-                </div>
-                {validateTitle(roomTitle) && (
-                    <div className="text-red-500" data-cursor="text">
-                        {validateTitle(roomTitle)}
-                    </div>
-                )}
 
-                <div
-                    data-cursor="text"
-                    className="font-bold flex w-fit text-lg"
+            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                <RoomNavigation isSignedIn={true} />
+                <Shell
+                    animateAppear={true}
+                    className="flex flex-col px-4 gap-4"
+                    size="large"
                 >
-                    一般
-                </div>
-
-                <div className="grid w-full grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-start">
-                    <div className="min-w-0 min-[360px]:col-span-2 lg:col-span-1">
-                        <Input
-                            onChange={(e) => setRoomExplanation(e.target.value)}
-                            label="説明"
-                            value={roomExplanation}
+                    <div className="flex mb-8 items-center w-full">
+                        <Button
+                            variant="text"
+                            iconName="arrowLeft"
+                            padding="small"
+                            href={`/${roomLink}`}
+                        />
+                        <Button
+                            variant="text"
+                            iconName={
+                                roomVisibility === "public"
+                                    ? "earth"
+                                    : roomVisibility === "unlisted"
+                                      ? "link"
+                                      : "lock"
+                            }
+                            padding="small"
+                            onClick={openVisibilitySettings}
+                        />
+                        <input
+                            className="w-full outline-none text-2xl font-bold font-mono"
+                            value={roomTitle}
+                            placeholder="ルーム名"
+                            data-cursor="text"
+                            onChange={(e) => setRoomTitle(e.target.value)}
                         />
                     </div>
-                    <Picker
-                        name="最大プレイヤー数"
-                        labelPrefix="上限"
-                        selection={Math.max(0, Number(maxPlayers) - 2)}
-                        items={Array.from(
-                            { length: 15 },
-                            (_, index) => `${index + 2}人`,
-                        )}
-                        itemIcons={Array(15).fill(null)}
-                        onSelected={(index) => {
-                            const nextMax = index + 2;
-                            setMaxPlayers(String(nextMax));
-                            setBombCount((current) =>
-                                current === null
-                                    ? null
-                                    : Math.min(current, nextMax, 4),
-                            );
-                        }}
-                    />
-                    <Picker
-                        name="爆弾数"
-                        labelPrefix="爆弾"
-                        selection={bombCount ?? 0}
-                        items={[
-                            "自動",
-                            ...Array.from(
-                                { length: Math.min(Number(maxPlayers), 4) },
-                                (_, index) => `${index + 1}個`,
-                            ),
-                        ]}
-                        itemIcons={Array(
-                            Math.min(Number(maxPlayers), 4) + 1,
-                        ).fill(null)}
-                        onSelected={(index) =>
-                            setBombCount(index === 0 ? null : index)
-                        }
-                    />
-                    <Picker
-                        name="ゲーム時間"
-                        labelPrefix="時間"
-                        selection={(gameDuration ?? 0) / 10 - 1}
-                        items={["1分", "2分", "3分"]}
-                        itemIcons={[null, null, null]}
-                        onSelected={(index) => setGameDuration(index * 10 + 10)}
-                    />
-                    {validateExplanation(roomExplanation) && (
-                        <div
-                            className="text-red-500 min-[360px]:col-span-2 lg:col-span-4"
-                            data-cursor="text"
-                        >
-                            {validateExplanation(roomExplanation)}
+                    {validateTitle(roomTitle) && (
+                        <div className="text-red-500" data-cursor="text">
+                            {validateTitle(roomTitle)}
                         </div>
                     )}
-                </div>
 
-                <div className="flex gap-4 w-full">
-                    <div className="w-full flex flex-col gap-4">
-                        <Input
-                            onChange={(e) => setRoomLink(e.target.value)}
-                            label="リンク"
-                            font="mono"
-                            type="url"
-                            inputClassName="pl-7.5"
-                            className={`transition-all w-full duration-(--duration-etb) ease-etb`}
-                            value={roomLink}
-                            disableLabelAnimation={true}
-                        >
-                            <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
-                                /
-                            </div>
-                        </Input>
-                        {validateLink(roomLink) && (
-                            <div className="text-red-500" data-cursor="text">
-                                {validateLink(roomLink)}
+                    <div
+                        data-cursor="text"
+                        className="font-bold flex w-fit text-lg"
+                    >
+                        一般
+                    </div>
+
+                    <div className="grid w-full grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-start">
+                        <div className="min-w-0 min-[360px]:col-span-2 lg:col-span-1">
+                            <Input
+                                onChange={(e) =>
+                                    setRoomExplanation(e.target.value)
+                                }
+                                label="説明"
+                                value={roomExplanation}
+                            />
+                        </div>
+                        <Picker
+                            name="最大プレイヤー数"
+                            labelPrefix="上限"
+                            selection={Math.max(0, Number(maxPlayers) - 2)}
+                            items={Array.from(
+                                { length: 15 },
+                                (_, index) => `${index + 2}人`,
+                            )}
+                            itemIcons={Array(15).fill(null)}
+                            onSelected={(index) => {
+                                const nextMax = index + 2;
+                                setMaxPlayers(String(nextMax));
+                                setBombCount((current) =>
+                                    current === null
+                                        ? null
+                                        : Math.min(current, nextMax, 4),
+                                );
+                            }}
+                        />
+                        <Picker
+                            name="爆弾数"
+                            labelPrefix="爆弾"
+                            selection={bombCount ?? 0}
+                            items={[
+                                "自動",
+                                ...Array.from(
+                                    { length: Math.min(Number(maxPlayers), 4) },
+                                    (_, index) => `${index + 1}個`,
+                                ),
+                            ]}
+                            itemIcons={Array(
+                                Math.min(Number(maxPlayers), 4) + 1,
+                            ).fill(null)}
+                            onSelected={(index) =>
+                                setBombCount(index === 0 ? null : index)
+                            }
+                        />
+                        <Picker
+                            name="ゲーム時間"
+                            labelPrefix="時間"
+                            selection={(gameDuration ?? 0) / 10 - 1}
+                            items={["1分", "2分", "3分"]}
+                            itemIcons={[null, null, null]}
+                            onSelected={(index) =>
+                                setGameDuration(index * 10 + 10)
+                            }
+                        />
+                        {validateExplanation(roomExplanation) && (
+                            <div
+                                className="text-red-500 min-[360px]:col-span-2 lg:col-span-4"
+                                data-cursor="text"
+                            >
+                                {validateExplanation(roomExplanation)}
                             </div>
                         )}
                     </div>
 
-                    <div className="w-16">
+                    <div className="flex gap-4 w-full">
+                        <div className="w-full flex flex-col gap-4">
+                            <Input
+                                onChange={(e) => setRoomLink(e.target.value)}
+                                label="リンク"
+                                font="mono"
+                                type="url"
+                                inputClassName="pl-7.5"
+                                className={`transition-all w-full duration-(--duration-etb) ease-etb`}
+                                value={roomLink}
+                                disableLabelAnimation={true}
+                            >
+                                <div className="font-mono opacity-50 absolute top-4 left-5 pointer-events-none">
+                                    /
+                                </div>
+                            </Input>
+                            {validateLink(roomLink) && (
+                                <div
+                                    className="text-red-500"
+                                    data-cursor="text"
+                                >
+                                    {validateLink(roomLink)}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="w-16">
+                            <MorphDialog
+                                button={
+                                    <Button
+                                        className="w-fit shrink-0"
+                                        onClick={() => {
+                                            if (items && items.length !== 0)
+                                                void handlePlay();
+                                            else setShowPlayWarning(true);
+                                        }}
+                                        variant="primary"
+                                        padding="large"
+                                        iconName="play"
+                                    />
+                                }
+                                open={showPlayWarning}
+                                onClose={() => setShowPlayWarning(false)}
+                                title="ルームに単語がありません"
+                                description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                                alignment="vertical"
+                            >
+                                <Button
+                                    onClick={() => handlePlay()}
+                                    iconName="play"
+                                    variant="primary"
+                                    className="w-full"
+                                >
+                                    プレイ
+                                </Button>
+                                <Button
+                                    onClick={() => setShowPlayWarning(false)}
+                                    iconName="x"
+                                    className="w-full"
+                                >
+                                    キャンセル
+                                </Button>
+                            </MorphDialog>
+                        </div>
+                    </div>
+
+                    <div
+                        data-cursor="text"
+                        className="font-bold flex w-fit text-lg mt-4"
+                    >
+                        設定
+                    </div>
+
+                    <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
                         <MorphDialog
                             button={
                                 <Button
-                                    className="w-fit shrink-0"
-                                    onClick={() => {
-                                        if (items && items.length !== 0)
-                                            void handlePlay();
-                                        else setShowPlayWarning(true);
-                                    }}
-                                    variant="primary"
-                                    padding="large"
-                                    iconName="play"
-                                />
+                                    onClick={openVisibilitySettings}
+                                    className="w-full"
+                                    iconName="eye"
+                                >
+                                    公開設定
+                                </Button>
                             }
-                            open={showPlayWarning}
-                            onClose={() => setShowPlayWarning(false)}
-                            title="ルームに単語がありません"
-                            description="ゲームをプレイするためには、ルームに最低でも1つの単語が必要です。"
+                            title="公開設定"
+                            open={showVisibilitySettings}
                             alignment="vertical"
+                            size="middle"
+                            onClose={() => setShowVisibilitySettings(false)}
+                        >
+                            <Selection
+                                items={["公開", "限定公開", "非公開"]}
+                                selection={VISIBILITY_OPTIONS.indexOf(
+                                    visibilitySelection,
+                                )}
+                                onSelected={(index) => {
+                                    setVisibilitySelection(
+                                        VISIBILITY_OPTIONS[index] ?? "unlisted",
+                                    );
+                                    setVisibilityError("");
+
+                                    if (index !== 2) {
+                                        setNewPassword("");
+                                        setConfirmPassword("");
+                                    }
+                                }}
+                            />
+
+                            <Input
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                label="パスワード"
+                                type="password"
+                                disabled={visibilitySelection !== "private"}
+                            />
+                            <Input
+                                value={confirmPassword}
+                                onChange={(e) =>
+                                    setConfirmPassword(e.target.value)
+                                }
+                                label="パスワードの確認"
+                                type="password"
+                                disabled={visibilitySelection !== "private"}
+                            />
+
+                            <div className="flex gap-4 w-full">
+                                <Button
+                                    className="w-full"
+                                    onClick={() =>
+                                        setShowVisibilitySettings(false)
+                                    }
+                                    iconName="x"
+                                >
+                                    キャンセル
+                                </Button>
+                                <Button
+                                    variant="primary"
+                                    onClick={() => handleVisibilityUpdate()}
+                                    className="w-full"
+                                    iconName="check"
+                                    loading={isUpdatingVisibilitySettings}
+                                >
+                                    完了
+                                </Button>
+                            </div>
+                            {visibilityError && (
+                                <div
+                                    className="text-red-500"
+                                    data-cursor="text"
+                                >
+                                    {visibilityError}
+                                </div>
+                            )}
+                        </MorphDialog>
+
+                        <Button
+                            onClick={() => handleExportWords()}
+                            className=""
+                            iconName={isExported ? "check" : "download"}
+                        >
+                            {!isExported && "エクスポート"}
+                        </Button>
+                        {exportError && (
+                            <div className="text-red-500" role="alert">
+                                {exportError}
+                            </div>
+                        )}
+
+                        <MorphDialog
+                            button={
+                                <Button
+                                    onClick={() => setShowDeleteDialog(true)}
+                                    variant="danger"
+                                    className=""
+                                    iconName="trash"
+                                >
+                                    ルームを削除
+                                </Button>
+                            }
+                            title="本当にこのルームを削除しますか？"
+                            description="この操作は取り消すことができません。"
+                            open={showDeleteDialog}
+                            alignment="vertical"
+                            onClose={() => setShowDeleteDialog(false)}
                         >
                             <Button
-                                onClick={() => handlePlay()}
-                                iconName="play"
-                                variant="primary"
+                                variant="danger"
+                                iconName="trash"
                                 className="w-full"
+                                onClick={() => handleDeleteRoom()}
+                                loading={isDeletingRoom}
                             >
-                                プレイ
+                                削除
                             </Button>
                             <Button
-                                onClick={() => setShowPlayWarning(false)}
                                 iconName="x"
                                 className="w-full"
+                                onClick={() => setShowDeleteDialog(false)}
                             >
                                 キャンセル
                             </Button>
                         </MorphDialog>
                     </div>
-                </div>
 
-                <div
-                    data-cursor="text"
-                    className="font-bold flex w-fit text-lg mt-4"
-                >
-                    設定
-                </div>
-
-                <div className="w-full grid gap-4 grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
-                    <MorphDialog
-                        button={
-                            <Button
-                                onClick={openVisibilitySettings}
-                                className="w-full"
-                                iconName="eye"
-                            >
-                                公開設定
-                            </Button>
-                        }
-                        title="公開設定"
-                        open={showVisibilitySettings}
-                        alignment="vertical"
-                        size="middle"
-                        onClose={() => setShowVisibilitySettings(false)}
+                    <div
+                        data-cursor="text"
+                        className="font-bold flex w-fit text-lg mt-4"
                     >
-                        <Selection
-                            items={["公開", "限定公開", "非公開"]}
-                            selection={VISIBILITY_OPTIONS.indexOf(
-                                visibilitySelection,
-                            )}
-                            onSelected={(index) => {
-                                setVisibilitySelection(
-                                    VISIBILITY_OPTIONS[index] ?? "unlisted",
-                                );
-                                setVisibilityError("");
+                        単語
+                    </div>
 
-                                if (index !== 2) {
-                                    setNewPassword("");
-                                    setConfirmPassword("");
+                    {items && (
+                        <div className="w-full flex gap-4">
+                            <Button
+                                onClick={() => {
+                                    setShowImportInput(false);
+                                    setItems([
+                                        {
+                                            id: crypto.randomUUID(),
+                                            type: "typed_recall",
+                                            prompt: "",
+                                            answer: "",
+                                        },
+                                        ...items,
+                                    ]);
+
+                                    posthog.capture("word_added");
+                                }}
+                                className="w-full"
+                                iconName="plus"
+                            >
+                                追加
+                            </Button>
+
+                            <Button
+                                onClick={() => {
+                                    setShowGenerationInput(
+                                        !showGenerationInput,
+                                    );
+                                    setGenerationPrompt("");
+                                    setGenerationError("");
+                                    setGeneratedWords([]);
+                                    setShowImportInput(false);
+                                }}
+                                disabled={
+                                    isGeminiUsageLoading || isGeminiLimitReached
                                 }
-                            }}
-                        />
+                                iconName="wandSparkles"
+                            />
 
-                        <Input
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            label="パスワード"
-                            type="password"
-                            disabled={visibilitySelection !== "private"}
-                        />
-                        <Input
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            label="パスワードの確認"
-                            type="password"
-                            disabled={visibilitySelection !== "private"}
-                        />
-
-                        <div className="flex gap-4 w-full">
                             <Button
-                                className="w-full"
-                                onClick={() => setShowVisibilitySettings(false)}
-                                iconName="x"
+                                onClick={() => {
+                                    setImportError("");
+                                    setImportData("");
+                                    setShowImportInput(!showImportInput);
+                                    setShowGenerationInput(false);
+                                }}
+                                iconName="upload"
+                            />
+                            <Dialog
+                                title="単語のインポート"
+                                size="middle"
+                                alignment="vertical"
+                                open={showImportDialog}
+                                onClose={() => setShowImportDialog(false)}
                             >
-                                キャンセル
-                            </Button>
-                            <Button
-                                variant="primary"
-                                onClick={() => handleVisibilityUpdate()}
-                                className="w-full"
-                                iconName="check"
-                                loading={isUpdatingVisibilitySettings}
-                            >
-                                完了
-                            </Button>
-                        </div>
-                        {visibilityError && (
-                            <div className="text-red-500" data-cursor="text">
-                                {visibilityError}
-                            </div>
-                        )}
-                    </MorphDialog>
-
-                    <Button
-                        onClick={() => handleExportWords()}
-                        className=""
-                        iconName={isExported ? "check" : "download"}
-                    >
-                        {!isExported && "エクスポート"}
-                    </Button>
-                    {exportError && (
-                        <div className="text-red-500" role="alert">
-                            {exportError}
+                                <div className="w-full px-2 flex flex-col items-start gap-4">
+                                    <div data-cursor="text">
+                                        JSONは、問題文をキー、回答を値にした1つのオブジェクトで貼り付けてください:
+                                    </div>
+                                    <div data-cursor="text">
+                                        {" "}
+                                        <pre className="text-sm">
+                                            {`{\n    "ねこ": "cat",\n    "日本の憲法の名前は？": "にほんこくけんぽう"\n}`}
+                                        </pre>
+                                    </div>
+                                    <div data-cursor="text">
+                                        CSVはヘッダーなしの2列で貼り付けてください:
+                                    </div>
+                                    <pre className="text-sm" data-cursor="text">
+                                        {
+                                            "りんご,apple\n日本の憲法の名前は？,にほんこくけんぽう"
+                                        }
+                                    </pre>
+                                </div>
+                                <Button
+                                    onClick={() => setShowImportDialog(false)}
+                                    variant="primary"
+                                    className="w-full"
+                                    iconName="check"
+                                >
+                                    完了
+                                </Button>
+                            </Dialog>
                         </div>
                     )}
 
-                    <MorphDialog
-                        button={
-                            <Button
-                                onClick={() => setShowDeleteDialog(true)}
-                                variant="danger"
-                                className=""
-                                iconName="trash"
+                    {items && (
+                        <div className="flex flex-col">
+                            <Collapsible
+                                open={showGenerationInput}
+                                className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
+                                childrenClassName="flex p-4 flex-col gap-4 items-center"
                             >
-                                ルームを削除
-                            </Button>
-                        }
-                        title="本当にこのルームを削除しますか？"
-                        description="この操作は取り消すことができません。"
-                        open={showDeleteDialog}
-                        alignment="vertical"
-                        onClose={() => setShowDeleteDialog(false)}
-                    >
-                        <Button
-                            variant="danger"
-                            iconName="trash"
-                            className="w-full"
-                            onClick={() => handleDeleteRoom()}
-                            loading={isDeletingRoom}
-                        >
-                            削除
-                        </Button>
-                        <Button
-                            iconName="x"
-                            className="w-full"
-                            onClick={() => setShowDeleteDialog(false)}
-                        >
-                            キャンセル
-                        </Button>
-                    </MorphDialog>
-                </div>
+                                <div className="flex gap-4 w-full">
+                                    <Input
+                                        value={generationPrompt}
+                                        label="テーマ"
+                                        onChange={(e) =>
+                                            setGenerationPrompt(e.target.value)
+                                        }
+                                        className="w-full"
+                                    />
+                                    <Button
+                                        loading={isGenerating}
+                                        disabled={!generationPrompt}
+                                        onClick={async () => {
+                                            setIsGenerating(true);
+                                            setGenerationError("");
 
-                <div
-                    data-cursor="text"
-                    className="font-bold flex w-fit text-lg mt-4"
-                >
-                    単語
-                </div>
+                                            try {
+                                                const generatedWords =
+                                                    await generateWordsAction(
+                                                        generationPrompt,
+                                                    );
 
-                {items && (
-                    <div className="w-full flex gap-4">
-                        <Button
-                            onClick={() => {
-                                setShowImportInput(false);
-                                setItems([
-                                    {
-                                        id: crypto.randomUUID(),
-                                        type: "typed_recall",
-                                        prompt: "",
-                                        answer: "",
-                                    },
-                                    ...items,
-                                ]);
-
-                                posthog.capture("word_added");
-                            }}
-                            className="w-full"
-                            iconName="plus"
-                        >
-                            追加
-                        </Button>
-
-                        <Button
-                            onClick={() => {
-                                setShowGenerationInput(!showGenerationInput);
-                                setGenerationPrompt("");
-                                setGenerationError("");
-                                setGeneratedWords([]);
-                                setShowImportInput(false);
-                            }}
-                            disabled={
-                                isGeminiUsageLoading || isGeminiLimitReached
-                            }
-                            iconName="wandSparkles"
-                        />
-
-                        <Button
-                            onClick={() => {
-                                setImportError("");
-                                setImportData("");
-                                setShowImportInput(!showImportInput);
-                                setShowGenerationInput(false);
-                            }}
-                            iconName="upload"
-                        />
-                        <Dialog
-                            title="単語のインポート"
-                            size="middle"
-                            alignment="vertical"
-                            open={showImportDialog}
-                            onClose={() => setShowImportDialog(false)}
-                        >
-                            <div className="w-full px-2 flex flex-col items-start gap-4">
-                                <div data-cursor="text">
-                                    JSONは、問題文をキー、回答を値にした1つのオブジェクトで貼り付けてください:
-                                </div>
-                                <div data-cursor="text">
-                                    {" "}
-                                    <pre className="text-sm">
-                                        {`{\n    "ねこ": "cat",\n    "日本の憲法の名前は？": "にほんこくけんぽう"\n}`}
-                                    </pre>
-                                </div>
-                                <div data-cursor="text">
-                                    CSVはヘッダーなしの2列で貼り付けてください:
-                                </div>
-                                <pre className="text-sm" data-cursor="text">
-                                    {
-                                        "りんご,apple\n日本の憲法の名前は？,にほんこくけんぽう"
-                                    }
-                                </pre>
-                            </div>
-                            <Button
-                                onClick={() => setShowImportDialog(false)}
-                                variant="primary"
-                                className="w-full"
-                                iconName="check"
-                            >
-                                完了
-                            </Button>
-                        </Dialog>
-                    </div>
-                )}
-
-                {items && (
-                    <div className="flex flex-col">
-                        <Collapsible
-                            open={showGenerationInput}
-                            className={`flex z-2 ${showGenerationInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
-                            childrenClassName="flex p-4 flex-col gap-4 items-center"
-                        >
-                            <div className="flex gap-4 w-full">
-                                <Input
-                                    value={generationPrompt}
-                                    label="テーマ"
-                                    onChange={(e) =>
-                                        setGenerationPrompt(e.target.value)
-                                    }
-                                    className="w-full"
-                                />
-                                <Button
-                                    loading={isGenerating}
-                                    disabled={!generationPrompt}
-                                    onClick={async () => {
-                                        setIsGenerating(true);
-                                        setGenerationError("");
-
-                                        try {
-                                            const generatedWords =
-                                                await generateWordsAction(
-                                                    generationPrompt,
+                                                if ("error" in generatedWords) {
+                                                    setGeneratedWords([]);
+                                                    setGenerationError(
+                                                        generatedWords.error,
+                                                    );
+                                                } else {
+                                                    setGeneratedWords(
+                                                        generatedWords.words,
+                                                    );
+                                                }
+                                            } catch (error) {
+                                                console.error(
+                                                    "Failed to generate words:",
+                                                    error,
                                                 );
 
-                                            if ("error" in generatedWords) {
                                                 setGeneratedWords([]);
                                                 setGenerationError(
-                                                    generatedWords.error,
+                                                    "単語の生成に失敗しました。もう一度お試しください。",
                                                 );
-                                            } else {
-                                                setGeneratedWords(
-                                                    generatedWords.words,
-                                                );
+                                            } finally {
+                                                setIsGenerating(false);
+                                                await refreshGeminiUsage();
                                             }
-                                        } catch (error) {
-                                            console.error(
-                                                "Failed to generate words:",
-                                                error,
-                                            );
-
-                                            setGeneratedWords([]);
-                                            setGenerationError(
-                                                "単語の生成に失敗しました。もう一度お試しください。",
-                                            );
-                                        } finally {
-                                            setIsGenerating(false);
-                                            await refreshGeminiUsage();
-                                        }
-                                    }}
-                                    iconName="arrowRight"
-                                    variant="primary"
-                                    padding="large"
-                                />
-                            </div>
-
-                            {!generationPrompt && !generatedWords.length && (
-                                <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
-                                    {EXAMPLES.map((example, index) => (
-                                        <Button
-                                            iconName="plus"
-                                            onClick={() =>
-                                                setGenerationPrompt(example)
-                                            }
-                                            className="w-full flex"
-                                            padding="small"
-                                            alignment="left"
-                                            key={index}
-                                        >
-                                            {example}
-                                        </Button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {generatedWords.length !== 0 && (
-                                <div
-                                    className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-etb duration-(--duration-etb)`}
-                                >
-                                    {generatedWords.map((word, index) => (
-                                        <div
-                                            data-cursor="text"
-                                            className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
-                                            key={index}
-                                        >
-                                            {word.jp}
-                                            <div className="w-full font-mono">
-                                                {word.en}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {generatedWords?.length !== 0 && (
-                                <div className="flex gap-4 w-full">
-                                    <Button
-                                        onClick={() =>
-                                            setShowGenerationInput(false)
-                                        }
-                                        className="w-full animate-appear"
-                                        iconName="x"
-                                    >
-                                        キャンセル
-                                    </Button>
-                                    <Button
-                                        variant="primary"
-                                        className="w-full animate-appear"
-                                        iconName="plus"
-                                        onClick={() => {
-                                            if (!generatedWords) return;
-
-                                            const generatedItems: TypedRecallItem[] =
-                                                generatedWords.map((word) => ({
-                                                    id: crypto.randomUUID(),
-                                                    type: "typed_recall",
-                                                    prompt: word.jp,
-                                                    answer: word.en,
-                                                }));
-
-                                            setItems([
-                                                ...generatedItems,
-                                                ...items,
-                                            ]);
-                                            setShowGenerationInput(false);
                                         }}
-                                    >
-                                        追加
-                                    </Button>
+                                        iconName="arrowRight"
+                                        variant="primary"
+                                        padding="large"
+                                    />
                                 </div>
-                            )}
 
-                            {generationError && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {generationError}
-                                </div>
-                            )}
-                        </Collapsible>
-                        <Collapsible
-                            open={showImportInput}
-                            className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
-                            childrenClassName="flex p-4 flex-col gap-4 items-center"
-                        >
-                            <div data-cursor="text" className="p-2">
-                                単語は2列のCSV、または問題と回答のペアを並べたJSONで貼り付けてください。
-                                <Button
-                                    onClick={() => setShowImportDialog(true)}
-                                    variant="text"
-                                >
-                                    詳しく見る
-                                </Button>
-                            </div>
-                            <Input
-                                value={importData}
-                                variant="textarea"
-                                inputClassName="resize-none h-48"
-                                font="mono"
-                                onChange={(e) => setImportData(e.target.value)}
-                                label="単語データ"
-                            />
-                            {importData && (
-                                <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                {!generationPrompt &&
+                                    !generatedWords.length && (
+                                        <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
+                                            {EXAMPLES.map((example, index) => (
+                                                <Button
+                                                    iconName="plus"
+                                                    onClick={() =>
+                                                        setGenerationPrompt(
+                                                            example,
+                                                        )
+                                                    }
+                                                    className="w-full flex"
+                                                    padding="small"
+                                                    alignment="left"
+                                                    key={index}
+                                                >
+                                                    {example}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                {generatedWords.length !== 0 && (
+                                    <div
+                                        className={`grid gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] origin-top w-full animate-appear transition-all ease-etb duration-(--duration-etb)`}
+                                    >
+                                        {generatedWords.map((word, index) => (
+                                            <div
+                                                data-cursor="text"
+                                                className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                                                key={index}
+                                            >
+                                                {word.jp}
+                                                <div className="w-full font-mono">
+                                                    {word.en}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {generatedWords?.length !== 0 && (
+                                    <div className="flex gap-4 w-full">
+                                        <Button
+                                            onClick={() =>
+                                                setShowGenerationInput(false)
+                                            }
+                                            className="w-full animate-appear"
+                                            iconName="x"
+                                        >
+                                            キャンセル
+                                        </Button>
+                                        <Button
+                                            variant="primary"
+                                            className="w-full animate-appear"
+                                            iconName="plus"
+                                            onClick={() => {
+                                                if (!generatedWords) return;
+
+                                                const generatedItems: TypedRecallItem[] =
+                                                    generatedWords.map(
+                                                        (word) => ({
+                                                            id: crypto.randomUUID(),
+                                                            type: "typed_recall",
+                                                            prompt: word.jp,
+                                                            answer: word.en,
+                                                        }),
+                                                    );
+
+                                                setItems([
+                                                    ...generatedItems,
+                                                    ...items,
+                                                ]);
+                                                setShowGenerationInput(false);
+                                            }}
+                                        >
+                                            追加
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {generationError && (
+                                    <div
+                                        className="text-red-500"
+                                        data-cursor="text"
+                                    >
+                                        {generationError}
+                                    </div>
+                                )}
+                            </Collapsible>
+                            <Collapsible
+                                open={showImportInput}
+                                className={`flex z-2 ${showImportInput ? "mb-4" : "scale-y-0 py-0 opacity-0 blur-md pointer-events-none"} flex-col rounded-3xl sm:-mx-4 bg-(--color-background) gap-4 origin-top ease-etb transition-all duration-(--duration-etb)`}
+                                childrenClassName="flex p-4 flex-col gap-4 items-center"
+                            >
+                                <div data-cursor="text" className="p-2">
+                                    単語は2列のCSV、または問題と回答のペアを並べたJSONで貼り付けてください。
                                     <Button
                                         onClick={() =>
-                                            setShowImportInput(false)
+                                            setShowImportDialog(true)
                                         }
-                                        className="w-full"
-                                        iconName="x"
+                                        variant="text"
                                     >
-                                        キャンセル
-                                    </Button>
-                                    <Button
-                                        variant="primary"
-                                        className="w-full"
-                                        iconName="plus"
-                                        onClick={() => handleImportWords()}
-                                    >
-                                        インポート
+                                        詳しく見る
                                     </Button>
                                 </div>
-                            )}
-                            {importError && (
-                                <div
-                                    className="text-red-500"
-                                    data-cursor="text"
-                                >
-                                    {importError}
-                                </div>
-                            )}
-                        </Collapsible>
-                        <div ref={itemListRef} className="flex flex-col gap-4">
-                            <DndContext
-                                sensors={sensors}
-                                modifiers={[restrictWordDrag]}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleDragEnd}
-                            >
-                                <SortableContext
-                                    items={items.map((item) => item.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    {items.map((item, index) => (
-                                        <SortableItem
-                                            key={item.id}
-                                            id={item.id}
+                                <Input
+                                    value={importData}
+                                    variant="textarea"
+                                    inputClassName="resize-none h-48"
+                                    font="mono"
+                                    onChange={(e) =>
+                                        setImportData(e.target.value)
+                                    }
+                                    label="単語データ"
+                                />
+                                {importData && (
+                                    <div className="w-full animate-appear grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                                        <Button
+                                            onClick={() =>
+                                                setShowImportInput(false)
+                                            }
+                                            className="w-full"
+                                            iconName="x"
                                         >
-                                            <div className="flex items-center gap-4 w-full">
-                                                <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
-                                                    <div className="flex flex-col gap-4">
-                                                        <Input
-                                                            label="問題"
-                                                            font="mono"
-                                                            value={item.prompt}
-                                                            onChange={(e) => {
-                                                                const newItems =
-                                                                    items.map(
-                                                                        (
-                                                                            currentItem,
-                                                                            itemIndex,
-                                                                        ) =>
-                                                                            itemIndex ===
-                                                                            index
-                                                                                ? {
-                                                                                      ...currentItem,
-                                                                                      prompt: e
-                                                                                          .target
-                                                                                          .value,
-                                                                                  }
-                                                                                : currentItem,
+                                            キャンセル
+                                        </Button>
+                                        <Button
+                                            variant="primary"
+                                            className="w-full"
+                                            iconName="plus"
+                                            onClick={() => handleImportWords()}
+                                        >
+                                            インポート
+                                        </Button>
+                                    </div>
+                                )}
+                                {importError && (
+                                    <div
+                                        className="text-red-500"
+                                        data-cursor="text"
+                                    >
+                                        {importError}
+                                    </div>
+                                )}
+                            </Collapsible>
+                            <div
+                                ref={itemListRef}
+                                className="flex flex-col gap-4"
+                            >
+                                <DndContext
+                                    sensors={sensors}
+                                    modifiers={[restrictWordDrag]}
+                                    collisionDetection={closestCenter}
+                                    onDragEnd={handleDragEnd}
+                                >
+                                    <SortableContext
+                                        items={items.map((item) => item.id)}
+                                        strategy={verticalListSortingStrategy}
+                                    >
+                                        {items.map((item, index) => (
+                                            <SortableItem
+                                                key={item.id}
+                                                id={item.id}
+                                            >
+                                                <div className="flex items-center gap-4 w-full">
+                                                    <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(200px,1fr))] w-full">
+                                                        <div className="flex flex-col gap-4">
+                                                            <Input
+                                                                label="問題"
+                                                                font="mono"
+                                                                value={
+                                                                    item.prompt
+                                                                }
+                                                                onChange={(
+                                                                    e,
+                                                                ) => {
+                                                                    const newItems =
+                                                                        items.map(
+                                                                            (
+                                                                                currentItem,
+                                                                                itemIndex,
+                                                                            ) =>
+                                                                                itemIndex ===
+                                                                                index
+                                                                                    ? {
+                                                                                          ...currentItem,
+                                                                                          prompt: e
+                                                                                              .target
+                                                                                              .value,
+                                                                                      }
+                                                                                    : currentItem,
+                                                                        );
+                                                                    setItems(
+                                                                        newItems,
                                                                     );
-                                                                setItems(
-                                                                    newItems,
-                                                                );
-                                                            }}
-                                                        />
-                                                        {item.prompt.length >
-                                                            32 && (
-                                                            <div
-                                                                className="text-red-500"
-                                                                data-cursor="text"
-                                                            >
-                                                                32文字以内で入力してください。
-                                                            </div>
-                                                        )}
-                                                        {!item.prompt && (
-                                                            <div
-                                                                className="text-red-500"
-                                                                data-cursor="text"
-                                                            >
-                                                                この項目は必須です。
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-col gap-4">
-                                                        <Input
-                                                            label="回答"
-                                                            font="mono"
-                                                            value={item.answer}
-                                                            onChange={(e) => {
-                                                                const newItems =
-                                                                    items.map(
-                                                                        (
-                                                                            currentItem,
-                                                                            itemIndex,
-                                                                        ) =>
-                                                                            itemIndex ===
-                                                                            index
-                                                                                ? {
-                                                                                      ...currentItem,
-                                                                                      answer: e
-                                                                                          .target
-                                                                                          .value,
-                                                                                  }
-                                                                                : currentItem,
-                                                                    );
-                                                                setItems(
-                                                                    newItems,
-                                                                );
-                                                            }}
-                                                        />
-                                                        {!isAllowedTypingAnswer(
-                                                            item.answer,
-                                                        ) &&
-                                                            item.answer && (
-                                                                <div className="text-red-500">
-                                                                    英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
+                                                                }}
+                                                            />
+                                                            {item.prompt
+                                                                .length >
+                                                                32 && (
+                                                                <div
+                                                                    className="text-red-500"
+                                                                    data-cursor="text"
+                                                                >
+                                                                    32文字以内で入力してください。
                                                                 </div>
                                                             )}
-                                                        {item.answer.length >
-                                                            32 && (
-                                                            <div
-                                                                className="text-red-500"
-                                                                data-cursor="text"
-                                                            >
-                                                                32文字以内で入力してください。
-                                                            </div>
-                                                        )}
-                                                        {!item.answer && (
-                                                            <div
-                                                                className="text-red-500"
-                                                                data-cursor="text"
-                                                            >
-                                                                この項目は必須です。
-                                                            </div>
-                                                        )}
+                                                            {!item.prompt && (
+                                                                <div
+                                                                    className="text-red-500"
+                                                                    data-cursor="text"
+                                                                >
+                                                                    この項目は必須です。
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col gap-4">
+                                                            <Input
+                                                                label="回答"
+                                                                font="mono"
+                                                                value={
+                                                                    item.answer
+                                                                }
+                                                                onChange={(
+                                                                    e,
+                                                                ) => {
+                                                                    const newItems =
+                                                                        items.map(
+                                                                            (
+                                                                                currentItem,
+                                                                                itemIndex,
+                                                                            ) =>
+                                                                                itemIndex ===
+                                                                                index
+                                                                                    ? {
+                                                                                          ...currentItem,
+                                                                                          answer: e
+                                                                                              .target
+                                                                                              .value,
+                                                                                      }
+                                                                                    : currentItem,
+                                                                        );
+                                                                    setItems(
+                                                                        newItems,
+                                                                    );
+                                                                }}
+                                                            />
+                                                            {!isAllowedTypingAnswer(
+                                                                item.answer,
+                                                            ) &&
+                                                                item.answer && (
+                                                                    <div className="text-red-500">
+                                                                        英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
+                                                                    </div>
+                                                                )}
+                                                            {item.answer
+                                                                .length >
+                                                                32 && (
+                                                                <div
+                                                                    className="text-red-500"
+                                                                    data-cursor="text"
+                                                                >
+                                                                    32文字以内で入力してください。
+                                                                </div>
+                                                            )}
+                                                            {!item.answer && (
+                                                                <div
+                                                                    className="text-red-500"
+                                                                    data-cursor="text"
+                                                                >
+                                                                    この項目は必須です。
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <Button
+                                                            onClick={() => {
+                                                                const newItems =
+                                                                    items.filter(
+                                                                        (
+                                                                            _,
+                                                                            itemIndex,
+                                                                        ) =>
+                                                                            itemIndex !==
+                                                                            index,
+                                                                    );
+                                                                setItems(
+                                                                    newItems,
+                                                                );
+                                                            }}
+                                                            className="h-fit"
+                                                            padding="large"
+                                                            iconName="trash"
+                                                        />
                                                     </div>
                                                 </div>
-
-                                                <div>
-                                                    <Button
-                                                        onClick={() => {
-                                                            const newItems =
-                                                                items.filter(
-                                                                    (
-                                                                        _,
-                                                                        itemIndex,
-                                                                    ) =>
-                                                                        itemIndex !==
-                                                                        index,
-                                                                );
-                                                            setItems(newItems);
-                                                        }}
-                                                        className="h-fit"
-                                                        padding="large"
-                                                        iconName="trash"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </SortableItem>
-                                    ))}
-                                </SortableContext>
-                            </DndContext>
+                                            </SortableItem>
+                                        ))}
+                                    </SortableContext>
+                                </DndContext>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                <div
-                    className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-(--duration-etb) ease-etb`}
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="dialog-title"
-                    aria-describedby={
-                        showImportInput || showGenerationInput
-                            ? "dialog-description"
-                            : undefined
-                    }
-                >
-                    <button
-                        type="button"
-                        aria-label="ダイアログを閉じる"
-                        onClick={() => {
-                            setShowImportInput(false);
-                            setShowGenerationInput(false);
-                        }}
-                        className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-(--duration-etb) ease-etb`}
-                    />
-                </div>
-            </Shell>
+                    <div
+                        className={`fixed z-1 inset-0 flex items-center justify-center ${!(showImportInput || showGenerationInput) && "opacity-0 pointer-events-none scale-105"} transition-all duration-(--duration-etb) ease-etb`}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="dialog-title"
+                        aria-describedby={
+                            showImportInput || showGenerationInput
+                                ? "dialog-description"
+                                : undefined
+                        }
+                    >
+                        <button
+                            type="button"
+                            aria-label="ダイアログを閉じる"
+                            onClick={() => {
+                                setShowImportInput(false);
+                                setShowGenerationInput(false);
+                            }}
+                            className={`absolute inset-0 cursor-default ${(showImportInput || showGenerationInput) && "bg-(--color-background-secondary)/50"} transition-all duration-(--duration-etb) ease-etb`}
+                        />
+                    </div>
+                </Shell>
+            </div>
         </>
     );
 }
