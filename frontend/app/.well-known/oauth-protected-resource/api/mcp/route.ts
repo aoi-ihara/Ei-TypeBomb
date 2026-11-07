@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+    MCP_AUTHORIZATION_SERVER,
     MCP_RESOURCE,
 } from "@/lib/mcp/oauth";
 
@@ -9,9 +10,7 @@ export async function GET() {
     return NextResponse.json(
         {
             resource: MCP_RESOURCE,
-            authorization_servers: [
-                "https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1",
-            ],
+            authorization_servers: [MCP_AUTHORIZATION_SERVER],
             bearer_methods_supported: ["header"],
             resource_documentation: "https://ei-typebomb.com/docs/mcp",
         },
