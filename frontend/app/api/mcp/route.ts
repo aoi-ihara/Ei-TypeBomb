@@ -48,6 +48,8 @@ function jsonRpc(id: JsonRpcId, result: unknown, protocolVersion = PROTOCOL_VERS
         { jsonrpc: "2.0", id, result },
         {
             headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Expose-Headers": "Mcp-Protocol-Version, WWW-Authenticate",
                 "Cache-Control": "no-store",
                 "Mcp-Protocol-Version": protocolVersion,
             },
@@ -63,7 +65,14 @@ function jsonRpcError(
 ) {
     return NextResponse.json(
         { jsonrpc: "2.0", id, error: { code, message } },
-        { status, headers: { "Cache-Control": "no-store" } },
+        {
+            status,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Expose-Headers": "WWW-Authenticate",
+                "Cache-Control": "no-store",
+            },
+        },
     );
 }
 
@@ -424,6 +433,25 @@ export async function DELETE(request: NextRequest) {
 
     return new NextResponse(null, {
         status: 405,
-        headers: { Allow: "POST", "Cache-Control": "no-store" },
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            Allow: "POST, OPTIONS",
+            "Cache-Control": "no-store",
+        },
+    });
+}
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 204,
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers":
+                "Authorization, Content-Type, Accept, Mcp-Protocol-Version",
+            "Access-Control-Expose-Headers":
+                "Mcp-Protocol-Version, WWW-Authenticate",
+            "Access-Control-Max-Age": "86400",
+        },
     });
 }
