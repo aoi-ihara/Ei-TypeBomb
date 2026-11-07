@@ -53,20 +53,25 @@ Authentication settings:
 4. The configured authorization path is reachable and requires the user to
    approve or deny each client grant.
 5. The consent UI clearly displays the requesting client's registered name and
-   redirect URI, and explains that approval gives that client access to read,
-   create, and edit the user's ETB rooms.
+   redirect URI, and explains what account/resource access is being granted.
 
-The last point matters: Supabase's built-in OAuth scopes (`openid`, `email`,
-`profile`, and `phone`) describe identity claims; they are not ETB room
-permissions. The MCP resource indicator binds the access token to ETB, while
-the user's explicit OAuth grant authorizes the client. The consent UI must
-therefore describe the ETB room access in ordinary language.
+Supabase's built-in OAuth scopes (`openid`, `email`, `profile`, and `phone`)
+describe identity claims; they are not ETB room permissions. The MCP resource
+indicator binds the access token to ETB, while the user's explicit OAuth grant
+authorizes the client. The consent UI must therefore explain the requested
+resource and the actions available to that client.
 
-Because `rcAccount` is shared with the existing ETB website login, do not change
-its authorization path or token hooks without reviewing the other clients that
-use that project. Keep the existing `RC_HUB_OAUTH_CLIENT_ID` web login client
-working: it does not request the MCP resource and its tokens must continue to
-use the normal `authenticated` audience.
+**Important:** `rcAccount` is shared with the existing ETB website login and
+other OAuth clients. Do not change its global authorization path or token hooks
+without reviewing every client that uses this project. The repository includes
+an ETB consent page at `/oauth/consent`; use it as the authorization path only
+if it is appropriate for all applications using the shared OAuth server. If
+another shared consent UI already exists, keep using that UI and ensure it
+shows the requesting client and requested resource accurately.
+
+Keep the existing `RC_HUB_OAUTH_CLIENT_ID` web login client working: it does
+not request the MCP resource and its tokens must continue to use the normal
+`authenticated` audience.
 
 Supabase's OAuth Server supports dynamic registration and recommends reviewing
 registered clients and requiring user approval. Users should revoke grants
@@ -82,8 +87,9 @@ https://ei-typebomb.com/api/mcp
 ```
 
 A compatible MCP client will discover OAuth metadata, register (when dynamic
-registration is enabled), open the sign-in/consent flow, and obtain/refresh its
-own tokens. Do not copy an ETB website session token into the MCP client.
+client registration is enabled), open the sign-in/consent flow, and obtain or
+refresh its own tokens. Do not copy an ETB website session token into the MCP
+client.
 
 No new Vercel environment variables are required. The issuer and resource URL
 are defined in server-side code.
