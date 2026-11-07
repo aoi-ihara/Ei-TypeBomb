@@ -57,6 +57,8 @@ export function unauthorizedMcpResponse(request: Request): Response {
     return new Response(null, {
         status: 401,
         headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "WWW-Authenticate",
             "Cache-Control": "no-store",
             "WWW-Authenticate":
                 `Bearer resource_metadata="${MCP_PROTECTED_RESOURCE_METADATA_URL}"${invalidToken}`,
