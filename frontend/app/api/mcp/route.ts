@@ -43,13 +43,18 @@ function isRecord(value: unknown): value is JsonRecord {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function jsonRpc(id: JsonRpcId, result: unknown, protocolVersion = PROTOCOL_VERSION) {
+function jsonRpc(
+    id: JsonRpcId,
+    result: unknown,
+    protocolVersion = PROTOCOL_VERSION,
+) {
     return NextResponse.json(
         { jsonrpc: "2.0", id, result },
         {
             headers: {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Expose-Headers": "Mcp-Protocol-Version, WWW-Authenticate",
+                "Access-Control-Expose-Headers":
+                    "Mcp-Protocol-Version, WWW-Authenticate",
                 "Cache-Control": "no-store",
                 "Mcp-Protocol-Version": protocolVersion,
             },
@@ -127,7 +132,7 @@ const tools = [
     {
         name: "create_room",
         description:
-            "認証中のユーザーのETBルームを作成します。作成後は通常のETBルームとして利用できます。",
+            "認証中のユーザーのEi-TypeBombルームを作成します。作成後は通常のEi-TypeBombルームとして利用できます。",
         inputSchema: {
             type: "object",
             properties: roomProperties,
@@ -172,11 +177,44 @@ function validateRoomPatch(input: JsonRecord): {
 } {
     const patch: JsonRecord = {};
     const checks: Array<[string, (value: unknown) => string | null, string]> = [
-        ["title", (v) => typeof v === "string" ? validateTitle(v) : "ルーム名が不正です。", "title"],
-        ["explanation", (v) => typeof v === "string" ? validateExplanation(v) : "説明が不正です。", "explanation"],
-        ["max_players", (v) => typeof v === "number" && Number.isInteger(v) ? validateMaxPlayers(v) : "最大プレイヤー数が不正です。", "max_players"],
-        ["game_duration", (v) => typeof v === "number" ? validateGameDuration(v) : "ゲーム時間が不正です。", "game_duration"],
-        ["link", (v) => typeof v === "string" ? validateLink(v) : "リンクが不正です。", "link"],
+        [
+            "title",
+            (v) =>
+                typeof v === "string"
+                    ? validateTitle(v)
+                    : "ルーム名が不正です。",
+            "title",
+        ],
+        [
+            "explanation",
+            (v) =>
+                typeof v === "string"
+                    ? validateExplanation(v)
+                    : "説明が不正です。",
+            "explanation",
+        ],
+        [
+            "max_players",
+            (v) =>
+                typeof v === "number" && Number.isInteger(v)
+                    ? validateMaxPlayers(v)
+                    : "最大プレイヤー数が不正です。",
+            "max_players",
+        ],
+        [
+            "game_duration",
+            (v) =>
+                typeof v === "number"
+                    ? validateGameDuration(v)
+                    : "ゲーム時間が不正です。",
+            "game_duration",
+        ],
+        [
+            "link",
+            (v) =>
+                typeof v === "string" ? validateLink(v) : "リンクが不正です。",
+            "link",
+        ],
     ];
 
     for (const [key, validate, column] of checks) {
@@ -195,13 +233,20 @@ function validateRoomPatch(input: JsonRecord): {
             value > 4 ||
             (typeof input.max_players === "number" && value > input.max_players)
         ) {
-            return { patch, error: "爆弾数は1〜4個、かつ最大プレイヤー数以下にしてください。" };
+            return {
+                patch,
+                error: "爆弾数は1〜4個、かつ最大プレイヤー数以下にしてください。",
+            };
         }
         patch.bomb_count = value;
     }
 
     if (input.visibility !== undefined) {
-        if (!["public", "unlisted", "private"].includes(String(input.visibility))) {
+        if (
+            !["public", "unlisted", "private"].includes(
+                String(input.visibility),
+            )
+        ) {
             return { patch, error: "公開設定が正しくありません。" };
         }
         patch.visibility = input.visibility;
@@ -212,7 +257,8 @@ function validateRoomPatch(input: JsonRecord): {
     }
 
     if (input.items !== undefined) {
-        if (!Array.isArray(input.items)) return { patch, error: "問題一覧が不正です。" };
+        if (!Array.isArray(input.items))
+            return { patch, error: "問題一覧が不正です。" };
         const error = validateItems(input.items as Room["items"]);
         if (error) return { patch, error };
         patch.items = input.items;
@@ -243,7 +289,11 @@ function presentRoom(room: JsonRecord): JsonRecord {
     return { ...safeRoom, has_password: Boolean(password) };
 }
 
-async function callTool(name: string, args: JsonRecord, userId: string): Promise<ToolResult> {
+async function callTool(
+    name: string,
+    args: JsonRecord,
+    userId: string,
+): Promise<ToolResult> {
     const supabase = await createAdminClient();
 
     if (name === "create_room") {
@@ -259,7 +309,10 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
             visibility: "unlisted",
             ...patch,
         };
-        if (insert.visibility === "public" || insert.visibility === "unlisted") {
+        if (
+            insert.visibility === "public" ||
+            insert.visibility === "unlisted"
+        ) {
             insert.password = null;
         } else if (typeof insert.password === "string") {
             insert.password = await hashPassword(insert.password);
@@ -273,7 +326,9 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
 
         if (insertError || !data) {
             console.error("MCP room creation failed", insertError?.code);
-            return toolError("ルームを作成できませんでした。入力内容と設定を確認してください。");
+            return toolError(
+                "ルームを作成できませんでした。入力内容と設定を確認してください。",
+            );
         }
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
@@ -300,8 +355,13 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
                 .eq("link", identifier)
                 .maybeSingle();
         }
-        if (query.error || !query.data) return toolError("ルームが見つからないか、アクセス権限がありません。");
-        return toolResult({ room: presentRoom(query.data as unknown as JsonRecord) });
+        if (query.error || !query.data)
+            return toolError(
+                "ルームが見つからないか、アクセス権限がありません。",
+            );
+        return toolResult({
+            room: presentRoom(query.data as unknown as JsonRecord),
+        });
     }
 
     if (name === "update_room") {
@@ -312,7 +372,8 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
         const { room_id: _roomId, ...input } = args;
         const { patch, error } = validateRoomPatch(input);
         if (error) return toolError(error);
-        if (Object.keys(patch).length === 0) return toolError("変更する項目を1つ以上指定してください。");
+        if (Object.keys(patch).length === 0)
+            return toolError("変更する項目を1つ以上指定してください。");
 
         if (typeof patch.password === "string") {
             patch.password = await hashPassword(patch.password);
@@ -343,12 +404,18 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
-        return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+        return NextResponse.json(
+            { error: "Content-Type must be application/json" },
+            { status: 415 },
+        );
     }
 
     const rawBody = await request.text();
     if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-        return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+        return NextResponse.json(
+            { error: "Request body too large" },
+            { status: 413 },
+        );
     }
 
     let body: unknown;
@@ -358,15 +425,25 @@ export async function POST(request: NextRequest) {
         return jsonRpcError(null, -32700, "Parse error", 400);
     }
 
-    if (!isRecord(body) || body.jsonrpc !== "2.0" || typeof body.method !== "string") {
+    if (
+        !isRecord(body) ||
+        body.jsonrpc !== "2.0" ||
+        typeof body.method !== "string"
+    ) {
         return jsonRpcError(null, -32600, "Invalid Request", 400);
     }
 
-    const id = typeof body.id === "string" || typeof body.id === "number" ? body.id : null;
+    const id =
+        typeof body.id === "string" || typeof body.id === "number"
+            ? body.id
+            : null;
     const isNotification = !("id" in body);
 
     if (isNotification) {
-        return new NextResponse(null, { status: 202, headers: { "Cache-Control": "no-store" } });
+        return new NextResponse(null, {
+            status: 202,
+            headers: { "Cache-Control": "no-store" },
+        });
     }
     if (id === null) {
         return jsonRpcError(null, -32600, "Invalid Request", 400);
@@ -376,7 +453,8 @@ export async function POST(request: NextRequest) {
         const params = isRecord(body.params) ? body.params : {};
         const requestedVersion = params.protocolVersion;
         const protocolVersion =
-            typeof requestedVersion === "string" && SUPPORTED_PROTOCOL_VERSIONS.has(requestedVersion)
+            typeof requestedVersion === "string" &&
+            SUPPORTED_PROTOCOL_VERSIONS.has(requestedVersion)
                 ? requestedVersion
                 : PROTOCOL_VERSION;
         return jsonRpc(
@@ -386,7 +464,7 @@ export async function POST(request: NextRequest) {
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: { name: "ei-typebomb", version: "1.0.0" },
                 instructions:
-                    "ETBのルームを管理するMCPサーバーです。OAuthで認証されたユーザー本人が所有するルームだけを操作できます。",
+                    "Ei-TypeBombのルームを管理するMCPサーバーです。OAuthで認証されたユーザー本人が所有するルームだけを操作できます。",
             },
             protocolVersion,
         );
