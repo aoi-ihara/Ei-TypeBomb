@@ -16,12 +16,32 @@ export type McpPrincipal = {
     clientId: string;
 };
 
+function logMcpAuthFailure(
+    reason: string,
+    details?: Record<string, string | boolean>,
+): void {
+    // Never include the Authorization header, JWT, or decoded claim values.
+    console.warn("[MCP Auth] Authentication failed", {
+        reason,
+        ...details,
+    });
+}
+
 export async function authenticateMcpRequest(
     request: Request,
 ): Promise<McpPrincipal | null> {
     const authorization = request.headers.get("authorization");
     const match = authorization?.match(/^Bearer\s+([^\s]+)$/i);
-    if (!match) return null;
+
+    if (!authorization) {
+        logMcpAuthFailure("missing_bearer_token");
+        return null;
+    }
+
+    if (!match) {
+        logMcpAuthFailure("malformed_authorization_header");
+        return null;
+    }
 
     try {
         const { payload } = await jwtVerify(match[1], jwks, {
@@ -30,20 +50,38 @@ export async function authenticateMcpRequest(
             algorithms: ["ES256", "RS256"],
         });
 
-        if (
-            typeof payload.sub !== "string" ||
-            typeof payload.client_id !== "string" ||
-            !payload.client_id ||
-            payload.role !== "authenticated"
-        ) {
+        const hasSubject = typeof payload.sub === "string";
+        const hasClientId =
+            typeof payload.client_id === "string" && payload.client_id.length > 0;
+        const hasAuthenticatedRole = payload.role === "authenticated";
+
+        if (!hasSubject || !hasClientId || !hasAuthenticatedRole) {
+            logMcpAuthFailure("required_claim_validation_failed", {
+                hasSubject,
+                hasClientId,
+                hasAuthenticatedRole,
+            });
             return null;
         }
 
         return {
-            userId: payload.sub,
-            clientId: payload.client_id,
+            userId: payload.sub as string,
+            clientId: payload.client_id as string,
         };
-    } catch {
+    } catch (error) {
+        const errorName = error instanceof Error ? error.name : "UnknownError";
+        const errorCode =
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            typeof error.code === "string"
+                ? error.code
+                : "unknown";
+
+        logMcpAuthFailure("jwt_verification_failed", {
+            errorName,
+            errorCode,
+        });
         return null;
     }
 }
