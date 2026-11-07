@@ -58,8 +58,22 @@ Authentication settings:
 Supabase's built-in OAuth scopes (`openid`, `email`, `profile`, and `phone`)
 describe identity claims; they are not ETB room permissions. The MCP resource
 indicator binds the access token to ETB, while the user's explicit OAuth grant
-authorizes the client. The consent UI must therefore explain the requested
-resource and the actions available to that client.
+authorizes the client. The OAuth consent response does not expose the MCP
+resource or a separate list of MCP tool permissions to the shared consent page.
+For that reason, the registered OAuth client's **description must explicitly
+identify the service and list its capabilities**.
+
+For the ETB MCP client, use a description equivalent to:
+
+> Ei-TypeBomb MCP server. Can create ETB rooms, read settings for rooms you own,
+> and update settings for rooms you own. It cannot access rooms owned by other
+> users.
+
+The consent page displays this registered description next to the client name.
+If the description is missing, the page warns that the service's operations
+cannot be verified. Users should not approve a client whose purpose or
+capabilities are unclear. Do not treat `openid`, `email`, or `profile` as
+descriptions of the MCP tools.
 
 **Important:** `rcAccount` is shared with the existing ETB website login and
 other OAuth clients. Do not change its global authorization path or token hooks
@@ -123,6 +137,6 @@ curl -i https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp
 ```
 
 An unauthenticated MCP request should return `401 Unauthorized` and a
-`WWW-Authenticate` header containing the metadata URL. A token issued for the
-normal ETB website audience should also be rejected; only a token issued for
-the MCP resource is accepted.
+`WWW-Authenticate` header containing the metadata URL. A token issued for
+the normal ETB website audience should also be rejected; only a token issued
+for the MCP resource is accepted.

@@ -1,16 +1,6 @@
 import { createClient } from "@/lib/db/server";
 import { redirect } from "next/navigation";
 
-type AuthorizationDetails = {
-    client?: {
-        name?: string | null;
-        description?: string | null;
-        uri?: string | null;
-    };
-    redirect_uri?: string;
-    scope?: string;
-};
-
 function getAuthorizationId(value: FormDataEntryValue | null) {
     if (typeof value !== "string" || value.length < 1 || value.length > 512) {
         throw new Error("認証リクエストが正しくありません。");
@@ -106,8 +96,15 @@ export default async function OAuthConsentPage({
         );
     }
 
-    const details = data as AuthorizationDetails;
+    // Supabase returns a redirect-only response when this client was already
+    // approved. Do not render an empty consent screen in that case.
+    if (!("authorization_id" in data)) {
+        redirect(data.redirect_url);
+    }
+
+    const details = data;
     const clientName = details.client?.name?.trim() || "名称未設定のアプリ";
+    const clientDescription = details.client?.description?.trim();
     const requestedScopes = (details.scope ?? "")
         .split(/\s+/)
         .filter(Boolean);
@@ -122,14 +119,18 @@ export default async function OAuthConsentPage({
                     アクセスを許可しますか？
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                    次のアプリが、あなたのアカウントへのアクセスを要求しています。
+                    次のアプリが、Supabaseアカウント認証を要求しています。許可する前に、アプリ名と接続先サービスの説明を確認してください。
                 </p>
 
                 <section className="mt-7 rounded-2xl bg-neutral-50 p-5 dark:bg-neutral-900">
                     <h2 className="text-lg font-semibold">{clientName}</h2>
-                    {details.client?.description && (
-                        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-                            {details.client.description}
+                    {clientDescription ? (
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-neutral-600 dark:text-neutral-400">
+                            {clientDescription}
+                        </p>
+                    ) : (
+                        <p className="mt-2 text-sm leading-6 text-red-700 dark:text-red-400">
+                            このアプリの説明が登録されていないため、接続先サービスで可能になる操作を確認できません。内容を確認できない場合は許可しないでください。
                         </p>
                     )}
                     {details.client?.uri && (
@@ -138,25 +139,27 @@ export default async function OAuthConsentPage({
                             <p className="mt-1 break-all text-sm">{details.client.uri}</p>
                         </div>
                     )}
-                    {details.redirect_uri && (
-                        <div className="mt-4">
-                            <p className="text-xs text-neutral-500">リダイレクト先</p>
-                            <p className="mt-1 break-all text-sm">{details.redirect_uri}</p>
-                        </div>
-                    )}
+                    <div className="mt-4">
+                        <p className="text-xs text-neutral-500">リダイレクト先</p>
+                        <p className="mt-1 break-all text-sm">{details.redirect_uri}</p>
+                    </div>
                 </section>
 
                 <section className="mt-6">
-                    <h2 className="text-sm font-semibold">要求された権限</h2>
+                    <h2 className="text-sm font-semibold">OAuthで要求された情報</h2>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                        許可すると、このアプリにOAuthリクエストで指定された権限を付与します。アプリ名、説明、ウェブサイト、リダイレクト先を確認してから判断してください。
+                        以下はSupabaseアカウントから共有される情報の範囲です。これらのスコープだけでは、接続先サービスで実行できる操作は分かりません。操作内容は上のアプリ説明と接続先サービスの公式情報で確認してください。
                     </p>
-                    {requestedScopes.length > 0 && (
+                    {requestedScopes.length > 0 ? (
                         <ul className="mt-3 list-inside list-disc text-sm text-neutral-500">
                             {requestedScopes.map((scope) => (
                                 <li key={scope}>{scope}</li>
                             ))}
                         </ul>
+                    ) : (
+                        <p className="mt-2 text-sm text-neutral-500">
+                            OAuthスコープは指定されていません。
+                        </p>
                     )}
                 </section>
 
