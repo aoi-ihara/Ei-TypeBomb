@@ -116,13 +116,13 @@ export default async function OAuthConsentPage({
         <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-16">
             <div className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 sm:p-9">
                 <p className="text-xs font-semibold tracking-widest text-neutral-500">
-                    EI-TYPEBOMB ACCOUNT
+                    ACCOUNT AUTHORIZATION
                 </p>
                 <h1 className="mt-5 text-2xl font-bold tracking-tight">
                     アクセスを許可しますか？
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                    次のアプリが、あなたのEi-TypeBombアカウントへのアクセスを要求しています。
+                    次のアプリが、あなたのアカウントへのアクセスを要求しています。
                 </p>
 
                 <section className="mt-7 rounded-2xl bg-neutral-50 p-5 dark:bg-neutral-900">
@@ -131,6 +131,12 @@ export default async function OAuthConsentPage({
                         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
                             {details.client.description}
                         </p>
+                    )}
+                    {details.client?.uri && (
+                        <div className="mt-3">
+                            <p className="text-xs text-neutral-500">アプリのウェブサイト</p>
+                            <p className="mt-1 break-all text-sm">{details.client.uri}</p>
+                        </div>
                     )}
                     {details.redirect_uri && (
                         <div className="mt-4">
@@ -141,9 +147,9 @@ export default async function OAuthConsentPage({
                 </section>
 
                 <section className="mt-6">
-                    <h2 className="text-sm font-semibold">許可するアクセス</h2>
+                    <h2 className="text-sm font-semibold">要求された権限</h2>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                        このアプリは、あなたが所有するルームの設定を読み取り、新しいルームの作成や既存ルームの編集を行えます。
+                        許可すると、このアプリにOAuthリクエストで指定された権限を付与します。アプリ名、説明、ウェブサイト、リダイレクト先を確認してから判断してください。
                     </p>
                     {requestedScopes.length > 0 && (
                         <ul className="mt-3 list-inside list-disc text-sm text-neutral-500">
@@ -183,7 +189,7 @@ export default async function OAuthConsentPage({
                     </form>
                 </div>
                 <p className="mt-5 text-xs leading-5 text-neutral-500">
-                    心当たりのないアプリからのリクエストは許可しないでください。許可後も、Supabaseアカウントの認可済みアプリからアクセスを取り消せます。
+                    心当たりのないアプリや、説明とリダイレクト先が一致しないアプリからのリクエストは許可しないでください。許可後も、Supabaseアカウントの認可済みアプリからアクセスを取り消せます。
                 </p>
             </div>
         </main>
