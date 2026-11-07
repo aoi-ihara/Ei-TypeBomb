@@ -1,23 +1,92 @@
 # ETB MCP Server
 
-ETB exposes a stateless MCP Streamable HTTP endpoint at:
+ETB exposes a remote MCP Streamable HTTP endpoint:
 
-`POST https://ei-typebomb.com/api/mcp`
+`https://ei-typebomb.com/api/mcp`
 
-The first implementation focuses on backend room management. It does not add a
-new frontend screen or change the existing room UI.
+The first version exposes room management tools and keeps the existing ETB
+frontend unchanged.
 
-## Authentication
+## OAuth 2.1 authentication
 
-Tool calls require a Supabase user access token in the HTTP
-`Authorization: Bearer <access-token>` header. The endpoint verifies the token
-with Supabase Auth, then scopes every database operation to the authenticated
-user's `user_id`. The service-role client is used only after identity
-verification; room ownership is enforced in every read/update query.
+The MCP endpoint uses the existing Supabase Auth project as its OAuth
+authorization server:
 
-This initial endpoint does not implement an OAuth authorization flow or issue
-MCP access tokens. A client must already have a valid Supabase access token.
-OAuth-based connection onboarding is a separate follow-up.
+- Authorization server: `https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1`
+- MCP resource / expected JWT audience:
+  `https://ei-typebomb.com/api/mcp`
+- Protected Resource Metadata:
+  `https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp`
+
+MCP clients discover the authorization server from the Protected Resource
+Metadata and use the OAuth 2.1 Authorization Code + PKCE flow. The client must
+send the MCP endpoint URL as the OAuth `resource` parameter in the authorization
+and token requests. Supabase Auth supports the resource indicator for MCP
+clients.
+
+The server validates each Bearer token using the Supabase project's public
+JWKS. It checks the signature, issuer, expiry, asymmetric signing algorithm,
+authenticated role, subject, OAuth client ID, and the exact MCP resource
+audience. Tokens issued for the normal ETB website login have the regular
+`authenticated` audience and are intentionally rejected by the MCP endpoint.
+The website's existing sign-in flow is not changed.
+
+Every MCP request, including `initialize`, `tools/list`, and notifications,
+requires a valid MCP access token. Missing or invalid tokens receive HTTP 401
+with a `WWW-Authenticate` challenge that points to the Protected Resource
+Metadata endpoint.
+
+### Supabase Auth configuration
+
+The authorization server is the existing shared `rcAccount` Supabase project.
+No Supabase dashboard settings or global authorization paths are changed by
+this repository PR.
+
+Before connecting an MCP client, verify the following in that project's
+Authentication settings:
+
+1. OAuth 2.1 Server is enabled.
+2. Dynamic Client Registration is enabled for clients that register themselves.
+   Alternatively, register a compatible OAuth client manually.
+3. The project's JWT signing keys use ES256 or RS256 and the public JWKS endpoint
+   is reachable.
+4. The configured authorization path is reachable and requires the user to
+   approve or deny each client grant.
+5. The consent UI clearly displays the requesting client's registered name and
+   redirect URI, and explains that approval gives that client access to read,
+   create, and edit the user's ETB rooms.
+
+The last point matters: Supabase's built-in OAuth scopes (`openid`, `email`,
+`profile`, and `phone`) describe identity claims; they are not ETB room
+permissions. The MCP resource indicator binds the access token to ETB, while
+the user's explicit OAuth grant authorizes the client. The consent UI must
+therefore describe the ETB room access in ordinary language.
+
+Because `rcAccount` is shared with the existing ETB website login, do not change
+its authorization path or token hooks without reviewing the other clients that
+use that project. Keep the existing `RC_HUB_OAUTH_CLIENT_ID` web login client
+working: it does not request the MCP resource and its tokens must continue to
+use the normal `authenticated` audience.
+
+Supabase's OAuth Server supports dynamic registration and recommends reviewing
+registered clients and requiring user approval. Users should revoke grants
+they no longer recognize from the Supabase account's authorized-applications
+management.
+
+### Client setup
+
+The MCP client only needs the remote endpoint URL:
+
+```text
+https://ei-typebomb.com/api/mcp
+```
+
+A compatible MCP client will discover OAuth metadata, register (when dynamic
+registration is enabled), open the sign-in/consent flow, and obtain/refresh its
+own tokens. Do not copy an ETB website session token into the MCP client.
+
+No new Vercel environment variables are required. The issuer and resource URL
+are defined in server-side code.
 
 ## Tools
 
@@ -25,19 +94,29 @@ OAuth-based connection onboarding is a separate follow-up.
 - `get_room`: reads an owned room by its ID or share link.
 - `update_room`: updates the supplied settings of an owned room.
 
-Password hashes are never returned. Public and unlisted rooms have their
-password cleared, matching the existing room update behavior.
+All reads and writes are scoped to the OAuth token's `sub` claim. The
+service-role client is only used after JWT validation, and room queries include
+the authenticated user's `user_id`. Password hashes are never returned.
+Public and unlisted rooms have their password cleared, matching the existing
+room update behavior.
 
 ## Protocol
 
 The endpoint implements stateless Streamable HTTP JSON-RPC for
-`initialize`, `ping`, `tools/list`, and `tools/call`. It does not issue
-MCP session IDs and does not support server-initiated notifications or SSE
-streams. Requests are limited to 32 KiB.
+`initialize`, `ping`, `tools/list`, and `tools/call`. It does not issue MCP
+session IDs or provide server-initiated SSE streams. GET and DELETE requests
+are authenticated and then return 405 because this implementation uses
+request/response JSON over POST. Request bodies are limited to 32 KiB.
 
-## Vercel
+## Verification
 
-Deploy the existing Next.js app as usual. The route uses the existing
-`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
-`SUPABASE_SERVICE_ROLE_KEY` environment variables. No new frontend settings
-or build configuration are required.
+Check the public metadata document:
+
+```bash
+curl -i https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp
+```
+
+An unauthenticated MCP request should return `401 Unauthorized` and a
+`WWW-Authenticate` header containing the metadata URL. A token issued for the
+normal ETB website audience should also be rejected; only a token issued for
+the MCP resource is accepted.
