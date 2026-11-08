@@ -15,6 +15,7 @@
         "test:import": "node --test test/import-words.test.mjs",
         "test:bot-typing": "node --test test/bot-typing.test.mjs",
         "test:mcp-oauth": "node --test test/mcp-oauth-discovery.test.mjs",
+        "test:room-list": "tsx --test test/room-list.test.mts",
         "check:mcp-oauth": "node scripts/check-mcp-oauth.mjs",
         "test:mcp-server": "tsx --test test/mcp-authorization-server.test.mts test/mcp-database-tls.test.mts",
         "generate:mcp-keys": "node scripts/generate-mcp-keys.mjs",

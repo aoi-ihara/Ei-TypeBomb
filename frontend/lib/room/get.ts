@@ -6,6 +6,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { createAdminClient } from "../db/server";
 import { getUser } from "../auth/session";
 import { isRoomAuthorized } from "./auth";
+import { getOwnedRoomsForUser } from "./list-queries";
 import type { Item, Room } from "@/type";
 import {
     rankPublicRooms,
@@ -478,34 +479,6 @@ export const getMyRooms = async () => {
     const userId = await getUser();
     if (!userId) return null;
 
-    const supabase = await createAdminClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_rooms")
-        .select(
-            "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, item_count, link, game_duration, visibility",
-        )
-        .eq("user_id", userId);
-
-    if (error) {
-        serverError("failed to fetch user's rooms", error, "DB");
-        return null;
-    }
-
-    const rooms: Room[] = data.map((room) => ({
-        id: room.id,
-        title: room.title,
-        explanation: room.explanation,
-        maxPlayers: room.max_players,
-        bombCount: room.bomb_count ?? null,
-        gameDuration: room.game_duration ?? 20,
-        createdAt: room.created_at,
-        updatedAt: room.updated_at,
-        items: [],
-        itemCount: Number(room.item_count ?? 0),
-        link: room.link ?? undefined,
-        visibility: room.visibility,
-    }));
-
-    serverLog("DB", "rooms fetched", { count: rooms.length });
-    return { userId, rooms };
+    const rooms = await getOwnedRoomsForUser(userId);
+    return rooms ? { userId, rooms } : null;
 };

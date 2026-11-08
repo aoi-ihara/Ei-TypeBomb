@@ -1,24 +1,13 @@
 "use server";
 
-import { createAdminClient, createClient } from "@/lib/db/server";
+import { createAdminClient } from "@/lib/db/server";
+import { getSavedRoomIdsForUser } from "./list-queries";
 import { getUser } from "@/lib/auth/session";
 
 export const getSavedRoomIds = async (): Promise<string[]> => {
     const userId = await getUser();
     if (!userId) return [];
-
-    const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("ei_typebomb_saved_rooms")
-        .select("room_id")
-        .eq("user_id", userId);
-
-    if (error) {
-        console.error("Failed to load saved rooms:", error);
-        return [];
-    }
-
-    return data.map((row) => row.room_id);
+    return (await getSavedRoomIdsForUser(userId)) ?? [];
 };
 
 export const toggleSavedRoom = async (

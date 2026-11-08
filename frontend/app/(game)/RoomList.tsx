@@ -17,6 +17,7 @@ import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import { View } from "@/type";
 import RoomNavigation from "./RoomNavigation";
+import { selectRoomsForView } from "@/lib/room/list-view";
 
 type CurrentUser = {
     id: string;
@@ -80,41 +81,22 @@ export default function RoomList({
               },
           ];
 
-    const rooms = useMemo(() => {
-        const roomsById = new Map<string, Room>();
-
-        for (const room of publicRooms) {
-            roomsById.set(room.id, room);
-        }
-
-        for (const room of myRooms) {
-            roomsById.set(room.id, {
-                ...room,
-                userId: room.userId ?? currentUser?.id,
-            });
-        }
-
-        return Array.from(roomsById.values());
-    }, [publicRooms, myRooms, currentUser?.id]);
-
     const myRoomIds = useMemo(
         () => new Set(myRooms.map((room) => room.id)),
         [myRooms],
     );
 
-    const roomsInView = useMemo(() => {
-        if (view === "mine") {
-            return [...myRooms].sort(
-                (a, b) =>
-                    new Date(b.updatedAt ?? 0).getTime() -
-                    new Date(a.updatedAt ?? 0).getTime(),
-            );
-        }
-        if (view === "saved") {
-            return rooms.filter((room) => savedRoomIds.includes(room.id));
-        }
-        return rooms.filter((room) => room.visibility === "public");
-    }, [view, myRooms, rooms, savedRoomIds]);
+    const roomsInView = useMemo(
+        () =>
+            selectRoomsForView({
+                view,
+                publicRooms,
+                myRooms,
+                savedRoomIds,
+                currentUserId: currentUser?.id ?? null,
+            }),
+        [view, publicRooms, myRooms, savedRoomIds, currentUser?.id],
+    );
 
     const filteredRooms = useMemo(() => {
         const query = keyword.trim().toLowerCase();
