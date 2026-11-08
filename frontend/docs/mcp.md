@@ -51,6 +51,11 @@ approved client. The UI displays the self-reported client name/site, exact
 redirect target, ETB resource and logged-in account ID. Names are not verified
 brand identities. Signed, secure, HttpOnly interaction cookies, same-origin form
 POST validation and user/interaction-bound CSRF tokens protect approval.
+Consent and connection-management pages use `Referrer-Policy: strict-origin`:
+full interaction URLs are not sent as referrers, and normal same-origin HTTPS
+form POSTs retain their Origin header. Do not replace it with `no-referrer`,
+which makes browser form submissions send `Origin: null` and fail the strict
+Origin check. Null, missing and foreign origins remain rejected.
 The user is verified through the existing rcAccount web JWT and Auth `getUser`
 endpoint; an anonymous Supabase user cannot approve. Website session refresh
 continues to run through the existing Next.js proxy.
