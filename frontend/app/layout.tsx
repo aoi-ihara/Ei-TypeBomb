@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getEtbBaseUrl } from "@/lib/config/base-url";
 import { Suspense } from "react";
 import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
@@ -23,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://ei-typebomb.com"),
+    metadataBase: new URL(getEtbBaseUrl()),
     title: "Ei-TypeBomb",
     description:
         "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
         title: "Ei-TypeBomb",
         description:
             "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
-        url: "https://ei-typebomb.com",
+        url: getEtbBaseUrl(),
         siteName: "Ei-TypeBomb",
         images: [
             {
