@@ -2,7 +2,9 @@ import {
   Provider,
   errors,
   interactionPolicy,
+  type ClientMetadata,
   type Configuration,
+  type KoaContextWithOIDC,
 } from "oidc-provider";
 import {
   getAuthorizationServerConfig,
@@ -102,7 +104,7 @@ export function createMcpProvider() {
       new interactionPolicy.Check(
         "explicit_mcp_consent",
         "MCP access requires explicit consent",
-        (ctx) => !ctx.oidc.result?.consent,
+        (ctx: KoaContextWithOIDC) => !ctx.oidc.result?.consent,
       ),
     );
   const configuration: Configuration = {
@@ -128,7 +130,12 @@ export function createMcpProvider() {
     },
     extraClientMetadata: {
       properties: ["etb_policy"],
-      validator(_ctx, _key, _value, metadata) {
+      validator(
+        _ctx: KoaContextWithOIDC | undefined,
+        _key: string,
+        _value: unknown,
+        metadata: ClientMetadata,
+      ) {
         validateClientMetadata(metadata);
       },
     },
