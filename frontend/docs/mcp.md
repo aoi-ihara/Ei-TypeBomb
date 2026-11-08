@@ -46,7 +46,12 @@ Before connecting an MCP client, verify the following in that project's
 Authentication settings:
 
 1. OAuth 2.1 Server is enabled.
-2. Dynamic Client Registration is enabled for clients that register themselves.
+2. **Dynamic Client Registration (DCR)** is enabled for clients that register
+   themselves. Verify that the authorization server advertises a
+   `registration_endpoint` in discovery metadata. If it does not, ChatGPT may
+   ask the user for a Client ID.
+   Supabase Auth is the authorization server, so adding metadata to the ETB MCP
+   resource endpoint cannot enable DCR or CIMD on its behalf.
    Alternatively, register a compatible OAuth client manually.
 3. The project's JWT signing keys use ES256 or RS256 and the public JWKS endpoint
    is reachable.
@@ -86,6 +91,44 @@ registered clients and requiring user approval. Users should revoke grants
 they no longer recognize from the Supabase account's authorized-applications
 management.
 
+### Client ID-free connection and diagnostics
+
+For ChatGPT connections with no manually entered Client ID, the shared Supabase
+Auth authorization server must advertise an automatic registration mechanism.
+Its currently documented integration path is **Dynamic Client Registration**.
+Client ID Metadata Documents (CIMD) can also remove manual entry, but support
+must be implemented and advertised by the **authorization server**, not merely
+by the Ei-TypeBomb MCP resource server. Do not publish
+`client_id_metadata_document_supported: true` unless the authorization server
+actually validates client metadata documents and redirect URIs.
+
+To check an environment without registering a client or sending credentials:
+
+```bash
+cd frontend
+npm run check:mcp-oauth -- https://beta.ei-typebomb.com/api/mcp
+npm run check:mcp-oauth -- https://ei-typebomb.com/api/mcp
+npm run test:mcp-oauth
+```
+
+If the diagnostic prints **DCR: not advertised** and **CIMD: not advertised**:
+
+1. Open the **shared rcAccount** Supabase project dashboard and go to
+   **Authentication → OAuth Server**.
+2. Enable **Dynamic Client Registration**. This is a shared-project setting;
+   review its impact on other apps and the consent experience before enabling.
+3. Re-run the diagnostic and confirm **DCR: advertised**.
+4. Reconnect the MCP app in ChatGPT without manually entering a Client ID.
+   Confirm the consent screen, authorization callback, token issuance, and
+   `tools/list` all work. If discovery succeeds but registration returns 401,
+   403 or 404, investigate Supabase registration policy, redirects and logs.
+
+The diagnostic only checks discovery, not whether an actual OAuth client can
+register or whether ChatGPT successfully completes OAuth. Keep PKCE, per-user
+consent, redirect-URI validation, token audience verification, and room
+ownership checks intact. Do **not** use an anonymous/public MCP access token
+as a shortcut.
+
 ### Client setup
 
 The MCP client only needs the remote endpoint URL:
@@ -99,8 +142,29 @@ client registration is enabled), open the sign-in/consent flow, and obtain or
 refresh its own tokens. Do not copy an Ei-TypeBomb website session token into the MCP
 client.
 
-No new Vercel environment variables are required. The issuer and resource URL
-are defined in server-side code.
+Set `ETB_BASE_URL` for each Vercel environment (`https://ei-typebomb.com` for Production, `https://beta.ei-typebomb.com` for Preview). The MCP resource, metadata and room URLs are derived from it. The issuer remains the shared Supabase OAuth server.
+
+### Temporary Preview audience compatibility
+
+The shared Supabase OAuth server currently uses a Custom Access Token Hook that
+issues `aud: "https://ei-typebomb.com/api/mcp"` for the registered MCP
+client. Connecting ChatGPT to `https://beta.ei-typebomb.com/api/mcp` therefore
+previously produced HTTP 401 (`failedClaim: "aud"`) during tool discovery.
+
+Until OAuth resource indicators are bound to tokens by the authorization
+server, **only the beta MCP endpoint** also accepts the production MCP
+audience. Production still accepts only its own audience. Tokens issued
+for the normal website (`aud: "authenticated"`) are not accepted.
+This is limited to the two Ei-TypeBomb MCP resources and does **not**
+weaken user ownership checks on room operations.
+
+This is a compatibility workaround, **not full RFC 8707 resource binding**:
+a valid production MCP token can also be used on beta. Remove this bridge
+when each environment uses separately issued resource-bound tokens.
+Do not expand the audience list to `authenticated` or add unrelated OAuth
+resource servers. Reconnect the ChatGPT app after deploying this change,
+then verify `tools/list` returns `create_room`, `get_room`, and
+`update_room`; confirm that normal login tokens still fail with 401.
 
 ## Tools
 

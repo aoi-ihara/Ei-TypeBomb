@@ -2,6 +2,8 @@
  * RC Hub is the OIDC provider. Keep OAuth credentials on the server.
  * The explicit feature flag permits deploying this safely before DNS cutover.
  */
+import { getEtbUrl } from "@/lib/config/base-url";
+
 export const isOAuthEnabled = () =>
     process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED === "true";
 
@@ -13,8 +15,8 @@ export const OAUTH_JWKS_URL = OAUTH_ISSUER + "/.well-known/jwks.json";
 export function getOAuthConfig() {
     const clientId = process.env.RC_HUB_OAUTH_CLIENT_ID;
     const clientSecret = process.env.RC_HUB_OAUTH_CLIENT_SECRET;
-    const redirectUri = process.env.ETB_OAUTH_REDIRECT_URI;
-    if (!clientId || !clientSecret || !redirectUri) {
+    const redirectUri = getEtbUrl("/auth/callback");
+    if (!clientId || !clientSecret) {
         throw new Error("ETB OAuth configuration is incomplete");
     }
     const url = new URL(redirectUri);

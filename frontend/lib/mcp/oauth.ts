@@ -1,13 +1,33 @@
+import { getEtbUrl } from "@/lib/config/base-url";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import {
     OAUTH_ISSUER,
     OAUTH_JWKS_URL,
 } from "@/lib/auth/oauth-config";
 
-export const MCP_RESOURCE = "https://ei-typebomb.com/api/mcp";
+export const getMcpResource = () => getEtbUrl("/api/mcp");
+
+/**
+ * Supabase OAuth currently issues the production MCP audience for the
+ * registered MCP client, even when it connects to the Preview endpoint.
+ *
+ * Allow that audience only on the dedicated beta origin. Production continues
+ * to accept its own resource audience exclusively; ordinary Supabase website
+ * tokens ("authenticated") remain invalid for both environments.
+ *
+ * TODO: Remove this compatibility exception once Supabase OAuth can issue a
+ * resource-bound token for each MCP endpoint independently.
+ */
+export function getAcceptedMcpAudiences(): string[] {
+    const resource = getMcpResource();
+    if (new URL(resource).origin === "https://beta.ei-typebomb.com") {
+        return [resource, "https://ei-typebomb.com/api/mcp"];
+    }
+    return [resource];
+}
 export const MCP_AUTHORIZATION_SERVER = OAUTH_ISSUER;
-export const MCP_PROTECTED_RESOURCE_METADATA_URL =
-    "https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp";
+export const getMcpMetadataUrl = () =>
+    getEtbUrl("/.well-known/oauth-protected-resource/api/mcp");
 
 const jwks = createRemoteJWKSet(new URL(OAUTH_JWKS_URL));
 
@@ -46,7 +66,7 @@ export async function authenticateMcpRequest(
     try {
         const { payload } = await jwtVerify(match[1], jwks, {
             issuer: OAUTH_ISSUER,
-            audience: MCP_RESOURCE,
+            audience: getAcceptedMcpAudiences(),
             algorithms: ["ES256", "RS256"],
         });
 
@@ -105,7 +125,7 @@ export function unauthorizedMcpResponse(request: Request): Response {
             "Access-Control-Expose-Headers": "WWW-Authenticate",
             "Cache-Control": "no-store",
             "WWW-Authenticate":
-                `Bearer resource_metadata="${MCP_PROTECTED_RESOURCE_METADATA_URL}"${invalidToken}`,
+                `Bearer resource_metadata="${getMcpMetadataUrl()}"${invalidToken}`,
         },
     });
 }

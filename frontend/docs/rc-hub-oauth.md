@@ -20,7 +20,7 @@ place until the feature flag is explicitly enabled.
     NEXT_PUBLIC_ETB_OAUTH_ENABLED=true
     RC_HUB_OAUTH_CLIENT_ID=<OAuth app client ID>
     RC_HUB_OAUTH_CLIENT_SECRET=<OAuth app client secret>
-    ETB_OAUTH_REDIRECT_URI=https://ei-typebomb.com/auth/callback
+    ETB_BASE_URL=https://ei-typebomb.com
     NEXT_PUBLIC_SUPABASE_URL=https://gkiniypvnwqhmgviwxws.supabase.co
     ```
 
@@ -30,7 +30,7 @@ place until the feature flag is explicitly enabled.
 
 4. Configure `ei-typebomb.com` for the same ETB Next.js deployment and verify
    HTTPS before enabling the flag. The exact callback URL must match the
-   OAuth App registration.
+   OAuth App registration. Set `ETB_BASE_URL=https://beta.ei-typebomb.com` for Preview and register `https://beta.ei-typebomb.com/auth/callback` in the OAuth App as well.
 5. Test login and logout on the new domain. Preserve the old subdomain as
    a redirect after migration; do not delete old user records.
 
