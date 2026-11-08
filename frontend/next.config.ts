@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { resolve } from "node:path";
 
 const nextConfig: NextConfig = {
+    serverExternalPackages: ["oidc-provider", "pg"],
     // Runtime-neutral backend/shared modules are also bundled by the browser.
     turbopack: { root: resolve(__dirname, "..") },
     async rewrites() {
