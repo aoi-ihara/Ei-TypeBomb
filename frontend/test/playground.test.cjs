@@ -557,7 +557,8 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     pending.current.set("a", newer);
     await failing();
     assert.equal(pending.current.get("a"), newer);
-    assert.equal(savingError, true);
+    assert.equal(savingError, false);
+    // A failed sync preserves pending data for the next retry and reports telemetry.
     assert.equal(inFlight.current, null);
 });
 
@@ -644,6 +645,7 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
             sessionTurnNumberRef: ref(0),
             memoryByItemRef: ref({}),
             exposureGapAtStartRef: ref(null),
+            predictedRetrievabilityAtPromptRef: ref(null),
             expectedTypingAtStartRef: ref(0),
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),

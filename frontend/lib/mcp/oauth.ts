@@ -1,13 +1,14 @@
+import { getEtbUrl } from "@/lib/config/base-url";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import {
     OAUTH_ISSUER,
     OAUTH_JWKS_URL,
 } from "@/lib/auth/oauth-config";
 
-export const MCP_RESOURCE = "https://ei-typebomb.com/api/mcp";
+export const getMcpResource = () => getEtbUrl("/api/mcp");
 export const MCP_AUTHORIZATION_SERVER = OAUTH_ISSUER;
-export const MCP_PROTECTED_RESOURCE_METADATA_URL =
-    "https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp";
+export const getMcpMetadataUrl = () =>
+    getEtbUrl("/.well-known/oauth-protected-resource/api/mcp");
 
 const jwks = createRemoteJWKSet(new URL(OAUTH_JWKS_URL));
 
@@ -46,7 +47,7 @@ export async function authenticateMcpRequest(
     try {
         const { payload } = await jwtVerify(match[1], jwks, {
             issuer: OAUTH_ISSUER,
-            audience: MCP_RESOURCE,
+            audience: getMcpResource(),
             algorithms: ["ES256", "RS256"],
         });
 
@@ -105,7 +106,7 @@ export function unauthorizedMcpResponse(request: Request): Response {
             "Access-Control-Expose-Headers": "WWW-Authenticate",
             "Cache-Control": "no-store",
             "WWW-Authenticate":
-                `Bearer resource_metadata="${MCP_PROTECTED_RESOURCE_METADATA_URL}"${invalidToken}`,
+                `Bearer resource_metadata="${getMcpMetadataUrl()}"${invalidToken}`,
         },
     });
 }

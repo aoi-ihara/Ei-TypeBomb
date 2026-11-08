@@ -99,8 +99,7 @@ client registration is enabled), open the sign-in/consent flow, and obtain or
 refresh its own tokens. Do not copy an Ei-TypeBomb website session token into the MCP
 client.
 
-No new Vercel environment variables are required. The issuer and resource URL
-are defined in server-side code.
+Set `ETB_BASE_URL` for each Vercel environment (`https://ei-typebomb.com` for Production, `https://beta.ei-typebomb.com` for Preview). The MCP resource, metadata and room URLs are derived from it. The issuer remains the shared Supabase OAuth server.
 
 ## Tools
 

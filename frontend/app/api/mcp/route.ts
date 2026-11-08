@@ -1,3 +1,4 @@
+import { getEtbUrl } from "@/lib/config/base-url";
 import {
     authenticateMcpRequest,
     unauthorizedMcpResponse,
@@ -277,7 +278,7 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
         }
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
-            url: `https://ei-typebomb.com/${data.link}`,
+            url: getEtbUrl(`/${data.link}`),
         });
     }
 
