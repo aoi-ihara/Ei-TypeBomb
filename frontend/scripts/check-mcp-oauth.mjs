@@ -53,7 +53,16 @@ export async function checkMcpOAuth(endpoint, fetchImpl = fetch) {
     const cimd = metadata.client_id_metadata_document_supported === true;
     const dcr = typeof metadata.registration_endpoint === "string" &&
         metadata.registration_endpoint.length > 0;
-    return { endpoint: target.href, issuer, cimd, dcr, registrationEndpoint: dcr ? metadata.registration_endpoint : null };
+    // Discovery proves registration availability, not that issued tokens are resource-bound.
+    // Supabase Custom Access Token Hook input does not document a resource field.
+    return {
+        endpoint: target.href,
+        issuer,
+        cimd,
+        dcr,
+        registrationEndpoint: dcr ? metadata.registration_endpoint : null,
+        resourceAudienceVerified: false,
+    };
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
@@ -66,7 +75,8 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
             console.error("OAuth client auto-registration unavailable. Enable Dynamic Client Registration in the shared Supabase Auth OAuth Server settings; do not add a fake discovery endpoint.");
             process.exitCode = 1;
         } else {
-            console.log("An automatic client-registration mechanism is advertised. Complete a fresh MCP client connection to test end-to-end OAuth.");
+            console.log("An automatic client-registration mechanism is advertised.");
+            console.warn("WARNING: DCR/CIMD does not prove MCP resource-bound JWT issuance. Check the access token aud claim against the MCP URL and verify a real tools/list call before declaring OAuth ready.");
         }
     }).catch((error) => {
         console.error(`MCP OAuth discovery failed: ${error.message}`);

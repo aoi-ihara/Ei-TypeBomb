@@ -91,6 +91,37 @@ registered clients and requiring user approval. Users should revoke grants
 they no longer recognize from the Supabase account's authorized-applications
 management.
 
+### Resource-bound token issuance: current blocker (2026-11-08)
+
+**Do not remove the fixed Client ID condition from the shared rcAccount Custom
+Access Token Hook without replacing it with a verified resource-aware condition.**
+Production logs show `ERR_JWT_CLAIM_VALIDATION_FAILED` for `aud` when a newly
+registered ChatGPT OAuth client calls `/api/mcp`. The existing hook rewrites
+`aud` only for one hard-coded client ID. This is not compatible with DCR.
+
+Supabase stores the requested RFC 8707 `resource` on
+`auth.oauth_authorizations.resource`, but its [documented Custom Access Token
+Hook input](https://supabase.com/docs/guides/auth/auth-hooks/custom-access-token-hook)
+includes `user_id`, `claims`, and `authentication_method`, **not the resource or
+authorization ID**. Consequently, neither the current hook nor an arbitrary
+Client ID allowlist can reliably bind a newly issued token to the resource
+requested in that specific authorization flow. Looking up any earlier approved
+authorization by user and client is not equivalent: a later token for another
+resource could accidentally become an MCP token.
+
+A complete fix requires a supported, server-verified resource value at token
+issuance, or a dedicated OAuth authorization server/token issuer that binds
+MCP tokens to the ETB resource. Confirm the implementation against actual
+issued tokens, including authorization-code exchange and refresh. Until then:
+
+- Keep JWT signature, issuer, expiry, authenticated role, client ID, and exact
+  resource audience validation in `frontend/lib/mcp/oauth.ts`.
+- Do not change all rcAccount OAuth tokens to the MCP audience; rcAccount is
+  shared with website login and other clients.
+- DCR can be enabled separately in the Supabase OAuth Server settings, but
+  **DCR alone does not fix JWT audience mismatches**.
+- Do not treat `DCR: advertised` as evidence that end-to-end MCP OAuth works.
+
 ### Client ID-free connection and diagnostics
 
 For ChatGPT connections with no manually entered Client ID, the shared Supabase
