@@ -46,13 +46,18 @@ function isRecord(value: unknown): value is JsonRecord {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function jsonRpc(id: JsonRpcId, result: unknown, protocolVersion = PROTOCOL_VERSION) {
+function jsonRpc(
+    id: JsonRpcId,
+    result: unknown,
+    protocolVersion = PROTOCOL_VERSION,
+) {
     return NextResponse.json(
         { jsonrpc: "2.0", id, result },
         {
             headers: {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Expose-Headers": "Mcp-Protocol-Version, WWW-Authenticate",
+                "Access-Control-Expose-Headers":
+                    "Mcp-Protocol-Version, WWW-Authenticate",
                 "Cache-Control": "no-store",
                 "Mcp-Protocol-Version": protocolVersion,
             },
@@ -137,7 +142,8 @@ const tools = [
                 view: {
                     type: "string",
                     enum: ["recommended", "mine", "saved"],
-                    description: "recommended=おすすめ、mine=自分のルーム、saved=保存済み。省略時はmine。",
+                    description:
+                        "recommended=おすすめ、mine=自分のルーム、saved=保存済み。省略時はmine。",
                 },
                 limit: {
                     type: "integer",
@@ -202,11 +208,44 @@ function validateRoomPatch(input: JsonRecord): {
 } {
     const patch: JsonRecord = {};
     const checks: Array<[string, (value: unknown) => string | null, string]> = [
-        ["title", (v) => typeof v === "string" ? validateTitle(v) : "ルーム名が不正です。", "title"],
-        ["explanation", (v) => typeof v === "string" ? validateExplanation(v) : "説明が不正です。", "explanation"],
-        ["max_players", (v) => typeof v === "number" && Number.isInteger(v) ? validateMaxPlayers(v) : "最大プレイヤー数が不正です。", "max_players"],
-        ["game_duration", (v) => typeof v === "number" ? validateGameDuration(v) : "ゲーム時間が不正です。", "game_duration"],
-        ["link", (v) => typeof v === "string" ? validateLink(v) : "リンクが不正です。", "link"],
+        [
+            "title",
+            (v) =>
+                typeof v === "string"
+                    ? validateTitle(v)
+                    : "ルーム名が不正です。",
+            "title",
+        ],
+        [
+            "explanation",
+            (v) =>
+                typeof v === "string"
+                    ? validateExplanation(v)
+                    : "説明が不正です。",
+            "explanation",
+        ],
+        [
+            "max_players",
+            (v) =>
+                typeof v === "number" && Number.isInteger(v)
+                    ? validateMaxPlayers(v)
+                    : "最大プレイヤー数が不正です。",
+            "max_players",
+        ],
+        [
+            "game_duration",
+            (v) =>
+                typeof v === "number"
+                    ? validateGameDuration(v)
+                    : "ゲーム時間が不正です。",
+            "game_duration",
+        ],
+        [
+            "link",
+            (v) =>
+                typeof v === "string" ? validateLink(v) : "リンクが不正です。",
+            "link",
+        ],
     ];
 
     for (const [key, validate, column] of checks) {
@@ -225,13 +264,20 @@ function validateRoomPatch(input: JsonRecord): {
             value > 4 ||
             (typeof input.max_players === "number" && value > input.max_players)
         ) {
-            return { patch, error: "爆弾数は1〜4個、かつ最大プレイヤー数以下にしてください。" };
+            return {
+                patch,
+                error: "爆弾数は1〜4個、かつ最大プレイヤー数以下にしてください。",
+            };
         }
         patch.bomb_count = value;
     }
 
     if (input.visibility !== undefined) {
-        if (!["public", "unlisted", "private"].includes(String(input.visibility))) {
+        if (
+            !["public", "unlisted", "private"].includes(
+                String(input.visibility),
+            )
+        ) {
             return { patch, error: "公開設定が正しくありません。" };
         }
         patch.visibility = input.visibility;
@@ -242,7 +288,8 @@ function validateRoomPatch(input: JsonRecord): {
     }
 
     if (input.items !== undefined) {
-        if (!Array.isArray(input.items)) return { patch, error: "問題一覧が不正です。" };
+        if (!Array.isArray(input.items))
+            return { patch, error: "問題一覧が不正です。" };
         const error = validateItems(input.items as Room["items"]);
         if (error) return { patch, error };
         patch.items = input.items;
@@ -273,18 +320,33 @@ function presentRoom(room: JsonRecord): JsonRecord {
     return { ...safeRoom, has_password: Boolean(password) };
 }
 
-async function callTool(name: string, args: JsonRecord, userId: string): Promise<ToolResult> {
+async function callTool(
+    name: string,
+    args: JsonRecord,
+    userId: string,
+): Promise<ToolResult> {
     if (name === "list_rooms") {
         const view = args.view ?? "mine";
         if (view !== "recommended" && view !== "mine" && view !== "saved") {
-            return toolError("viewはrecommended、mine、savedのいずれかを指定してください。");
+            return toolError(
+                "viewはrecommended、mine、savedのいずれかを指定してください。",
+            );
         }
         const limit = args.limit ?? 50;
         const offset = args.offset ?? 0;
-        if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        if (
+            typeof limit !== "number" ||
+            !Number.isInteger(limit) ||
+            limit < 1 ||
+            limit > 100
+        ) {
             return toolError("limitは1〜100の整数を指定してください。");
         }
-        if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0) {
+        if (
+            typeof offset !== "number" ||
+            !Number.isSafeInteger(offset) ||
+            offset < 0
+        ) {
             return toolError("offsetは0以上の整数を指定してください。");
         }
 
@@ -304,7 +366,8 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
             total: selected.length,
             offset,
             limit,
-            next_offset: offset + limit < selected.length ? offset + limit : null,
+            next_offset:
+                offset + limit < selected.length ? offset + limit : null,
             rooms: selected.slice(offset, offset + limit).map((room) => ({
                 id: room.id,
                 link: room.link ?? room.id,
@@ -339,7 +402,10 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
             visibility: "unlisted",
             ...patch,
         };
-        if (insert.visibility === "public" || insert.visibility === "unlisted") {
+        if (
+            insert.visibility === "public" ||
+            insert.visibility === "unlisted"
+        ) {
             insert.password = null;
         } else if (typeof insert.password === "string") {
             insert.password = await hashPassword(insert.password);
@@ -353,7 +419,9 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
 
         if (insertError || !data) {
             console.error("MCP room creation failed", insertError?.code);
-            return toolError("ルームを作成できませんでした。入力内容と設定を確認してください。");
+            return toolError(
+                "ルームを作成できませんでした。入力内容と設定を確認してください。",
+            );
         }
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
@@ -368,7 +436,10 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
         }
         // The id column is UUID-typed, while custom room links are arbitrary strings.
         // Avoid sending non-UUID links to the id filter (which causes a Postgres cast error).
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+        const isUuid =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                identifier,
+            );
         let room: JsonRecord | null = null;
 
         if (isUuid) {
@@ -380,12 +451,13 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
                 .maybeSingle();
             if (error) {
                 console.error("MCP room lookup by id failed", error.code);
-                return toolError("ルームが見つからないか、アクセス権限がありません。");
+                return toolError(
+                    "ルームが見つからないか、アクセス権限がありません。",
+                );
             }
             if (data) room = data as unknown as JsonRecord;
         }
 
-        // Also try link for UUID-shaped identifiers because default room links may be UUIDs.
         if (!room) {
             const { data, error } = await supabase
                 .from("ei_typebomb_rooms")
@@ -395,12 +467,17 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
                 .maybeSingle();
             if (error) {
                 console.error("MCP room lookup by link failed", error.code);
-                return toolError("ルームが見つからないか、アクセス権限がありません。");
+                return toolError(
+                    "ルームが見つからないか、アクセス権限がありません。",
+                );
             }
             if (data) room = data as unknown as JsonRecord;
         }
 
-        if (!room) return toolError("ルームが見つからないか、アクセス権限がありません。");
+        if (!room)
+            return toolError(
+                "ルームが見つからないか、アクセス権限がありません。",
+            );
         return toolResult({ room: presentRoom(room) });
     }
 
@@ -412,7 +489,8 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
         const { room_id: _roomId, ...input } = args;
         const { patch, error } = validateRoomPatch(input);
         if (error) return toolError(error);
-        if (Object.keys(patch).length === 0) return toolError("変更する項目を1つ以上指定してください。");
+        if (Object.keys(patch).length === 0)
+            return toolError("変更する項目を1つ以上指定してください。");
 
         if (typeof patch.password === "string") {
             patch.password = await hashPassword(patch.password);
@@ -443,12 +521,18 @@ export async function POST(request: NextRequest) {
 
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
-        return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
+        return NextResponse.json(
+            { error: "Content-Type must be application/json" },
+            { status: 415 },
+        );
     }
 
     const rawBody = await request.text();
     if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-        return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+        return NextResponse.json(
+            { error: "Request body too large" },
+            { status: 413 },
+        );
     }
 
     let body: unknown;
@@ -458,15 +542,25 @@ export async function POST(request: NextRequest) {
         return jsonRpcError(null, -32700, "Parse error", 400);
     }
 
-    if (!isRecord(body) || body.jsonrpc !== "2.0" || typeof body.method !== "string") {
+    if (
+        !isRecord(body) ||
+        body.jsonrpc !== "2.0" ||
+        typeof body.method !== "string"
+    ) {
         return jsonRpcError(null, -32600, "Invalid Request", 400);
     }
 
-    const id = typeof body.id === "string" || typeof body.id === "number" ? body.id : null;
+    const id =
+        typeof body.id === "string" || typeof body.id === "number"
+            ? body.id
+            : null;
     const isNotification = !("id" in body);
 
     if (isNotification) {
-        return new NextResponse(null, { status: 202, headers: { "Cache-Control": "no-store" } });
+        return new NextResponse(null, {
+            status: 202,
+            headers: { "Cache-Control": "no-store" },
+        });
     }
     if (id === null) {
         return jsonRpcError(null, -32600, "Invalid Request", 400);
@@ -476,7 +570,8 @@ export async function POST(request: NextRequest) {
         const params = isRecord(body.params) ? body.params : {};
         const requestedVersion = params.protocolVersion;
         const protocolVersion =
-            typeof requestedVersion === "string" && SUPPORTED_PROTOCOL_VERSIONS.has(requestedVersion)
+            typeof requestedVersion === "string" &&
+            SUPPORTED_PROTOCOL_VERSIONS.has(requestedVersion)
                 ? requestedVersion
                 : PROTOCOL_VERSION;
         return jsonRpc(
@@ -486,7 +581,7 @@ export async function POST(request: NextRequest) {
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: { name: "ei-typebomb", version: "1.0.0" },
                 instructions:
-                    "ETBのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。",
+                    "Ei-TypeBombのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。",
             },
             protocolVersion,
         );

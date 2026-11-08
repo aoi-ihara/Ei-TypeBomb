@@ -14,7 +14,6 @@ function logMcpAuthFailure(
     reason: string,
     details?: Record<string, string | boolean>,
 ): void {
-    // Never include the Authorization header, JWT, or decoded claim values.
     console.warn("[MCP Auth] Authentication failed", {
         reason,
         ...details,
@@ -75,8 +74,7 @@ export function unauthorizedMcpResponse(request: Request): Response {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Expose-Headers": "WWW-Authenticate",
             "Cache-Control": "no-store",
-            "WWW-Authenticate":
-                `Bearer resource_metadata="${getMcpMetadataUrl()}"${invalidToken}`,
+            "WWW-Authenticate": `Bearer resource_metadata="${getMcpMetadataUrl()}"${invalidToken}`,
         },
     });
 }

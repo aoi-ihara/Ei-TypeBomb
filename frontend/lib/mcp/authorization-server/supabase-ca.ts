@@ -1,9 +1,3 @@
-/** Public Supabase Root 2021 CA, downloaded from the authenticated rcAccount
- * dashboard's Database > Settings > SSL configuration > Download certificate:
- * https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt
- * SHA-256: 807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA
- * Public trust anchor only; no private key or project credential.
- */
 export const SUPABASE_DATABASE_CA = `-----BEGIN CERTIFICATE-----
 MIIDxDCCAqygAwIBAgIUbLxMod62P2ktCiAkxnKJwtE9VPYwDQYJKoZIhvcNAQEL
 BQAwazELMAkGA1UEBhMCVVMxEDAOBgNVBAgMB0RlbHdhcmUxEzARBgNVBAcMCk5l
