@@ -83,6 +83,25 @@ library then authenticates the requesting client and revokes the grant through
 its native policy. Opaque refresh tokens also use that library revocation logic. Unknown
 or invalid tokens receive RFC 7009's HTTP 200; storage failures return 503.
 
+### Rollout hold: inherited dependency advisories (2026-11-08)
+
+Do not enable production MCP OAuth until existing dependency advisories have
+been triaged/patched and the resulting dependency set has been re-tested.
+`npm audit` currently reports 32 findings (3 critical, 15 high, 14 moderate).
+The critical package versions are unchanged from the base branch:
+`next@16.3.0`, `proxy-addr@2.0.7`, and `dompurify@3.4.13`. None of the newly
+added OAuth packages is listed in that audit. This is a package-level audit,
+not a claim that every advisory is exploitable in the deployed ETB application.
+
+Next's maintainer advisories include
+[GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw) and
+[GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr), with
+Next 16.4.1 identified as patched for those issues. A framework/dependency
+upgrade and application-wide regression review remain separate rollout work.
+This PR keeps the new authorization server disabled unless explicitly enabled;
+a successful local OAuth test suite must not be treated as clearance to enable
+it on a dependency set with unresolved critical advisories.
+
 ### Persistence and deployment setup
 
 Use Node.js **22.x** on Vercel. Pages API routes provide the real Node HTTP
