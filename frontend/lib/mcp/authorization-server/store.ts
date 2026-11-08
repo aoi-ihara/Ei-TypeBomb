@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { getAuthorizationServerConfig } from "./config";
+import { getMcpDatabasePoolConfig } from "./database-config";
 
 type Payload = Record<string, unknown>;
 type Stored = { payload: string; consumed: number | null };
@@ -17,20 +18,7 @@ const digest = (s: string) => createHash("sha256").update(s).digest("hex");
 function database() {
   if (!pool) {
     const { databaseUrl } = getAuthorizationServerConfig();
-    // TLS configuration belongs in the URL (sslmode=verify-full). Never
-    // disable certificate verification for a hosted database.
-    const url = new URL(databaseUrl);
-    const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-    if (!local && url.searchParams.get("sslmode") !== "verify-full") {
-      throw new Error("MCP database requires sslmode=verify-full");
-    }
-    pool = new Pool({
-      connectionString: databaseUrl,
-      max: 2,
-      connectionTimeoutMillis: 5000,
-      idleTimeoutMillis: 10000,
-      query_timeout: 10000,
-    });
+    pool = new Pool(getMcpDatabasePoolConfig(databaseUrl));
   }
   return pool;
 }

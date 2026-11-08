@@ -161,7 +161,12 @@ create policy mcp_server on etb_mcp_oauth.rate_limits to etb_mcp_login
 ```
 
 Never expose this schema through the Supabase Data API. Remote connections must
-verify TLS certificates. Both direct connections and Supabase transaction
+verify TLS certificates. Supabase cloud pooler/direct hosts automatically use the
+public Supabase Root 2021 CA bundled from the authenticated dashboard download.
+`sslmode=verify-full` remains required; Node verifies both the chain and hostname.
+No extra certificate environment variable or Vercel filesystem path is needed.
+Other providers keep the system CA store; an explicit `sslrootcert` path is also
+supported. Conflicting TLS options are rejected. Both direct connections and Supabase transaction
 pooling are supported: OAuth mutations run in a transaction with a per-issuer
 PostgreSQL advisory transaction lock. HTTP responses are released only after
 commit. This deliberately serializes authorization mutations per environment
@@ -260,3 +265,17 @@ An unauthenticated MCP request should return `401 Unauthorized` and a
 `WWW-Authenticate` header containing the metadata URL. A token issued for
 the normal Ei-TypeBomb website audience should also be rejected; only a token issued
 for the MCP resource is accepted.
+
+### Diagnosing OAuth registration failures
+
+If discovery returns 200 but `/api/oauth/register` or `/api/oauth/jwks` returns
+503, inspect Vercel runtime logs for the sanitized `code` field. For example:
+
+- `SELF_SIGNED_CERT_IN_CHAIN`: check the deployed Supabase root CA / TLS configuration.
+- `28P01`: verify the dedicated database role's password and pooler username.
+- `42501`: verify schema/table grants and RLS policies for the dedicated role.
+- `42P01` / `3F000`: apply the dedicated OAuth storage migration.
+
+Database URLs, passwords, OAuth parameters, exception messages and stacks are
+never included in these logs. A successful metadata response validates keys and
+configuration, but does not prove database connectivity or client registration.

@@ -10,6 +10,7 @@ import {
   MCP_SCOPE,
 } from "./config";
 import { OAuthStore } from "./store";
+import { logOAuthServerFailure } from "./diagnostics";
 
 /** Additional policy on top of the provider's exact redirect matching and
  * standards validation. No remote client metadata/JWKS fetching is permitted. */
@@ -211,9 +212,7 @@ export function createMcpProvider() {
   const provider = new Provider(config.issuer, configuration);
   provider.proxy = true;
   // Avoid logging OAuth parameters, tokens, or identity claims.
-  provider.on("server_error", () =>
-    console.error("[MCP OAuth] provider operation failed"),
-  );
+  provider.on("server_error", (_ctx, error) => logOAuthServerFailure(error));
   return provider;
 }
 
