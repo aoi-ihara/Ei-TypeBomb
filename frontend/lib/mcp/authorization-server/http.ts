@@ -10,7 +10,7 @@ import { OAuthStore, rateLimit, revokeGrant, withOAuthLock } from "./store";
 import { verifyMcpToken, InvalidMcpTokenError } from "./verify";
 import { errors as joseErrors } from "jose";
 import { errors as oauthErrors } from "oidc-provider";
-import { logOAuthServerFailure } from "./diagnostics";
+import { logOAuthProtocolFailure, logOAuthServerFailure } from "./diagnostics";
 import { oauthCookieNames } from "../../auth/oauth-config";
 import { verifyOAuthAccessToken } from "../../auth/oauth-tokens";
 
@@ -510,6 +510,14 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                 }
                 await getMcpProvider().callback()(req, res);
             });
+            // oidc-provider handles OAuth protocol errors without throwing.
+            // Capture only a fixed route label and the final status.
+            const route = url.pathname.split("/").at(-1);
+            if (
+                res.statusCode >= 400 &&
+                (route === "authorize" || route === "token" ||
+                    route === "register" || route === "revoke" || route === "jwks")
+            ) logOAuthProtocolFailure(route, res.statusCode);
         } catch (error) {
             const invalidRequest =
                 error instanceof oauthErrors.SessionNotFound ||
@@ -519,6 +527,12 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                 for (const name of ["Location", "Content-Length", "Set-Cookie"])
                     res.removeHeader(name);
                 res.statusCode = invalidRequest ? 400 : 503;
+                const route = new URL(req.url ?? "/", "https://invalid.example")
+                    .pathname.split("/").at(-1);
+                if (
+                    route === "authorize" || route === "token" ||
+                    route === "register" || route === "revoke" || route === "jwks"
+                ) logOAuthProtocolFailure(route, res.statusCode);
                 res.end(
                     invalidRequest
                         ? "Invalid or expired authorization request"
