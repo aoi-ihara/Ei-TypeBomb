@@ -10,6 +10,7 @@ import { OAuthStore, rateLimit, revokeGrant, withOAuthLock } from "./store";
 import { verifyMcpToken, InvalidMcpTokenError } from "./verify";
 import { errors as joseErrors } from "jose";
 import { errors as oauthErrors } from "oidc-provider";
+import { logOAuthServerFailure } from "./diagnostics";
 import { oauthCookieNames } from "../../auth/oauth-config";
 import { verifyOAuthAccessToken } from "../../auth/oauth-tokens";
 
@@ -413,8 +414,7 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
       const invalidRequest =
         error instanceof oauthErrors.SessionNotFound ||
         error instanceof oauthErrors.InvalidRequest;
-      if (!invalidRequest)
-        console.error("[MCP OAuth] request could not be completed");
+      if (!invalidRequest) logOAuthServerFailure(error);
       if (!res.headersSent) {
         for (const name of ["Location", "Content-Length", "Set-Cookie"])
           res.removeHeader(name);
