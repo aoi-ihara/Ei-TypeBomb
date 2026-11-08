@@ -286,22 +286,42 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
         if (typeof identifier !== "string" || !identifier.trim()) {
             return toolError("room_identifierを指定してください。");
         }
-        let query = await supabase
-            .from("ei_typebomb_rooms")
-            .select(ROOM_FIELDS)
-            .eq("user_id", userId)
-            .eq("id", identifier)
-            .maybeSingle();
-        if (!query.data && !query.error) {
-            query = await supabase
+        // The id column is UUID-typed, while custom room links are arbitrary strings.
+        // Avoid sending non-UUID links to the id filter (which causes a Postgres cast error).
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+        let room: JsonRecord | null = null;
+
+        if (isUuid) {
+            const { data, error } = await supabase
+                .from("ei_typebomb_rooms")
+                .select(ROOM_FIELDS)
+                .eq("user_id", userId)
+                .eq("id", identifier)
+                .maybeSingle();
+            if (error) {
+                console.error("MCP room lookup by id failed", error.code);
+                return toolError("ルームが見つからないか、アクセス権限がありません。");
+            }
+            if (data) room = data as unknown as JsonRecord;
+        }
+
+        // Also try link for UUID-shaped identifiers because default room links may be UUIDs.
+        if (!room) {
+            const { data, error } = await supabase
                 .from("ei_typebomb_rooms")
                 .select(ROOM_FIELDS)
                 .eq("user_id", userId)
                 .eq("link", identifier)
                 .maybeSingle();
+            if (error) {
+                console.error("MCP room lookup by link failed", error.code);
+                return toolError("ルームが見つからないか、アクセス権限がありません。");
+            }
+            if (data) room = data as unknown as JsonRecord;
         }
-        if (query.error || !query.data) return toolError("ルームが見つからないか、アクセス権限がありません。");
-        return toolResult({ room: presentRoom(query.data as unknown as JsonRecord) });
+
+        if (!room) return toolError("ルームが見つからないか、アクセス権限がありません。");
+        return toolResult({ room: presentRoom(room) });
     }
 
     if (name === "update_room") {
