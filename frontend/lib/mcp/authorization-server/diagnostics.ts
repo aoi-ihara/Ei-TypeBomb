@@ -36,3 +36,13 @@ export function logOAuthServerFailure(error: unknown): void {
         code: oauthFailureCode(error),
     });
 }
+
+/** Log only a fixed endpoint label and HTTP status, never client secrets,
+ * authorization codes, request parameters, tokens or error response bodies. */
+export function logOAuthProtocolFailure(
+    route: "authorize" | "token" | "register" | "revoke" | "jwks",
+    status: number,
+): void {
+    if (!Number.isInteger(status) || status < 400 || status > 599) return;
+    console.warn("[MCP OAuth] endpoint returned an error", { route, status });
+}
