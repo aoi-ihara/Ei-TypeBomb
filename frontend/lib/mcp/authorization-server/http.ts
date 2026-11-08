@@ -211,14 +211,36 @@ async function interaction(
       res.end();
       return;
     }
-    // Each approval creates its own grant, never silently reusing a grant
-    // from another rcAccount user or a previously approved application.
-    const grant = new provider.Grant({
-      accountId: user,
-      clientId: client.clientId,
-    });
-    grant.addResourceScope(getMcpResource(), MCP_SCOPE);
-    const grantId = await grant.save();
+    // Consent remains explicit on every authorization, but an existing
+    // unexpired grant for this verified user, registered client and resource
+    // is reused. withOAuthLock serializes concurrent approvals across instances.
+    // Never identify clients using their self-reported display name.
+    const stored = await new OAuthStore("Grant").forAccount(user);
+    let grantId: string | undefined;
+    for (const entry of stored.sort(
+      (a, b) => Number(b.iat ?? 0) - Number(a.iat ?? 0),
+    )) {
+      if (entry.accountId !== user || entry.clientId !== client.clientId ||
+          typeof entry.jti !== "string") continue;
+      const existing = await provider.Grant.find(entry.jti);
+      if (
+        existing &&
+        existing.accountId === user &&
+        existing.clientId === client.clientId &&
+        existing.getResourceScope(getMcpResource()).split(" ").includes(MCP_SCOPE)
+      ) {
+        grantId = existing.jti;
+        break;
+      }
+    }
+    if (!grantId) {
+      const grant = new provider.Grant({
+        accountId: user,
+        clientId: client.clientId,
+      });
+      grant.addResourceScope(getMcpResource(), MCP_SCOPE);
+      grantId = await grant.save();
+    }
     await provider.interactionFinished(
       req,
       res,
@@ -272,19 +294,42 @@ async function connections(
       res.end();
       return;
     }
-    await revokeGrant(id);
+    // Historical deployments issued a separate grant on every approval.
+    // Disconnecting one displayed client revokes all its grants so the old
+    // token chains cannot silently remain authorized after removal.
+    const grants = await new OAuthStore("Grant").forAccount(user);
+    for (const related of grants) {
+      if (
+        related.accountId === user &&
+        related.clientId === grant.clientId &&
+        typeof related.jti === "string"
+      ) {
+        await revokeGrant(related.jti);
+      }
+    }
     res.statusCode = 303;
     res.setHeader("Location", "/api/oauth/connections");
     res.end();
     return;
   }
   const grants = await new OAuthStore("Grant").forAccount(user);
+  const uniqueClients = new Map<string, string>();
+  for (const grant of grants) {
+    if (
+      grant.accountId === user &&
+      typeof grant.clientId === "string" &&
+      typeof grant.jti === "string" &&
+      !uniqueClients.has(grant.clientId)
+    ) {
+      uniqueClients.set(grant.clientId, grant.jti);
+    }
+  }
   const items = await Promise.all(
-    grants.map(async (grant) => {
-      const client = await getMcpProvider().Client.find(String(grant.clientId));
-      return `<li><p>${escape(client?.clientName || "名称未設定のアプリ")}</p><p>${escape(client?.clientUri || grant.clientId)}</p>
+    [...uniqueClients].map(async ([clientId, grantId]) => {
+      const client = await getMcpProvider().Client.find(clientId);
+      return `<li><p>${escape(client?.clientName || "名称未設定のアプリ")}</p><p>${escape(client?.clientUri || clientId)}</p>
             <form method="post"><input type="hidden" name="csrf" value="${escape(csrf(user, "connections"))}">
-            <input type="hidden" name="grant_id" value="${escape(grant.jti)}"><button>接続を解除</button></form></li>`;
+            <input type="hidden" name="grant_id" value="${escape(grantId)}"><button>接続を解除</button></form></li>`;
     }),
   );
   html(
