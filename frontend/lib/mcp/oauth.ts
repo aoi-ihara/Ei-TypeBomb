@@ -31,7 +31,7 @@ export async function authenticateMcpRequest(
     request: Request,
 ): Promise<McpPrincipal | null> {
     const authorization = request.headers.get("authorization");
-    const match = authorization?.match(/^Bearer\\s+([^\\s]+)$/i);
+    const match = authorization?.match(/^Bearer\s+([^\s]+)$/i);
 
     if (!authorization) {
         logMcpAuthFailure("missing_bearer_token");
@@ -93,7 +93,7 @@ export async function authenticateMcpRequest(
 }
 
 export function unauthorizedMcpResponse(request: Request): Response {
-    const hasBearer = /^Bearer\\s+\\S+$/i.test(
+    const hasBearer = /^Bearer\s+\S+$/i.test(
         request.headers.get("authorization") ?? "",
     );
     const invalidToken = hasBearer ? ', error="invalid_token"' : "";
