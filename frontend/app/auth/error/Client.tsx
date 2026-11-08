@@ -13,14 +13,20 @@ export default function Client({ message }: { message: string }) {
                 {message}
             </p>
             <Button
-                onClick={() => { startNavigationProgress(); router.push("/auth/sign-in"); }}
+                onClick={() => {
+                    startNavigationProgress();
+                    router.push("/auth/sign-in");
+                }}
                 className="w-full"
                 iconName="rotateCcw"
             >
                 もう一度試す
             </Button>
             <Button
-                onClick={() => { startNavigationProgress(); router.push("/"); }}
+                onClick={() => {
+                    startNavigationProgress();
+                    router.push("/");
+                }}
                 variant="text"
                 iconName="home"
             >

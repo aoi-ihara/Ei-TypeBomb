@@ -8,8 +8,13 @@ function getAuthorizationId(value: FormDataEntryValue | null) {
     return value;
 }
 
-async function decideAuthorization(formData: FormData, decision: "approve" | "deny") {
-    const authorizationId = getAuthorizationId(formData.get("authorization_id"));
+async function decideAuthorization(
+    formData: FormData,
+    decision: "approve" | "deny",
+) {
+    const authorizationId = getAuthorizationId(
+        formData.get("authorization_id"),
+    );
     const supabase = await createClient();
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -61,7 +66,9 @@ export default async function OAuthConsentPage({
     ) {
         return (
             <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-16">
-                <h1 className="text-2xl font-bold">認証リクエストを確認できません</h1>
+                <h1 className="text-2xl font-bold">
+                    認証リクエストを確認できません
+                </h1>
                 <p className="mt-3 text-sm text-neutral-500">
                     リクエストが無効か、有効期限が切れている可能性があります。
                 </p>
@@ -88,7 +95,9 @@ export default async function OAuthConsentPage({
     if (error || !data) {
         return (
             <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-16">
-                <h1 className="text-2xl font-bold">認証リクエストを確認できません</h1>
+                <h1 className="text-2xl font-bold">
+                    認証リクエストを確認できません
+                </h1>
                 <p className="mt-3 text-sm text-neutral-500">
                     リクエストが無効か、有効期限が切れている可能性があります。
                 </p>
@@ -104,9 +113,7 @@ export default async function OAuthConsentPage({
 
     const details = data;
     const clientName = details.client?.name?.trim() || "名称未設定のアプリ";
-    const requestedScopes = (details.scope ?? "")
-        .split(/\s+/)
-        .filter(Boolean);
+    const requestedScopes = (details.scope ?? "").split(/\s+/).filter(Boolean);
 
     return (
         <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-16">
@@ -125,8 +132,12 @@ export default async function OAuthConsentPage({
                     <h2 className="text-lg font-semibold">{clientName}</h2>
                     {details.client?.uri ? (
                         <div className="mt-3">
-                            <p className="text-xs text-neutral-500">アプリのウェブサイト</p>
-                            <p className="mt-1 break-all text-sm">{details.client.uri}</p>
+                            <p className="text-xs text-neutral-500">
+                                アプリのウェブサイト
+                            </p>
+                            <p className="mt-1 break-all text-sm">
+                                {details.client.uri}
+                            </p>
                         </div>
                     ) : (
                         <p className="mt-3 text-sm leading-6 text-red-700 dark:text-red-400">
@@ -134,13 +145,19 @@ export default async function OAuthConsentPage({
                         </p>
                     )}
                     <div className="mt-4">
-                        <p className="text-xs text-neutral-500">リダイレクト先</p>
-                        <p className="mt-1 break-all text-sm">{details.redirect_uri}</p>
+                        <p className="text-xs text-neutral-500">
+                            リダイレクト先
+                        </p>
+                        <p className="mt-1 break-all text-sm">
+                            {details.redirect_uri}
+                        </p>
                     </div>
                 </section>
 
                 <section className="mt-6">
-                    <h2 className="text-sm font-semibold">OAuthで要求された情報</h2>
+                    <h2 className="text-sm font-semibold">
+                        OAuthで要求された情報
+                    </h2>
                     <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
                         以下はSupabaseアカウントから共有される情報の範囲です。これらのスコープだけでは、接続先サービスで実行できる操作やMCPリソースは分かりません。アプリ名とウェブサイトに心当たりがあり、接続先を信頼できる場合にのみ許可してください。
                     </p>

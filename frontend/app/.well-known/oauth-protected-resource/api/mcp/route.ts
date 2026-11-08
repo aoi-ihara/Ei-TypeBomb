@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEtbUrl } from "@/lib/config/base-url";
-import {
-    getMcpIssuer,
-    getMcpResource,
-} from "@/lib/mcp/oauth";
+import { getMcpIssuer, getMcpResource } from "@/lib/mcp/oauth";
 
 export const dynamic = "force-dynamic";
 
