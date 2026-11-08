@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { getEtbUrl } from "@/lib/config/base-url";
 import {
     MCP_AUTHORIZATION_SERVER,
-    MCP_RESOURCE,
+    getMcpResource,
 } from "@/lib/mcp/oauth";
 
 export const dynamic = "force-dynamic";
@@ -9,10 +10,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
     return NextResponse.json(
         {
-            resource: MCP_RESOURCE,
+            resource: getMcpResource(),
             authorization_servers: [MCP_AUTHORIZATION_SERVER],
             bearer_methods_supported: ["header"],
-            resource_documentation: "https://ei-typebomb.com/docs/mcp",
+            resource_documentation: getEtbUrl("/docs/mcp"),
         },
         {
             headers: {
