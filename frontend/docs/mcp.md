@@ -101,6 +101,28 @@ client.
 
 Set `ETB_BASE_URL` for each Vercel environment (`https://ei-typebomb.com` for Production, `https://beta.ei-typebomb.com` for Preview). The MCP resource, metadata and room URLs are derived from it. The issuer remains the shared Supabase OAuth server.
 
+### Temporary Preview audience compatibility
+
+The shared Supabase OAuth server currently uses a Custom Access Token Hook that
+issues `aud: "https://ei-typebomb.com/api/mcp"` for the registered MCP
+client. Connecting ChatGPT to `https://beta.ei-typebomb.com/api/mcp` therefore
+previously produced HTTP 401 (`failedClaim: "aud"`) during tool discovery.
+
+Until OAuth resource indicators are bound to tokens by the authorization
+server, **only the beta MCP endpoint** also accepts the production MCP
+audience. Production still accepts only its own audience. Tokens issued
+for the normal website (`aud: "authenticated"`) are not accepted.
+This is limited to the two Ei-TypeBomb MCP resources and does **not**
+weaken user ownership checks on room operations.
+
+This is a compatibility workaround, **not full RFC 8707 resource binding**:
+a valid production MCP token can also be used on beta. Remove this bridge
+when each environment uses separately issued resource-bound tokens.
+Do not expand the audience list to `authenticated` or add unrelated OAuth
+resource servers. Reconnect the ChatGPT app after deploying this change,
+then verify `tools/list` returns `create_room`, `get_room`, and
+`update_room`; confirm that normal login tokens still fail with 401.
+
 ## Tools
 
 - `create_room`: creates a normal Ei-TypeBomb room owned by the authenticated user.

@@ -6,6 +6,25 @@ import {
 } from "@/lib/auth/oauth-config";
 
 export const getMcpResource = () => getEtbUrl("/api/mcp");
+
+/**
+ * Supabase OAuth currently issues the production MCP audience for the
+ * registered MCP client, even when it connects to the Preview endpoint.
+ *
+ * Allow that audience only on the dedicated beta origin. Production continues
+ * to accept its own resource audience exclusively; ordinary Supabase website
+ * tokens ("authenticated") remain invalid for both environments.
+ *
+ * TODO: Remove this compatibility exception once Supabase OAuth can issue a
+ * resource-bound token for each MCP endpoint independently.
+ */
+export function getAcceptedMcpAudiences(): string[] {
+    const resource = getMcpResource();
+    if (new URL(resource).origin === "https://beta.ei-typebomb.com") {
+        return [resource, "https://ei-typebomb.com/api/mcp"];
+    }
+    return [resource];
+}
 export const MCP_AUTHORIZATION_SERVER = OAUTH_ISSUER;
 export const getMcpMetadataUrl = () =>
     getEtbUrl("/.well-known/oauth-protected-resource/api/mcp");
@@ -47,7 +66,7 @@ export async function authenticateMcpRequest(
     try {
         const { payload } = await jwtVerify(match[1], jwks, {
             issuer: OAUTH_ISSUER,
-            audience: getMcpResource(),
+            audience: getAcceptedMcpAudiences(),
             algorithms: ["ES256", "RS256"],
         });
 
