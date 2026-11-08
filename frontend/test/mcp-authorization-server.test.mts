@@ -176,6 +176,10 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
     const page = await request(interaction, {}, true);
     assert.equal(page.status, 200, await page.clone().text());
     assert.equal(page.headers.get("referrer-policy"), "strict-origin");
+    assert.equal(
+      page.headers.get("content-security-policy"),
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://client.example; frame-ancestors 'none'; base-uri 'none'",
+    );
     const markup = await page.text();
     assert.ok(markup.includes("作成・閲覧・変更"));
     assert.ok(markup.includes("&lt;script&gt;"));
@@ -239,6 +243,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
           "https://*.example/cb",
           "https://client.example/cb#x",
           "https://u:p@client.example/cb",
+          "https://client.example;upgrade-insecure-requests/cb",
           "javascript:alert(1)",
         ]) {
           assert.equal((await register(uri)).status, 400, uri);
@@ -255,6 +260,34 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
           (await register(undefined, { jwks_uri: "https://127.0.0.1/keys" }))
             .status,
           400,
+        );
+      },
+    );
+    await t.test(
+      "consent CSP allows only the requested registered callback origin, without query directives",
+      async () => {
+        const redirect =
+          "https://other.example:8443/callback?x=;frame-src%20%2A";
+        const registration = await register(redirect, {
+          redirect_uris: [redirect, "https://unused.example/callback"],
+        });
+        assert.equal(
+          registration.status,
+          201,
+          await registration.clone().text(),
+        );
+        const client = await registration.json();
+        const { response } = await authorize({
+          client_id: client.client_id,
+          redirect_uri: redirect,
+        });
+        const path = new URL(response.headers.get("location")!, issuer)
+          .pathname;
+        const page = await request(path, {}, true);
+        assert.equal(page.status, 200, await page.clone().text());
+        assert.equal(
+          page.headers.get("content-security-policy"),
+          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://other.example:8443; frame-ancestors 'none'; base-uri 'none'",
         );
       },
     );
@@ -483,6 +516,10 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         const payload = decodeJwt(token.access_token);
         const page = await request("/api/oauth/connections", {}, true);
         assert.equal(page.headers.get("referrer-policy"), "strict-origin");
+        assert.equal(
+          page.headers.get("content-security-policy"),
+          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        );
         const markup = await page.text();
         const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
         assert.equal(

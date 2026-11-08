@@ -226,6 +226,30 @@ host validation, commit failures and rate limits.
 It does not log into a live rcAccount or prove actual ChatGPT/Claude UI behavior.
 The discovery diagnostic also does not prove issued-token audience binding.
 
+Consent uses `Referrer-Policy: strict-origin` so browser form submissions retain
+their genuine same-origin `Origin` header. Its CSP `form-action` allows only
+`'self'` and the requested, registered redirect URI's origin: Chromium enforces
+this policy on the entire POST redirect chain, including the final client
+callback. The provider still requires the exact registered redirect URI. Paths
+and queries never enter CSP; unsupported host characters are rejected. Other
+pages, including connection management, keep `form-action 'self'`.
+
+For a real-browser regression check, create a separate disposable local database
+named `etb_mcp_oauth_browser_test`, then run:
+
+```sh
+npm exec -- node --import tsx test/fixtures/mcp-browser-flow.mts
+```
+
+Open the printed `start` URL in Chrome. Approve and confirm the success page
+(callback, PKCE code exchange and MCP JWT verification), then open `start` again
+and deny. The printed `status` URL exposes only aggregate outcome counters.
+The fixture resets only its private schema in that exact local database, uses
+ephemeral keys and a simulated rcAccount user, and never accesses live accounts.
+Two loopback origins model the issuer and client; a test-only TLS-offload shim
+maps those to canonical HTTPS origins inside the real production handler.
+Cookies, redirect paths, CSP and form submissions remain browser-enforced.
+
 Before enabling production, complete a fresh ChatGPT and Claude connection on
 the canonical preview domain with the real rcAccount account, confirm approve
 and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm a normal web

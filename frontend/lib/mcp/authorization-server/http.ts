@@ -85,11 +85,16 @@ const escape = (s: unknown) =>
       })[c]!,
   );
 
-function html(res: NextApiResponse, title: string, content: string) {
+function html(
+  res: NextApiResponse,
+  title: string,
+  content: string,
+  callbackOrigin?: string,
+) {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+    `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'${callbackOrigin ? " " + callbackOrigin : ""}; frame-ancestors 'none'; base-uri 'none'`,
   );
   res.setHeader("X-Frame-Options", "DENY");
   // no-referrer makes HTML form POSTs send Origin: null, which our strict
@@ -143,6 +148,24 @@ async function interaction(
   }
   const client = await provider.Client.find(String(details.params.client_id));
   if (!client) throw new Error("Client not found");
+  const redirectUri = details.params.redirect_uri;
+  if (
+    typeof redirectUri !== "string" ||
+    !client.redirectUriAllowed(redirectUri)
+  ) {
+    throw new oauthErrors.InvalidRequest("Invalid client redirect URI");
+  }
+  const redirectOrigin = new URL(redirectUri).origin;
+  // Only a literal CSP host source is allowed, including loopback IPv6 for
+  // registered native clients. Reject unusual URL host characters rather than
+  // interpolating them as CSP syntax (also covers older registrations).
+  if (
+    !/^https?:\/\/(?:[a-z0-9.-]+|\[[0-9a-f:]+\])(?::[0-9]+)?$/i.test(
+      redirectOrigin,
+    )
+  ) {
+    throw new oauthErrors.InvalidRequest("Invalid client redirect origin");
+  }
   if (
     req.method === "GET" &&
     details.session?.accountId &&
@@ -221,6 +244,12 @@ async function interaction(
         <form method="post"><input type="hidden" name="csrf" value="${escape(csrf(user, purpose))}">
         <button name="decision" value="deny">拒否</button><button name="decision" value="approve">許可する</button></form>
         <p><small>許可は30日間有効です。<a href="/api/oauth/connections">MCP接続の管理</a>からいつでも解除できます。</small></p>`,
+    // Browsers enforce form-action throughout the POST's redirect chain,
+    // including the provider's final redirect to the client. Only this consent
+    // page needs that validated client's origin. URL.origin excludes paths and
+    // queries, so registered URI text cannot inject additional CSP directives.
+    // oidc-provider still enforces the full registered redirect URI separately.
+    redirectOrigin,
   );
 }
 
