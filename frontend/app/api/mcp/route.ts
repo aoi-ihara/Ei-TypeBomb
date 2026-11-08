@@ -15,7 +15,9 @@ import {
     validatePassword,
     validateTitle,
 } from "@/lib/auth/validator";
-import type { Room } from "@/type";
+import type { Room, View } from "@/type";
+import { getRoomCollectionsForUser } from "@/lib/room/list-data";
+import { selectRoomsForView } from "@/lib/room/list-view";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,6 +127,33 @@ const roomProperties = {
 };
 
 const tools = [
+    {
+        name: "list_rooms",
+        description:
+            "おすすめ・自分のルーム・保存済みルームを一覧取得します。view省略時は自分のルーム。おすすめは公開ルームのみ、保存済みはWeb版と同じ閲覧可能なルームのみ返します。",
+        inputSchema: {
+            type: "object",
+            properties: {
+                view: {
+                    type: "string",
+                    enum: ["recommended", "mine", "saved"],
+                    description: "recommended=おすすめ、mine=自分のルーム、saved=保存済み。省略時はmine。",
+                },
+                limit: {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: 100,
+                    description: "1回に返す件数（省略時50、最大100）",
+                },
+                offset: {
+                    type: "integer",
+                    minimum: 0,
+                    description: "先頭からスキップする件数（省略時0）",
+                },
+            },
+            additionalProperties: false,
+        },
+    },
     {
         name: "create_room",
         description:
@@ -245,6 +274,56 @@ function presentRoom(room: JsonRecord): JsonRecord {
 }
 
 async function callTool(name: string, args: JsonRecord, userId: string): Promise<ToolResult> {
+    if (name === "list_rooms") {
+        const view = args.view ?? "mine";
+        if (view !== "recommended" && view !== "mine" && view !== "saved") {
+            return toolError("viewはrecommended、mine、savedのいずれかを指定してください。");
+        }
+        const limit = args.limit ?? 50;
+        const offset = args.offset ?? 0;
+        if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+            return toolError("limitは1〜100の整数を指定してください。");
+        }
+        if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0) {
+            return toolError("offsetは0以上の整数を指定してください。");
+        }
+
+        const { publicRooms, myRooms, savedRoomIds } =
+            await getRoomCollectionsForUser(userId, { strict: true });
+        const selected = selectRoomsForView({
+            view: view as View,
+            publicRooms,
+            myRooms,
+            savedRoomIds,
+            currentUserId: userId,
+        });
+        const ownIds = new Set(myRooms.map((room) => room.id));
+        const savedIds = new Set(savedRoomIds);
+        return toolResult({
+            view,
+            total: selected.length,
+            offset,
+            limit,
+            next_offset: offset + limit < selected.length ? offset + limit : null,
+            rooms: selected.slice(offset, offset + limit).map((room) => ({
+                id: room.id,
+                link: room.link ?? room.id,
+                title: room.title ?? null,
+                explanation: room.explanation ?? null,
+                visibility: room.visibility ?? "public",
+                item_count: room.itemCount ?? 0,
+                max_players: room.maxPlayers ?? 2,
+                bomb_count: room.bombCount ?? null,
+                game_duration: room.gameDuration ?? 20,
+                created_at: room.createdAt ?? null,
+                updated_at: room.updatedAt ?? null,
+                is_owner: ownIds.has(room.id),
+                is_saved: savedIds.has(room.id),
+                url: getEtbUrl("/" + encodeURIComponent(room.link ?? room.id)),
+            })),
+        });
+    }
+
     const supabase = await createAdminClient();
 
     if (name === "create_room") {
@@ -407,7 +486,7 @@ export async function POST(request: NextRequest) {
                 capabilities: { tools: { listChanged: false } },
                 serverInfo: { name: "ei-typebomb", version: "1.0.0" },
                 instructions:
-                    "ETBのルームを管理するMCPサーバーです。OAuthで認証されたユーザー本人が所有するルームだけを操作できます。",
+                    "ETBのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。",
             },
             protocolVersion,
         );

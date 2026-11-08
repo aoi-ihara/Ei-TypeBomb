@@ -1,20 +1,15 @@
 import { getUserDetails } from "@/lib/auth/session";
-import { getMyRooms, getPublicRooms } from "@/lib/room/get";
-import { getSavedRoomIds } from "@/lib/room/save";
+import { getRoomCollectionsForUser } from "@/lib/room/list-data";
 
 export const getRoomListData = async () => {
-    const [publicRooms, currentUser, initialSavedRoomIds, myRoomsResult] =
-        await Promise.all([
-            getPublicRooms(),
-            getUserDetails(),
-            getSavedRoomIds(),
-            getMyRooms(),
-        ]);
+    const currentUser = await getUserDetails();
+    const { publicRooms, myRooms, savedRoomIds } =
+        await getRoomCollectionsForUser(currentUser?.id ?? null);
 
     return {
         publicRooms,
-        myRooms: myRoomsResult?.rooms ?? [],
+        myRooms,
         currentUser,
-        initialSavedRoomIds,
+        initialSavedRoomIds: savedRoomIds,
     };
 };
