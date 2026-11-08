@@ -13,6 +13,7 @@ import {
 } from "../lib/mcp/authorization-server/store";
 import { getAuthorizationServerMetadata } from "../lib/mcp/authorization-server/config";
 import { verifyMcpToken } from "../lib/mcp/authorization-server/verify";
+import { getMcpProvider } from "../lib/mcp/authorization-server/provider";
 import { authenticateMcpRequest } from "../lib/mcp/oauth";
 
 // A dedicated disposable PostgreSQL database is mandatory: no in-memory
@@ -406,6 +407,52 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         );
         assert.ok(!row.rows[0].payload.includes(user));
         assert.equal(await authenticateMcpRequest(new Request(resource)), null);
+      },
+    );
+    await t.test(
+      "repeat approval reuses a grant and legacy duplicates are grouped and fully revoked",
+      async () => {
+        const first = await tokens();
+        const second = await tokens();
+        const firstGrantId = decodeJwt(first.token.access_token).grant_id as string;
+        const secondGrantId = decodeJwt(second.token.access_token).grant_id as string;
+        assert.equal(firstGrantId, secondGrantId);
+        assert.equal((await verifyMcpToken(second.token.access_token)).grantId, firstGrantId);
+
+        // Simulate historical duplicate grants from the same client. A second
+        // account using that client must remain isolated when disconnecting.
+        const provider = getMcpProvider();
+        const legacy = new provider.Grant({ accountId: user, clientId });
+        legacy.addResourceScope(resource, "etb:rooms");
+        const legacyGrantId = await legacy.save();
+        const anotherAccount = new provider.Grant({
+          accountId: otherUser,
+          clientId,
+        });
+        anotherAccount.addResourceScope(resource, "etb:rooms");
+        const otherGrantId = await anotherAccount.save();
+
+        const page = await request("/api/oauth/connections", {}, true);
+        assert.equal(page.status, 200);
+        const markup = await page.text();
+        assert.equal((markup.match(/<li>/g) ?? []).length, 1);
+        assert.ok(markup.includes("ChatGPT") === false); // This test client has its own name.
+        const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
+        const disconnected = await request(
+          "/api/oauth/connections",
+          form({ csrf, grant_id: firstGrantId }),
+          true,
+        );
+        assert.equal(disconnected.status, 303);
+        await assert.rejects(verifyMcpToken(first.token.access_token));
+        await assert.rejects(verifyMcpToken(second.token.access_token));
+        assert.equal(await new OAuthStore("Grant").find(legacyGrantId), undefined);
+        assert.ok(await new OAuthStore("Grant").find(otherGrantId));
+
+        // Explicit approval after disconnect must issue a fresh grant.
+        const third = await tokens();
+        assert.notEqual(decodeJwt(third.token.access_token).grant_id, firstGrantId);
+        assert.equal((await verifyMcpToken(third.token.access_token)).userId, user);
       },
     );
     await t.test(

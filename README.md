@@ -283,6 +283,23 @@ Ei-TypeBomb/
 
 Backend build, test, and deployment instructions: [backend/README.md](backend/README.md).
 
+## Local frontend development
+
+The Next.js application has its own dependency manifest in `frontend/`. Install its
+runtime packages and TypeScript declarations after cloning or pulling changes:
+
+```sh
+npm ci --prefix frontend
+npm exec --prefix frontend -- tsc --noEmit -p frontend/tsconfig.json
+```
+
+If your editor reports `Cannot find module 'oidc-provider'` alongside implicit
+`any` errors in the OAuth provider, verify that `frontend/node_modules/oidc-provider`
+and `frontend/node_modules/@types/oidc-provider` exist. Both dependencies are
+already declared in `frontend/package.json`; missing installations prevent
+TypeScript from inferring callback parameter types. Reopen the project or restart
+the editor's TypeScript language server after installation if the diagnostics remain.
+
 ## How to Play
 
 1. Open the game.

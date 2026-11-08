@@ -2,8 +2,8 @@ import {
   Provider,
   errors,
   interactionPolicy,
-  type Configuration,
   type ClientMetadata,
+  type Configuration,
   type KoaContextWithOIDC,
 } from "oidc-provider";
 import {

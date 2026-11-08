@@ -67,7 +67,13 @@ cannot change it. The former production-audience exception on beta is removed.
 Production and beta tokens cannot be used interchangeably.
 
 Every authorization requires a new explicit decision, even for an already
-approved client. The UI displays the self-reported client name/site, exact
+approved client. Once approved, the server reuses an unexpired grant for the
+same authenticated user, registered client ID and MCP resource/scope rather
+than creating a new grant on every reconnect. Different client IDs are never
+merged based on client display name. The management UI groups historical
+duplicate grants by client ID; disconnecting a client revokes all its existing
+grants and token chains. Reuse does not extend the original grant lifetime, and
+refresh-token reuse detection still revokes its full shared grant. The UI displays the self-reported client name/site, exact
 redirect target, ETB resource and logged-in account ID. Names are not verified
 brand identities. Signed, secure, HttpOnly interaction cookies, same-origin form
 POST validation and user/interaction-bound CSRF tokens protect approval.
