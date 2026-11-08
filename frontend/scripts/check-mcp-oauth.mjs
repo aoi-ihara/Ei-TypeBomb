@@ -32,11 +32,11 @@ export async function checkMcpOAuth(endpoint, fetchImpl = fetch) {
 
     // RFC 8414 inserts the well-known segment before an issuer path.
     const oauthDiscovery = new URL(
-        `/.well-known/oauth-authorization-server${authServer.pathname.replace(/\\/$/, "")}`,
+        `/.well-known/oauth-authorization-server${authServer.pathname.replace(/\/$/, "")}`,
         authServer.origin,
     ).href;
     const oidcDiscovery = new URL(
-        `${authServer.pathname.replace(/\\/$/, "")}/.well-known/openid-configuration`,
+        `${authServer.pathname.replace(/\/$/, "")}/.well-known/openid-configuration`,
         authServer.origin,
     ).href;
     let metadata;
@@ -54,7 +54,6 @@ export async function checkMcpOAuth(endpoint, fetchImpl = fetch) {
     const dcr = typeof metadata.registration_endpoint === "string" &&
         metadata.registration_endpoint.length > 0;
     // Discovery proves registration availability, not that issued tokens are resource-bound.
-    // Supabase Custom Access Token Hook input does not document a resource field.
     return {
         endpoint: target.href,
         issuer,
@@ -72,7 +71,7 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
         console.log(`CIMD: ${result.cimd ? "supported" : "not advertised"}`);
         console.log(`DCR: ${result.dcr ? "advertised" : "not advertised"}`);
         if (!result.cimd && !result.dcr) {
-            console.error("OAuth client auto-registration unavailable. Enable Dynamic Client Registration in the shared Supabase Auth OAuth Server settings; do not add a fake discovery endpoint.");
+            console.error("OAuth client auto-registration unavailable. Check the ETB authorization server configuration and its registration endpoint.");
             process.exitCode = 1;
         } else {
             console.log("An automatic client-registration mechanism is advertised.");
