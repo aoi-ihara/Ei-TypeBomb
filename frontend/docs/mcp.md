@@ -1,5 +1,25 @@
 # Ei-TypeBomb MCP Server
 
+## Local development and TypeScript
+
+The OAuth server imports `oidc-provider` and its TypeScript definitions from
+`frontend/package.json`. Both `oidc-provider@9.13.3` and
+`@types/oidc-provider@9.13.1` are already pinned in the frontend lockfile.
+Run the following from the repository root to install the frontend dependencies
+(including dev dependencies) before checking TypeScript errors in an editor:
+
+```sh
+npm ci --prefix frontend
+cd frontend && npx tsc --noEmit
+```
+
+Use Node.js 22 and ensure development dependencies have not been omitted
+(`NODE_ENV=production` or `npm ci --omit=dev` would exclude the `@types`
+package). If the editor still shows `Cannot find module 'oidc-provider'`
+after installation, restart its TypeScript language server. The implicit-any
+messages for the provider callbacks can be secondary diagnostics when the
+library's declarations are unavailable; keep their types explicit regardless.
+
 Ei-TypeBomb exposes a remote MCP Streamable HTTP endpoint:
 
 `https://ei-typebomb.com/api/mcp`
