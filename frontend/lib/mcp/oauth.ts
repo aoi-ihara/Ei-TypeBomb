@@ -69,7 +69,6 @@ export async function authenticateMcpRequest(
             clientId: payload.client_id as string,
         };
     } catch (error) {
-        const errorName = error instanceof Error ? error.name : "UnknownError";
         const errorCode =
             typeof error === "object" &&
             error !== null &&
@@ -77,10 +76,17 @@ export async function authenticateMcpRequest(
             typeof error.code === "string"
                 ? error.code
                 : "unknown";
+        const failedClaim =
+            typeof error === "object" &&
+            error !== null &&
+            "claim" in error &&
+            typeof error.claim === "string"
+                ? error.claim
+                : "unknown";
 
         logMcpAuthFailure("jwt_verification_failed", {
-            errorName,
             errorCode,
+            failedClaim,
         });
         return null;
     }
