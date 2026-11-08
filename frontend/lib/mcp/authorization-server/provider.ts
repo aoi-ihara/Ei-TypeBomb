@@ -49,6 +49,7 @@ export function validateClientMetadata(metadata: Record<string, unknown>) {
       return;
     }
     if (url.username || url.password || url.hash) invalid();
+    if (!/^(?:[a-z0-9.-]+|\[[0-9a-f:]+\])$/i.test(url.hostname)) invalid();
     const loopback = ["127.0.0.1", "[::1]"].includes(url.hostname);
     if (
       url.protocol === "http:" &&
