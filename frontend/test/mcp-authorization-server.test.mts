@@ -175,6 +175,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
       .pathname;
     const page = await request(interaction, {}, true);
     assert.equal(page.status, 200, await page.clone().text());
+    assert.equal(page.headers.get("referrer-policy"), "strict-origin");
     const markup = await page.text();
     assert.ok(markup.includes("作成・閲覧・変更"));
     assert.ok(markup.includes("&lt;script&gt;"));
@@ -299,6 +300,26 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         for (const [key, value] of originalCookies) jar.set(key, value);
         const markup = await (await request(path, {}, true)).text();
         const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
+        // Keep rejecting opaque/missing/foreign origins; fix the page's
+        // referrer policy rather than weakening the form's Origin guard.
+        for (const origin of ["null", "https://evil.example"]) {
+          assert.equal(
+            (
+              await request(path, {
+                ...form({ csrf, decision: "approve" }),
+                headers: {
+                  "content-type": "application/x-www-form-urlencoded",
+                  origin,
+                },
+              })
+            ).status,
+            403,
+          );
+        }
+        assert.equal(
+          (await request(path, form({ csrf, decision: "approve" }))).status,
+          403,
+        );
         assert.equal(
           (
             await request(
@@ -461,6 +482,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         const { token } = await tokens();
         const payload = decodeJwt(token.access_token);
         const page = await request("/api/oauth/connections", {}, true);
+        assert.equal(page.headers.get("referrer-policy"), "strict-origin");
         const markup = await page.text();
         const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
         assert.equal(

@@ -92,7 +92,10 @@ function html(res: NextApiResponse, title: string, content: string) {
     "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   );
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "no-referrer");
+  // no-referrer makes HTML form POSTs send Origin: null, which our strict
+  // same-origin guard correctly rejects. strict-origin preserves Origin for
+  // HTTPS form submissions while keeping interaction paths out of Referer.
+  res.setHeader("Referrer-Policy", "strict-origin");
   res.end(
     `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} | Ei-TypeBomb</title><style>body{font:16px/1.8 system-ui;background:#f5f5f5;color:#171717;margin:0}main{max-width:560px;margin:6vh auto;padding:28px;background:white;border-radius:20px}h1{font-size:24px}p,dd{overflow-wrap:anywhere}dt{font-weight:bold}dd{margin:0 0 16px}button{font:inherit;padding:10px 24px;margin:12px 12px 0 0;border-radius:24px;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #2255dd}small{color:#555}</style><main><p>Ei-TypeBomb · MCP</p><h1>${escape(title)}</h1>${content}</main></html>`,
   );
