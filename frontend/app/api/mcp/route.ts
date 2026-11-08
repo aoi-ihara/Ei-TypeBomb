@@ -319,7 +319,7 @@ async function callTool(name: string, args: JsonRecord, userId: string): Promise
                 updated_at: room.updatedAt ?? null,
                 is_owner: ownIds.has(room.id),
                 is_saved: savedIds.has(room.id),
-                url: getEtbUrl("/" + encodeURIComponent(room.link ?? room.id)),
+                url: getEtbUrl(`/${encodeURIComponent(room.link ?? room.id)}`),
             })),
         });
     }
