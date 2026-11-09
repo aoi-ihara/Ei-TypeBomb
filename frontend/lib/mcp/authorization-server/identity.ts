@@ -16,10 +16,9 @@ export async function getMcpAuthenticatedUser(req: NextApiRequest) {
                 cookieOptions,
                 cookies: {
                     getAll: () =>
-                        Object.entries(req.cookies ?? {}).map(([name, value]) => ({
-                            name,
-                            value,
-                        })),
+                        Object.entries(req.cookies ?? {}).flatMap(([name, value]) =>
+                            typeof value === "string" ? [{ name, value }] : [],
+                        ),
                     // The proxy must persist any refreshed cookies before this
                     // handler. Fail closed if an unexpected second refresh tries
                     // to rotate tokens without a writable response cookie store.
