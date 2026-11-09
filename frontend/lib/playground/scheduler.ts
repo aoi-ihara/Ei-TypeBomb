@@ -283,18 +283,8 @@ export const chooseBotItem = (
     );
     if (!hasUserHistory) return null;
 
-    // If the strict pool is empty, keep the turn handoff alive by choosing a
-    // random non-protected word. It may be unseen, but it is outside the
-    // immediate lookahead/retry set.
-    const safeFallback = state.itemIds.filter(
-        (id) => !protectedIds.has(id) && id !== state.lastBotItem,
-    );
-    const safePool = safeFallback.length
-        ? safeFallback
-        : state.itemIds.filter((id) => !protectedIds.has(id));
-    if (safePool.length)
-        return safePool[Math.floor(random() * safePool.length)];
-
+    // Never let BOT reveal a previously unseen answer: this would silently
+    // introduce a new word while the learner's relearning pool is full.
     // Tiny rooms can have every word protected. In that case reuse a random
     // word the user has already answered, so no new answer is revealed.
     const answeredFallback = state.itemIds.filter(
