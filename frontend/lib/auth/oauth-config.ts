@@ -4,7 +4,11 @@
  */
 import { getEtbUrl } from "@/lib/config/base-url";
 
+// The ETB-hosted MCP authorization server authenticates through ETB's own
+// Supabase session, never the legacy RC Hub website OAuth client.
+// Enable local website login even if the legacy deployment flag remains set.
 export const isOAuthEnabled = () =>
+    process.env.ETB_MCP_OAUTH_ENABLED !== "true" &&
     process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED === "true";
 
 export const OAUTH_ISSUER = "https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1";
