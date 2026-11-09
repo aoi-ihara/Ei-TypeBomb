@@ -191,7 +191,7 @@ export const chooseNextUserItem = (
 
     // A due relearning item always beats an unseen item. The old alternating
     // cycle/retry schedule introduced new words even when learners struggled.
-    let itemId = eligible[0]?.itemId;
+    let itemId: string | undefined = eligible[0]?.itemId;
 
     const pickFromCycle = () => {
         if (state.cycleQueue.length === 0) {
@@ -209,6 +209,14 @@ export const chooseNextUserItem = (
         // answered filler instead of breaking the earliest-retry boundary.
     }
 
+    // When the active pool is full, any unanswered filler can fail and add
+    // a fifth pending retry. Stay inside the pool until a slot clears.
+    if (!itemId && pending.length >= Math.min(MAX_ACTIVE_RELEARNING, state.itemIds.length)) {
+        itemId = [...pending].sort((a, b) =>
+            a.earliestTurn - b.earliestTurn
+        )[0]?.itemId;
+    }
+
     if (!itemId) {
         const fillers = state.itemIds.filter(
             (id) => (state.userAnswered[id] ?? 0) > 0 && !state.retries[id],
@@ -222,12 +230,12 @@ export const chooseNextUserItem = (
         }
     }
 
-    // A tiny room may have every word awaiting a retry. It is better to
-    // practice the oldest pending word than to deadlock or introduce new ones.
+    // Tiny rooms can have every word protected. Reuse the earliest pending
+    // word instead of failing to schedule a question.
     if (!itemId && pending.length) {
         itemId = [...pending].sort(
             (a, b) => a.earliestTurn - b.earliestTurn,
-        )[0].itemId;
+        )[0]?.itemId;
     }
     if (!itemId) itemId = pickFromCycle();
     if (!itemId) throw new Error("Scheduler has no feasible question");
