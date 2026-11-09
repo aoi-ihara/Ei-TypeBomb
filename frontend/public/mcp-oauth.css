@@ -53,7 +53,7 @@ button {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     background: var(--surface); color: var(--foreground);
     border: 0; border-radius: 8px; width: 100%; padding: 12px 16px;
-    font: 700 16px/1.5 inherit; font-family: inherit;
+    font-family: inherit; font-size: 16px; line-height: 1.5; font-weight: 700;
     cursor: pointer; transition: transform .18s ease, opacity .18s ease;
 }
 button:active { transform: scale(.97); }
