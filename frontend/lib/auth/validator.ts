@@ -180,6 +180,8 @@ export const validateLink = (link?: string) => {
     }
 
     const reservedLinks = new Set([
+        "account",
+        "sign-up",
         "auth",
         "display-name",
         "favicon.ico",

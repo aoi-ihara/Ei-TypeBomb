@@ -118,23 +118,6 @@ export default function RoomList({
         });
     }, [roomsInView, keyword]);
 
-    const selectView = (nextView: View) => {
-        if ((nextView === "mine" || nextView === "saved") && !currentUser) {
-            return;
-        }
-
-        if (nextView === view) return;
-
-        const paths: Record<View, string> = {
-            recommended: "/",
-            mine: "/mine",
-            saved: "/saved",
-        };
-
-        startNavigationProgress();
-        router.push(paths[nextView]);
-    };
-
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;
 
@@ -227,10 +210,7 @@ export default function RoomList({
                                 icon: "userRoundCog",
                                 onClick: () => {
                                     startNavigationProgress();
-                                    router.push(
-                                        process.env
-                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
-                                    );
+                                    router.push("/account");
                                 },
                             },
                             {

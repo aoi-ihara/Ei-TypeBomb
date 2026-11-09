@@ -35,7 +35,6 @@ import {
     validateTitle,
 } from "@/lib/auth/validator";
 import posthog from "posthog-js";
-import { Icon } from "@/components/ui/Icon";
 import Shell from "@/components/layout/Shell";
 import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
@@ -45,7 +44,6 @@ import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 import Header from "@/components/layout/Header";
-import Link from "next/link";
 import RoomNavigation from "@/app/(game)/RoomNavigation";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
