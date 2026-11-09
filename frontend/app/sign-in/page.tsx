@@ -2,7 +2,7 @@ import Header from "@/components/layout/Header";
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import AuthForm from "@/components/account/AuthForm";
-import { safeReturnPath } from "@/lib/auth/oauth-config";
+import { safeReturnPath } from "@/lib/auth/return-path";
 
 export default async function Page({
     searchParams,
