@@ -3,7 +3,7 @@ import type { NextApiRequest } from "next";
 import { cookieOptions } from "../../db/cookie-options";
 
 /**
- * MCP authorizes the same person signed in to ETB, not an RC Hub OAuth client.
+ * MCP authorizes the person signed in to ETB via Supabase Auth.
  * The Next.js proxy validates/refreshes Supabase cookies before Pages API routes.
  * Never accept a cookie's unverified user ID or an MCP JWT as a website session.
  */
