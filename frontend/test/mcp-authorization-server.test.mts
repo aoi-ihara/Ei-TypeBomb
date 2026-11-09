@@ -48,7 +48,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
   Object.assign(process.env, {
     ETB_BASE_URL: issuer,
     ETB_MCP_OAUTH_ENABLED: "true",
-    NEXT_PUBLIC_ETB_OAUTH_ENABLED: "true",
+    NEXT_PUBLIC_ETB_OAUTH_ENABLED: "false",
     ETB_MCP_DATABASE_URL: databaseUrl,
     ETB_MCP_SIGNING_JWKS: JSON.stringify({ keys: [jwk] }),
     ETB_MCP_STORAGE_KEY: randomBytes(32).toString("base64url"),
@@ -319,7 +319,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         const noLogin = await request(path, {}, true, "");
         assert.equal(noLogin.status, 303);
         assert.ok(
-          noLogin.headers.get("location")!.startsWith("/auth/sign-in?next="),
+          noLogin.headers.get("location")!.startsWith("/sign-in?next="),
         );
         const noCookie = await request(path);
         assert.equal(noCookie.status, 303);
