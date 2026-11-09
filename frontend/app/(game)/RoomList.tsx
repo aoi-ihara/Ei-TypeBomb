@@ -227,10 +227,7 @@ export default function RoomList({
                                 icon: "userRoundCog",
                                 onClick: () => {
                                     startNavigationProgress();
-                                    router.push(
-                                        process.env
-                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
-                                    );
+                                    router.push("/account");
                                 },
                             },
                             {

@@ -24,6 +24,7 @@ export const signOut = async () => {
 
     const supabase = await createClient();
     const { error } = await supabase.auth.signOut();
-    if (error) console.error("Failed to sign out:", error);
+    if (error)
+        throw new Error("サインアウトに失敗しました。再度お試しください。");
     redirect("/");
 };
