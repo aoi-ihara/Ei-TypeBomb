@@ -68,18 +68,35 @@ async function query(sql: string, values: unknown[]) {
  * with Supabase transaction pooling. The HTTP layer releases responses only
  * after commit. Handled protocol errors commit replay/revocation markers.
  */
-export async function withOAuthLock<T>(run: () => Promise<T>): Promise<T> {
+/** Fixed labels surface which database phase failed without logging SQL or credentials. */
+export type OAuthTransactionPhase =
+    | "database_connect"
+    | "database_begin"
+    | "database_lock"
+    | "request_processing"
+    | "database_commit";
+
+export async function withOAuthLock<T>(
+    run: () => Promise<T>,
+    onPhase?: (phase: OAuthTransactionPhase) => void,
+): Promise<T> {
+    onPhase?.("database_connect");
     const client = await database().connect();
-    const issuer = getAuthorizationServerConfig().issuer;
     let broken = false;
     try {
+        // Keep configuration checks inside try so an error never leaks a pool client.
+        onPhase?.("database_begin");
+        const issuer = getAuthorizationServerConfig().issuer;
         await client.query("begin");
         await client.query("set local statement_timeout = '10s'");
+        onPhase?.("database_lock");
         await client.query(
             "select pg_advisory_xact_lock(hashtextextended($1, 0))",
             [issuer],
         );
+        onPhase?.("request_processing");
         const result = await connection.run(client, run);
+        onPhase?.("database_commit");
         await client.query("commit");
         return result;
     } catch (error) {
