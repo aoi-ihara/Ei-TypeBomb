@@ -4,7 +4,7 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { submitAccountForm } from "@/lib/auth/account";
-import { safeReturnPath } from "@/lib/auth/oauth-config";
+import { safeReturnPath } from "@/lib/auth/return-path";
 
 type Mode = "sign-in" | "sign-up" | "recovery" | "email" | "password";
 export default function AuthForm({
