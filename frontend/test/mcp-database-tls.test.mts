@@ -186,7 +186,7 @@ test("diagnostics expose only recognized error codes, never credentials or excep
   logOAuthServerFailure(error);
   assert.deepEqual(logger.mock.calls[0].arguments, [
     "[MCP OAuth] request could not be completed",
-    { code: "SELF_SIGNED_CERT_IN_CHAIN" },
+    { code: "SELF_SIGNED_CERT_IN_CHAIN", stage: "unknown" },
   ]);
   assert.equal(
     oauthFailureCode({ code: "postgresql://user:secret@host/db" }),

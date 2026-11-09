@@ -6,17 +6,31 @@ import {
     MCP_SCOPE,
 } from "./config";
 import { getMcpProvider } from "./provider";
-import { OAuthStore, rateLimit, revokeGrant, withOAuthLock } from "./store";
+import {
+    OAuthStore,
+    rateLimit,
+    revokeGrant,
+    withOAuthLock,
+    type OAuthTransactionPhase,
+} from "./store";
 import { verifyMcpToken, InvalidMcpTokenError } from "./verify";
 import { errors as joseErrors } from "jose";
 import { errors as oauthErrors } from "oidc-provider";
-import { logOAuthProtocolFailure, logOAuthServerFailure } from "./diagnostics";
+import {
+    logOAuthProtocolFailure,
+    logOAuthServerFailure,
+    type OAuthFailureStage,
+} from "./diagnostics";
 import { oauthCookieNames } from "../../auth/oauth-config";
 import { verifyOAuthAccessToken } from "../../auth/oauth-tokens";
 
 type CurrentUser = (req: NextApiRequest) => Promise<string | null>;
 
-async function atomicResponse(res: NextApiResponse, run: () => Promise<void>) {
+async function atomicResponse(
+    res: NextApiResponse,
+    run: () => Promise<void>,
+    onPhase?: (phase: OAuthTransactionPhase) => void,
+) {
     const original = res.end;
     let finish: (() => void) | undefined;
     res.end = ((...args: Parameters<typeof res.end>) => {
@@ -26,7 +40,7 @@ async function atomicResponse(res: NextApiResponse, run: () => Promise<void>) {
         return res;
     }) as typeof res.end;
     try {
-        await withOAuthLock(run);
+        await withOAuthLock(run, onPhase);
     } finally {
         res.end = original;
     }
@@ -69,6 +83,12 @@ function equal(a: string | null, b: string) {
         bb = Buffer.from(b);
     return aa.length === bb.length && timingSafeEqual(aa, bb);
 }
+function textError(res: NextApiResponse, status: number, message: string) {
+    res.statusCode = status;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end(message);
+}
+
 const escape = (s: unknown) =>
     String(s ?? "").replace(
         /[&<>"']/g,
@@ -139,8 +159,7 @@ async function interaction(
         details.params.resource !== getMcpResource() ||
         details.params.scope !== MCP_SCOPE
     ) {
-        res.statusCode = 400;
-        res.end("Invalid MCP authorization request");
+        textError(res, 400, "Invalid MCP authorization request");
         return;
     }
     const client = await provider.Client.find(String(details.params.client_id));
@@ -190,8 +209,7 @@ async function interaction(
     if (req.method === "POST") {
         const form = await body(req);
         if (!equal(form.get("csrf"), csrf(user, purpose))) {
-            res.statusCode = 403;
-            res.end("Invalid authorization form");
+            textError(res, 403, "Invalid authorization form");
             return;
         }
         if (form.get("decision") === "deny") {
@@ -369,8 +387,13 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
     return async (req: NextApiRequest, res: NextApiResponse) => {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Content-Type-Options", "nosniff");
+        let stage: OAuthFailureStage = "configuration";
+        const onPhase = (phase: OAuthTransactionPhase) => {
+            stage = phase;
+        };
         try {
             const { issuer } = getAuthorizationServerConfig();
+            stage = "request_validation";
             const url = new URL(req.url ?? "/", issuer);
             if (req.headers.host !== new URL(issuer).host) {
                 res.statusCode = 421;
@@ -398,6 +421,7 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                     res.end();
                     return;
                 }
+                stage = "identity";
                 const user = await currentUser(req);
                 if (!user) {
                     res.statusCode = 303;
@@ -409,15 +433,21 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                     res.end();
                     return;
                 }
-                await atomicResponse(res, () =>
-                    url.pathname === "/api/oauth/connections"
-                        ? connections(req, res, user)
-                        : interaction(
-                              req,
-                              res,
-                              user,
-                              url.pathname.split("/").at(-1)!,
-                          ),
+                stage = "database_connect";
+                await atomicResponse(
+                    res,
+                    () => {
+                        stage = "interaction";
+                        return url.pathname === "/api/oauth/connections"
+                            ? connections(req, res, user)
+                            : interaction(
+                                  req,
+                                  res,
+                                  user,
+                                  url.pathname.split("/").at(-1)!,
+                              );
+                    },
+                    onPhase,
                 );
                 return;
             }
@@ -466,11 +496,12 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                 url.searchParams.has("response_mode") &&
                 url.searchParams.get("response_mode") !== "query"
             ) {
-                res.statusCode = 400;
-                res.end("Only query response mode is supported");
+                textError(res, 400, "Only query response mode is supported");
                 return;
             }
+            stage = "database_connect";
             await atomicResponse(res, async () => {
+                stage = "rate_limit";
                 if (
                     !(await rateLimit("all", 600)) ||
                     (url.pathname === "/api/oauth/register" &&
@@ -485,6 +516,7 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                     url.pathname === "/api/oauth/revoke" &&
                     req.method === "POST"
                 ) {
+                    stage = "revocation";
                     // The provider deliberately rejects JWTs at its revocation endpoint.
                     // Resolve our JWT to a short-lived opaque surrogate for the same
                     // grant, then let the provider authenticate the client and apply its
@@ -525,8 +557,9 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                     // stream has ended; preserve duplicate rejection above.
                     req.body = Object.fromEntries(form);
                 }
+                stage = "provider";
                 await getMcpProvider().callback()(req, res);
-            });
+            }, onPhase);
             // oidc-provider handles OAuth protocol errors without throwing.
             // Capture only a fixed route label and the final status.
             const route = oauthDiagnosticRoute(url.pathname);
@@ -539,11 +572,12 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
             const invalidRequest =
                 error instanceof oauthErrors.SessionNotFound ||
                 error instanceof oauthErrors.InvalidRequest;
-            if (!invalidRequest) logOAuthServerFailure(error);
+            if (!invalidRequest) logOAuthServerFailure(error, stage);
             if (!res.headersSent) {
                 for (const name of ["Location", "Content-Length", "Set-Cookie"])
                     res.removeHeader(name);
                 res.statusCode = invalidRequest ? 400 : 503;
+                res.setHeader("Content-Type", "text/plain; charset=utf-8");
                 const route = oauthDiagnosticRoute(
                     new URL(req.url ?? "/", "https://invalid.example").pathname,
                 );
