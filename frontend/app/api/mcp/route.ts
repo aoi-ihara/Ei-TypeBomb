@@ -486,7 +486,7 @@ async function callTool(
         if (typeof roomId !== "string" || !roomId.trim()) {
             return toolError("room_idを指定してください。");
         }
-        const { room_id: _roomId, ...input } = args;
+        const { ...input } = args;
         const { patch, error } = validateRoomPatch(input);
         if (error) return toolError(error);
         if (Object.keys(patch).length === 0)

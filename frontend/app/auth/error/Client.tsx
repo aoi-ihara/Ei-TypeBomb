@@ -2,12 +2,9 @@
 
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
-import { useRouter } from "next/navigation";
-import { startNavigationProgress } from "@/lib/navigation-progress";
 import Header from "@/components/layout/Header";
 
 export default function Client({ message }: { message: string }) {
-    const router = useRouter();
     return (
         <>
             <Header />
@@ -20,23 +17,14 @@ export default function Client({ message }: { message: string }) {
                     {message}
                 </p>
                 <Button
-                    onClick={() => {
-                        startNavigationProgress();
-                        router.push("/auth/sign-in");
-                    }}
+                    href="/auth/sign-in"
                     className="w-full"
                     iconName="rotateCcw"
+                    variant="primary"
                 >
                     もう一度試す
                 </Button>
-                <Button
-                    onClick={() => {
-                        startNavigationProgress();
-                        router.push("/");
-                    }}
-                    variant="text"
-                    iconName="home"
-                >
+                <Button href="/" className="w-full" iconName="home">
                     ホームに戻る
                 </Button>
             </Shell>

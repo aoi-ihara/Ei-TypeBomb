@@ -1,12 +1,18 @@
 import { createClient } from "@/lib/db/server";
 import { redirect } from "next/navigation";
-
-import { mockOAuthConsent } from "@/lib/mocks/oauth-consent";
 import Shell from "@/components/layout/Shell";
 import Header from "@/components/layout/Header";
 import Button from "@/components/ui/Button";
 
-function Row({ heading, body }: { heading?: string; body: string }) {
+function Row({
+    heading,
+    body,
+    font = "mono",
+}: {
+    heading?: string;
+    body: string;
+    font?: "mono" | "default" | "italic";
+}) {
     return (
         <div className="flex">
             {heading && (
@@ -18,7 +24,7 @@ function Row({ heading, body }: { heading?: string; body: string }) {
                 </span>
             )}
             <span
-                className="w-full font-mono wrap-anywhere flex h-fit"
+                className={`w-full ${font === "mono" ? "font-mono" : font === "italic" && "opacity-50 italic"} wrap-anywhere flex h-fit`}
                 data-cursor="text"
             >
                 {body}
@@ -115,28 +121,20 @@ export default async function OAuthConsentPage({
         );
     }
 
-    const useMock = authorizationId === "auth_test_123456789";
-
-    console.log("[OAuth Consent Debug]", {
-        authorizationId,
-        nodeEnv: process.env.NODE_ENV,
-        useMock,
-    });
-
-    const { data, error } = useMock
-        ? { data: mockOAuthConsent, error: null }
-        : await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
+    const { data, error } =
+        await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
 
     if (error || !data) {
         return (
-            <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center px-6 py-16">
-                <h1 className="text-2xl font-bold">
-                    認証リクエストを確認できません
-                </h1>
-                <p className="mt-3 text-sm text-neutral-500">
-                    リクエストが無効か、有効期限が切れている可能性があります。
-                </p>
-            </main>
+            <>
+                <Header />
+                <Shell title="認証に失敗しました" size="small">
+                    <p data-cursor="text">リクエストを確認できませんでした。</p>
+                    <Button href="/" className="w-full" iconName="home">
+                        ホームに戻る
+                    </Button>
+                </Shell>
+            </>
         );
     }
 
@@ -145,32 +143,40 @@ export default async function OAuthConsentPage({
     }
 
     const details = data;
-    const clientName = details.client?.name?.trim() || "名称未設定のアプリ";
     const requestedScopes = (details.scope ?? "").split(/\s+/).filter(Boolean);
 
     return (
         <>
             <Header />
             <Shell title="アプリの接続リクエスト" size="large">
-                <p data-cursor="text">
+                <p className="w-full" data-cursor="text">
                     次のアプリが、Supabaseアカウント認証を要求しています。許可する前にアプリ名,
                     ウェブサイト, リダイレクト先を確認してください。
                 </p>
 
-                <h2 className="font-bold">情報</h2>
+                <h2 className="font-bold" data-cursor="text">
+                    情報
+                </h2>
                 <section className="rounded-2xl bg-(--color-background-secondary) p-4 flex flex-col gap-4">
                     <Row heading="名称" body={details.client.name} />
                     {details.client?.uri ? (
                         <Row heading="ウェブサイト" body={details.client.uri} />
                     ) : (
-                        <p className="mt-3 text-sm leading-6 text-red-700 dark:text-red-400">
-                            アプリのウェブサイトが登録されていません。接続先を確認できない場合は許可しないでください。
-                        </p>
+                        <Row
+                            heading="ウェブサイト"
+                            body="ウェブサイトなし"
+                            font="italic"
+                        />
                     )}
                     <Row heading="リダイレクト先" body={details.redirect_uri} />
                 </section>
 
-                <h2 className="font-bold">要求されたデータ</h2>
+                <h2 className="font-bold" data-cursor="text">
+                    要求されたデータ
+                </h2>
+                <p className="w-full" data-cursor="text">
+                    以下の情報が接続元のアプリに公開されます。
+                </p>
                 <section className="w-full rounded-2xl bg-(--color-background-secondary) p-4 flex flex-col gap-4">
                     {requestedScopes.length > 0 ? (
                         requestedScopes.map((scope) => (
@@ -178,15 +184,15 @@ export default async function OAuthConsentPage({
                         ))
                     ) : (
                         <p className="opacity-50 italic">
-                            OAuthスコープは指定されていません。
+                            要求されたデータなし
                         </p>
                     )}
                 </section>
-                <p data-cursor="text">
-                    心当たりのないアプリや、ウェブサイトとリダイレクト先が一致しないアプリからのリクエストは許可しないでください。許可後も、Supabaseアカウントの認可済みアプリからアクセスを取り消せます。
+                <p className="w-full" data-cursor="text">
+                    心当たりのないアプリや、ウェブサイトとリダイレクト先が一致しない場合は許可しないでください。許可後もアカウント設定から取り消すことができます。
                 </p>
 
-                <div className="mt-8 flex gap-4 w-full">
+                <div className="flex gap-4 w-full">
                     <form action={denyAuthorization} className="w-full">
                         <input
                             type="hidden"
