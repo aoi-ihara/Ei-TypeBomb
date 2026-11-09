@@ -37,8 +37,6 @@ function load(overrides = {}) {
         require(id) {
             if (id.endsWith("/db/server"))
                 return { createClient: async () => ({ auth }) };
-            if (id.endsWith("/oauth-config"))
-                return { isOAuthEnabled: () => Boolean(overrides.oauth) };
             if (id.endsWith("/validator"))
                 return {
                     validateEmail: (e) =>
@@ -54,20 +52,11 @@ function load(overrides = {}) {
     return { submit: exports.submitAccountForm, calls };
 }
 
-test("OAuth accounts cannot establish a password session or mutate provider credentials", async () => {
-    for (const mode of [
-        "sign-in",
-        "sign-up",
-        "recovery",
-        "email",
-        "password",
-    ]) {
-        const { submit, calls } = load({ oauth: true });
-        assert.ok(
-            await submit(mode, "a@example.com", "password123", "captcha"),
-        );
-        assert.equal(calls.length, 0);
-    }
+test("ETB password sign-in uses Supabase Auth even without legacy OAuth", async () => {
+    const { submit, calls } = load();
+    assert.equal(await submit("sign-in", "a@example.com", "password123", "captcha"), null);
+    assert.equal(calls[0][0], "signInWithPassword");
+    assert.equal(calls[0][1].options.captchaToken, "captcha");
 });
 test("public operations require CAPTCHA before calling Auth", async () => {
     for (const mode of ["sign-in", "sign-up", "recovery"]) {
