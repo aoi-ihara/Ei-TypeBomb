@@ -3,7 +3,7 @@ import "@/app/page.css";
 import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
-import { MarkdownReader } from "@/components/layout/MarkdownReader";
+import { MarkdownReader } from "@/components/docs/MarkdownReader";
 
 export default async function TermsOfUsePage() {
     const filePath = path.join(

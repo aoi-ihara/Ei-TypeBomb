@@ -709,11 +709,11 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
 });
 test("actual input callbacks retain a wrong character through Backspace correction", () => {
     const source = fs.readFileSync(
-        path.join(root, "components/feature/InputView.tsx"),
+        path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
     const ast = ts.createSourceFile(
-            "InputView.tsx",
+            "TypingView.tsx",
             source,
             ts.ScriptTarget.Latest,
             true,
@@ -861,7 +861,7 @@ test("manual hints skip solved letters and spaces and never reveal the last unre
 
 function getInputFunction(name, globals) {
     const source = fs.readFileSync(
-        path.join(root, "components/feature/InputView.tsx"),
+        path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
     const ast = ts.createSourceFile(
@@ -888,7 +888,7 @@ function getInputFunction(name, globals) {
 
 test("manual hint shortcut is handled by the text input change path", () => {
     const source = fs.readFileSync(
-        path.join(root, "components/feature/InputView.tsx"),
+        path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
     assert.match(source, /if \(char === " "\)/);
@@ -898,7 +898,7 @@ test("manual hint shortcut is handled by the text input change path", () => {
 
 test("full manual hint reuses the inline overlay and keeps typing enabled", () => {
     const source = fs.readFileSync(
-        path.join(root, "components/feature/InputView.tsx"),
+        path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
     assert.match(
@@ -916,7 +916,7 @@ test("full manual hint reuses the inline overlay and keeps typing enabled", () =
 
 test("Playground full hints and online partial hints clear incorrect English and kana input", () => {
     const source = fs.readFileSync(
-        path.join(root, "components/feature/InputView.tsx"),
+        path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
     assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);

@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
-import { Icon } from "./Icon";
-import Button from "./Button";
+import { Icon } from "@/components/ui/Icon";
+import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 import Link from "next/link";
 
