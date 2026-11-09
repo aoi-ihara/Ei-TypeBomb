@@ -14,7 +14,7 @@
         "test:kana": "node --test test/romaji-input.test.mjs",
         "test:import": "node --test test/import-words.test.mjs",
         "test:bot-typing": "node --test test/bot-typing.test.mjs",
-        "test:mcp-oauth": "node --test test/mcp-oauth-discovery.test.mjs && tsx --test test/mcp-oauth-diagnostics.test.mts",
+        "test:mcp-oauth": "node --test test/account-auth.test.cjs test/mcp-etb-auth.test.cjs test/mcp-oauth-discovery.test.mjs && tsx --test test/mcp-oauth-diagnostics.test.mts",
         "test:account": "node --test test/account-auth.test.cjs",
         "test:room-list": "tsx --test test/room-list.test.mts",
         "check:mcp-oauth": "node scripts/check-mcp-oauth.mjs",

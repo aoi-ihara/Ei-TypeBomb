@@ -21,8 +21,7 @@ import {
     logOAuthServerFailure,
     type OAuthFailureStage,
 } from "./diagnostics";
-import { oauthCookieNames } from "../../auth/oauth-config";
-import { verifyOAuthAccessToken } from "../../auth/oauth-tokens";
+import { getMcpAuthenticatedUser } from "./identity";
 
 type CurrentUser = (req: NextApiRequest) => Promise<string | null>;
 
@@ -45,31 +44,6 @@ async function atomicResponse(
         res.end = original;
     }
     finish?.();
-}
-async function rcAccountUser(req: NextApiRequest) {
-    const token = req.cookies[oauthCookieNames().access];
-    if (!token) return null;
-    try {
-        await verifyOAuthAccessToken(token);
-        const response = await fetch(
-            process.env.NEXT_PUBLIC_SUPABASE_URL + "/auth/v1/user",
-            {
-                cache: "no-store",
-                signal: AbortSignal.timeout(5000),
-                headers: {
-                    apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                    Authorization: "Bearer " + token,
-                },
-            },
-        );
-        if (!response.ok) return null;
-        const user = await response.json();
-        return typeof user.id === "string" && user.is_anonymous !== true
-            ? user.id
-            : null;
-    } catch {
-        return null;
-    }
 }
 
 function csrf(user: string, purpose: string) {
@@ -187,7 +161,7 @@ async function interaction(
         details.session?.accountId &&
         details.session.accountId !== user
     ) {
-        // rcAccount is the source of identity. Discard a stale provider browser
+        // ETB Supabase Auth is the source of identity. Discard a stale MCP browser
         // session before re-running the validated request for the new account.
         // Existing grants remain with their original owner.
         const session = await provider.Session.findByUid(details.session.uid);
@@ -381,9 +355,9 @@ export function oauthDiagnosticRoute(pathname: string) {
     return null;
 }
 
-/** Current-user injection is for integration tests; production always uses the
- * existing rcAccount web access cookie, JWKS validation and Auth getUser API. */
-export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
+/** Current-user injection is for integration tests; production verifies the
+ * ETB Supabase browser session through Auth getUser. */
+export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticatedUser) {
     return async (req: NextApiRequest, res: NextApiResponse) => {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Content-Type-Options", "nosniff");
@@ -427,7 +401,7 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                     res.statusCode = 303;
                     res.setHeader(
                         "Location",
-                        "/auth/sign-in?next=" +
+                        "/sign-in?next=" +
                             encodeURIComponent(url.pathname),
                     );
                     res.end();

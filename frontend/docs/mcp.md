@@ -34,16 +34,15 @@ ETB hosts a dedicated OAuth authorization server on Vercel/Next.js using
 The library implements authorization-code exchange, mandatory S256 PKCE,
 RFC 7591 dynamic client registration (DCR), exact registered redirect matching,
 RFC 8707 resource indicators, refresh rotation/reuse detection, and RFC 7009
-refresh-token revocation. ETB supplies the rcAccount login adapter, explicit
+refresh-token revocation. ETB supplies the local Supabase Auth session adapter, explicit
 consent UI, persistence, resource policy and MCP JWT verification. This is a
 restricted OAuth profile, not a general-purpose OIDC login provider.
 
-rcAccount (Supabase Auth) continues to authenticate the user through the existing
-web login. `RC_HUB_OAUTH_CLIENT_ID`, `RC_HUB_OAUTH_CLIENT_SECRET`, `/auth/start`,
-`/auth/callback`, and the existing shared `/oauth/consent` are unchanged. The new
-MCP client IDs are dynamically generated and are independent of the web login
-client. No shared Supabase OAuth settings or Custom Access Token Hook changes
-are required. Normal rcAccount JWTs are never accepted as MCP access tokens.
+MCP consent authenticates users via ETB's own /sign-in form and its Supabase
+Auth session cookies (using the existing Supabase project). It does **not**
+require the a separate website OAuth client. The dynamically registered MCP client IDs are
+independent of website login. Website sessions are never accepted directly as
+MCP access tokens. After sign-in, ETB returns to the pending MCP consent page.
 
 For `ETB_BASE_URL=https://ei-typebomb.com`:
 
@@ -53,7 +52,7 @@ For `ETB_BASE_URL=https://ei-typebomb.com`:
 | `/.well-known/oauth-authorization-server` | RFC 8414 authorization server metadata |
 | `/api/oauth/register` | DCR for public and confidential clients |
 | `/api/oauth/authorize` | Authorization code + S256 PKCE |
-| `/api/oauth/interaction/:uid` | rcAccount login and explicit approve/deny |
+| `/api/oauth/interaction/:uid` | ETB login and explicit approve/deny |
 | `/api/oauth/token` | Code exchange and refresh |
 | `/api/oauth/jwks` | Public ES256 signing keys |
 | `/api/oauth/revoke` | Refresh-token or access-JWT revocation |
@@ -82,9 +81,9 @@ full interaction URLs are not sent as referrers, and normal same-origin HTTPS
 form POSTs retain their Origin header. Do not replace it with `no-referrer`,
 which makes browser form submissions send `Origin: null` and fail the strict
 Origin check. Null, missing and foreign origins remain rejected.
-The user is verified through the existing rcAccount web JWT and Auth `getUser`
+The user is verified through the ETB Supabase browser session and Auth `getUser`
 endpoint; an anonymous Supabase user cannot approve. Website session refresh
-continues to run through the existing Next.js proxy.
+continues to run through the existing Next.js proxy before MCP Pages API routes.
 
 Only authorization-code clients using `none`, `client_secret_basic` or
 `client_secret_post` are accepted. Confidential client authentication on code
@@ -151,10 +150,11 @@ and Preview. Do not use a `NEXT_PUBLIC_` prefix for MCP keys or credentials.
 | `ETB_MCP_COOKIE_KEYS` | Comma-separated random signing keys, each at least 32 characters; current key first |
 | `ETB_MCP_SIGNING_JWKS` | Private ES256 JWKS JSON; unique `kid`, `alg=ES256`, `use=sig`; current key first |
 
-The existing `NEXT_PUBLIC_ETB_OAUTH_ENABLED=true` web OAuth deployment and its
-rcAccount credentials must already work, including the canonical `/auth/callback`
-registration. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` remain
-the rcAccount project's values. Keep the existing MCP room API's
+MCP OAuth is independent of website login; `ETB_MCP_OAUTH_ENABLED=true`
+activates the authorization server while ETB continues to use its own
+Supabase Auth browser sessions.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` remain
+the existing Supabase project's values. Keep the existing MCP room API's
 `SUPABASE_SERVICE_ROLE_KEY`; it is unrelated to the new database login.
 When MCP is disabled or missing required configuration, authorization is 503
 and MCP access fails closed. This PR does not enable MCP in a live environment.
@@ -177,7 +177,7 @@ database together.
 Apply `supabase/migrations/20261108120000_mcp_oauth_storage.sql` through the
 normal database migration process. It creates the private `etb_mcp_oauth` schema
 with RLS enabled and no public/anon/authenticated access. It does not modify
-`auth.*`, public application tables, token hooks or shared rcAccount grants.
+`auth.*`, public application tables, token hooks or Supabase Auth grants.
 Provision a dedicated PostgreSQL LOGIN role with a secret managed outside git,
 then substitute its identifier in this administrative SQL:
 
@@ -224,16 +224,16 @@ security decisions. These caps may need tuning as usage grows.
 
 Do not enable this on arbitrary preview aliases: use the stable configured
 canonical preview domain and matching environment secrets. Requests on a
-noncanonical Host receive 421. Existing rcAccount-issued MCP tokens must be
+noncanonical Host receive 421. Existing Supabase Auth-issued MCP tokens must be
 replaced by reconnecting clients after cutover. The legacy shared fixed-client
 hook can be retired separately after checking its other consumers; ETB no longer
-uses it. There is no fixed MCP Client ID allowlist or rcAccount token fallback.
+uses it. There is no fixed MCP Client ID allowlist or Supabase Auth token fallback.
 
 ### Verification and client setup
 
 The MCP client needs only `https://ei-typebomb.com/api/mcp` (or the preview URL).
-It discovers ETB metadata, dynamically registers, opens rcAccount login/ETB
-consent and obtains its own tokens. Do not paste a website token into the client.
+It discovers ETB metadata, dynamically registers, opens ETB sign-in/consent
+and obtains its own tokens. Do not paste a website token into the client.
 
 ```sh
 cd frontend
@@ -249,7 +249,7 @@ invalid metadata/redirects, PKCE, explicit consent, CSRF, denial, code replay,
 concurrent redemption, JWT claims and MCP acceptance, refresh/reuse revocation,
 JWT/refresh revocation, confidential client authentication, user-owned disconnect,
 host validation, commit failures and rate limits.
-It does not log into a live rcAccount or prove actual ChatGPT/Claude UI behavior.
+It does not log into a live Supabase Auth or prove actual ChatGPT/Claude UI behavior.
 The discovery diagnostic also does not prove issued-token audience binding.
 
 Consent uses `Referrer-Policy: strict-origin` so browser form submissions retain
@@ -271,22 +271,22 @@ Open the printed `start` URL in Chrome. Approve and confirm the success page
 (callback, PKCE code exchange and MCP JWT verification), then open `start` again
 and deny. The printed `status` URL exposes only aggregate outcome counters.
 The fixture resets only its private schema in that exact local database, uses
-ephemeral keys and a simulated rcAccount user, and never accesses live accounts.
+ephemeral keys and a simulated Supabase Auth user, and never accesses live accounts.
 Two loopback origins model the issuer and client; a test-only TLS-offload shim
 maps those to canonical HTTPS origins inside the real production handler.
 Cookies, redirect paths, CSP and form submissions remain browser-enforced.
 
 Before enabling production, complete a fresh ChatGPT and Claude connection on
-the canonical preview domain with the real rcAccount account, confirm approve
-and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm a normal web
-login and other rcAccount services still work. Treat this deployment check as
+the canonical preview domain with the real ETB account, confirm approve
+and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm the ETB web
+login, password recovery and existing room ownership still work. Treat this deployment check as
 required; local fixtures are not evidence of live interoperability. Inspect the
 consent/connection-management screens visually as well.
 
 The earlier [PR #504](https://github.com/aoi-ihara/Ei-TypeBomb/pull/504) documented
 that DCR alone could not fix Supabase's resource audience issuance. This design
-resolves that dependency by issuing MCP tokens in ETB while preserving rcAccount
-as the user's login provider.
+resolves that dependency by issuing MCP tokens in ETB and using ETB's
+Supabase-backed login for user authentication.
 
 ## Tools
 

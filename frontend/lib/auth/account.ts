@@ -1,6 +1,5 @@
 "use server";
 import { createClient } from "@/lib/db/server";
-import { isOAuthEnabled } from "@/lib/auth/oauth-config";
 import { validateEmail, validatePassword } from "@/lib/auth/validator";
 import { getEtbUrl } from "@/lib/config/base-url";
 
@@ -10,7 +9,6 @@ export async function submitAccountForm(
     password: string,
     captchaToken: string,
 ) {
-    if (isOAuthEnabled()) return "RC Hubでアカウントを管理してください。";
     if (!["sign-in", "sign-up", "recovery", "email", "password"].includes(mode))
         return "操作が正しくありません。";
     const validation =

@@ -9,11 +9,6 @@ export function getAuthorizationServerConfig() {
     if (process.env.ETB_MCP_OAUTH_ENABLED !== "true") {
         throw new Error("MCP authorization server is disabled");
     }
-    if (process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED !== "true") {
-        throw new Error(
-            "MCP OAuth requires the existing rcAccount web OAuth login",
-        );
-    }
     const issuer = getMcpIssuer();
     const databaseUrl = process.env.ETB_MCP_DATABASE_URL;
     const encryptionKey = Buffer.from(

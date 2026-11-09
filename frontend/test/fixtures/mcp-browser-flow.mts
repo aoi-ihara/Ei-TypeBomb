@@ -1,5 +1,5 @@
 /** Manual real-browser fixture. Local-only disposable DB and simulated user;
- * never contacts rcAccount, never reads deployment keys, never grants live access.
+ * never contacts Supabase Auth, never reads deployment keys, never grants live access.
  * A local TLS-offload shim maps the fixture's HTTP loopback origins to the
  * canonical HTTPS issuer/client origins consumed by the production handler.
  */
@@ -32,7 +32,6 @@ const { privateKey } = await generateKeyPair("ES256", { extractable: true });
 Object.assign(process.env, {
   ETB_BASE_URL: issuer,
   ETB_MCP_OAUTH_ENABLED: "true",
-  NEXT_PUBLIC_ETB_OAUTH_ENABLED: "true",
   ETB_MCP_DATABASE_URL: databaseUrl,
   ETB_MCP_STORAGE_KEY: randomBytes(32).toString("base64url"),
   ETB_MCP_COOKIE_KEYS: randomBytes(48).toString("base64url"),
