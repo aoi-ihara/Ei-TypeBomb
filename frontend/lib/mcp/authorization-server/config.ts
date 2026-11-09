@@ -36,12 +36,13 @@ export function getAuthorizationServerConfig() {
             "MCP OAuth storage/cookie configuration is incomplete",
         );
     }
-    let jwks: { keys?: any[] } | null;
-    try {
-        jwks = JSON.parse(process.env.ETB_MCP_SIGNING_JWKS ?? "null");
-    } catch {
-        throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "Invalid MCP OAuth signing JWKS JSON");
-    }
+    const jwks = (() => {
+        try {
+            return JSON.parse(process.env.ETB_MCP_SIGNING_JWKS ?? "null");
+        } catch {
+            throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "Invalid MCP OAuth signing JWKS JSON");
+        }
+    })();
     if (!jwks || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
         throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "MCP OAuth requires persistent signing keys");
     }
