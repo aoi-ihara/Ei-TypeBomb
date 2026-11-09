@@ -5,12 +5,17 @@ export const MCP_SCOPE = "etb:rooms";
 export const getMcpIssuer = getEtbBaseUrl;
 export const getMcpResource = () => getEtbUrl("/api/mcp");
 
+function configurationError(code: string, message: string): Error {
+    return Object.assign(new Error(message), { code });
+}
+
 export function getAuthorizationServerConfig() {
     if (process.env.ETB_MCP_OAUTH_ENABLED !== "true") {
-        throw new Error("MCP authorization server is disabled");
+        throw configurationError("MCP_OAUTH_DISABLED", "MCP authorization server is disabled");
     }
     if (process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED !== "true") {
-        throw new Error(
+        throw configurationError(
+            "MCP_OAUTH_WEB_LOGIN_DISABLED",
             "MCP OAuth requires the existing rcAccount web OAuth login",
         );
     }
@@ -26,11 +31,19 @@ export function getAuthorizationServerConfig() {
         encryptionKey.length !== 32 ||
         cookieKeys.some((k) => k.length < 32)
     ) {
-        throw new Error("MCP OAuth storage/cookie configuration is incomplete");
+        throw configurationError(
+            "MCP_OAUTH_STORAGE_CONFIG_INVALID",
+            "MCP OAuth storage/cookie configuration is incomplete",
+        );
     }
-    const jwks = JSON.parse(process.env.ETB_MCP_SIGNING_JWKS ?? "null");
+    let jwks: { keys?: any[] } | null;
+    try {
+        jwks = JSON.parse(process.env.ETB_MCP_SIGNING_JWKS ?? "null");
+    } catch {
+        throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "Invalid MCP OAuth signing JWKS JSON");
+    }
     if (!jwks || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
-        throw new Error("MCP OAuth requires persistent signing keys");
+        throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "MCP OAuth requires persistent signing keys");
     }
     const kids = new Set();
     for (const jwk of jwks.keys) {
@@ -44,11 +57,13 @@ export function getAuthorizationServerConfig() {
             kids.has(jwk.kid) ||
             typeof jwk.d !== "string"
         ) {
-            throw new Error(
-                "MCP OAuth requires distinct private ES256 signing keys",
-            );
+            throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "MCP OAuth requires distinct private ES256 signing keys");
         }
-        createPublicKey(createPrivateKey({ key: jwk, format: "jwk" }));
+        try {
+            createPublicKey(createPrivateKey({ key: jwk, format: "jwk" }));
+        } catch {
+            throw configurationError("MCP_OAUTH_SIGNING_KEYS_INVALID", "Malformed MCP OAuth signing key");
+        }
         kids.add(jwk.kid);
     }
     return { issuer, databaseUrl, encryptionKey, cookieKeys, jwks };
