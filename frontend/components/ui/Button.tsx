@@ -126,7 +126,6 @@ export default function Button({
             data-cursor-shape={cursor}
         >
             <button
-                ref={buttonRef}
                 {...ariaProps}
                 type={type}
                 onClick={onClick}
