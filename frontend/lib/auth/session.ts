@@ -2,21 +2,11 @@
 
 import { cache } from "react";
 import { createClient } from "@/lib/db/server";
-import { isOAuthEnabled, oauthCookieNames } from "@/lib/auth/oauth-config";
-import { cookies } from "next/headers";
-import { getOAuthAccessToken } from "@/lib/auth/oauth-session";
 import { serverError } from "@/lib/server-console";
 
 const currentUser = cache(async () => {
     const supabase = await createClient();
-    const token = isOAuthEnabled() ? await getOAuthAccessToken() : null;
-
-    // OAuth refresh is handled by proxy.ts, not supabase-js.
-    if (isOAuthEnabled() && !token) return null;
-
-    const { data, error } = await (token
-        ? supabase.auth.getUser(token)
-        : supabase.auth.getUser());
+    const { data, error } = await supabase.auth.getUser();
 
     if (error) {
         serverError("failed to get user", error, "AUTH");
@@ -26,9 +16,6 @@ const currentUser = cache(async () => {
 });
 
 export const getSession = async () => {
-    if (isOAuthEnabled()) {
-        return (await currentUser())?.id ?? null;
-    }
     const supabase = await createClient({
         next: { tags: ["current-session"] },
     });
@@ -68,36 +55,6 @@ export const getMemoryAuthStatus = async (): Promise<{
 }> => {
     try {
         const supabase = await createClient();
-        if (isOAuthEnabled()) {
-            const store = await cookies();
-            const names = oauthCookieNames();
-            const hasCredentials = Boolean(
-                store.get(names.access)?.value ||
-                store.get(names.refresh)?.value,
-            );
-            if (!hasCredentials) return { userId: null, error: null };
-
-            const token = await getOAuthAccessToken();
-            if (!token) {
-                return {
-                    userId: null,
-                    error: { message: "OAuth session could not be verified" },
-                };
-            }
-            const { data, error } = await supabase.auth.getUser(token);
-            if (error || !data.user) {
-                return {
-                    userId: null,
-                    error: {
-                        message:
-                            error?.message ??
-                            "Could not verify authenticated user",
-                    },
-                };
-            }
-            return { userId: data.user.id, error: null };
-        }
-
         const { data: session, error: sessionError } =
             await supabase.auth.getSession();
         if (sessionError) {
