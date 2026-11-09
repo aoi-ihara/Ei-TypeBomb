@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getAuthorizationServerConfig } from "../lib/mcp/authorization-server/config";
 import {
     logOAuthProtocolFailure,
     logOAuthServerFailure,
@@ -90,5 +91,38 @@ test("authorization 503 errors display as plain text, not downloads", async () =
         );
         if (original === undefined) delete process.env.ETB_MCP_OAUTH_ENABLED;
         else process.env.ETB_MCP_OAUTH_ENABLED = original;
+    }
+});
+
+test("MCP OAuth configuration errors are classified without revealing secrets", () => {
+    const keys = [
+        "ETB_MCP_OAUTH_ENABLED",
+        "NEXT_PUBLIC_ETB_OAUTH_ENABLED",
+        "ETB_MCP_DATABASE_URL",
+        "ETB_MCP_STORAGE_KEY",
+        "ETB_MCP_COOKIE_KEYS",
+        "ETB_MCP_SIGNING_JWKS",
+    ] as const;
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    try {
+        process.env.ETB_MCP_OAUTH_ENABLED = "false";
+        assert.throws(() => getAuthorizationServerConfig(), { code: "MCP_OAUTH_DISABLED" });
+        process.env.ETB_MCP_OAUTH_ENABLED = "true";
+        process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED = "false";
+        assert.throws(() => getAuthorizationServerConfig(), { code: "MCP_OAUTH_WEB_LOGIN_DISABLED" });
+        process.env.NEXT_PUBLIC_ETB_OAUTH_ENABLED = "true";
+        delete process.env.ETB_MCP_DATABASE_URL;
+        assert.throws(() => getAuthorizationServerConfig(), { code: "MCP_OAUTH_STORAGE_CONFIG_INVALID" });
+        process.env.ETB_MCP_DATABASE_URL = "postgresql://localhost/test";
+        process.env.ETB_MCP_STORAGE_KEY = Buffer.alloc(32, 1).toString("base64url");
+        process.env.ETB_MCP_COOKIE_KEYS = "a".repeat(32);
+        process.env.ETB_MCP_SIGNING_JWKS = "{invalid";
+        assert.throws(() => getAuthorizationServerConfig(), { code: "MCP_OAUTH_SIGNING_KEYS_INVALID" });
+    } finally {
+        for (const key of keys) {
+            const value = previous[key];
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
     }
 });
