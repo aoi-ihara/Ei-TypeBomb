@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
-import RoomCard from "@/components/ui/RoomCard";
+import RoomCard from "@/components/rooms/RoomCard";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
@@ -16,7 +16,7 @@ import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import { View } from "@/type";
-import RoomNavigation from "./RoomNavigation";
+import RoomNavigation from "@/components/rooms/RoomNavigation";
 import { selectRoomsForView } from "@/lib/room/list-view";
 
 type CurrentUser = {

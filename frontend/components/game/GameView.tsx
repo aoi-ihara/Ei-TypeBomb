@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode, Ref } from "react";
-import ItemView from "@/components/feature/ItemView";
-import UsersView from "@/components/feature/UsersView";
+import ItemView from "@/components/recall/ItemView";
+import UsersView from "@/components/game/UsersView";
 import Button from "@/components/ui/Button";
+import PlayAgainButton from "@/components/game/PlayAgainButton";
 import type { GameBomb, Item, Position, Room, User } from "@/type";
 import type {
     LearningMode,
@@ -13,8 +14,8 @@ import type {
 import { getRoomItems } from "@/lib/item";
 import GameNotice, {
     type GameNoticeProps,
-} from "@/components/feature/GameNotice";
-import ReconnectStatus from "@/components/feature/ReconnectStatus";
+} from "@/components/game/GameNotice";
+import ReconnectStatus from "@/components/game/ReconnectStatus";
 
 type Props = {
     room: Room | null;
@@ -216,14 +217,12 @@ export default function GameView({
                                 </Button>
                             </>
                         ) : (
-                            <Button
+                            <PlayAgainButton
                                 iconName="rotateCcw"
                                 className="w-full"
                                 variant="primary"
                                 onClick={onPlayAgain}
-                            >
-                                もう一度プレイ
-                            </Button>
+                            />
                         )}
                         <Button
                             iconName="plus"

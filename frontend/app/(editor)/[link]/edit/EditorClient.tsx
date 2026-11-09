@@ -44,7 +44,7 @@ import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
 import Header from "@/components/layout/Header";
-import RoomNavigation from "@/app/(game)/RoomNavigation";
+import RoomNavigation from "@/components/rooms/RoomNavigation";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
 

@@ -5,7 +5,7 @@ import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
 import type { Item, LegacyWord } from "@/type";
 import { legacyWireWordsToItems } from "@/lib/item";
-import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
+import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import { decodeKanaProgress, hasHiragana } from "@/lib/romaji-input.mjs";
 
 type RoomSnapshot = {

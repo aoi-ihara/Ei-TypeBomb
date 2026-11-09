@@ -1,4 +1,4 @@
-import TypingView from "@/components/feature/InputView";
+import TypingView from "@/components/recall/TypingView";
 import type { TypedRecallItem } from "@/type";
 import type {
     LearningMode,

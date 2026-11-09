@@ -3,7 +3,7 @@ import {
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
 import { useEffect, useRef, useState } from "react";
-import KanaTypingBoxes from "@/components/feature/KanaTypingBoxes";
+import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import {
     advanceKanaInput,
     decodeKanaProgress,

@@ -6,7 +6,7 @@ import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
 import RoomShareActions from "./RoomShareActions";
 import Header from "@/components/layout/Header";
-import RoomNavigation from "../RoomNavigation";
+import RoomNavigation from "@/components/rooms/RoomNavigation";
 
 export default async function RoomPage({
     params,
