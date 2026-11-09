@@ -1,12 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import Shell from "@/components/layout/Shell";
-import { useEffect } from "react";
-
-export default function OAuthLoginPage() {
-    useEffect(() => {
-        window.location.replace("/auth/start" + window.location.search);
-    }, []);
-
-    return <Shell title="サインイン" loading={true} />;
+/** Legacy sign-in URL now opens ETB's own sign-in form. */
+export default function Page() {
+    redirect("/sign-in");
 }
