@@ -40,8 +40,7 @@ restricted OAuth profile, not a general-purpose OIDC login provider.
 
 MCP consent authenticates users via ETB's own /sign-in form and its Supabase
 Auth session cookies (using the existing Supabase project). It does **not**
-require the RC Hub web OAuth client, /auth/start, /auth/callback, or
-RC_HUB_OAUTH_CLIENT_ID/SECRET. The dynamically registered MCP client IDs are
+require the a separate website OAuth client. The dynamically registered MCP client IDs are
 independent of website login. Website sessions are never accepted directly as
 MCP access tokens. After sign-in, ETB returns to the pending MCP consent page.
 
@@ -53,7 +52,7 @@ For `ETB_BASE_URL=https://ei-typebomb.com`:
 | `/.well-known/oauth-authorization-server` | RFC 8414 authorization server metadata |
 | `/api/oauth/register` | DCR for public and confidential clients |
 | `/api/oauth/authorize` | Authorization code + S256 PKCE |
-| `/api/oauth/interaction/:uid` | rcAccount login and explicit approve/deny |
+| `/api/oauth/interaction/:uid` | ETB login and explicit approve/deny |
 | `/api/oauth/token` | Code exchange and refresh |
 | `/api/oauth/jwks` | Public ES256 signing keys |
 | `/api/oauth/revoke` | Refresh-token or access-JWT revocation |
@@ -151,9 +150,9 @@ and Preview. Do not use a `NEXT_PUBLIC_` prefix for MCP keys or credentials.
 | `ETB_MCP_COOKIE_KEYS` | Comma-separated random signing keys, each at least 32 characters; current key first |
 | `ETB_MCP_SIGNING_JWKS` | Private ES256 JWKS JSON; unique `kid`, `alg=ES256`, `use=sig`; current key first |
 
-MCP OAuth does **not** require `NEXT_PUBLIC_ETB_OAUTH_ENABLED=true`. When
-`ETB_MCP_OAUTH_ENABLED=true`, ETB uses its own sign-in flow even if the legacy
-web OAuth flag is still set to true; RC Hub client credentials are unnecessary.
+MCP OAuth is independent of website login; `ETB_MCP_OAUTH_ENABLED=true`
+activates the authorization server while ETB continues to use its own
+Supabase Auth browser sessions.
 `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` remain
 the existing Supabase project's values. Keep the existing MCP room API's
 `SUPABASE_SERVICE_ROLE_KEY`; it is unrelated to the new database login.
@@ -279,8 +278,8 @@ Cookies, redirect paths, CSP and form submissions remain browser-enforced.
 
 Before enabling production, complete a fresh ChatGPT and Claude connection on
 the canonical preview domain with the real ETB account, confirm approve
-and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm a normal web
-login and other rcAccount services still work. Treat this deployment check as
+and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm the ETB web
+login, password recovery and existing room ownership still work. Treat this deployment check as
 required; local fixtures are not evidence of live interoperability. Inspect the
 consent/connection-management screens visually as well.
 
