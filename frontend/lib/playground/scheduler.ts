@@ -6,12 +6,14 @@ import {
 } from "./memory";
 
 // Product hypotheses. Turns count USER questions only, never BOT presentations.
-export const SHORT_RETRY_GAP = 5;
-export const CONFIRM_RETRY_GAP = 8;
+export const SHORT_RETRY_GAP = 2;
+export const CONFIRM_RETRY_GAP = 5;
 export const RETRY_WINDOW_WIDTH = 3;
 export const CYCLE_STRIDE = 2;
 export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
+// Do not introduce more words while this many still need recall practice.
+export const MAX_ACTIVE_RELEARNING = 4;
 export type RetryEntry = {
     itemId: string;
     earliestTurn: number;
@@ -37,6 +39,7 @@ export type SchedulerState = {
     userAnswered: Record<string, number>;
     botShown: Record<string, number>;
     lastBotItem: string | null;
+    lastUserItem: string | null;
     initialPriorityApplied: boolean;
     current: Selection | null;
 };
@@ -91,6 +94,7 @@ export const createScheduler = (
         userAnswered: {},
         botShown: {},
         lastBotItem: null,
+        lastUserItem: null,
         initialPriorityApplied: false,
         current: null,
     };
@@ -170,36 +174,72 @@ export const chooseNextUserItem = (
     now = Date.now(),
 ): Selection | null => {
     if (state.itemIds.length === 0) return null;
-    if (state.current) return state.current; // Idempotent until the answer is recorded.
+    if (state.current) return state.current;
+
     if (!state.initialPriorityApplied) {
-        // The initial queue is already Fisher–Yates shuffled. A stable sort
-        // preserves that randomness for ties while bringing reviewed, due
-        // words forward on returning sessions.
         state.cycleQueue = state.cycleQueue.sort((a, b) =>
             compareMemoryPriority(a, b, memories, now),
         );
         state.initialPriorityApplied = true;
     }
-    if (state.cycleQueue.length === 0) {
-        state.cycle++;
-        // Every cycle still includes every room item. Randomized ties prevent
-        // equal-priority words from becoming a fixed sequence.
-        state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
-            compareMemoryPriority(a, b, memories, now),
-        );
-    }
+
     const turn = state.turn + 1;
-    const eligible = Object.values(state.retries)
+    const pending = Object.values(state.retries);
+    const eligible = pending
         .filter((entry) => entry.earliestTurn <= turn)
         .sort((a, b) => a.latestTurn - b.latestTurn);
-    const forced = eligible.find((entry) => entry.latestTurn <= turn);
-    const cycleId = state.cycleQueue.find(
-        (id) => !state.retries[id] || state.retries[id].earliestTurn <= turn,
-    );
-    const retry =
-        forced ?? (turn % CYCLE_STRIDE === 0 ? eligible[0] : undefined);
-    const itemId = retry?.itemId ?? cycleId ?? eligible[0]?.itemId;
+
+    // A due relearning item always beats an unseen item. The old alternating
+    // cycle/retry schedule introduced new words even when learners struggled.
+    let itemId: string | undefined = eligible[0]?.itemId;
+
+    const pickFromCycle = () => {
+        if (state.cycleQueue.length === 0) {
+            state.cycle++;
+            state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
+                compareMemoryPriority(a, b, memories, now),
+            );
+        }
+        return state.cycleQueue.find((id) => !state.retries[id]);
+    };
+
+    if (!itemId && pending.length < Math.min(MAX_ACTIVE_RELEARNING, state.itemIds.length)) {
+        itemId = pickFromCycle();
+        // If the new cycle contains only pending words, choose a previously
+        // answered filler instead of breaking the earliest-retry boundary.
+    }
+
+    // When the active pool is full, any unanswered filler can fail and add
+    // a fifth pending retry. Stay inside the pool until a slot clears.
+    if (!itemId && pending.length >= Math.min(MAX_ACTIVE_RELEARNING, state.itemIds.length)) {
+        itemId = [...pending].sort((a, b) =>
+            a.earliestTurn - b.earliestTurn
+        )[0]?.itemId;
+    }
+
+    if (!itemId) {
+        const fillers = state.itemIds.filter(
+            (id) => (state.userAnswered[id] ?? 0) > 0 && !state.retries[id],
+        );
+        const varied = fillers.filter((id) => id !== state.lastUserItem);
+        const pool = varied.length ? varied : fillers;
+        if (pool.length) {
+            const least = Math.min(...pool.map((id) => state.userAnswered[id] ?? 0));
+            const ties = pool.filter((id) => (state.userAnswered[id] ?? 0) === least);
+            itemId = ties[Math.floor(random() * ties.length)];
+        }
+    }
+
+    // Tiny rooms can have every word protected. Reuse the earliest pending
+    // word instead of failing to schedule a question.
+    if (!itemId && pending.length) {
+        itemId = [...pending].sort(
+            (a, b) => a.earliestTurn - b.earliestTurn,
+        )[0]?.itemId;
+    }
+    if (!itemId) itemId = pickFromCycle();
     if (!itemId) throw new Error("Scheduler has no feasible question");
+
     const entry = state.retries[itemId];
     const advancesCycle = state.cycleQueue.includes(itemId);
     if (advancesCycle) {
@@ -208,6 +248,7 @@ export const chooseNextUserItem = (
     }
     delete state.retries[itemId];
     state.turn = turn;
+    state.lastUserItem = itemId;
     state.current = {
         itemId,
         turn,
@@ -250,18 +291,8 @@ export const chooseBotItem = (
     );
     if (!hasUserHistory) return null;
 
-    // If the strict pool is empty, keep the turn handoff alive by choosing a
-    // random non-protected word. It may be unseen, but it is outside the
-    // immediate lookahead/retry set.
-    const safeFallback = state.itemIds.filter(
-        (id) => !protectedIds.has(id) && id !== state.lastBotItem,
-    );
-    const safePool = safeFallback.length
-        ? safeFallback
-        : state.itemIds.filter((id) => !protectedIds.has(id));
-    if (safePool.length)
-        return safePool[Math.floor(random() * safePool.length)];
-
+    // Never let BOT reveal a previously unseen answer: this would silently
+    // introduce a new word while the learner's relearning pool is full.
     // Tiny rooms can have every word protected. In that case reuse a random
     // word the user has already answered, so no new answer is revealed.
     const answeredFallback = state.itemIds.filter(

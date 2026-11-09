@@ -26,9 +26,9 @@ const scheduler = load("lib/playground/scheduler.ts", {
     require: () => memory,
 });
 
-test("retry intervals leave more room between repeated words", () => {
-    assert.equal(scheduler.SHORT_RETRY_GAP, 5);
-    assert.equal(scheduler.CONFIRM_RETRY_GAP, 8);
+test("short retries precede spaced confirmation checks", () => {
+    assert.equal(scheduler.SHORT_RETRY_GAP, 2);
+    assert.equal(scheduler.CONFIRM_RETRY_GAP, 5);
 
     const ids = Array.from({ length: 20 }, (_, index) => String(index));
     const state = scheduler.createScheduler(ids, () => 0);
@@ -38,7 +38,7 @@ test("retry intervals leave more room between repeated words", () => {
         reason: "failed_recall",
         independent: false,
     });
-    assert.equal(state.retries[first.itemId].earliestTurn, 6);
+    assert.equal(state.retries[first.itemId].earliestTurn, 3);
 
     let retry;
     while (!retry) {
@@ -51,7 +51,7 @@ test("retry intervals leave more room between repeated words", () => {
         );
         if (selected.reason === "retry") retry = selected;
     }
-    assert.equal(state.retries[first.itemId].earliestTurn, state.turn + 8);
+    assert.equal(state.retries[first.itemId].earliestTurn, state.turn + 5);
 });
 
 test("retry intervals remain feasible in rooms smaller than the configured gap", () => {
