@@ -2,10 +2,8 @@ import Header from "@/components/layout/Header";
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import AuthForm from "@/components/account/AuthForm";
-import { isOAuthEnabled } from "@/lib/auth/oauth-config";
-import { redirect } from "next/navigation";
+
 export default function Page() {
-    if (isOAuthEnabled()) redirect("/auth/sign-in");
     return (
         <>
             <Header />
