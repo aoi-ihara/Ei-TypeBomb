@@ -346,6 +346,23 @@ async function connections(
     );
 }
 
+/** Collapse authorization resume paths to a fixed, non-sensitive label.
+ * Never include a resume UID or other URL segment in diagnostics. */
+export function oauthDiagnosticRoute(pathname: string) {
+    if (
+        pathname === "/api/oauth/authorize" ||
+        /^\/api\/oauth\/authorize\/[A-Za-z0-9_-]+$/.test(pathname)
+    ) return "authorize";
+    const route = pathname.startsWith("/api/oauth/")
+        ? pathname.slice("/api/oauth/".length)
+        : "";
+    if (
+        route === "token" || route === "register" ||
+        route === "revoke" || route === "jwks"
+    ) return route;
+    return null;
+}
+
 /** Current-user injection is for integration tests; production always uses the
  * existing rcAccount web access cookie, JWKS validation and Auth getUser API. */
 export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
@@ -512,7 +529,7 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
             });
             // oidc-provider handles OAuth protocol errors without throwing.
             // Capture only a fixed route label and the final status.
-            const route = url.pathname.split("/").at(-1);
+            const route = oauthDiagnosticRoute(url.pathname);
             if (
                 res.statusCode >= 400 &&
                 (route === "authorize" || route === "token" ||
@@ -527,8 +544,9 @@ export function createOAuthHandler(currentUser: CurrentUser = rcAccountUser) {
                 for (const name of ["Location", "Content-Length", "Set-Cookie"])
                     res.removeHeader(name);
                 res.statusCode = invalidRequest ? 400 : 503;
-                const route = new URL(req.url ?? "/", "https://invalid.example")
-                    .pathname.split("/").at(-1);
+                const route = oauthDiagnosticRoute(
+                    new URL(req.url ?? "/", "https://invalid.example").pathname,
+                );
                 if (
                     route === "authorize" || route === "token" ||
                     route === "register" || route === "revoke" || route === "jwks"
