@@ -32,7 +32,7 @@ const { privateKey } = await generateKeyPair("ES256", { extractable: true });
 Object.assign(process.env, {
   ETB_BASE_URL: issuer,
   ETB_MCP_OAUTH_ENABLED: "true",
-  NEXT_PUBLIC_ETB_OAUTH_ENABLED: "true",
+  NEXT_PUBLIC_ETB_OAUTH_ENABLED: "false",
   ETB_MCP_DATABASE_URL: databaseUrl,
   ETB_MCP_STORAGE_KEY: randomBytes(32).toString("base64url"),
   ETB_MCP_COOKIE_KEYS: randomBytes(48).toString("base64url"),
