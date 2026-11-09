@@ -222,9 +222,7 @@ export default function GameView({
                                 className="w-full"
                                 variant="primary"
                                 onClick={onPlayAgain}
-                            >
-                                もう一度プレイ
-                            </PlayAgainButton>
+                            />
                         )}
                         <Button
                             iconName="plus"
