@@ -177,7 +177,7 @@ database together.
 Apply `supabase/migrations/20261108120000_mcp_oauth_storage.sql` through the
 normal database migration process. It creates the private `etb_mcp_oauth` schema
 with RLS enabled and no public/anon/authenticated access. It does not modify
-`auth.*`, public application tables, token hooks or shared rcAccount grants.
+`auth.*`, public application tables, token hooks or Supabase Auth grants.
 Provision a dedicated PostgreSQL LOGIN role with a secret managed outside git,
 then substitute its identifier in this administrative SQL:
 
@@ -224,10 +224,10 @@ security decisions. These caps may need tuning as usage grows.
 
 Do not enable this on arbitrary preview aliases: use the stable configured
 canonical preview domain and matching environment secrets. Requests on a
-noncanonical Host receive 421. Existing rcAccount-issued MCP tokens must be
+noncanonical Host receive 421. Existing Supabase Auth-issued MCP tokens must be
 replaced by reconnecting clients after cutover. The legacy shared fixed-client
 hook can be retired separately after checking its other consumers; ETB no longer
-uses it. There is no fixed MCP Client ID allowlist or rcAccount token fallback.
+uses it. There is no fixed MCP Client ID allowlist or Supabase Auth token fallback.
 
 ### Verification and client setup
 
@@ -249,7 +249,7 @@ invalid metadata/redirects, PKCE, explicit consent, CSRF, denial, code replay,
 concurrent redemption, JWT claims and MCP acceptance, refresh/reuse revocation,
 JWT/refresh revocation, confidential client authentication, user-owned disconnect,
 host validation, commit failures and rate limits.
-It does not log into a live rcAccount or prove actual ChatGPT/Claude UI behavior.
+It does not log into a live Supabase Auth or prove actual ChatGPT/Claude UI behavior.
 The discovery diagnostic also does not prove issued-token audience binding.
 
 Consent uses `Referrer-Policy: strict-origin` so browser form submissions retain
@@ -271,7 +271,7 @@ Open the printed `start` URL in Chrome. Approve and confirm the success page
 (callback, PKCE code exchange and MCP JWT verification), then open `start` again
 and deny. The printed `status` URL exposes only aggregate outcome counters.
 The fixture resets only its private schema in that exact local database, uses
-ephemeral keys and a simulated rcAccount user, and never accesses live accounts.
+ephemeral keys and a simulated Supabase Auth user, and never accesses live accounts.
 Two loopback origins model the issuer and client; a test-only TLS-offload shim
 maps those to canonical HTTPS origins inside the real production handler.
 Cookies, redirect paths, CSP and form submissions remain browser-enforced.
