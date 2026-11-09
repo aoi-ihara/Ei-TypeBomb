@@ -31,9 +31,29 @@ export function oauthFailureCode(error: unknown): string {
     return "operation_failed";
 }
 
-export function logOAuthServerFailure(error: unknown): void {
+/** Static phases only: never include OAuth parameters, database URLs, or exception text. */
+export type OAuthFailureStage =
+    | "configuration"
+    | "request_validation"
+    | "identity"
+    | "database_connect"
+    | "database_begin"
+    | "database_lock"
+    | "request_processing"
+    | "database_commit"
+    | "interaction"
+    | "rate_limit"
+    | "revocation"
+    | "provider"
+    | "unknown";
+
+export function logOAuthServerFailure(
+    error: unknown,
+    stage: OAuthFailureStage = "unknown",
+): void {
     console.error("[MCP OAuth] request could not be completed", {
         code: oauthFailureCode(error),
+        stage,
     });
 }
 
