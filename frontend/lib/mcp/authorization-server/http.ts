@@ -161,7 +161,7 @@ async function interaction(
         details.session?.accountId &&
         details.session.accountId !== user
     ) {
-        // rcAccount is the source of identity. Discard a stale provider browser
+        // ETB Supabase Auth is the source of identity. Discard a stale MCP browser
         // session before re-running the validated request for the new account.
         // Existing grants remain with their original owner.
         const session = await provider.Session.findByUid(details.session.uid);
