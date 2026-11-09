@@ -442,7 +442,7 @@ test("BOT fallback keeps the handoff alive after a user answer when every word i
     }
 });
 
-test("BOT random fallback prefers non-protected words before protected answered words", () => {
+test("BOT never introduces an unseen word when only a protected answered word exists", () => {
     const state = scheduler.createScheduler(["a", "b", "c", "d", "e"], () => 0);
     state.userAnswered.a = 1;
     state.lastBotItem = "a";
@@ -455,12 +455,7 @@ test("BOT random fallback prefers non-protected words before protected answered 
         successCount: 0,
     };
 
-    // b/c/d are lookahead-protected and a is retry-protected, leaving e as
-    // the safe random fallback.
-    assert.equal(
-        scheduler.chooseBotItem(state, () => 0.75),
-        "e",
-    );
+    assert.equal(scheduler.chooseBotItem(state, () => 0.75), "a");
 });
 
 // Exercise the real queue callback, including arrivals during an in-flight request.
