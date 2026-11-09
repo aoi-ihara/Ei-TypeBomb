@@ -228,7 +228,7 @@ export default function RoomList({
                             router.push(getSignInUrl());
                         }}
                     >
-                        ログイン
+                        サインイン
                     </Button>
                 )}
             </Header>
