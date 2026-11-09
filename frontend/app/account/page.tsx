@@ -12,24 +12,7 @@ export default async function Page() {
     return (
         <>
             <Header />
-            <Shell title="アカウント" size="large">
-                <p className="break-all w-full font-mono">{user.email}</p>
-                {isOAuthEnabled() ? (
-                    <>
-                        <Button href="https://hub.vgnz93hs.com/">
-                            RC Hubでアカウントを管理
-                        </Button>
-                        <p>サインアウトするとETBのセッションが終了します。</p>
-                        <form action={signOut}>
-                            <Button type="submit" variant="danger">
-                                サインアウト
-                            </Button>
-                        </form>
-                    </>
-                ) : (
-                    <AccountDetails />
-                )}
-            </Shell>
+            <AccountDetails />
         </>
     );
 }

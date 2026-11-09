@@ -8,9 +8,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { IconName } from "@/components/ui/Icon";
+import Shell from "../layout/Shell";
 
 export default function AccountDetails() {
-    const buttonNames = ["連携アプリ", "メールアドレス", "パスワード"];
+    const buttonNames = ["接続", "メールアドレス", "パスワード"];
     const buttonIconNames: IconName[] = ["layoutGrid", "mail", "keyRound"];
     const [navigation, setNavigation] = useState(0);
 
@@ -18,11 +19,11 @@ export default function AccountDetails() {
 
     return (
         <>
-            <div className="flex sm:flex-row flex-col w-full h-full gap-4">
-                <div className="w-full sm:w-48 flex sm:flex-col shrink-0 no-scrollbar overflow-scroll gap-4 px-4 sm:px-0">
+            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll no-scrollbar">
                     {buttonNames.map((item, index) => (
                         <Button
-                            key={index}
+                            key={item}
                             className="w-fit shrink-0 sm:w-full"
                             variant={
                                 navigation == index ? "primary" : "default"
@@ -49,15 +50,17 @@ export default function AccountDetails() {
                     </Button>
                 </div>
 
-                <div className="w-full px-4 sm:px-0">
-                    {navigation == 0 ? (
-                        <Apps />
-                    ) : navigation == 1 ? (
-                        <AuthForm key="email" mode="email" />
-                    ) : (
-                        <AuthForm key="password" mode="password" />
-                    )}
-                </div>
+                <Shell title="アカウント" size="medium">
+                    <div className="w-full px-4 sm:px-0">
+                        {navigation == 0 ? (
+                            <Apps />
+                        ) : navigation == 1 ? (
+                            <AuthForm key="email" mode="email" />
+                        ) : (
+                            <AuthForm key="password" mode="password" />
+                        )}
+                    </div>
+                </Shell>
             </div>
         </>
     );

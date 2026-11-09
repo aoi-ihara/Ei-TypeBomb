@@ -9,17 +9,17 @@ export default function Page() {
     return (
         <>
             <Header />
-            <Shell title="ログイン">
+            <Shell title="サインイン">
                 <AuthForm mode="sign-in" />
                 <Button href="/sign-up" variant="text" iconName="userRoundPlus">
-                    rcAccountを作成
+                    サインアップ
                 </Button>
                 <Button
                     href="/sign-in/reset-password"
                     variant="text"
                     iconName="keyRound"
                 >
-                    パスワードを忘れた場合
+                    パスワードをリセット
                 </Button>
             </Shell>
         </>

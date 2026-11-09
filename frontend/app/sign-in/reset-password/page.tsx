@@ -30,8 +30,8 @@ export default async function Page({
                 ) : (
                     <AuthForm mode={update ? "password" : "recovery"} />
                 )}
-                <Button href="/sign-in" variant="text">
-                    ログインに戻る
+                <Button href="/sign-in" variant="text" iconName="logIn">
+                    サインイン
                 </Button>
             </Shell>
         </>

@@ -96,18 +96,26 @@ export default function Apps() {
             )}
             {loading ? (
                 <div className="w-full flex justify-center">
-                    <p className="font-bold gradient-text" role="status">
+                    <p
+                        className="font-bold gradient-text"
+                        data-cursor="text"
+                        role="status"
+                    >
                         読み込み中…
                     </p>
                 </div>
             ) : apps.length === 0 && !error ? (
                 <div className="w-full flex justify-center">
-                    <p className="opacity-50" role="status">
+                    <p
+                        className="opacity-50 italic"
+                        data-cursor="text"
+                        role="status"
+                    >
                         連携済みアプリはありません。
                     </p>
                 </div>
             ) : (
-                <ul className="flex w-full flex-col gap-2">
+                <ul className="flex w-full flex-col gap-4">
                     {apps.map((app) => (
                         <li
                             key={app.clientId}
@@ -140,11 +148,9 @@ export default function Apps() {
                                 variant="danger"
                                 iconName="trash"
                                 padding="large"
-                                loading={revokingId !== null}
+                                loading={revokingId === app.clientId}
                                 onClick={() => void revoke(app.clientId)}
-                            >
-                                連携を解除
-                            </Button>
+                            />
                         </li>
                     ))}
                 </ul>

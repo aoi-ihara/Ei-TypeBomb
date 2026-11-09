@@ -21,7 +21,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     const needsPassword = ["sign-in", "sign-up", "password"].includes(mode);
     return (
         <form
-            className="flex w-full flex-col gap-4"
+            className="flex w-full flex-col gap-4 items-center"
             onSubmit={async (event) => {
                 event.preventDefault();
                 if (lock.current) return;
@@ -117,10 +117,12 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                         }}
                     />
                 ) : (
-                    <p role="alert">認証の設定が不足しています。</p>
+                    <p role="alert" data-cursor="text">
+                        認証の設定が不足しています。
+                    </p>
                 ))}
             {error && (
-                <p role="alert" className="text-red-500">
+                <p data-cursor="text" role="alert" className="text-red-500">
                     {error}
                 </p>
             )}
@@ -129,16 +131,25 @@ export default function AuthForm({ mode }: { mode: Mode }) {
                 type="submit"
                 className="w-full"
                 variant="primary"
+                iconName={
+                    {
+                        "sign-in": "logIn",
+                        "sign-up": "userRoundPlus",
+                        recovery: "arrowRight",
+                        email: "arrowRight",
+                        password: "rotateCcw",
+                    }[mode]
+                }
                 loading={busy}
                 disabled={publicOperation && !token}
             >
                 {
                     {
-                        "sign-in": "ログイン",
-                        "sign-up": "アカウント作成",
-                        recovery: "再設定メールを送信",
-                        email: "確認メールを送信",
-                        password: "パスワードを変更",
+                        "sign-in": "サインイン",
+                        "sign-up": "サインアップ",
+                        recovery: "続ける",
+                        email: "続ける",
+                        password: "変更",
                     }[mode]
                 }
             </Button>
