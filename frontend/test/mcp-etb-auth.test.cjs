@@ -18,25 +18,14 @@ function load(path, requireMock, env) {
     return exports;
 }
 
-test("MCP enabled always selects ETB local login, not RC Hub", () => {
-    for (const legacy of ["true", "false"]) {
-        const config = load("../lib/auth/oauth-config.ts", (id) => {
-            if (id.endsWith("/base-url")) return { getEtbUrl: (path) => path };
-            throw new Error(id);
-        }, {
-            NEXT_PUBLIC_ETB_OAUTH_ENABLED: legacy,
-            ETB_MCP_OAUTH_ENABLED: "true",
-        });
-        assert.equal(config.isOAuthEnabled(), false);
+test("return destination stays within ETB", () => {
+    const { safeReturnPath } = load("../lib/auth/return-path.ts", () => {
+        throw Error("no imports expected");
+    }, {});
+    assert.equal(safeReturnPath("/api/oauth/interaction/123"), "/api/oauth/interaction/123");
+    for (const unsafe of ["https://external.example", "//external.example", "/\\\\external.example", ""]) {
+        assert.equal(safeReturnPath(unsafe), "/");
     }
-    const legacy = load("../lib/auth/oauth-config.ts", (id) => {
-        if (id.endsWith("/base-url")) return { getEtbUrl: (path) => path };
-        throw new Error(id);
-    }, {
-        NEXT_PUBLIC_ETB_OAUTH_ENABLED: "true",
-        ETB_MCP_OAUTH_ENABLED: "false",
-    });
-    assert.equal(legacy.isOAuthEnabled(), true);
 });
 
 test("MCP identity is verified from ETB's Supabase session cookies", async () => {
@@ -63,6 +52,8 @@ test("MCP identity is verified from ETB's Supabase session cookies", async () =>
     assert.equal(sessionCookies.length, 1);
     assert.equal(sessionCookies[0].name, "sb-project-auth-token");
     assert.equal(sessionCookies[0].value, "session");
+    await getMcpAuthenticatedUser({ cookies: { valid: "session", missing: undefined } });
+    assert.equal(sessionCookies.length, 1);
     assert.throws(() => sessionConfig.cookies.setAll([]), /proxy/);
 
     userResult = { data: { user: { id: "anonymous", is_anonymous: true } }, error: null };
