@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useEffect, useRef } from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";

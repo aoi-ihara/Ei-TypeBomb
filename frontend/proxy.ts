@@ -1,3 +1,5 @@
+import { createServerClient } from "@supabase/ssr";
+import { cookieOptions } from "@/lib/db/cookie-options";
 import { NextRequest, NextResponse } from "next/server";
 import {
     isOAuthEnabled,
@@ -14,7 +16,30 @@ import {
  * execute. Propagate rotated tokens to both the current request and browser.
  */
 export async function proxy(request: NextRequest) {
-    if (!isOAuthEnabled()) return NextResponse.next();
+    if (!isOAuthEnabled()) {
+        let response = NextResponse.next();
+        const client = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookieOptions,
+                cookies: {
+                    getAll: () => request.cookies.getAll(),
+                    setAll(values) {
+                        values.forEach(({ name, value }) =>
+                            request.cookies.set(name, value),
+                        );
+                        response = NextResponse.next({ request });
+                        values.forEach(({ name, value, options }) =>
+                            response.cookies.set(name, value, options),
+                        );
+                    },
+                },
+            },
+        );
+        await client.auth.getUser();
+        return response;
+    }
 
     const names = oauthCookieNames();
     const access = request.cookies.get(names.access)?.value;
