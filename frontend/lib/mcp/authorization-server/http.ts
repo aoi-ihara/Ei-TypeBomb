@@ -356,7 +356,7 @@ export function oauthDiagnosticRoute(pathname: string) {
 }
 
 /** Current-user injection is for integration tests; production verifies the
- * ETB Supabase browser session through Auth getUser (not RC Hub OAuth cookies). */
+ * ETB Supabase browser session through Auth getUser. */
 export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticatedUser) {
     return async (req: NextApiRequest, res: NextApiResponse) => {
         res.setHeader("Cache-Control", "no-store");
