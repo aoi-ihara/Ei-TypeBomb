@@ -8,7 +8,7 @@ export default async function Page() {
     return (
         <>
             <Header />
-            <AccountDetails />
+            <AccountDetails mcpEnabled={process.env.ETB_MCP_OAUTH_ENABLED === "true"} />
         </>
     );
 }
