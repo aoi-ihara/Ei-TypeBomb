@@ -1,44 +1,35 @@
-# RC Hub account features in ETB
+# Ei-TypeBomb account management
 
-When `NEXT_PUBLIC_ETB_OAUTH_ENABLED` is not `true`, ETB provides `/sign-in`,
-`/sign-up`, `/sign-in/reset-password`, and `/account` using the existing rcAccount
-Supabase project. The account screen follows RC Hub's Apps / Email / Password
-navigation using ETB's Shell, Input and Button components. Grant listing and
-revocation use the authenticated user's Supabase client, never the admin key.
+ETB handles sign-in, sign-up, password recovery, email/password changes, and
+sign-out directly with Supabase Auth. The normal website session is stored in
+host-scoped Supabase SSR cookies and refreshed in the Next.js proxy.
+
+MCP clients authenticate through ETB's own OAuth authorization server, which
+uses the ETB browser session to identify the user during consent. Website
+session cookies are not accepted as MCP access tokens. When MCP OAuth is
+enabled, the account screen links to `/api/oauth/connections` to review and
+revoke MCP grants.
 
 ## Deployment configuration
 
-- Set `ETB_BASE_URL` to the deployment's HTTPS origin, the existing Supabase URL
-  and anon key, and `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Enable CAPTCHA protection in
-  Supabase Auth with the matching Turnstile secret. Public forms send CAPTCHA
-  tokens to Auth; the secret is not sent to the browser.
+- Set `ETB_BASE_URL` to the deployment's HTTPS origin and configure
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Enable CAPTCHA protection in Supabase
+  Auth with the matching Turnstile secret.
 - Add `<ETB_BASE_URL>/auth/confirm` and
-  `<ETB_BASE_URL>/auth/confirm?next=/sign-in/reset-password?update=true` to the
-  Supabase Auth redirect allowlist. Keep RC Hub's existing entries.
-- Default PKCE emails return a `code` to `/auth/confirm`. For custom token-hash
-  templates use `{{ .RedirectTo }}` with the token hash and the matching `type`
-  (`signup`, `recovery`, or `email_change`). Do not hardcode RC Hub's URL in ETB
-  email links. Shared-project templates must also preserve RC Hub's flows.
-- Native sessions now use host-scoped cookies so ei-typebomb.com and preview
-  deployments can sign in. They no longer establish a shared subdomain SSO
-  cookie; users may need to sign in separately on each host. Existing shared
-  domain cookies are not deleted by this change.
-- The proxy refreshes native sessions and propagates rotated cookies. Password
-  login is no longer restricted to developer mode.
-
-When OAuth is enabled, `/sign-in` continues through `/auth/start` and RC Hub.
-Provider account creation, recovery and management link to RC Hub because OAuth
-access tokens are not native Supabase Auth sessions. Direct password actions
-reject requests in this mode. ETB sign-out clears only the ETB OAuth cookies.
+  `<ETB_BASE_URL>/auth/confirm?next=/sign-in/reset-password?update=true`
+  to the Supabase Auth redirect allowlist.
+- Default PKCE emails return a `code` to `/auth/confirm`. For custom
+  token-hash templates, use `{{ .RedirectTo }}` with the token hash and
+  matching `type` (`signup`, `recovery` or `email_change`).
+- Sessions are scoped to each ETB host (production and beta may require
+  separate sign-ins). Existing user IDs and room/learning data are unchanged.
+- `ETB_MCP_OAUTH_ENABLED` controls the MCP authorization server independently
+  of website login. No separate website OAuth client is required.
 
 ## Verification
 
-Automated action tests: `node --test test/account-auth.test.cjs` (from frontend).
-They check CAPTCHA requirements, authenticated credential changes, OAuth mode
-isolation, input validation and trusted callback destinations with mocked Auth.
-
-Before release, test real confirmation/recovery emails, expired/replayed links,
-email changes, password changes, grant revocation and sign-out with a dedicated
-account on the configured deployment. These require Supabase redirect/template
-configuration and access to the recipient mailbox; local rendering and mocks do
-not verify email delivery or live authentication.
+Run `npm run test:account` and `npm run test:mcp-oauth` from `frontend`.
+Test confirmation/recovery emails, replayed links, credential changes, sign-out,
+MCP consent, token refresh and grant revocation on a deployed test environment.
+Mocks alone cannot verify live email delivery or browser cookies.
