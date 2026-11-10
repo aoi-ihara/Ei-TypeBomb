@@ -29,6 +29,8 @@ import {
 } from "@/lib/playground/memory";
 import {
     createScheduler,
+    loadSchedulerState,
+    saveSchedulerState,
     chooseNextUserItem,
     chooseBotItem,
     recordUserAnswer,
@@ -310,6 +312,14 @@ export default function Client({
                     new Set(items.map((item) => item.id)),
                 );
                 memoryByItemRef.current = saved;
+                schedulerRef.current =
+                    loadSchedulerState(
+                        "playground",
+                        GUEST_MEMORY_USER_ID,
+                        room.id,
+                        items.map((item) => item.id),
+                        saved,
+                    ) ?? createScheduler(items.map((item) => item.id));
                 setMemoryByItem(saved);
                 setMemoryReady(true);
                 return;
@@ -346,6 +356,14 @@ export default function Client({
                 // A damaged/unavailable local cache must not prevent practice.
             }
             memoryByItemRef.current = loaded.memoryByItem;
+            schedulerRef.current =
+                loadSchedulerState(
+                    "playground",
+                    loaded.userId,
+                    room.id,
+                    items.map((item) => item.id),
+                    loaded.memoryByItem,
+                ) ?? createScheduler(items.map((item) => item.id));
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
         };
@@ -406,12 +424,19 @@ export default function Client({
                     item.answer.length * userTypingDelayRef.current;
             } else {
                 predictedRetrievabilityAtPromptRef.current = null;
-                if (schedulerRef.current)
+                if (schedulerRef.current) {
                     recordBotPresentation(schedulerRef.current, item.id);
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                        room.id,
+                        schedulerRef.current,
+                    );
+                }
                 saveBotExposure(item);
             }
         },
-        [saveBotExposure],
+        [room.id, saveBotExposure],
     );
 
     const chooseItemForTurn = useCallback(
@@ -426,9 +451,15 @@ export default function Client({
                     ? chooseNextUserItem(scheduler, memoryByItemRef.current)
                           ?.itemId
                     : chooseBotItem(scheduler);
+            saveSchedulerState(
+                "playground",
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                room.id,
+                scheduler,
+            );
             return items.find((item) => item.id === id) ?? null;
         },
-        [items],
+        [items, room.id],
     );
 
     const resolveTurnWithItem = useCallback(
@@ -638,11 +669,23 @@ export default function Client({
 
             if (authenticatedUserIdRef.current) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
+                // Persist the observation immediately, before a rapid reload.
+                // The existing debounced sync still sends it to the server.
+                try {
+                    localStorage.setItem(
+                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
+                        JSON.stringify([...pendingMemoryRef.current.values()]),
+                    );
+                } catch {
+                    // Local storage may be unavailable; the current game continues.
+                }
             } else {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
+            if (scheduler)
+                saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
 
             posthog.capture("playground_item_recalled", {
@@ -843,10 +886,25 @@ export default function Client({
         }
 
         const presentedItem = currentItemRef.current;
+        const isLocalAnswer =
+            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
+        // Speak after completed input even when a full hint was used.
+        // Hint use affects memory evidence, not whether correct input is read aloud.
         if (
-            presentedItem &&
-            usersRef.current[currentTurnRef.current]?.id !== LOCAL_USER_ID
+            isLocalAnswer &&
+            offlineVoiceReading === "answer" &&
+            presentedItem?.answer.trim() &&
+            typeof window !== "undefined" &&
+            "speechSynthesis" in window &&
+            typeof SpeechSynthesisUtterance !== "undefined"
         ) {
+            const synthesis = window.speechSynthesis;
+            synthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(presentedItem.answer);
+            utterance.lang = "en-US";
+            synthesis.speak(utterance);
+        }
+        if (presentedItem && !isLocalAnswer) {
             saveBotExposure(presentedItem);
         }
         setCurrentInput("");
@@ -868,6 +926,7 @@ export default function Client({
         );
     }, [
         soundEffects,
+        offlineVoiceReading,
         saveBotExposure,
         resolveTurnWithItem,
         room.id,
@@ -883,7 +942,7 @@ export default function Client({
             result !== null ||
             !currentItem ||
             currentTurnUser?.id !== LOCAL_USER_ID ||
-            offlineVoiceReading === "none"
+            offlineVoiceReading !== "question"
         ) {
             return;
         }
@@ -896,17 +955,14 @@ export default function Client({
             return;
         }
 
-        const text =
-            offlineVoiceReading === "question"
-                ? currentItem.prompt
-                : currentItem.answer;
+        const text = currentItem.prompt;
         if (!text.trim()) return;
 
         const synthesis = window.speechSynthesis;
         synthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = offlineVoiceReading === "question" ? "ja-JP" : "en-US";
+        utterance.lang = "ja-JP";
         synthesis.speak(utterance);
 
         return () => synthesis.cancel();
