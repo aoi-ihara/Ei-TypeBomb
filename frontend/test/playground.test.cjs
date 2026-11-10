@@ -628,6 +628,60 @@ function getCallback(name, globals) {
     return evaluate("export const callback = " + printed, globals).callback;
 }
 
+test("answer speech plays only after a successful local answer", () => {
+    for (const scenario of [
+        { mode: "answer", local: true, revealed: false, expected: ["apple"] },
+        { mode: "answer", local: true, revealed: true, expected: [] },
+        { mode: "answer", local: false, revealed: false, expected: [] },
+        { mode: "question", local: true, revealed: false, expected: [] },
+        { mode: "none", local: true, revealed: false, expected: [] },
+    ]) {
+        const spoken = [];
+        const synthesis = {
+            cancel: () => {},
+            speak: (utterance) => spoken.push([utterance.text, utterance.lang]),
+        };
+        class Utterance {
+            constructor(text) {
+                this.text = text;
+            }
+        }
+        const turn = scenario.local ? 0 : 1;
+        const callback = getCallback("handleSuccess", {
+            window: { speechSynthesis: synthesis },
+            SpeechSynthesisUtterance: Utterance,
+            LOCAL_USER_ID: "local",
+            offlineVoiceReading: scenario.mode,
+            soundEffects: false,
+            successAudioRef: { current: null },
+            usersRef: { current: [{ id: "local" }, { id: "bot" }] },
+            currentTurnRef: { current: turn },
+            currentItemRef: { current: { id: "a", answer: "apple" } },
+            recallProgressRef: {
+                current: { answerWasFullyRevealed: scenario.revealed },
+            },
+            saveBotExposure: () => {},
+            setCurrentInput: () => {},
+            previousInputAtRef: { current: null },
+            previousInputLengthRef: { current: 0 },
+            resolveTurnWithItem: () => ({ turnIndex: 0, item: null }),
+            setTrackedTurn: () => {},
+            setTrackedItem: () => {},
+            posthog: { capture: () => {} },
+            room: { id: "r" },
+        });
+        callback();
+        assert.deepEqual(
+            spoken.map(([text]) => text),
+            scenario.expected,
+            JSON.stringify(scenario),
+        );
+        if (scenario.expected.length) {
+            assert.equal(spoken[0][1], "en-US");
+        }
+    }
+});
+
 test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
     const pending = { current: new Map([["a", initial()]]) };
     const inFlight = { current: null };
