@@ -315,3 +315,221 @@ export const recordBotPresentation = (
     state.botShown[itemId] = (state.botShown[itemId] ?? 0) + 1;
     state.lastBotItem = itemId;
 };
+
+
+// The scheduler is a learning session, not a page lifecycle. Keep its cycle and
+// pending reviews across reloads; memory rows remain the source of recall scores.
+export type SchedulerMode = "playground" | "online";
+const SCHEDULER_CACHE_VERSION = 1;
+const PRIORITY_REFRESH_MS = 6 * 60 * 60 * 1000;
+const SCHEDULER_CACHE_MAX_AGE_MS = 30 * 86_400_000;
+
+const schedulerKey = (mode: SchedulerMode, userId: string, roomId: string) =>
+    `playground-scheduler:v1:${mode}:${userId}:${roomId}`;
+
+const isNonNegativeInteger = (value: unknown): value is number =>
+    Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
+
+const validRetry = (value: unknown, id: string): RetryEntry | null => {
+    if (!value || typeof value !== "object") return null;
+    const entry = value as Partial<RetryEntry>;
+    if (
+        entry.itemId !== id ||
+        !isNonNegativeInteger(entry.earliestTurn) ||
+        !isNonNegativeInteger(entry.latestTurn) ||
+        entry.latestTurn < entry.earliestTurn ||
+        !isNonNegativeInteger(entry.successCount) ||
+        entry.successCount >= REQUIRED_RETRY_SUCCESSES ||
+        !["failed_recall", "heavy_hint", "uncertain_recall"].includes(
+            entry.reason ?? "",
+        )
+    )
+        return null;
+    return entry as RetryEntry;
+};
+
+/** A failed storage write must never prevent someone from practicing. */
+export const saveSchedulerState = (
+    mode: SchedulerMode,
+    userId: string,
+    roomId: string,
+    state: SchedulerState,
+    now = Date.now(),
+): void => {
+    try {
+        localStorage.setItem(
+            schedulerKey(mode, userId, roomId),
+            JSON.stringify({
+                version: SCHEDULER_CACHE_VERSION,
+                updatedAt: now,
+                state,
+            }),
+        );
+    } catch {
+        // Private browsing, quota limits, etc. leave an in-memory scheduler.
+    }
+};
+
+/**
+ * Restore the exact upcoming order and retry windows. After a long break,
+ * release an unfinished prompt (without crediting it) and re-rank remaining
+ * cycle items by current retrievability. New room words join the queue while
+ * deleted words and invalid cached entries are discarded.
+ */
+export const loadSchedulerState = (
+    mode: SchedulerMode,
+    userId: string,
+    roomId: string,
+    itemIds: string[],
+    memories: Record<string, ItemMemoryState> = {},
+    now = Date.now(),
+): SchedulerState | null => {
+    try {
+        const raw: unknown = JSON.parse(
+            localStorage.getItem(schedulerKey(mode, userId, roomId)) ?? "null",
+        );
+        if (!raw || typeof raw !== "object") return null;
+        const cache = raw as {
+            version?: unknown;
+            updatedAt?: unknown;
+            state?: unknown;
+        };
+        if (
+            cache.version !== SCHEDULER_CACHE_VERSION ||
+            typeof cache.updatedAt !== "number" ||
+            !Number.isFinite(cache.updatedAt) ||
+            cache.updatedAt > now + 60_000 ||
+            now - cache.updatedAt > SCHEDULER_CACHE_MAX_AGE_MS ||
+            !cache.state ||
+            typeof cache.state !== "object"
+        )
+            return null;
+
+        const saved = cache.state as Partial<SchedulerState>;
+        if (
+            !Array.isArray(saved.itemIds) ||
+            !Array.isArray(saved.cycleQueue) ||
+            !isNonNegativeInteger(saved.turn) ||
+            !isNonNegativeInteger(saved.cycle) ||
+            saved.cycle < 1 ||
+            !isNonNegativeInteger(saved.completedCycles) ||
+            !saved.retries ||
+            typeof saved.retries !== "object" ||
+            Array.isArray(saved.retries)
+        )
+            return null;
+
+        const ids = [...new Set(itemIds)];
+        const allowed = new Set(ids);
+        const previousIds = new Set(
+            saved.itemIds.filter(
+                (id): id is string => typeof id === "string",
+            ),
+        );
+        const queue = new Set<string>();
+        for (const id of saved.cycleQueue) {
+            if (typeof id === "string" && allowed.has(id)) queue.add(id);
+        }
+        // Only newly added words are appended: old words already reviewed in
+        // this cycle must not be reintroduced by the reconciliation.
+        for (const id of ids) {
+            if (!previousIds.has(id)) queue.add(id);
+        }
+
+        const retries: Record<string, RetryEntry> = {};
+        for (const [id, entry] of Object.entries(saved.retries)) {
+            if (!allowed.has(id)) continue;
+            const valid = validRetry(entry, id);
+            if (valid) retries[id] = valid;
+        }
+
+        const readCounters = (source: unknown) => {
+            const result: Record<string, number> = {};
+            if (!source || typeof source !== "object" || Array.isArray(source))
+                return result;
+            for (const [id, value] of Object.entries(source)) {
+                if (allowed.has(id) && isNonNegativeInteger(value))
+                    result[id] = value;
+            }
+            return result;
+        };
+
+        let current: Selection | null = null;
+        const selected = saved.current;
+        if (
+            selected &&
+            typeof selected === "object" &&
+            typeof selected.itemId === "string" &&
+            allowed.has(selected.itemId) &&
+            isNonNegativeInteger(selected.turn) &&
+            selected.turn === saved.turn &&
+            isNonNegativeInteger(selected.cycle) &&
+            selected.cycle >= 1 &&
+            typeof selected.advancesCycle === "boolean" &&
+            ["cycle", "retry", "long_term_due"].includes(selected.reason)
+        ) {
+            const retry = selected.retry
+                ? validRetry(selected.retry, selected.itemId)
+                : null;
+            // Never silently lose a pending retry from a damaged snapshot.
+            if (!selected.retry || retry) {
+                current = {
+                    itemId: selected.itemId,
+                    turn: selected.turn,
+                    cycle: selected.cycle,
+                    reason: selected.reason,
+                    advancesCycle: selected.advancesCycle,
+                    ...(retry ? { retry } : {}),
+                };
+                queue.delete(current.itemId);
+                delete retries[current.itemId];
+            }
+        }
+
+        const age = Math.max(0, now - cache.updatedAt);
+        if (age >= PRIORITY_REFRESH_MS) {
+            // A prompt interrupted hours ago is not a completed recall.
+            if (current) {
+                if (current.retry) retries[current.itemId] = current.retry;
+                else queue.add(current.itemId);
+                current = null;
+            }
+        }
+
+        const cycleQueue = [...queue];
+        if (age >= PRIORITY_REFRESH_MS) {
+            cycleQueue.sort((a, b) =>
+                compareMemoryPriority(a, b, memories, now),
+            );
+        }
+
+        return {
+            itemIds: ids,
+            cycleQueue,
+            cycle: saved.cycle,
+            completedCycles: saved.completedCycles,
+            turn: saved.turn,
+            retries,
+            userAnswered: readCounters(saved.userAnswered),
+            botShown: readCounters(saved.botShown),
+            lastBotItem:
+                typeof saved.lastBotItem === "string" &&
+                allowed.has(saved.lastBotItem)
+                    ? saved.lastBotItem
+                    : null,
+            lastUserItem:
+                typeof saved.lastUserItem === "string" &&
+                allowed.has(saved.lastUserItem)
+                    ? saved.lastUserItem
+                    : null,
+            initialPriorityApplied:
+                age >= PRIORITY_REFRESH_MS
+                    ? true
+                    : saved.initialPriorityApplied === true,
+            current,
+        };
+    } catch {
+        // Ignore corrupted/inaccessible state and start a normal session.
+        return null;
+    }
+};
