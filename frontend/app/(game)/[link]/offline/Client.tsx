@@ -1216,9 +1216,14 @@ export default function Client({
                             <p>
                                 難しい単語はいったん保留しました。
                                 次の復習は
-                                {new Date(nextReviewAt).toLocaleTimeString(
+                                {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
-                                    { hour: "2-digit", minute: "2-digit" },
+                                    {
+                                        month: "numeric",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    },
                                 )}
                                 以降にできます。
                             </p>
