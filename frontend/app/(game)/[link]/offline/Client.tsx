@@ -656,7 +656,21 @@ export default function Client({
                 predictedRetrievabilityAtPromptRef.current;
             predictedRetrievabilityAtPromptRef.current = null;
             const evaluation = evaluateRecall(evidence);
+            const previousHoldUntil =
+                scheduler?.struggles[item.id]?.suspendedUntil ?? null;
             if (scheduler) recordUserAnswer(scheduler, evaluation);
+            const currentStruggle = scheduler?.struggles[item.id];
+            if (
+                currentStruggle?.suspendedUntil != null &&
+                currentStruggle.suspendedUntil !== previousHoldUntil
+            ) {
+                posthog.capture("playground_item_suspended", {
+                    room_id: room.id,
+                    item_id: item.id,
+                    suspension_level: currentStruggle.suspensionLevel,
+                    suspended_until: new Date(currentStruggle.suspendedUntil).toISOString(),
+                });
+            }
             const freshestMemory = authenticatedUserIdRef.current
                 ? memoryByItemRef.current
                 : mergeGuestMemory(
@@ -722,6 +736,8 @@ export default function Client({
                 retry_latest_turn: selected?.retry?.latestTurn,
                 memory_evidence: evaluation.memoryEvidence,
                 retry_need: evaluation.retryNeed,
+                struggle_failures: currentStruggle?.consecutiveFailures ?? 0,
+                suspension_level: currentStruggle?.suspensionLevel ?? 0,
                 independent_recall: evaluation.independent,
                 first_attempt_correct: evidence.firstAttemptCorrect,
                 incorrect_input_count: evidence.incorrectInputCount,
@@ -1209,14 +1225,14 @@ export default function Client({
                             <Button
                                 className="w-full"
                                 variant="primary"
-                                iconName="refresh-cw"
+                                iconName="rotateCcw"
                                 onClick={() => startGame(0)}
                             >
                                 復習を確認
                             </Button>
                             <Button
                                 className="w-full"
-                                iconName="arrow-left"
+                                iconName="arrowLeft"
                                 onClick={() => router.push("/" + (room.link ?? room.id))}
                             >
                                 ルームへ戻る
