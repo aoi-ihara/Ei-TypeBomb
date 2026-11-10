@@ -424,12 +424,19 @@ export default function Client({
                     item.answer.length * userTypingDelayRef.current;
             } else {
                 predictedRetrievabilityAtPromptRef.current = null;
-                if (schedulerRef.current)
+                if (schedulerRef.current) {
                     recordBotPresentation(schedulerRef.current, item.id);
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                        room.id,
+                        schedulerRef.current,
+                    );
+                }
                 saveBotExposure(item);
             }
         },
-        [saveBotExposure],
+        [room.id, saveBotExposure],
     );
 
     const chooseItemForTurn = useCallback(
