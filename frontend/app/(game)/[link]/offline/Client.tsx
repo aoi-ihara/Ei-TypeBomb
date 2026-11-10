@@ -888,11 +888,10 @@ export default function Client({
         const presentedItem = currentItemRef.current;
         const isLocalAnswer =
             usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
-        // Answer speech reinforces a completed recall instead of revealing
-        // the answer before the learner has attempted the question.
+        // Speak after completed input even when a full hint was used.
+        // Hint use affects memory evidence, not whether correct input is read aloud.
         if (
             isLocalAnswer &&
-            !wasAnswerRevealed &&
             offlineVoiceReading === "answer" &&
             presentedItem?.answer.trim() &&
             typeof window !== "undefined" &&
