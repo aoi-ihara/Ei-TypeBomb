@@ -631,7 +631,8 @@ function getCallback(name, globals) {
 test("answer speech plays only after a successful local answer", () => {
     for (const scenario of [
         { mode: "answer", local: true, revealed: false, expected: ["apple"] },
-        { mode: "answer", local: true, revealed: true, expected: [] },
+        // Using the full-answer hint does not suppress speech after correct input.
+        { mode: "answer", local: true, revealed: true, expected: ["apple"] },
         { mode: "answer", local: false, revealed: false, expected: [] },
         { mode: "question", local: true, revealed: false, expected: [] },
         { mode: "none", local: true, revealed: false, expected: [] },
