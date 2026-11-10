@@ -886,10 +886,26 @@ export default function Client({
         }
 
         const presentedItem = currentItemRef.current;
+        const isLocalAnswer =
+            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
+        // Answer speech reinforces a completed recall instead of revealing
+        // the answer before the learner has attempted the question.
         if (
-            presentedItem &&
-            usersRef.current[currentTurnRef.current]?.id !== LOCAL_USER_ID
+            isLocalAnswer &&
+            !wasAnswerRevealed &&
+            offlineVoiceReading === "answer" &&
+            presentedItem?.answer.trim() &&
+            typeof window !== "undefined" &&
+            "speechSynthesis" in window &&
+            typeof SpeechSynthesisUtterance !== "undefined"
         ) {
+            const synthesis = window.speechSynthesis;
+            synthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(presentedItem.answer);
+            utterance.lang = "en-US";
+            synthesis.speak(utterance);
+        }
+        if (presentedItem && !isLocalAnswer) {
             saveBotExposure(presentedItem);
         }
         setCurrentInput("");
@@ -911,6 +927,7 @@ export default function Client({
         );
     }, [
         soundEffects,
+        offlineVoiceReading,
         saveBotExposure,
         resolveTurnWithItem,
         room.id,
@@ -926,7 +943,7 @@ export default function Client({
             result !== null ||
             !currentItem ||
             currentTurnUser?.id !== LOCAL_USER_ID ||
-            offlineVoiceReading === "none"
+            offlineVoiceReading !== "question"
         ) {
             return;
         }
@@ -939,17 +956,14 @@ export default function Client({
             return;
         }
 
-        const text =
-            offlineVoiceReading === "question"
-                ? currentItem.prompt
-                : currentItem.answer;
+        const text = currentItem.prompt;
         if (!text.trim()) return;
 
         const synthesis = window.speechSynthesis;
         synthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = offlineVoiceReading === "question" ? "ja-JP" : "en-US";
+        utterance.lang = "ja-JP";
         synthesis.speak(utterance);
 
         return () => synthesis.cancel();
