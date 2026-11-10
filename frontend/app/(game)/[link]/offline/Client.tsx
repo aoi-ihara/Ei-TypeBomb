@@ -31,6 +31,7 @@ import {
     createScheduler,
     loadSchedulerState,
     saveSchedulerState,
+    nextSuspendedReviewAt,
     chooseNextUserItem,
     chooseBotItem,
     recordUserAnswer,
@@ -210,6 +211,7 @@ export default function Client({
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
+    const [nextReviewAt, setNextReviewAt] = useState<number | null>(null);
     const currentItemRef = useRef<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState(0);
     const currentTurnRef = useRef(0);
@@ -482,9 +484,18 @@ export default function Client({
                 };
             }
 
+            const localItem = chooseItemForTurn(localTurnIndex);
+            if (!localItem) {
+                setNextReviewAt(
+                    schedulerRef.current
+                        ? nextSuspendedReviewAt(schedulerRef.current)
+                        : null,
+                );
+                setIsStarted(false);
+            }
             return {
                 turnIndex: localTurnIndex,
-                item: chooseItemForTurn(localTurnIndex),
+                item: localItem,
             };
         },
         [chooseItemForTurn],
@@ -507,6 +518,7 @@ export default function Client({
                 sessionStartedAtRef.current = Date.now();
             resetExplosion();
             setIsStarted(true);
+            setNextReviewAt(null);
             setBombStatus(0);
             bombStageProgressRef.current = 0;
             setCurrentInput("");
@@ -644,7 +656,21 @@ export default function Client({
                 predictedRetrievabilityAtPromptRef.current;
             predictedRetrievabilityAtPromptRef.current = null;
             const evaluation = evaluateRecall(evidence);
+            const previousHoldUntil =
+                scheduler?.struggles[item.id]?.suspendedUntil ?? null;
             if (scheduler) recordUserAnswer(scheduler, evaluation);
+            const currentStruggle = scheduler?.struggles[item.id];
+            if (
+                currentStruggle?.suspendedUntil != null &&
+                currentStruggle.suspendedUntil !== previousHoldUntil
+            ) {
+                posthog.capture("playground_item_suspended", {
+                    room_id: room.id,
+                    item_id: item.id,
+                    suspension_level: currentStruggle.suspensionLevel,
+                    suspended_until: new Date(currentStruggle.suspendedUntil).toISOString(),
+                });
+            }
             const freshestMemory = authenticatedUserIdRef.current
                 ? memoryByItemRef.current
                 : mergeGuestMemory(
@@ -710,6 +736,8 @@ export default function Client({
                 retry_latest_turn: selected?.retry?.latestTurn,
                 memory_evidence: evaluation.memoryEvidence,
                 retry_need: evaluation.retryNeed,
+                struggle_failures: currentStruggle?.consecutiveFailures ?? 0,
+                suspension_level: currentStruggle?.suspensionLevel ?? 0,
                 independent_recall: evaluation.independent,
                 first_attempt_correct: evidence.firstAttemptCorrect,
                 incorrect_input_count: evidence.incorrectInputCount,
@@ -1182,7 +1210,40 @@ export default function Client({
                 currentInput={currentInput}
                 isStarted={isStarted}
                 preGameContent={
-                    memoryReady && showInstructions ? (
+                    memoryReady && nextReviewAt !== null ? (
+                        <div className="flex flex-col gap-4 px-2" role="status">
+                            <p className="font-bold">すべての単語が復習待ちです</p>
+                            <p>
+                                難しい単語はいったん保留しました。
+                                次の復習は
+                                {new Date(nextReviewAt).toLocaleString(
+                                    "ja-JP",
+                                    {
+                                        month: "numeric",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    },
+                                )}
+                                以降にできます。
+                            </p>
+                            <Button
+                                className="w-full"
+                                variant="primary"
+                                iconName="rotateCcw"
+                                onClick={() => startGame(0)}
+                            >
+                                復習を確認
+                            </Button>
+                            <Button
+                                className="w-full"
+                                iconName="arrowLeft"
+                                onClick={() => router.push("/" + (room.link ?? room.id))}
+                            >
+                                ルームへ戻る
+                            </Button>
+                        </div>
+                    ) : memoryReady && showInstructions ? (
                         <div
                             className="flex flex-col gap-4 px-2"
                             role="region"

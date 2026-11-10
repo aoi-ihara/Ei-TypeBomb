@@ -24,6 +24,35 @@ items. Newly introduced words that succeed unaided do not occupy a slot.
 These numeric thresholds are hypotheses and should be validated through
 next-day and seven-day unaided recall, not only session completion metrics.
 
+## Escalating holds for repeatedly difficult words
+
+To avoid blocking all new introductions behind a few words that cannot yet be
+recalled, each word has a persistent, per-user/per-room struggle record in the
+scheduler cache. An assisted recall (including a full hint) or an incorrect
+answer counts as a struggling attempt **only when the attempt is independent
+of recent BOT exposure**. Unaided correct recalls, even with typing mistakes,
+do not count as failures.
+
+- First hold: 4 struggling attempts over at least 2 minutes → 10 minutes.
+- After returning, 2 more struggling attempts → 30 minutes, then 3 hours,
+  12 hours, and 24 hours; further holds are capped at 24 hours.
+- A held word is removed from active retries, excluded from cycle fillers and
+  BOT presentations, and does not consume one of the four relearning slots.
+- Once its deadline passes, the word is eligible ahead of newly introduced
+  material (but after an already-due active retry). A successful independent,
+  unaided answer reduces the retained hold level by one, rather than
+  immediately wiping all evidence of prior difficulty.
+- If every word is held, the Playground pauses and displays the earliest
+  next review time. It never breaks a multi-hour hold to fill a question.
+- Hold timestamps are absolute and survive reload, but stale/invalid entries
+  and words removed from the room are discarded during cache recovery.
+- `playground_item_suspended` records the hold level and deadline for
+  calibration; no new DB table is needed.
+
+These times and failure thresholds are **uncalibrated product hypotheses**.
+Compare delayed unaided recall and overall practice throughput before deciding
+whether the feature actually improves retention.
+
 ## Historical context
 
 The earlier scheduler reserved alternate user turns for complete room coverage
