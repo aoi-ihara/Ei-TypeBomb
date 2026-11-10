@@ -765,3 +765,35 @@ test("intentional page exit immediately clears the active seat and session, unli
     await f.runtime.closeSession("a", instance); // duplicate unload delivery is harmless
     assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
 });
+
+test("a recommendation is single-use, and a refreshed recommendation is respected", async () => {
+    const f = fixture();
+    await f.runtime.open({
+        ...room,
+        items: [
+            room.items[0],
+            { id: "r", type: "typed_recall", prompt: "r", answer: "b" },
+        ],
+    });
+    for (const id of ["a", "b"]) {
+        await f.runtime.connect(id, id);
+        await f.runtime.command(f.command(id, "room:join"), id);
+    }
+    await f.runtime.command(f.command("a", "game:start"), "a");
+    f.runtime.recommend("a", "r");
+    f.advance(3_001);
+    await f.runtime.tick();
+    assert.equal(f.runtime.state.room.wordIndex, 1);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
+
+    await f.runtime.command(f.command("a", "word:success"), "a");
+    await f.runtime.command(f.command("b", "word:success"), "b");
+    // No new recommendation: the old one must not pin the next turn to r.
+    assert.equal(f.runtime.state.room.wordIndex, 0);
+
+    f.runtime.recommend("a", "r");
+    await f.runtime.command(f.command("a", "word:success"), "a");
+    await f.runtime.command(f.command("b", "word:success"), "b");
+    assert.equal(f.runtime.state.room.wordIndex, 1);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
+});
