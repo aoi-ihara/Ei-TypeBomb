@@ -571,7 +571,11 @@ const createRoomIfNeeded = async (
                         ...metadata,
                     }),
                 (playerId, currentRoom) => {
+                    // Recommendations describe one upcoming turn only. If the
+                    // client has not supplied a fresh one, use the fallback
+                    // instead of replaying the previous word indefinitely.
                     const itemId = recommendedItems.get(playerId);
+                    recommendedItems.delete(playerId);
                     if (!itemId) return undefined;
                     const index = currentRoom.items.findIndex(
                         (item) => item.id === itemId,
