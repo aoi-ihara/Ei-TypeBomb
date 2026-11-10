@@ -765,6 +765,40 @@ test("BOT fallback keeps the handoff alive after a user answer when every word i
     }
 });
 
+test("BOT lookahead skips held and retry words before protecting upcoming recalls", () => {
+    const ids = [
+        "held-a", "held-b", "held-c", "retry",
+        "next-a", "next-b", "next-c", "safe",
+    ];
+    const state = scheduler.createScheduler(ids, () => 0);
+    state.cycleQueue = [...ids];
+    for (const id of ["held-a", "held-b", "held-c"]) {
+        state.struggles[id] = {
+            consecutiveFailures: 0,
+            firstFailureAt: null,
+            suspensionLevel: 1,
+            suspendedUntil: now.getTime() + 10 * 60_000,
+        };
+    }
+    state.retries.retry = {
+        itemId: "retry",
+        earliestTurn: 999,
+        latestTurn: 1002,
+        reason: "failed_recall",
+        successCount: 0,
+    };
+    // A previously seen upcoming recall is otherwise an eligible BOT word.
+    state.userAnswered["next-a"] = 1;
+    state.userAnswered.safe = 1;
+
+    // BOT can use the safe word without spoiling the next user question.
+    assert.equal(scheduler.chooseBotItem(state, () => 0), "safe");
+    assert.equal(
+        scheduler.chooseNextUserItem(state, {}, () => 0, now.getTime()).itemId,
+        "next-a",
+    );
+});
+
 test("BOT never introduces an unseen word when only a protected answered word exists", () => {
     const state = scheduler.createScheduler(["a", "b", "c", "d", "e"], () => 0);
     state.userAnswered.a = 1;
