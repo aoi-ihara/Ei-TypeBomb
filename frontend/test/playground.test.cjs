@@ -23,8 +23,14 @@ function load(file, globals = {}) {
     return evaluate(fs.readFileSync(path.join(root, file), "utf8"), globals);
 }
 const memory = load("lib/playground/memory.ts");
+const schedulerCache = new Map();
+const schedulerStorage = {
+    getItem: (key) => schedulerCache.get(key) ?? null,
+    setItem: (key, value) => schedulerCache.set(key, value),
+};
 const scheduler = load("lib/playground/scheduler.ts", {
     require: () => memory,
+    localStorage: schedulerStorage,
 });
 const input = load("lib/playground/recall-input.ts");
 const clock = load("lib/playground/bomb-clock.ts");
@@ -254,6 +260,142 @@ test("the first cycle preserves its Fisher–Yates order when no recall history 
         scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
     }
     assert.deepEqual(order, shuffled);
+});
+
+
+test("reload continues the exact pending cycle instead of reshuffling", () => {
+    const ids = ["a", "b", "c", "d"];
+    const state = scheduler.createScheduler(ids, rng(18));
+    const timestamp = now.getTime();
+    const first = scheduler.chooseNextUserItem(state, {}, rng(1), timestamp);
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    scheduler.saveSchedulerState("playground", "reload-user", "reload-room", state, timestamp);
+    const expected = scheduler.chooseNextUserItem(state, {}, rng(2), timestamp);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "reload-user", "reload-room", ids, {}, timestamp + 1000,
+    );
+    assert.ok(restored);
+    assert.equal(
+        scheduler.chooseNextUserItem(restored, {}, rng(99), timestamp + 1000).itemId,
+        expected.itemId,
+    );
+    assert.equal(restored.turn, 2);
+    assert.equal(restored.userAnswered[first.itemId], 1);
+});
+
+test("reload preserves unfinished questions and scheduled failed recalls", () => {
+    const ids = ["a", "b", "c", "d"];
+    const timestamp = now.getTime();
+    const state = scheduler.createScheduler(ids, rng(42));
+    const first = scheduler.chooseNextUserItem(state, {}, rng(10), timestamp);
+    scheduler.saveSchedulerState("playground", "retry-user", "retry-room", state, timestamp);
+    let restored = scheduler.loadSchedulerState(
+        "playground", "retry-user", "retry-room", ids, {}, timestamp + 1000,
+    );
+    assert.equal(restored.current.itemId, first.itemId);
+    assert.equal(restored.turn, 1);
+    assert.equal(restored.userAnswered[first.itemId] ?? 0, 0);
+    assert.equal(
+        scheduler.chooseNextUserItem(restored, {}, rng(11), timestamp + 1000).itemId,
+        first.itemId,
+    );
+
+    scheduler.recordUserAnswer(
+        restored,
+        memory.evaluateRecall(observation({ success: false })),
+    );
+    scheduler.saveSchedulerState(
+        "playground", "retry-user", "retry-room", restored, timestamp + 1000,
+    );
+    const resumed = scheduler.loadSchedulerState(
+        "playground", "retry-user", "retry-room", ids, {}, timestamp + 2000,
+    );
+    assert.ok(resumed.retries[first.itemId]);
+    scheduler.chooseNextUserItem(resumed, {}, rng(12), timestamp + 2000);
+    scheduler.recordUserAnswer(resumed, memory.evaluateRecall(observation()));
+    assert.equal(
+        scheduler.chooseNextUserItem(resumed, {}, rng(13), timestamp + 2000).itemId,
+        first.itemId,
+    );
+});
+
+test("scheduler storage is scoped to user, room and mode", () => {
+    const ids = ["a", "b"];
+    const state = scheduler.createScheduler(ids, rng(9));
+    scheduler.saveSchedulerState(
+        "playground", "owner", "room", state, now.getTime(),
+    );
+    for (const [mode, user, room] of [
+        ["online", "owner", "room"],
+        ["playground", "other", "room"],
+        ["playground", "owner", "other"],
+    ]) {
+        assert.equal(
+            scheduler.loadSchedulerState(mode, user, room, ids, {}, now.getTime()),
+            null,
+        );
+    }
+});
+
+test("long-break restore re-evaluates due words without grading interrupted work", () => {
+    const ids = ["stable", "due"];
+    const timestamp = now.getTime();
+    const state = scheduler.createScheduler(ids, rng(17));
+    scheduler.chooseNextUserItem(state, {}, rng(1), timestamp);
+    scheduler.saveSchedulerState("playground", "delayed", "room", state, timestamp);
+    const memories = {
+        stable: { ...initial("stable"), stability: 100 },
+        due: {
+            ...initial("due"),
+            stability: 0.15,
+            lastReviewedAt: new Date(timestamp - 86_400_000).toISOString(),
+        },
+    };
+    const restored = scheduler.loadSchedulerState(
+        "playground", "delayed", "room", ids, memories,
+        timestamp + 8 * 60 * 60 * 1000,
+    );
+    assert.equal(restored.current, null);
+    assert.equal(
+        scheduler.chooseNextUserItem(
+            restored, memories, rng(22), timestamp + 8 * 60 * 60 * 1000,
+        ).itemId,
+        "due",
+    );
+    assert.equal(Object.keys(restored.userAnswered).length, 0);
+});
+
+test("room edits reconcile the queue while preserving prior answers", () => {
+    const timestamp = now.getTime();
+    const state = scheduler.createScheduler(["a", "b", "removed"], rng(33));
+    const first = scheduler.chooseNextUserItem(state, {}, rng(1), timestamp);
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    scheduler.saveSchedulerState("playground", "edit", "room", state, timestamp);
+    const ids = ["a", "b", "new"];
+    const restored = scheduler.loadSchedulerState(
+        "playground", "edit", "room", ids, {}, timestamp + 1000,
+    );
+    assert.ok(restored);
+    assert.deepEqual(Array.from(restored.itemIds), ids);
+    assert.ok(restored.cycleQueue.includes("new"));
+    assert.ok(!restored.cycleQueue.includes("removed"));
+    if (first.itemId !== "removed") {
+        assert.ok(!restored.cycleQueue.includes(first.itemId));
+        assert.equal(restored.userAnswered[first.itemId], 1);
+    }
+});
+
+test("damaged scheduler storage falls back to normal scheduling", () => {
+    schedulerStorage.setItem(
+        "playground-scheduler:v1:playground:bad:room",
+        "{not-json",
+    );
+    assert.equal(
+        scheduler.loadSchedulerState(
+            "playground", "bad", "room", ["a"], {}, now.getTime(),
+        ),
+        null,
+    );
 });
 
 test("a failed word is retried promptly, before unbounded new introductions", () => {
