@@ -5,6 +5,18 @@ const nextConfig: NextConfig = {
     serverExternalPackages: ["oidc-provider", "pg"],
     // Runtime-neutral backend/shared modules are also bundled by the browser.
     turbopack: { root: resolve(__dirname, "..") },
+    // Consent must be protected on the React document, not only the OAuth API.
+    async headers() {
+        return [
+            {
+                source: "/oauth/consent",
+                headers: [
+                    { key: "X-Frame-Options", value: "DENY" },
+                    { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+                ],
+            },
+        ];
+    },
     async rewrites() {
         return [
             {
