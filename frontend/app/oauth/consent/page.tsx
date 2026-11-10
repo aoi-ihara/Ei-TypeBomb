@@ -23,7 +23,10 @@ export default async function OAuthConsentPage({
         );
     }
     if (!(await getUser())) {
-        redirect("/sign-in?next=" + encodeURIComponent("/api/oauth/interaction/" + uid));
+        redirect(
+            "/sign-in?next=" +
+                encodeURIComponent("/api/oauth/interaction/" + uid),
+        );
     }
 
     return <OAuthConsent uid={uid} />;

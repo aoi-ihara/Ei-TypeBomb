@@ -10,7 +10,11 @@ import { useRouter } from "next/navigation";
 import { IconName } from "@/components/ui/Icon";
 import Shell from "../layout/Shell";
 
-export default function AccountDetails({ mcpEnabled }: { mcpEnabled: boolean }) {
+export default function AccountDetails({
+    mcpEnabled,
+}: {
+    mcpEnabled: boolean;
+}) {
     const buttonNames = mcpEnabled
         ? ["接続", "メールアドレス", "パスワード"]
         : ["メールアドレス", "パスワード"];
@@ -56,7 +60,7 @@ export default function AccountDetails({ mcpEnabled }: { mcpEnabled: boolean }) 
 
                 <Shell title="アカウント" size="medium">
                     <div className="w-full px-4 sm:px-0">
-                        {(mcpEnabled && navigation == 0) ? (
+                        {mcpEnabled && navigation == 0 ? (
                             <Apps />
                         ) : navigation == (mcpEnabled ? 1 : 0) ? (
                             <AuthForm key="email" mode="email" />

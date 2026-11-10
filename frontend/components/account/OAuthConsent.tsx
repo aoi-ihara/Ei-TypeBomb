@@ -56,8 +56,12 @@ export default function OAuthConsent({ uid }: { uid: string }) {
                     cache: "no-store",
                     signal: controller.signal,
                 });
-                if (!response.ok ||
-                    !response.headers.get("content-type")?.includes("application/json")) {
+                if (
+                    !response.ok ||
+                    !response.headers
+                        .get("content-type")
+                        ?.includes("application/json")
+                ) {
                     throw new Error("Invalid authorization request");
                 }
                 const data = (await response.json()) as AuthorizationDetails;
@@ -76,9 +80,7 @@ export default function OAuthConsent({ uid }: { uid: string }) {
         return (
             <>
                 <Header />
-                <Shell title="アプリの接続リクエスト" size="large">
-                    <p role="status" data-cursor="text">読み込み中…</p>
-                </Shell>
+                <Shell title="アプリの接続リクエスト" size="large" loading />
             </>
         );
     }
