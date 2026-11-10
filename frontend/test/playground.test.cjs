@@ -813,6 +813,7 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
             room: { id: "r" },
             LOCAL_USER_ID: "local",
             initialSounDeffects: false,
+            offlineVoiceReading: false,
             schedulerRef: ref(
                 sch.createScheduler(
                     items.map((x) => x.id),
