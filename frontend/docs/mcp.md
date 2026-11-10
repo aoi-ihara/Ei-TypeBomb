@@ -69,17 +69,14 @@ Every authorization requires a new explicit decision, even for an already
 approved client. Once approved, the server reuses an unexpired grant for the
 same authenticated user, registered client ID and MCP resource/scope rather
 than creating a new grant on every reconnect. Different client IDs are never
-merged based on client display name. The management UI in `/account` groups historical
-duplicate grants by client ID; its JSON view of `/api/oauth/connections` and
-HTML fallback use the same CSRF-protected revocation logic. Disconnecting a client revokes all its existing
+merged based on client display name. The management UI groups historical
+duplicate grants by client ID; disconnecting a client revokes all its existing
 grants and token chains. Reuse does not extend the original grant lifetime, and
 refresh-token reuse detection still revokes its full shared grant. The UI displays the self-reported client name/site, exact
 redirect target, ETB resource and logged-in account ID. Names are not verified
 brand identities. Signed, secure, HttpOnly interaction cookies, same-origin form
 POST validation and user/interaction-bound CSRF tokens protect approval.
-Consent and connection-management pages use the standalone `/mcp-oauth.css`
-stylesheet to match the ETB light/dark UI without allowing inline styles or scripts.
-They use `Referrer-Policy: strict-origin`:
+Consent and connection-management pages use `Referrer-Policy: strict-origin`:
 full interaction URLs are not sent as referrers, and normal same-origin HTTPS
 form POSTs retain their Origin header. Do not replace it with `no-referrer`,
 which makes browser form submissions send `Origin: null` and fail the strict

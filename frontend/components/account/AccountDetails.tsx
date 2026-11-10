@@ -1,72 +1,73 @@
 "use client";
 
-import Apps from "@/components/account/Apps";
 import AuthForm from "@/components/account/AuthForm";
 import Button from "@/components/ui/Button";
-import type { IconName } from "@/components/ui/Icon";
 import { signOut } from "@/lib/auth/sign-out";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+import { IconName } from "@/components/ui/Icon";
 import Shell from "../layout/Shell";
 
-type Section = "connections" | "email" | "password";
-
 export default function AccountDetails({ mcpEnabled }: { mcpEnabled: boolean }) {
-    const sections: { id: Section; label: string; icon: IconName }[] = [
-        ...(mcpEnabled
-            ? [{ id: "connections" as const, label: "接続", icon: "layoutGrid" as const }]
-            : []),
-        { id: "email", label: "メールアドレス", icon: "mail" },
-        { id: "password", label: "パスワード", icon: "keyRound" },
-    ];
-    const [navigation, setNavigation] = useState<Section>(
-        mcpEnabled ? "connections" : "email",
-    );
+    const buttonNames = ["メールアドレス", "パスワード"];
+    const buttonIconNames: IconName[] = ["mail", "keyRound"];
+    const [navigation, setNavigation] = useState(0);
+
     const router = useRouter();
 
     return (
-        <div className="flex w-full flex-col gap-12 sm:flex-row sm:gap-0">
-            <nav
-                aria-label="アカウント設定"
-                className="flex w-full shrink-0 gap-4 overflow-x-auto px-4 no-scrollbar sm:w-48 sm:flex-col sm:pr-0"
-            >
-                {sections.map((section) => (
+        <>
+            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll no-scrollbar">
+                    {buttonNames.map((item, index) => (
+                        <Button
+                            key={item}
+                            className="w-fit shrink-0 sm:w-full"
+                            variant={
+                                navigation == index ? "primary" : "default"
+                            }
+                            onClick={() => setNavigation(index)}
+                            iconName={buttonIconNames[index]}
+                            alignment="left"
+                        >
+                            {buttonNames[index]}
+                        </Button>
+                    ))}
+
                     <Button
-                        key={section.id}
+                        variant="danger"
+                        onClick={async () => {
+                            await signOut();
+                            router.refresh();
+                        }}
                         className="w-fit shrink-0 sm:w-full"
-                        variant={navigation === section.id ? "primary" : "default"}
-                        onClick={() => setNavigation(section.id)}
-                        iconName={section.icon}
+                        iconName="logOut"
                         alignment="left"
                     >
-                        {section.label}
+                        サインアウト
                     </Button>
-                ))}
-                <Button
-                    variant="danger"
-                    onClick={async () => {
-                        await signOut();
-                        router.refresh();
-                    }}
-                    className="w-fit shrink-0 sm:w-full"
-                    iconName="logOut"
-                    alignment="left"
-                >
-                    サインアウト
-                </Button>
-            </nav>
-
-            <Shell title="アカウント" size="medium">
-                <div className="w-full px-4 sm:px-0">
-                    {navigation === "connections" && mcpEnabled ? (
-                        <Apps />
-                    ) : navigation === "email" ? (
-                        <AuthForm key="email" mode="email" />
-                    ) : (
-                        <AuthForm key="password" mode="password" />
-                    )}
                 </div>
-            </Shell>
-        </div>
+
+                <Shell title="アカウント" size="medium">
+                    <div className="w-full px-4 sm:px-0">
+                        {mcpEnabled && (
+                            <Button
+                                href="/api/oauth/connections"
+                                iconName="layoutGrid"
+                                className="w-full mb-6"
+                            >
+                                MCP接続を管理
+                            </Button>
+                        )}
+                        {navigation === 0 ? (
+                            <AuthForm key="email" mode="email" />
+                        ) : (
+                            <AuthForm key="password" mode="password" />
+                        )}
+                    </div>
+                </Shell>
+            </div>
+        </>
     );
 }

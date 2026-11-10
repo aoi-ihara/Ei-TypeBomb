@@ -7,12 +7,8 @@ host-scoped Supabase SSR cookies and refreshed in the Next.js proxy.
 MCP clients authenticate through ETB's own OAuth authorization server, which
 uses the ETB browser session to identify the user during consent. Website
 session cookies are not accepted as MCP access tokens. When MCP OAuth is
-enabled, the account screen shows a **接続** (Connections) tab. This tab
-loads authorized clients from `GET /api/oauth/connections` with
-`Accept: application/json` and revokes their grants through the existing
-CSRF-protected `POST /api/oauth/connections`. HTML clients can still use the
-standalone connections page. Both interfaces revoke all grants for a selected
-client ID.
+enabled, the account screen links to `/api/oauth/connections` to review and
+revoke MCP grants.
 
 ## Deployment configuration
 
