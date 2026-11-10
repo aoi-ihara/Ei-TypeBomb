@@ -174,17 +174,23 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
     const interaction = new URL(response.headers.get("location")!, issuer)
       .pathname;
     const page = await request(interaction, {}, true);
-    assert.equal(page.status, 200, await page.clone().text());
-    assert.equal(page.headers.get("referrer-policy"), "strict-origin");
+    assert.equal(page.status, 303, await page.clone().text());
     assert.equal(
-      page.headers.get("content-security-policy"),
-      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://client.example; frame-ancestors 'none'; base-uri 'none'",
+      page.headers.get("location"),
+      "/oauth/consent?uid=" + interaction.split("/").at(-1),
     );
-    const markup = await page.text();
-    assert.ok(markup.includes("作成・閲覧・変更"));
-    assert.ok(markup.includes("&lt;script&gt;"));
-    assert.ok(!markup.includes("<script>"));
-    const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
+    const dataResponse = await request(
+      interaction, { headers: { Accept: "application/json" } }, true,
+    );
+    assert.equal(dataResponse.status, 200, await dataResponse.clone().text());
+    assert.ok(dataResponse.headers.get("content-type")?.includes("application/json"));
+    const details = await dataResponse.json();
+    assert.equal(details.scope, "etb:rooms");
+    assert.equal(details.client.name, "<script>alert(1)</script>");
+    assert.equal(details.client.uri, "https://client.example");
+    assert.equal(details.redirect_uri, "https://client.example/callback");
+    const csrf = details.csrf;
+    assert.ok(csrf);
     const approved = await request(interaction, form({ csrf, decision }), true);
     assert.equal(approved.status, 303, await approved.clone().text());
     const resume = new URL(approved.headers.get("location")!, issuer);
@@ -264,7 +270,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
       },
     );
     await t.test(
-      "consent CSP allows only the requested registered callback origin, without query directives",
+      "consent JSON validates callback and excludes client-controlled CSP directives",
       async () => {
         const redirect =
           "https://other.example:8443/callback?x=;frame-src%20%2A";
@@ -283,12 +289,17 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         });
         const path = new URL(response.headers.get("location")!, issuer)
           .pathname;
-        const page = await request(path, {}, true);
+        const page = await request(
+          path, { headers: { Accept: "application/json" } }, true,
+        );
         assert.equal(page.status, 200, await page.clone().text());
         assert.equal(
           page.headers.get("content-security-policy"),
-          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://other.example:8443; frame-ancestors 'none'; base-uri 'none'",
+          "default-src 'none'; frame-ancestors 'none'",
         );
+        const details = await page.json();
+        assert.equal(details.redirect_uri, redirect);
+        assert.ok(details.csrf);
       },
     );
     await t.test(
@@ -331,8 +342,10 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         assert.equal((await request(path, {}, true)).status, 400);
         jar.clear();
         for (const [key, value] of originalCookies) jar.set(key, value);
-        const markup = await (await request(path, {}, true)).text();
-        const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
+        const details = await (await request(
+          path, { headers: { Accept: "application/json" } }, true,
+        )).json();
+        const csrf = details.csrf;
         // Keep rejecting opaque/missing/foreign origins; fix the page's
         // referrer policy rather than weakening the form's Origin guard.
         for (const origin of ["null", "https://evil.example"]) {

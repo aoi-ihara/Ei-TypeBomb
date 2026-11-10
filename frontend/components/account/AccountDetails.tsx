@@ -1,5 +1,6 @@
 "use client";
 
+import Apps from "@/components/account/Apps";
 import AuthForm from "@/components/account/AuthForm";
 import Button from "@/components/ui/Button";
 import { signOut } from "@/lib/auth/sign-out";
@@ -10,8 +11,12 @@ import { IconName } from "@/components/ui/Icon";
 import Shell from "../layout/Shell";
 
 export default function AccountDetails({ mcpEnabled }: { mcpEnabled: boolean }) {
-    const buttonNames = ["メールアドレス", "パスワード"];
-    const buttonIconNames: IconName[] = ["mail", "keyRound"];
+    const buttonNames = mcpEnabled
+        ? ["接続", "メールアドレス", "パスワード"]
+        : ["メールアドレス", "パスワード"];
+    const buttonIconNames: IconName[] = mcpEnabled
+        ? ["layoutGrid", "mail", "keyRound"]
+        : ["mail", "keyRound"];
     const [navigation, setNavigation] = useState(0);
 
     const router = useRouter();
@@ -51,16 +56,9 @@ export default function AccountDetails({ mcpEnabled }: { mcpEnabled: boolean }) 
 
                 <Shell title="アカウント" size="medium">
                     <div className="w-full px-4 sm:px-0">
-                        {mcpEnabled && (
-                            <Button
-                                href="/api/oauth/connections"
-                                iconName="layoutGrid"
-                                className="w-full mb-6"
-                            >
-                                MCP接続を管理
-                            </Button>
-                        )}
-                        {navigation === 0 ? (
+                        {(mcpEnabled && navigation == 0) ? (
+                            <Apps />
+                        ) : navigation == (mcpEnabled ? 1 : 0) ? (
                             <AuthForm key="email" mode="email" />
                         ) : (
                             <AuthForm key="password" mode="password" />

@@ -251,27 +251,23 @@ async function interaction(
         );
         return;
     }
-    html(
-        res,
-        "ルームへのアクセスを許可しますか？",
-        `
-        <p>次のアプリに、あなたが所有するEi-TypeBombルームの<strong>作成・閲覧・変更</strong>を許可します。</p>
-        <dl><dt>アプリ名（登録者による申告）</dt><dd>${escape(client.clientName || "名称未設定のアプリ")}</dd>
-        <dt>アプリのウェブサイト（登録者による申告）</dt><dd>${escape(client.clientUri || "未登録")}</dd>
-        <dt>接続先</dt><dd>${escape(details.params.redirect_uri)}</dd>
-        <dt>対象のETB環境</dt><dd>${escape(getMcpResource())}</dd>
-        <dt>ログイン中のアカウントID</dt><dd>${escape(user)}</dd></dl>
-        <p>アプリ名だけで信頼せず、接続を開始したアプリと接続先を確認してください。</p>
-        <form method="post"><input type="hidden" name="csrf" value="${escape(csrf(user, purpose))}">
-        <button name="decision" value="deny">拒否</button><button name="decision" value="approve">許可する</button></form>
-        <p><small>許可は30日間有効です。<a href="/api/oauth/connections">MCP接続の管理</a>からいつでも解除できます。</small></p>`,
-        // Browsers enforce form-action throughout the POST's redirect chain,
-        // including the provider's final redirect to the client. Only this consent
-        // page needs that validated client's origin. URL.origin excludes paths and
-        // queries, so registered URI text cannot inject additional CSP directives.
-        // oidc-provider still enforces the full registered redirect URI separately.
-        redirectOrigin,
-    );
+    if (req.headers.accept?.includes("application/json")) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+        res.end(JSON.stringify({
+            client: {
+                name: client.clientName || "名称未設定のアプリ",
+                uri: client.clientUri || null,
+            },
+            redirect_uri: redirectUri,
+            scope: details.params.scope,
+            csrf: csrf(user, purpose),
+        }));
+        return;
+    }
+    res.statusCode = 303;
+    res.setHeader("Location", "/oauth/consent?uid=" + encodeURIComponent(uid));
+    res.end();
 }
 
 async function connections(
