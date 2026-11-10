@@ -1,4 +1,6 @@
-import React, { useEffect, useRef } from "react";
+"use client";
+
+import React from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";
 import Link from "next/link";
@@ -28,8 +30,6 @@ type ButtonProps = Pick<
     cursor?: "0" | "1" | "2";
     href?: string;
 };
-
-const PLAY_AGAIN_AUTO_CLICK_DELAY_MS = 7_000;
 
 const baseStyles =
     "font-bold transition-all duration-(--duration-etb) ease-etb cursor-pointer";
@@ -79,40 +79,6 @@ export default function Button({
                 ? `rounded-lg ${iconName && !loading ? "pl-3" : "pl-4"} ${children ? "pr-4" : "pr-3"} py-3 gap-2`
                 : `rounded-lg ${iconName && !loading ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4.5 gap-2`;
 
-    const autoPlayAgain = children === "もう一度プレイ";
-    const buttonRef = useRef<HTMLButtonElement | null>(null);
-    const autoPlayAgainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    );
-
-    useEffect(() => {
-        if (!autoPlayAgain || disabled || loading) return;
-
-        autoPlayAgainTimerRef.current = setTimeout(() => {
-            autoPlayAgainTimerRef.current = null;
-
-            if (!disabled && !loading) {
-                buttonRef.current?.click();
-            }
-        }, PLAY_AGAIN_AUTO_CLICK_DELAY_MS);
-
-        return () => {
-            if (autoPlayAgainTimerRef.current) {
-                clearTimeout(autoPlayAgainTimerRef.current);
-                autoPlayAgainTimerRef.current = null;
-            }
-        };
-    }, [autoPlayAgain, disabled, loading]);
-
-    const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
-        if (autoPlayAgainTimerRef.current) {
-            clearTimeout(autoPlayAgainTimerRef.current);
-            autoPlayAgainTimerRef.current = null;
-        }
-
-        onClick?.(event);
-    };
-
     if (href) {
         return (
             <div
@@ -160,10 +126,9 @@ export default function Button({
             data-cursor-shape={cursor}
         >
             <button
-                ref={buttonRef}
                 {...ariaProps}
                 type={type}
-                onClick={handleClick}
+                onClick={onClick}
                 onPointerDown={onPointerDown}
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerCancel}

@@ -1,43 +1,36 @@
-# Playground v5 hints: coverage, bounded retries, and recall evidence
+# Playground: mastery-first scheduling
 
-`memory.ts` evaluates an observation and updates the custom long-term model. `scheduler.ts` independently chooses questions. `InputView.tsx` records incorrect characters when entered, so Backspace and input reset cannot erase that evidence. The scheduler never reads legacy graduation/phase fields.
+`memory.ts` evaluates recall observations. `scheduler.ts` now prioritizes
+relearning instead of maximizing new-word coverage.
 
-## Coverage and selection
+## New selection policy
 
-A session starts with a Fisher–Yates shuffle of **every** room item, including all previously learned or graduated items. If recall history exists, the first user selection stably orders previously reviewed items by ascending predicted retrievability `R`, with difficulty breaking ties; items with no recorded review history remain in their shuffled order after reviewed items. With no review history, the first cycle remains fully random. Every first-cycle item is still selected once unless its own answer calls for a retry. BOT turns do not consume this queue or increment user question indices. Fast unaided answers produce no retry; 20 and 100 such words therefore take 20 and 100 user answers to cover.
+- A failed or fully revealed answer schedules a retry after two user questions
+  (or sooner only when a tiny room has no safe filler).
+- The first independent, unaided retry success schedules another confirmation
+  after five user questions. A second independent success clears the retry.
+- Eligible retries take precedence over ordinary cycle questions.
+- At most four words may be awaiting relearning at once. When this pool is full,
+  new words are paused. Previously answered words can fill the spacing gap.
+- In very small rooms where every word is waiting, the oldest pending word
+  can be practiced early instead of deadlocking.
+- The usual first-session shuffle and the returning-session ordering by
+  predicted retrievability are preserved for words that are introduced.
+- BOT turns do not advance the user's question counter and pending retries
+  remain protected from BOT previews.
 
-Selection applies constraints before preferences:
+The active pool bounds **pending retries**, not all previously encountered
+items. Newly introduced words that succeed unaided do not occupy a slot.
+These numeric thresholds are hypotheses and should be validated through
+next-day and seven-day unaided recall, not only session completion metrics.
 
-1. Serve a retry whose reserved deadline is now.
-2. On odd user turns, advance the cycle. A pending retry item cannot be selected before its earliest turn, even through the cycle.
-3. On even turns, serve the eligible retry with the earliest deadline.
-4. If no retry is eligible, advance the cycle on that turn as well.
-5. When the queue empties, start another full shuffle. Previously reviewed words are ordered by ascending retrievability `R`, with higher difficulty breaking ties; words without review history remain in shuffled order after them. No word is excluded. A retry that is also in the current cycle satisfies both obligations.
+## Historical context
 
-There is no active-four gate, graduation prerequisite, fixed sequence of cue successes, additive priority lottery, or 12-presentation history used for fairness. Previously serialized `learning_state` is accepted for compatibility, ignored for selection, and cleared on the next user observation.
-
-## Retry windows and feasibility
-
-All constants below are **product hypotheses**, not experimentally established optimal intervals:
-
-| Constant                   | Value | Meaning                                                           |
-| -------------------------- | ----: | ----------------------------------------------------------------- |
-| `SHORT_RETRY_GAP`          |     5 | Earliest retry after failure/heavy support/uncertainty            |
-| `CONFIRM_RETRY_GAP`        |     8 | Earliest next confirmation after successful retry                 |
-| `RETRY_WINDOW_WIDTH`       |     3 | Minimum width before reservation/collision handling               |
-| `CYCLE_STRIDE`             |     2 | Odd turns reserved for coverage; even turns available for retries |
-| `REQUIRED_RETRY_SUCCESSES` |     2 | Independent, sufficiently clear successes to finish a retry       |
-| `BOT_LOOKAHEAD`            |     3 | Near-future cycle targets protected from BOT exposure             |
-
-At answered turn `q`, earliest is `q + min(gap, N)`, where N is the number of distinct room items. Thus gap 5 means four intervening user questions in rooms with at least five distinct items; gap 8 means seven intervening questions before a confirmation retry. Capping the gap at N avoids deadlock in small rooms. A successful retry extends the gap from 5 to 8; renewed failure resets the success count and uses the short gap again. Repeated failures do not multiply the interval.
-
-Each entry reserves a distinct even `latestTurn`, starting at or after `earliestTurn + RETRY_WINDOW_WIDTH`. Collisions move the reservation to the next free even slot. Earlier service is allowed only at/after earliest. Selected entries are removed; the next answer either completes or creates a new retry obligation. Deadlines of waiting entries are never silently extended.
-
-This reservation is necessary: arbitrarily many permanently failing words cannot all have a fixed 3–7-question maximum wait while also guaranteeing new cycle questions. At most N entries exist. The hard maximum from the triggering answer is:
-
-`min(gap, N) + RETRY_WINDOW_WIDTH + CYCLE_STRIDE × N` user questions.
-
-For one failure in a 20-word room at Q1, the initial window is Q4–Q8 (Q7 rounds to an even reservation). Queue congestion can widen the maximum, but a finite bound is assigned immediately, and each odd turn remains available for coverage. In the first cycle, every word is reached within at most `2 × N` user questions even with failures; all-fast success needs exactly N. The tests check every outstanding deadline on every simulated turn, not merely eventual completion.
+The earlier scheduler reserved alternate user turns for complete room coverage
+and could introduce new words while many failed words awaited retry. That
+behavior was intentionally removed because it could overwhelm learners.
+Old retry reservation fields remain for compatibility and observability,
+but they no longer dictate new-word coverage.
 
 ## Evidence and memory
 

@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEtbUrl } from "@/lib/config/base-url";
-import {
-    MCP_AUTHORIZATION_SERVER,
-    getMcpResource,
-} from "@/lib/mcp/oauth";
+import { getMcpIssuer, getMcpResource } from "@/lib/mcp/oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +8,9 @@ export async function GET() {
     return NextResponse.json(
         {
             resource: getMcpResource(),
-            authorization_servers: [MCP_AUTHORIZATION_SERVER],
+            authorization_servers: [getMcpIssuer()],
             bearer_methods_supported: ["header"],
+            scopes_supported: ["etb:rooms"],
             resource_documentation: getEtbUrl("/docs/mcp"),
         },
         {

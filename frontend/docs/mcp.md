@@ -1,5 +1,25 @@
 # Ei-TypeBomb MCP Server
 
+## Local development and TypeScript
+
+The OAuth server imports `oidc-provider` and its TypeScript definitions from
+`frontend/package.json`. Both `oidc-provider@9.13.3` and
+`@types/oidc-provider@9.13.1` are already pinned in the frontend lockfile.
+Run the following from the repository root to install the frontend dependencies
+(including dev dependencies) before checking TypeScript errors in an editor:
+
+```sh
+npm ci --prefix frontend
+cd frontend && npx tsc --noEmit
+```
+
+Use Node.js 22 and ensure development dependencies have not been omitted
+(`NODE_ENV=production` or `npm ci --omit=dev` would exclude the `@types`
+package). If the editor still shows `Cannot find module 'oidc-provider'`
+after installation, restart its TypeScript language server. The implicit-any
+messages for the provider callbacks can be secondary diagnostics when the
+library's declarations are unavailable; keep their types explicit regardless.
+
 Ei-TypeBomb exposes a remote MCP Streamable HTTP endpoint:
 
 `https://ei-typebomb.com/api/mcp`
@@ -7,164 +27,266 @@ Ei-TypeBomb exposes a remote MCP Streamable HTTP endpoint:
 The first version exposes room management tools and keeps the existing Ei-TypeBomb
 frontend unchanged.
 
-## OAuth 2.1 authentication
+## MCP OAuth authorization server
 
-The MCP endpoint uses the existing Supabase Auth project as its OAuth
-authorization server:
+ETB hosts a dedicated OAuth authorization server on Vercel/Next.js using
+[`oidc-provider` 9.13.3](https://github.com/panva/node-oidc-provider/tree/v9.13.3).
+The library implements authorization-code exchange, mandatory S256 PKCE,
+RFC 7591 dynamic client registration (DCR), exact registered redirect matching,
+RFC 8707 resource indicators, refresh rotation/reuse detection, and RFC 7009
+refresh-token revocation. ETB supplies the local Supabase Auth session adapter, explicit
+consent UI, persistence, resource policy and MCP JWT verification. This is a
+restricted OAuth profile, not a general-purpose OIDC login provider.
 
-- Authorization server: `https://gkiniypvnwqhmgviwxws.supabase.co/auth/v1`
-- MCP resource / expected JWT audience:
-  `https://ei-typebomb.com/api/mcp`
-- Protected Resource Metadata:
-  `https://ei-typebomb.com/.well-known/oauth-protected-resource/api/mcp`
+MCP consent authenticates users via ETB's own /sign-in form and its Supabase
+Auth session cookies (using the existing Supabase project). It does **not**
+require the a separate website OAuth client. The dynamically registered MCP client IDs are
+independent of website login. Website sessions are never accepted directly as
+MCP access tokens. After sign-in, ETB returns to the pending MCP consent page.
 
-MCP clients discover the authorization server from the Protected Resource
-Metadata and use the OAuth 2.1 Authorization Code + PKCE flow. The client must
-send the MCP endpoint URL as the OAuth `resource` parameter in the authorization
-and token requests. Supabase Auth supports the resource indicator for MCP
-clients.
+For `ETB_BASE_URL=https://ei-typebomb.com`:
 
-The server validates each Bearer token using the Supabase project's public
-JWKS. It checks the signature, issuer, expiry, asymmetric signing algorithm,
-authenticated role, subject, OAuth client ID, and the exact MCP resource
-audience. Tokens issued for the normal Ei-TypeBomb website login have the regular
-`authenticated` audience and are intentionally rejected by the MCP endpoint.
-The website's existing sign-in flow is not changed.
+| Endpoint | Purpose |
+| --- | --- |
+| `/.well-known/oauth-protected-resource/api/mcp` | RFC 9728 resource metadata |
+| `/.well-known/oauth-authorization-server` | RFC 8414 authorization server metadata |
+| `/api/oauth/register` | DCR for public and confidential clients |
+| `/api/oauth/authorize` | Authorization code + S256 PKCE |
+| `/api/oauth/interaction/:uid` | ETB login and explicit approve/deny |
+| `/api/oauth/token` | Code exchange and refresh |
+| `/api/oauth/jwks` | Public ES256 signing keys |
+| `/api/oauth/revoke` | Refresh-token or access-JWT revocation |
+| `/api/oauth/connections` | User's active grants and disconnect controls |
 
-Every MCP request, including `initialize`, `tools/list`, and notifications,
-requires a valid MCP access token. Missing or invalid tokens receive HTTP 401
-with a `WWW-Authenticate` challenge that points to the Protected Resource
-Metadata endpoint.
+The issuer is the exact canonical ETB origin. The only allowed resource and JWT
+`aud` is `${ETB_BASE_URL}/api/mcp`; the scope is `etb:rooms` (create, read, update
+only the user's own rooms). Clients must request that resource and scope at
+authorization. Refresh may omit `resource` and reuse the original binding, but
+cannot change it. The former production-audience exception on beta is removed.
+Production and beta tokens cannot be used interchangeably.
 
-### Supabase Auth configuration
+Every authorization requires a new explicit decision, even for an already
+approved client. Once approved, the server reuses an unexpired grant for the
+same authenticated user, registered client ID and MCP resource/scope rather
+than creating a new grant on every reconnect. Different client IDs are never
+merged based on client display name. The management UI groups historical
+duplicate grants by client ID; disconnecting a client revokes all its existing
+grants and token chains. Reuse does not extend the original grant lifetime, and
+refresh-token reuse detection still revokes its full shared grant. The UI displays the self-reported client name/site, exact
+redirect target, ETB resource and logged-in account ID. Names are not verified
+brand identities. Signed, secure, HttpOnly interaction cookies, same-origin form
+POST validation and user/interaction-bound CSRF tokens protect approval.
+Consent and connection-management pages use `Referrer-Policy: strict-origin`:
+full interaction URLs are not sent as referrers, and normal same-origin HTTPS
+form POSTs retain their Origin header. Do not replace it with `no-referrer`,
+which makes browser form submissions send `Origin: null` and fail the strict
+Origin check. Null, missing and foreign origins remain rejected.
+The user is verified through the ETB Supabase browser session and Auth `getUser`
+endpoint; an anonymous Supabase user cannot approve. Website session refresh
+continues to run through the existing Next.js proxy before MCP Pages API routes.
 
-The authorization server is the existing shared `rcAccount` Supabase project.
-No Supabase dashboard settings or global authorization paths are changed by
-this repository PR.
+Only authorization-code clients using `none`, `client_secret_basic` or
+`client_secret_post` are accepted. Confidential client authentication on code
+exchange, refresh and revocation is performed by the library. DCR disallows wildcard,
+fragment, credential-bearing and insecure remote redirect URIs. Native clients
+may use literal loopback HTTP redirects, subject to the provider's RFC 8252
+validation. Redirects are subsequently checked by the library. Remote JWKS,
+sector identifier, logo and request URI metadata are rejected; ETB does not
+fetch registration-supplied URLs. CIMD is not advertised or implemented.
 
-Before connecting an MCP client, verify the following in that project's
-Authentication settings:
+Access JWTs use ES256, `typ=at+jwt`, a 5-minute lifetime, UUID `sub`, dynamic
+`client_id`, `grant_id` and scope. MCP verifies their signature against the public
+portion of the *same configured JWKS* served at `/api/oauth/jwks`, issuer,
+exact single audience, type, required claims, expiry and live grant ownership.
+The resource server uses local public keys because issuer and resource are in
+the same deployment; it does not perform a self-fetch on every cold start.
+JWTs are never sent to Supabase as website sessions. Room ownership filters
+remain unchanged.
 
-1. OAuth 2.1 Server is enabled.
-2. **Dynamic Client Registration (DCR)** is enabled for clients that register
-   themselves. Verify that the authorization server advertises a
-   `registration_endpoint` in discovery metadata. If it does not, ChatGPT may
-   ask the user for a Client ID.
-   Supabase Auth is the authorization server, so adding metadata to the ETB MCP
-   resource endpoint cannot enable DCR or CIMD on its behalf.
-   Alternatively, register a compatible OAuth client manually.
-3. The project's JWT signing keys use ES256 or RS256 and the public JWKS endpoint
-   is reachable.
-4. The configured authorization path is reachable and requires the user to
-   approve or deny each client grant.
-5. The consent UI clearly displays the requesting client's registered name,
-   website, and redirect URI.
+Grants last at most 30 days. Refresh tokens always rotate; reuse revokes the
+entire grant, immediately invalidating its JWTs. Disconnect and revocation also
+invalidate the whole grant. `oidc-provider` intentionally does not revoke
+structured JWTs through its built-in revocation endpoint; the ETB adapter
+verifies its own JWT and creates a short-lived opaque surrogate for the same
+grant. The surrogate never leaves the server and is never accepted by MCP. The
+library then authenticates the requesting client and revokes the grant through
+its native policy. Opaque refresh tokens also use that library revocation logic. Unknown
+or invalid tokens receive RFC 7009's HTTP 200; storage failures return 503.
 
-Supabase's built-in OAuth scopes (`openid`, `email`, `profile`, and `phone`)
-describe identity claims; they are not Ei-TypeBomb room permissions. The MCP resource
-indicator binds the access token to Ei-TypeBomb, while the user's explicit OAuth grant
-authorizes the client.
+### Rollout hold: inherited dependency advisories (2026-11-08)
 
-**Consent UI limitation:** Supabase's `getAuthorizationDetails()` response
-exposes the OAuth client's name, website URI, redirect URI, and requested
-identity scopes, but does not expose the MCP resource indicator or a separate
-list of MCP tool permissions. The consent page therefore must not claim that
-these scopes describe room access. It displays the client identity and
-redirect target and warns users to approve only clients they recognize and
-trust. Configure OAuth client names and website URIs so users can identify the
-application. Do not rely on OAuth scopes as a description of MCP capabilities.
+Do not enable production MCP OAuth until existing dependency advisories have
+been triaged/patched and the resulting dependency set has been re-tested.
+`npm audit` currently reports 32 findings (3 critical, 15 high, 14 moderate).
+The critical package versions are unchanged from the base branch:
+`next@16.3.0`, `proxy-addr@2.0.7`, and `dompurify@3.4.13`. None of the newly
+added OAuth packages is listed in that audit. This is a package-level audit,
+not a claim that every advisory is exploitable in the deployed ETB application.
 
-**Important:** `rcAccount` is shared with the existing Ei-TypeBomb website login and
-other OAuth clients. Do not change its global authorization path or token hooks
-without reviewing every client that uses this project. The repository includes
-an Ei-TypeBomb consent page at `/oauth/consent`; use it as the authorization path only
-if it is appropriate for all applications using the shared OAuth server. If
-another shared consent UI already exists, keep using that UI and ensure it
-shows the requesting client identity and redirect target accurately.
+Next's maintainer advisories include
+[GHSA-2464-fhr4-w9xw](https://github.com/advisories/GHSA-2464-fhr4-w9xw) and
+[GHSA-673q-mjm6-r5xr](https://github.com/advisories/GHSA-673q-mjm6-r5xr), with
+Next 16.4.1 identified as patched for those issues. A framework/dependency
+upgrade and application-wide regression review remain separate rollout work.
+This PR keeps the new authorization server disabled unless explicitly enabled;
+a successful local OAuth test suite must not be treated as clearance to enable
+it on a dependency set with unresolved critical advisories.
 
-Keep the existing `RC_HUB_OAUTH_CLIENT_ID` web login client working: it does
-not request the MCP resource and its tokens must continue to use the normal
-`authenticated` audience.
+### Persistence and deployment setup
 
-Supabase's OAuth Server supports dynamic registration and recommends reviewing
-registered clients and requiring user approval. Users should revoke grants
-they no longer recognize from the Supabase account's authorized-applications
-management.
+Use Node.js **22.x** on Vercel. Pages API routes provide the real Node HTTP
+streams expected by `oidc-provider`; no custom HTTP server or separate compute
+service is required. The module is externalized in `next.config.ts`.
 
-### Client ID-free connection and diagnostics
+Set these **server-side** environment variables independently for Production
+and Preview. Do not use a `NEXT_PUBLIC_` prefix for MCP keys or credentials.
 
-For ChatGPT connections with no manually entered Client ID, the shared Supabase
-Auth authorization server must advertise an automatic registration mechanism.
-Its currently documented integration path is **Dynamic Client Registration**.
-Client ID Metadata Documents (CIMD) can also remove manual entry, but support
-must be implemented and advertised by the **authorization server**, not merely
-by the Ei-TypeBomb MCP resource server. Do not publish
-`client_id_metadata_document_supported: true` unless the authorization server
-actually validates client metadata documents and redirect URIs.
+| Variable | Value |
+| --- | --- |
+| `ETB_BASE_URL` | Exact HTTPS origin, e.g. `https://ei-typebomb.com` or `https://beta.ei-typebomb.com` |
+| `ETB_MCP_OAUTH_ENABLED` | `true` after provisioning storage and keys |
+| `ETB_MCP_DATABASE_URL` | PostgreSQL connection URL with `sslmode=verify-full`; a dedicated role restricted to the new schema |
+| `ETB_MCP_STORAGE_KEY` | 32 random bytes encoded as base64url |
+| `ETB_MCP_COOKIE_KEYS` | Comma-separated random signing keys, each at least 32 characters; current key first |
+| `ETB_MCP_SIGNING_JWKS` | Private ES256 JWKS JSON; unique `kid`, `alg=ES256`, `use=sig`; current key first |
 
-To check an environment without registering a client or sending credentials:
+MCP OAuth is independent of website login; `ETB_MCP_OAUTH_ENABLED=true`
+activates the authorization server while ETB continues to use its own
+Supabase Auth browser sessions.
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` remain
+the existing Supabase project's values. Keep the existing MCP room API's
+`SUPABASE_SERVICE_ROLE_KEY`; it is unrelated to the new database login.
+When MCP is disabled or missing required configuration, authorization is 503
+and MCP access fails closed. This PR does not enable MCP in a live environment.
 
-```bash
+Generate keys once per environment and keep the resulting file private:
+
+```sh
+cd frontend
+npm run generate:mcp-keys -- /secure/path/etb-mcp.env
+```
+
+Do not regenerate keys on cold start or on every deployment. Keep keys identical
+across all Vercel instances for an environment. During signing-key rotation,
+place the new private key first and retain previous keys for at least the
+5-minute JWT lifetime. Cookie key rotation can retain previous keys in the list.
+Storage key changes require re-encrypting stored artifacts, or revoking/deleting
+all of that environment's records and reconnecting clients. Back up keys and
+database together.
+
+Apply `supabase/migrations/20261108120000_mcp_oauth_storage.sql` through the
+normal database migration process. It creates the private `etb_mcp_oauth` schema
+with RLS enabled and no public/anon/authenticated access. It does not modify
+`auth.*`, public application tables, token hooks or Supabase Auth grants.
+Provision a dedicated PostgreSQL LOGIN role with a secret managed outside git,
+then substitute its identifier in this administrative SQL:
+
+```sql
+-- Run as the schema owner; etb_mcp_login is an example role name.
+grant usage on schema etb_mcp_oauth to etb_mcp_login;
+grant select, insert, update, delete on all tables in schema etb_mcp_oauth to etb_mcp_login;
+create policy mcp_server on etb_mcp_oauth.models to etb_mcp_login
+    using (true) with check (true);
+create policy mcp_server on etb_mcp_oauth.rate_limits to etb_mcp_login
+    using (true) with check (true);
+```
+
+Never expose this schema through the Supabase Data API. Remote connections must
+verify TLS certificates. Supabase cloud pooler/direct hosts automatically use the
+public Supabase Root 2021 CA bundled from the authenticated dashboard download.
+`sslmode=verify-full` remains required; Node verifies both the chain and hostname.
+No extra certificate environment variable or Vercel filesystem path is needed.
+Other providers keep the system CA store; an explicit `sslrootcert` path is also
+supported. Conflicting TLS options are rejected. Both direct connections and Supabase transaction
+pooling are supported: OAuth mutations run in a transaction with a per-issuer
+PostgreSQL advisory transaction lock. HTTP responses are released only after
+commit. This deliberately serializes authorization mutations per environment
+for correctness at ETB's current scale. MCP JWT verification performs unlocked
+live-grant reads. Authorization service/database outages deny access.
+
+Artifacts are AES-256-GCM encrypted with model/ID-bound associated data; IDs,
+account IDs and grant indexes are SHA-256 digests. Records are partitioned by
+canonical issuer so preview cannot read production grants even if storage is
+shared. DCR registrations have a 90-day server-side TTL. Clients must re-register
+if their registration expires. Maintain storage with a scheduled administrative
+cleanup (expired records are always ignored even before cleanup):
+
+```sql
+delete from etb_mcp_oauth.models where expires_at < now();
+delete from etb_mcp_oauth.rate_limits where window_start < now() - interval '1 day';
+```
+
+The database enforces deployment-wide caps of 30 registrations and 600 OAuth
+endpoint requests per minute (429 + Retry-After). Add Vercel Firewall per-IP
+limits for public registration/authorization/token routes to protect availability
+under abuse; the application never trusts a caller-supplied forwarding IP for
+security decisions. These caps may need tuning as usage grows.
+
+Do not enable this on arbitrary preview aliases: use the stable configured
+canonical preview domain and matching environment secrets. Requests on a
+noncanonical Host receive 421. Existing Supabase Auth-issued MCP tokens must be
+replaced by reconnecting clients after cutover. The legacy shared fixed-client
+hook can be retired separately after checking its other consumers; ETB no longer
+uses it. There is no fixed MCP Client ID allowlist or Supabase Auth token fallback.
+
+### Verification and client setup
+
+The MCP client needs only `https://ei-typebomb.com/api/mcp` (or the preview URL).
+It discovers ETB metadata, dynamically registers, opens ETB sign-in/consent
+and obtains its own tokens. Do not paste a website token into the client.
+
+```sh
 cd frontend
 npm run check:mcp-oauth -- https://beta.ei-typebomb.com/api/mcp
-npm run check:mcp-oauth -- https://ei-typebomb.com/api/mcp
 npm run test:mcp-oauth
+# Must target a disposable local database: this test drops its private schema.
+ETB_MCP_TEST_DATABASE_URL=postgresql://localhost/etb_mcp_oauth_test npm run test:mcp-server
 ```
 
-If the diagnostic prints **DCR: not advertised** and **CIMD: not advertised**:
+The integration suite uses real PostgreSQL and HTTP, with a test-only injected
+identity adapter (not a production login bypass). It covers registration,
+invalid metadata/redirects, PKCE, explicit consent, CSRF, denial, code replay,
+concurrent redemption, JWT claims and MCP acceptance, refresh/reuse revocation,
+JWT/refresh revocation, confidential client authentication, user-owned disconnect,
+host validation, commit failures and rate limits.
+It does not log into a live Supabase Auth or prove actual ChatGPT/Claude UI behavior.
+The discovery diagnostic also does not prove issued-token audience binding.
 
-1. Open the **shared rcAccount** Supabase project dashboard and go to
-   **Authentication → OAuth Server**.
-2. Enable **Dynamic Client Registration**. This is a shared-project setting;
-   review its impact on other apps and the consent experience before enabling.
-3. Re-run the diagnostic and confirm **DCR: advertised**.
-4. Reconnect the MCP app in ChatGPT without manually entering a Client ID.
-   Confirm the consent screen, authorization callback, token issuance, and
-   `tools/list` all work. If discovery succeeds but registration returns 401,
-   403 or 404, investigate Supabase registration policy, redirects and logs.
+Consent uses `Referrer-Policy: strict-origin` so browser form submissions retain
+their genuine same-origin `Origin` header. Its CSP `form-action` allows only
+`'self'` and the requested, registered redirect URI's origin: Chromium enforces
+this policy on the entire POST redirect chain, including the final client
+callback. The provider still requires the exact registered redirect URI. Paths
+and queries never enter CSP; unsupported host characters are rejected. Other
+pages, including connection management, keep `form-action 'self'`.
 
-The diagnostic only checks discovery, not whether an actual OAuth client can
-register or whether ChatGPT successfully completes OAuth. Keep PKCE, per-user
-consent, redirect-URI validation, token audience verification, and room
-ownership checks intact. Do **not** use an anonymous/public MCP access token
-as a shortcut.
+For a real-browser regression check, create a separate disposable local database
+named `etb_mcp_oauth_browser_test`, then run:
 
-### Client setup
-
-The MCP client only needs the remote endpoint URL:
-
-```text
-https://ei-typebomb.com/api/mcp
+```sh
+npm exec -- node --import tsx test/fixtures/mcp-browser-flow.mts
 ```
 
-A compatible MCP client will discover OAuth metadata, register (when dynamic
-client registration is enabled), open the sign-in/consent flow, and obtain or
-refresh its own tokens. Do not copy an Ei-TypeBomb website session token into the MCP
-client.
+Open the printed `start` URL in Chrome. Approve and confirm the success page
+(callback, PKCE code exchange and MCP JWT verification), then open `start` again
+and deny. The printed `status` URL exposes only aggregate outcome counters.
+The fixture resets only its private schema in that exact local database, uses
+ephemeral keys and a simulated Supabase Auth user, and never accesses live accounts.
+Two loopback origins model the issuer and client; a test-only TLS-offload shim
+maps those to canonical HTTPS origins inside the real production handler.
+Cookies, redirect paths, CSP and form submissions remain browser-enforced.
 
-Set `ETB_BASE_URL` for each Vercel environment (`https://ei-typebomb.com` for Production, `https://beta.ei-typebomb.com` for Preview). The MCP resource, metadata and room URLs are derived from it. The issuer remains the shared Supabase OAuth server.
+Before enabling production, complete a fresh ChatGPT and Claude connection on
+the canonical preview domain with the real ETB account, confirm approve
+and deny, `initialize`/`tools/list`, refresh and disconnect. Confirm the ETB web
+login, password recovery and existing room ownership still work. Treat this deployment check as
+required; local fixtures are not evidence of live interoperability. Inspect the
+consent/connection-management screens visually as well.
 
-### Temporary Preview audience compatibility
-
-The shared Supabase OAuth server currently uses a Custom Access Token Hook that
-issues `aud: "https://ei-typebomb.com/api/mcp"` for the registered MCP
-client. Connecting ChatGPT to `https://beta.ei-typebomb.com/api/mcp` therefore
-previously produced HTTP 401 (`failedClaim: "aud"`) during tool discovery.
-
-Until OAuth resource indicators are bound to tokens by the authorization
-server, **only the beta MCP endpoint** also accepts the production MCP
-audience. Production still accepts only its own audience. Tokens issued
-for the normal website (`aud: "authenticated"`) are not accepted.
-This is limited to the two Ei-TypeBomb MCP resources and does **not**
-weaken user ownership checks on room operations.
-
-This is a compatibility workaround, **not full RFC 8707 resource binding**:
-a valid production MCP token can also be used on beta. Remove this bridge
-when each environment uses separately issued resource-bound tokens.
-Do not expand the audience list to `authenticated` or add unrelated OAuth
-resource servers. Reconnect the ChatGPT app after deploying this change,
-then verify `tools/list` returns `create_room`, `get_room`, and
-`update_room`; confirm that normal login tokens still fail with 401.
+The earlier [PR #504](https://github.com/aoi-ihara/Ei-TypeBomb/pull/504) documented
+that DCR alone could not fix Supabase's resource audience issuance. This design
+resolves that dependency by issuing MCP tokens in ETB and using ETB's
+Supabase-backed login for user authentication.
 
 ## Tools
 
@@ -198,3 +320,17 @@ An unauthenticated MCP request should return `401 Unauthorized` and a
 `WWW-Authenticate` header containing the metadata URL. A token issued for
 the normal Ei-TypeBomb website audience should also be rejected; only a token issued
 for the MCP resource is accepted.
+
+### Diagnosing OAuth registration failures
+
+If discovery returns 200 but `/api/oauth/register` or `/api/oauth/jwks` returns
+503, inspect Vercel runtime logs for the sanitized `code` field. For example:
+
+- `SELF_SIGNED_CERT_IN_CHAIN`: check the deployed Supabase root CA / TLS configuration.
+- `28P01`: verify the dedicated database role's password and pooler username.
+- `42501`: verify schema/table grants and RLS policies for the dedicated role.
+- `42P01` / `3F000`: apply the dedicated OAuth storage migration.
+
+Database URLs, passwords, OAuth parameters, exception messages and stacks are
+never included in these logs. A successful metadata response validates keys and
+configuration, but does not prove database connectivity or client registration.

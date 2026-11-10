@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
-import RoomCard from "@/components/ui/RoomCard";
+import RoomCard from "@/components/rooms/RoomCard";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
@@ -16,7 +16,8 @@ import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import Header from "@/components/layout/Header";
 import { View } from "@/type";
-import RoomNavigation from "./RoomNavigation";
+import RoomNavigation from "@/components/rooms/RoomNavigation";
+import { selectRoomsForView } from "@/lib/room/list-view";
 
 type CurrentUser = {
     id: string;
@@ -80,41 +81,22 @@ export default function RoomList({
               },
           ];
 
-    const rooms = useMemo(() => {
-        const roomsById = new Map<string, Room>();
-
-        for (const room of publicRooms) {
-            roomsById.set(room.id, room);
-        }
-
-        for (const room of myRooms) {
-            roomsById.set(room.id, {
-                ...room,
-                userId: room.userId ?? currentUser?.id,
-            });
-        }
-
-        return Array.from(roomsById.values());
-    }, [publicRooms, myRooms, currentUser?.id]);
-
     const myRoomIds = useMemo(
         () => new Set(myRooms.map((room) => room.id)),
         [myRooms],
     );
 
-    const roomsInView = useMemo(() => {
-        if (view === "mine") {
-            return [...myRooms].sort(
-                (a, b) =>
-                    new Date(b.updatedAt ?? 0).getTime() -
-                    new Date(a.updatedAt ?? 0).getTime(),
-            );
-        }
-        if (view === "saved") {
-            return rooms.filter((room) => savedRoomIds.includes(room.id));
-        }
-        return rooms.filter((room) => room.visibility === "public");
-    }, [view, myRooms, rooms, savedRoomIds]);
+    const roomsInView = useMemo(
+        () =>
+            selectRoomsForView({
+                view,
+                publicRooms,
+                myRooms,
+                savedRoomIds,
+                currentUserId: currentUser?.id ?? null,
+            }),
+        [view, publicRooms, myRooms, savedRoomIds, currentUser?.id],
+    );
 
     const filteredRooms = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -135,23 +117,6 @@ export default function RoomList({
             return searchableText.includes(query);
         });
     }, [roomsInView, keyword]);
-
-    const selectView = (nextView: View) => {
-        if ((nextView === "mine" || nextView === "saved") && !currentUser) {
-            return;
-        }
-
-        if (nextView === view) return;
-
-        const paths: Record<View, string> = {
-            recommended: "/",
-            mine: "/mine",
-            saved: "/saved",
-        };
-
-        startNavigationProgress();
-        router.push(paths[nextView]);
-    };
 
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;
@@ -245,10 +210,7 @@ export default function RoomList({
                                 icon: "userRoundCog",
                                 onClick: () => {
                                     startNavigationProgress();
-                                    router.push(
-                                        process.env
-                                            .NEXT_PUBLIC_USER_SETTINGS_URL!,
-                                    );
+                                    router.push("/account");
                                 },
                             },
                             {
@@ -266,7 +228,7 @@ export default function RoomList({
                             router.push(getSignInUrl());
                         }}
                     >
-                        ログイン
+                        サインイン
                     </Button>
                 )}
             </Header>

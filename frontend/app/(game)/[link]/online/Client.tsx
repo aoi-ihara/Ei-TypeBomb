@@ -11,10 +11,10 @@ import {
     connectionLog,
     isTerminalConnectionError,
 } from "@/lib/room/connectionLogger";
-import { useBombExplosion } from "@/components/feature/BombExplosion";
-import GameView from "@/components/feature/GameView";
-import GameSettings from "@/components/layout/GameSettings";
-import type { GameNoticeProps } from "@/components/feature/GameNotice";
+import { useBombExplosion } from "@/components/game/BombExplosion";
+import GameView from "@/components/game/GameView";
+import GameSettings from "@/components/settings/GameSettings";
+import type { GameNoticeProps } from "@/components/game/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
 import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
 import {

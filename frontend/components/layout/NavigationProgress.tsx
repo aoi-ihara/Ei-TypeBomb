@@ -12,7 +12,7 @@ import {
 export default function NavigationProgress() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const locationKey = `${pathname}?${searchParams.toString()}`;
+    const locationKey = `${pathname}?${searchParams?.toString() ?? ""}`;
     const previousLocationKey = useRef(locationKey);
     const [visible, setVisible] = useState(false);
     const [progress, setProgress] = useState(0);

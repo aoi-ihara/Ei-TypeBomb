@@ -32,11 +32,11 @@ export async function checkMcpOAuth(endpoint, fetchImpl = fetch) {
 
     // RFC 8414 inserts the well-known segment before an issuer path.
     const oauthDiscovery = new URL(
-        `/.well-known/oauth-authorization-server${authServer.pathname.replace(/\\/$/, "")}`,
+        `/.well-known/oauth-authorization-server${authServer.pathname.replace(/\/$/, "")}`,
         authServer.origin,
     ).href;
     const oidcDiscovery = new URL(
-        `${authServer.pathname.replace(/\\/$/, "")}/.well-known/openid-configuration`,
+        `${authServer.pathname.replace(/\/$/, "")}/.well-known/openid-configuration`,
         authServer.origin,
     ).href;
     let metadata;
@@ -53,7 +53,15 @@ export async function checkMcpOAuth(endpoint, fetchImpl = fetch) {
     const cimd = metadata.client_id_metadata_document_supported === true;
     const dcr = typeof metadata.registration_endpoint === "string" &&
         metadata.registration_endpoint.length > 0;
-    return { endpoint: target.href, issuer, cimd, dcr, registrationEndpoint: dcr ? metadata.registration_endpoint : null };
+    // Discovery proves registration availability, not that issued tokens are resource-bound.
+    return {
+        endpoint: target.href,
+        issuer,
+        cimd,
+        dcr,
+        registrationEndpoint: dcr ? metadata.registration_endpoint : null,
+        resourceAudienceVerified: false,
+    };
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
@@ -63,10 +71,11 @@ if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).
         console.log(`CIMD: ${result.cimd ? "supported" : "not advertised"}`);
         console.log(`DCR: ${result.dcr ? "advertised" : "not advertised"}`);
         if (!result.cimd && !result.dcr) {
-            console.error("OAuth client auto-registration unavailable. Enable Dynamic Client Registration in the shared Supabase Auth OAuth Server settings; do not add a fake discovery endpoint.");
+            console.error("OAuth client auto-registration unavailable. Check the ETB authorization server configuration and its registration endpoint.");
             process.exitCode = 1;
         } else {
-            console.log("An automatic client-registration mechanism is advertised. Complete a fresh MCP client connection to test end-to-end OAuth.");
+            console.log("An automatic client-registration mechanism is advertised.");
+            console.warn("WARNING: DCR/CIMD does not prove MCP resource-bound JWT issuance. Check the access token aud claim against the MCP URL and verify a real tools/list call before declaring OAuth ready.");
         }
     }).catch((error) => {
         console.error(`MCP OAuth discovery failed: ${error.message}`);

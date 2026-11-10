@@ -5,11 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Item, Position, Room, User } from "@/type";
-import { useBombExplosion } from "@/components/feature/BombExplosion";
-import GameView from "@/components/feature/GameView";
-import type { GameNoticeProps } from "@/components/feature/GameNotice";
+import { useBombExplosion } from "@/components/game/BombExplosion";
+import GameView from "@/components/game/GameView";
+import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
-import GameSettings from "@/components/layout/GameSettings";
+import GameSettings from "@/components/settings/GameSettings";
 import type { OfflineVoiceReading } from "@/lib/settings";
 import { newPositions } from "@/lib/ui/position";
 import { useFeatureFlagPayload } from "@posthog/react";
@@ -40,7 +40,7 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
-import OfflineVoicePicker from "@/components/layout/OfflineVoicePicker";
+import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
 
 type Props = {

@@ -53,3 +53,11 @@ test("rejects issuer mismatch", async () => {
     const { mock } = fakeFetch({ ...base, issuer: "https://attacker.example" });
     await assert.rejects(checkMcpOAuth(endpoint, mock), /issuer mismatch/);
 });
+
+
+test("DCR discovery does not imply resource-bound access tokens", async () => {
+    const { mock } = fakeFetch({ ...base, registration_endpoint: issuer + "/oauth/register" });
+    const result = await checkMcpOAuth(endpoint, mock);
+    assert.equal(result.dcr, true);
+    assert.equal(result.resourceAudienceVerified, false);
+});
