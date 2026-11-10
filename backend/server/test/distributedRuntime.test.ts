@@ -24,7 +24,7 @@ const room: Room = {
     bombHolder: 0,
     bombStatus: 0,
 };
-function fixture() {
+function fixture(items: Room["items"] = room.items) {
     let now = 10_000;
     let failure = "";
     const published: unknown[] = [],
@@ -40,7 +40,7 @@ function fixture() {
             savedAt: now,
         },
         value: {
-            game: { room: structuredClone(room), revision: 0 },
+            game: { room: { ...structuredClone(room), items: structuredClone(items) }, revision: 0 },
             sessions: {},
             events: {},
         },
@@ -767,14 +767,12 @@ test("intentional page exit immediately clears the active seat and session, unli
 });
 
 test("a recommendation is single-use, and a refreshed recommendation is respected", async () => {
-    const f = fixture();
-    await f.runtime.open({
-        ...room,
-        items: [
-            room.items[0],
-            { id: "r", type: "typed_recall", prompt: "r", answer: "b" },
-        ],
-    });
+    const items: Room["items"] = [
+        room.items[0],
+        { id: "r", type: "typed_recall", prompt: "r", answer: "b" },
+    ];
+    const f = fixture(items);
+    await f.runtime.open({ ...room, items });
     for (const id of ["a", "b"]) {
         await f.runtime.connect(id, id);
         await f.runtime.command(f.command(id, "room:join"), id);
