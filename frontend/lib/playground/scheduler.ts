@@ -390,7 +390,12 @@ export const chooseBotItem = (
     state: SchedulerState,
     random = Math.random,
 ): string | null => {
-    const protectedIds = new Set(state.cycleQueue.slice(0, BOT_LOOKAHEAD));
+    // Skip held and pending-retry entries: neither can be the next cycle
+    // question, so they must not consume one of the protected lookahead slots.
+    const upcomingCycleItems = state.cycleQueue.filter(
+        (id) => !isOnHold(state, id) && !state.retries[id],
+    );
+    const protectedIds = new Set(upcomingCycleItems.slice(0, BOT_LOOKAHEAD));
     for (const id of Object.keys(state.retries)) protectedIds.add(id);
 
     // Prefer words the user has already answered, while still avoiding upcoming
