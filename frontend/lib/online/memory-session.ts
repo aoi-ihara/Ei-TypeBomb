@@ -7,6 +7,8 @@ import {
 import {
     chooseNextUserItem,
     createScheduler,
+    loadSchedulerState,
+    saveSchedulerState,
     recordUserAnswer,
     type SchedulerState,
 } from "../playground/scheduler";
@@ -129,12 +131,27 @@ export const createOnlineMemorySession = (
     roomId,
     userId,
     memory,
-    scheduler: createScheduler(itemIds),
+    scheduler:
+        loadSchedulerState(
+            "online",
+            userId ?? guestUserId,
+            roomId,
+            itemIds,
+            memory,
+        ) ?? createScheduler(itemIds),
     pending: new Map(),
 });
 
-export const nextOnlineRecommendation = (session: OnlineMemorySession) =>
-    chooseNextUserItem(session.scheduler, session.memory)?.itemId ?? null;
+export const nextOnlineRecommendation = (session: OnlineMemorySession) => {
+    const selected = chooseNextUserItem(session.scheduler, session.memory);
+    saveSchedulerState(
+        "online",
+        session.userId ?? guestUserId,
+        session.roomId,
+        session.scheduler,
+    );
+    return selected?.itemId ?? null;
+};
 
 export const recordOnlineRecall = (
     session: OnlineMemorySession,
@@ -213,5 +230,11 @@ export const recordOnlineRecall = (
     session.memory = { ...session.memory, [itemId]: updated };
     if (session.userId) session.pending.set(itemId, updated);
     else saveOnlineGuestMemory(session);
+    saveSchedulerState(
+        "online",
+        session.userId ?? guestUserId,
+        session.roomId,
+        scheduler,
+    );
     return updated;
 };

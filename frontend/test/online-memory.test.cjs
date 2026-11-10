@@ -29,6 +29,7 @@ function evaluate(file, globals = {}) {
 const memory = evaluate("lib/playground/memory.ts");
 const scheduler = evaluate("lib/playground/scheduler.ts", {
     require: () => memory,
+    localStorage,
 });
 const online = evaluate("lib/online/memory-session.ts", {
     require: (id) => (id.includes("scheduler") ? scheduler : memory),
@@ -84,4 +85,22 @@ test("server fallback is recorded against the actual word, never the suggestion"
     assert.equal(session.scheduler.userAnswered[recommendation] ?? 0, 0);
     assert.equal(session.scheduler.userAnswered[actual], 1);
     assert.equal(session.pending.get(actual), updated);
+});
+
+test("online recommendations and retries survive a new session after reload", () => {
+    const roomId = "online-reload";
+    const session = online.createOnlineMemorySession(roomId, ids, "online-user", {});
+    const first = online.nextOnlineRecommendation(session);
+    online.recordOnlineRecall(session, first, recall);
+    const expected = online.nextOnlineRecommendation(session);
+    const resumed = online.createOnlineMemorySession(
+        roomId, ids, "online-user", session.memory,
+    );
+    assert.equal(online.nextOnlineRecommendation(resumed), expected);
+    assert.equal(resumed.scheduler.userAnswered[first], 1);
+    assert.equal(resumed.scheduler.turn, session.scheduler.turn);
+    assert.equal(
+        online.createOnlineMemorySession(roomId, ids, "different-user", {}).scheduler.turn,
+        0,
+    );
 });
