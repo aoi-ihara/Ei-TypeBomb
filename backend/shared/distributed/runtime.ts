@@ -212,7 +212,12 @@ export class DistributedRoom {
             random: this.random,
             rules: GAME_RULES,
             chooseItemIndex: (id, room) => {
-                const item = value.sessions[id]?.recommendation;
+                // Consume the recommendation with the authoritative turn.
+                // An interrupted client must not pin every future turn to
+                // the same word until another recommendation arrives.
+                const session = value.sessions[id];
+                const item = session?.recommendation;
+                if (session) delete session.recommendation;
                 const index = room.items.findIndex(
                     (entry) => entry.id === item,
                 );
