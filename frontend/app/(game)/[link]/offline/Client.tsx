@@ -29,6 +29,8 @@ import {
 } from "@/lib/playground/memory";
 import {
     createScheduler,
+    loadSchedulerState,
+    saveSchedulerState,
     chooseNextUserItem,
     chooseBotItem,
     recordUserAnswer,
@@ -310,6 +312,14 @@ export default function Client({
                     new Set(items.map((item) => item.id)),
                 );
                 memoryByItemRef.current = saved;
+                schedulerRef.current =
+                    loadSchedulerState(
+                        "playground",
+                        GUEST_MEMORY_USER_ID,
+                        room.id,
+                        items.map((item) => item.id),
+                        saved,
+                    ) ?? createScheduler(items.map((item) => item.id));
                 setMemoryByItem(saved);
                 setMemoryReady(true);
                 return;
@@ -346,6 +356,14 @@ export default function Client({
                 // A damaged/unavailable local cache must not prevent practice.
             }
             memoryByItemRef.current = loaded.memoryByItem;
+            schedulerRef.current =
+                loadSchedulerState(
+                    "playground",
+                    loaded.userId,
+                    room.id,
+                    items.map((item) => item.id),
+                    loaded.memoryByItem,
+                ) ?? createScheduler(items.map((item) => item.id));
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
         };
@@ -426,9 +444,15 @@ export default function Client({
                     ? chooseNextUserItem(scheduler, memoryByItemRef.current)
                           ?.itemId
                     : chooseBotItem(scheduler);
+            saveSchedulerState(
+                "playground",
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                room.id,
+                scheduler,
+            );
             return items.find((item) => item.id === id) ?? null;
         },
-        [items],
+        [items, room.id],
     );
 
     const resolveTurnWithItem = useCallback(
@@ -638,11 +662,23 @@ export default function Client({
 
             if (authenticatedUserIdRef.current) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
+                // Persist the observation immediately, before a rapid reload.
+                // The existing debounced sync still sends it to the server.
+                try {
+                    localStorage.setItem(
+                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
+                        JSON.stringify([...pendingMemoryRef.current.values()]),
+                    );
+                } catch {
+                    // Local storage may be unavailable; the current game continues.
+                }
             } else {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
+            if (scheduler)
+                saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
 
             posthog.capture("playground_item_recalled", {
