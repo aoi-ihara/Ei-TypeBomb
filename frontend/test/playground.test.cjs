@@ -319,6 +319,186 @@ test("reload preserves unfinished questions and scheduled failed recalls", () =>
     );
 });
 
+// Drive the real answer recorder with explicit wall-clock times.
+function gradeStruggle(state, itemId, evaluation, at) {
+    // In live play a retry is removed when its prompt is selected.
+    const retry = state.retries[itemId];
+    delete state.retries[itemId];
+    state.turn += 1;
+    state.current = {
+        itemId,
+        turn: state.turn,
+        cycle: state.cycle,
+        reason: retry ? "retry" : "cycle",
+        advancesCycle: false,
+        ...(retry ? { retry } : {}),
+    };
+    scheduler.recordUserAnswer(state, evaluation, at);
+}
+const failedRecall = memory.evaluateRecall(
+    observation({ success: false, firstAttemptCorrect: false }),
+);
+const cleanRecall = memory.evaluateRecall(observation());
+
+test("repeated difficulty suspends only after four failures over two minutes", () => {
+    const start = now.getTime();
+    const state = scheduler.createScheduler(["hard", "easy"], rng(7));
+    for (const elapsed of [0, 20_000, 60_000]) {
+        gradeStruggle(state, "hard", failedRecall, start + elapsed);
+        assert.equal(state.struggles.hard.suspendedUntil, null);
+    }
+    gradeStruggle(state, "hard", failedRecall, start + 120_000);
+    const firstDeadline = start + 120_000 + scheduler.SUSPENSION_DELAYS_MS[0];
+    assert.equal(state.struggles.hard.suspensionLevel, 1);
+    assert.equal(state.struggles.hard.suspendedUntil, firstDeadline);
+    assert.equal(state.retries.hard, undefined);
+
+    // The held word does not occupy the relearning pool or block new words.
+    const next = scheduler.chooseNextUserItem(state, {}, rng(1), start + 121_000);
+    assert.equal(next.itemId, "easy");
+    scheduler.recordUserAnswer(state, cleanRecall, start + 121_000);
+
+    // The next review resumes the old word before introducing new ones.
+    const resumed = scheduler.chooseNextUserItem(state, {}, rng(2), firstDeadline);
+    assert.equal(resumed.itemId, "hard");
+    assert.equal(resumed.reason, "suspension_due");
+    scheduler.recordUserAnswer(state, failedRecall, firstDeadline);
+    assert.equal(state.struggles.hard.suspendedUntil, null);
+    gradeStruggle(state, "hard", failedRecall, firstDeadline + 1_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 2);
+    assert.equal(
+        state.struggles.hard.suspendedUntil,
+        firstDeadline + 1_000 + scheduler.SUSPENSION_DELAYS_MS[1],
+    );
+});
+
+test("persistent failures escalate through 3h, 12h and 24h with a 24h cap", () => {
+    const state = scheduler.createScheduler(["hard"], rng(8));
+    let time = now.getTime();
+    for (const elapsed of [0, 30_000, 60_000, 120_000])
+        gradeStruggle(state, "hard", failedRecall, time + elapsed);
+    let deadline = state.struggles.hard.suspendedUntil;
+    const expected = [
+        30 * 60_000,
+        3 * 60 * 60_000,
+        12 * 60 * 60_000,
+        24 * 60 * 60_000,
+        24 * 60 * 60_000,
+    ];
+    for (let index = 0; index < expected.length; index++) {
+        // One-word room: there are no safe fillers before this deadline.
+        assert.equal(scheduler.chooseNextUserItem(state, {}, rng(1), deadline - 1), null);
+        const due = scheduler.chooseNextUserItem(state, {}, rng(1), deadline);
+        assert.equal(due?.reason, "suspension_due");
+        scheduler.recordUserAnswer(state, failedRecall, deadline);
+        gradeStruggle(state, "hard", failedRecall, deadline + 1_000);
+        assert.equal(
+            state.struggles.hard.suspendedUntil,
+            deadline + 1_000 + expected[index],
+        );
+        deadline = state.struggles.hard.suspendedUntil;
+    }
+});
+
+test("a successful independent recall reduces hold severity without treating typos as failures", () => {
+    const state = scheduler.createScheduler(["hard"], rng(2));
+    state.struggles.hard = {
+        consecutiveFailures: 1,
+        firstFailureAt: now.getTime(),
+        suspensionLevel: 3,
+        suspendedUntil: null,
+    };
+    // A corrected typing mistake still counts as unaided recall.
+    const typo = memory.evaluateRecall(observation({
+        incorrectInputCount: 1,
+        firstAttemptCorrect: false,
+    }));
+    assert.equal(typo.retryNeed, "none");
+    gradeStruggle(state, "hard", typo, now.getTime() + 1_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 2);
+    assert.equal(state.struggles.hard.consecutiveFailures, 0);
+    gradeStruggle(state, "hard", failedRecall, now.getTime() + 2_000);
+    assert.equal(state.struggles.hard.consecutiveFailures, 1);
+    gradeStruggle(state, "hard", cleanRecall, now.getTime() + 3_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 1);
+    gradeStruggle(state, "hard", cleanRecall, now.getTime() + 4_000);
+    assert.equal(state.struggles.hard, undefined);
+});
+
+test("recent BOT exposure never escalates difficulty, but assisted independent recalls do", () => {
+    const state = scheduler.createScheduler(["hard"], rng(2));
+    const exposed = memory.evaluateRecall(observation({
+        success: false,
+        elapsedSincePresentationMs: 100,
+    }));
+    assert.equal(exposed.independent, false);
+    gradeStruggle(state, "hard", exposed, now.getTime());
+    assert.equal(state.struggles.hard, undefined);
+    const hint = memory.evaluateRecall(observation({
+        finalCueRatio: 0.1,
+        additionalHintCount: 1,
+    }));
+    assert.equal(hint.retryNeed, "confirm");
+    gradeStruggle(state, "hard", hint, now.getTime());
+    assert.equal(state.struggles.hard.consecutiveFailures, 1);
+});
+
+test("all held words remain absent from user/BOT selection until due", () => {
+    const state = scheduler.createScheduler(["a", "b"], rng(1));
+    const until = now.getTime() + 3 * 60 * 60_000;
+    for (const id of state.itemIds) {
+        state.struggles[id] = {
+            consecutiveFailures: 0,
+            firstFailureAt: null,
+            suspensionLevel: 3,
+            suspendedUntil: until,
+        };
+        state.userAnswered[id] = 1;
+    }
+    assert.equal(scheduler.chooseNextUserItem(state, {}, rng(4), now.getTime()), null);
+    assert.equal(scheduler.chooseBotItem(state, rng(4)), null);
+    assert.equal(scheduler.nextSuspendedReviewAt(state), until);
+    const restoredId = scheduler.chooseNextUserItem(state, {}, rng(4), until)?.itemId;
+    assert.ok(["a", "b"].includes(restoredId));
+    assert.equal(state.struggles[restoredId].suspendedUntil, null);
+});
+
+test("word hold deadlines survive reload and removed room words are discarded", () => {
+    const state = scheduler.createScheduler(["hard", "deleted", "new"], rng(2));
+    const time = now.getTime();
+    state.struggles.hard = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 4,
+        suspendedUntil: time + 12 * 60 * 60_000,
+    };
+    state.struggles.deleted = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 1,
+        suspendedUntil: time + 600_000,
+    };
+    scheduler.saveSchedulerState("playground", "hold-user", "room", state, time);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "hold-user", "room", ["hard", "new"], {}, time + 10_000,
+    );
+    assert.equal(restored.struggles.hard.suspendedUntil, time + 12 * 60 * 60_000);
+    assert.equal(restored.struggles.deleted, undefined);
+    assert.equal(
+        scheduler.chooseNextUserItem(restored, {}, rng(4), time + 10_000).itemId,
+        "new",
+    );
+    const old = scheduler.createScheduler(["old"], rng(3));
+    delete old.struggles;
+    scheduler.saveSchedulerState("playground", "old-cache", "room", old, time);
+    assert.deepEqual(
+        Object.keys(scheduler.loadSchedulerState(
+            "playground", "old-cache", "room", ["old"], {}, time + 1_000,
+        ).struggles),
+        [],
+    );
+});
+
 test("scheduler storage is scoped to user, room and mode", () => {
     const ids = ["a", "b"];
     const state = scheduler.createScheduler(ids, rng(9));
