@@ -85,7 +85,7 @@ function html(
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader(
         "Content-Security-Policy",
-        `default-src 'none'; style-src 'self'; form-action 'self'${callbackOrigin ? " " + callbackOrigin : ""}; frame-ancestors 'none'; base-uri 'none'`,
+        `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'${callbackOrigin ? " " + callbackOrigin : ""}; frame-ancestors 'none'; base-uri 'none'`,
     );
     res.setHeader("X-Frame-Options", "DENY");
     // no-referrer makes HTML form POSTs send Origin: null, which our strict
@@ -93,7 +93,7 @@ function html(
     // HTTPS form submissions while keeping interaction paths out of Referer.
     res.setHeader("Referrer-Policy", "strict-origin");
     res.end(
-        `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} | Ei-TypeBomb</title><link rel="stylesheet" href="/mcp-oauth.css"></head><body><header class="header"><a class="brand" href="/">Ei-TypeBomb</a></header><main class="shell"><h1>${escape(title)}</h1>${content}</main></body></html>`,
+        `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} | Ei-TypeBomb</title><style>body{font:16px/1.8 system-ui;background:#f5f5f5;color:#171717;margin:0}main{max-width:560px;margin:6vh auto;padding:28px;background:white;border-radius:20px}h1{font-size:24px}p,dd{overflow-wrap:anywhere}dt{font-weight:bold}dd{margin:0 0 16px}button{font:inherit;padding:10px 24px;margin:12px 12px 0 0;border-radius:24px;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #2255dd}small{color:#555}</style><main><p>Ei-TypeBomb · MCP</p><h1>${escape(title)}</h1>${content}</main></html>`,
     );
 }
 
@@ -251,50 +251,27 @@ async function interaction(
         );
         return;
     }
-    const row = (label: string, value: string, missing = false) =>
-        `<div class="row"><span class="row-label">${escape(label)}</span><span class="row-value${missing ? " missing" : ""}">${escape(value)}</span></div>`;
-    const infoRows = [
-        row("名称", client.clientName || "名称未設定のアプリ"),
-        row("ウェブサイト", client.clientUri || "ウェブサイトなし", !client.clientUri),
-        row("リダイレクト先", redirectUri),
-        row("対象のETB環境", getMcpResource()),
-        row("アカウントID", user),
-    ].join("");
-    const scopeRows = MCP_SCOPE.split(/\s+/)
-        .filter(Boolean)
-        .map((scope) => `<div class="data-row">${escape(scope)}</div>`)
-        .join("");
     html(
         res,
-        "アプリの接続リクエスト",
+        "ルームへのアクセスを許可しますか？",
         `
-        <p class="lead">次のアプリがEi-TypeBombへのアクセスを要求しています。許可する前にアプリ名、ウェブサイト、リダイレクト先を確認してください。</p>
-        <h2>情報</h2>
-        <section class="panel" aria-label="接続情報">${infoRows}</section>
-        <h2>要求されたデータ</h2>
-        <p>このアプリに、あなたが所有するEi-TypeBombルームの<strong>作成・閲覧・変更</strong>を許可します。</p>
-        <section class="panel" aria-label="要求された権限">${scopeRows}</section>
-        <p class="note">アプリ名とウェブサイトはアプリの登録者による自己申告です。心当たりのない接続は許可しないでください。</p>
-        <form method="post" class="actions">
-            <input type="hidden" name="csrf" value="${escape(csrf(user, purpose))}">
-            <button type="submit" name="decision" value="deny">拒否</button>
-            <button type="submit" name="decision" value="approve" class="primary">許可する</button>
-        </form>
-        <p class="small">許可は最大30日間有効です。後から<a href="/account">アカウントの「接続」</a>で取り消せます。</p>`,
-        // Keep only the validated callback origin in CSP form-action.
+        <p>次のアプリに、あなたが所有するEi-TypeBombルームの<strong>作成・閲覧・変更</strong>を許可します。</p>
+        <dl><dt>アプリ名（登録者による申告）</dt><dd>${escape(client.clientName || "名称未設定のアプリ")}</dd>
+        <dt>アプリのウェブサイト（登録者による申告）</dt><dd>${escape(client.clientUri || "未登録")}</dd>
+        <dt>接続先</dt><dd>${escape(details.params.redirect_uri)}</dd>
+        <dt>対象のETB環境</dt><dd>${escape(getMcpResource())}</dd>
+        <dt>ログイン中のアカウントID</dt><dd>${escape(user)}</dd></dl>
+        <p>アプリ名だけで信頼せず、接続を開始したアプリと接続先を確認してください。</p>
+        <form method="post"><input type="hidden" name="csrf" value="${escape(csrf(user, purpose))}">
+        <button name="decision" value="deny">拒否</button><button name="decision" value="approve">許可する</button></form>
+        <p><small>許可は30日間有効です。<a href="/api/oauth/connections">MCP接続の管理</a>からいつでも解除できます。</small></p>`,
+        // Browsers enforce form-action throughout the POST's redirect chain,
+        // including the provider's final redirect to the client. Only this consent
+        // page needs that validated client's origin. URL.origin excludes paths and
+        // queries, so registered URI text cannot inject additional CSP directives.
+        // oidc-provider still enforces the full registered redirect URI separately.
         redirectOrigin,
     );
-}
-
-function safeClientUrl(value: unknown): string | null {
-    if (typeof value !== "string") return null;
-    try {
-        const url = new URL(value);
-        return (url.protocol === "https:" || url.protocol === "http:") &&
-            !url.username && !url.password ? url.href : null;
-    } catch {
-        return null;
-    }
 }
 
 async function connections(
@@ -302,9 +279,6 @@ async function connections(
     res: NextApiResponse,
     user: string,
 ) {
-    const json = typeof req.headers.accept === "string" &&
-        req.headers.accept.split(",").some((type) => type.trim().startsWith("application/json"));
-
     if (req.method === "POST") {
         const form = await body(req);
         if (!equal(form.get("csrf"), csrf(user, "connections"))) {
@@ -319,7 +293,9 @@ async function connections(
             res.end();
             return;
         }
-        // Revoke all historical grants for this client, not just the selected one.
+        // Historical deployments issued a separate grant on every approval.
+        // Disconnecting one displayed client revokes all its grants so the old
+        // token chains cannot silently remain authorized after removal.
         const grants = await new OAuthStore("Grant").forAccount(user);
         for (const related of grants) {
             if (
@@ -330,17 +306,11 @@ async function connections(
                 await revokeGrant(related.jti);
             }
         }
-        if (json) {
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.end(JSON.stringify({ success: true }));
-        } else {
-            res.statusCode = 303;
-            res.setHeader("Location", "/api/oauth/connections");
-            res.end();
-        }
+        res.statusCode = 303;
+        res.setHeader("Location", "/api/oauth/connections");
+        res.end();
         return;
     }
-
     const grants = await new OAuthStore("Grant").forAccount(user);
     const uniqueClients = new Map<string, string>();
     for (const grant of grants) {
@@ -353,34 +323,18 @@ async function connections(
             uniqueClients.set(grant.clientId, grant.jti);
         }
     }
-    const apps = await Promise.all(
+    const items = await Promise.all(
         [...uniqueClients].map(async ([clientId, grantId]) => {
             const client = await getMcpProvider().Client.find(clientId);
-            return {
-                clientId,
-                grantId,
-                name: client?.clientName || "名称未設定のアプリ",
-                url: safeClientUrl(client?.clientUri),
-            };
+            return `<li><p>${escape(client?.clientName || "名称未設定のアプリ")}</p><p>${escape(client?.clientUri || clientId)}</p>
+            <form method="post"><input type="hidden" name="csrf" value="${escape(csrf(user, "connections"))}">
+            <input type="hidden" name="grant_id" value="${escape(grantId)}"><button>接続を解除</button></form></li>`;
         }),
-    );
-    const csrfToken = csrf(user, "connections");
-    if (json) {
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.end(JSON.stringify({ apps, csrf: csrfToken }));
-        return;
-    }
-    const items = apps.map((app) =>
-        `<li><p>${escape(app.name)}</p><p>${escape(app.url || app.clientId)}</p>
-         <form method="post"><input type="hidden" name="csrf" value="${escape(csrfToken)}">
-         <input type="hidden" name="grant_id" value="${escape(app.grantId)}"><button type="submit" class="danger">接続を解除</button></form></li>`,
     );
     html(
         res,
         "MCP接続の管理",
-        `<p>解除すると、この接続のアクセストークンと更新トークンが失効します。</p>
-         <ul>${items.join("")}</ul>${items.length ? "" : "<p>接続はありません。</p>"}
-         <a href="/account">アカウントへ戻る</a>`,
+        `<p>解除すると、この接続のアクセストークンと更新トークンが失効します。</p><ul>${items.join("")}</ul>${items.length ? "" : "<p>接続はありません。</p>"}<a href="/">Ei-TypeBombへ戻る</a>`,
     );
 }
 

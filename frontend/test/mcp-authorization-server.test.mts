@@ -178,13 +178,10 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
     assert.equal(page.headers.get("referrer-policy"), "strict-origin");
     assert.equal(
       page.headers.get("content-security-policy"),
-      "default-src 'none'; style-src 'self'; form-action 'self' https://client.example; frame-ancestors 'none'; base-uri 'none'",
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://client.example; frame-ancestors 'none'; base-uri 'none'",
     );
     const markup = await page.text();
     assert.ok(markup.includes("作成・閲覧・変更"));
-    assert.ok(markup.includes("アプリの接続リクエスト"));
-    assert.ok(markup.includes('class="actions"'));
-    assert.ok(markup.includes('/mcp-oauth.css'));
     assert.ok(markup.includes("&lt;script&gt;"));
     assert.ok(!markup.includes("<script>"));
     const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
@@ -290,7 +287,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         assert.equal(page.status, 200, await page.clone().text());
         assert.equal(
           page.headers.get("content-security-policy"),
-          "default-src 'none'; style-src 'self'; form-action 'self' https://other.example:8443; frame-ancestors 'none'; base-uri 'none'",
+          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://other.example:8443; frame-ancestors 'none'; base-uri 'none'",
         );
       },
     );
@@ -434,18 +431,6 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         anotherAccount.addResourceScope(resource, "etb:rooms");
         const otherGrantId = await anotherAccount.save();
 
-        const api = await request("/api/oauth/connections", {
-          headers: { Accept: "application/json" },
-        }, true);
-        assert.equal(api.status, 200);
-        assert.ok(api.headers.get("content-type")?.includes("application/json"));
-        const listing = await api.json();
-        assert.equal(listing.apps.length, 1);
-        assert.equal(listing.apps[0].clientId, clientId);
-        assert.equal(listing.apps[0].url, "https://client.example/");
-        assert.ok(listing.apps[0].grantId);
-        assert.ok(listing.csrf);
-
         const page = await request("/api/oauth/connections", {}, true);
         assert.equal(page.status, 200);
         const markup = await page.text();
@@ -467,20 +452,6 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         const third = await tokens();
         assert.notEqual(decodeJwt(third.token.access_token).grant_id, firstGrantId);
         assert.equal((await verifyMcpToken(third.token.access_token)).userId, user);
-        const jsonPage = await request("/api/oauth/connections", {
-          headers: { Accept: "application/json" },
-        }, true);
-        const jsonListing = await jsonPage.json();
-        const revoked = await request("/api/oauth/connections", {
-          ...form({ csrf: jsonListing.csrf, grant_id: jsonListing.apps[0].grantId }),
-          headers: {
-            "content-type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-          },
-        }, true);
-        assert.equal(revoked.status, 200, await revoked.clone().text());
-        assert.deepEqual(await revoked.json(), { success: true });
-        await assert.rejects(verifyMcpToken(third.token.access_token));
       },
     );
     await t.test(
@@ -593,7 +564,7 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
         assert.equal(page.headers.get("referrer-policy"), "strict-origin");
         assert.equal(
           page.headers.get("content-security-policy"),
-          "default-src 'none'; style-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
         );
         const markup = await page.text();
         const csrf = markup.match(/name="csrf" value="([^"]+)"/)![1];
