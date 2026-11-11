@@ -401,7 +401,7 @@ export default function GameView({
 
             {soloMode ? (
                 <div
-                    className="absolute top-0 left-0 pl-4 w-full max-w-[calc(100%-23rem)] truncate line-clamp-1 font-bold font-mono text-lg"
+                    className="absolute top-0 left-0 pl-4 w-1/2 truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     {room?.title}
