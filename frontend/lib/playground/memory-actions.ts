@@ -3,10 +3,13 @@
 import { createClient } from "@/lib/db/server";
 import { getMemoryAuthStatus } from "@/lib/auth/session";
 import type { ItemMemoryState } from "@/lib/playground/memory";
-import { toMemoryState } from "@/lib/playground/memory";
+import {
+    isValidAnswerModeStats,
+    toMemoryState,
+} from "@/lib/playground/memory";
 
 const MEMORY_COLUMNS =
-    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
+    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at, answer_mode_stats";
 
 export const loadPlaygroundMemory = async (roomId: string) => {
     const { userId, error: authError } = await getMemoryAuthStatus();
@@ -80,7 +83,9 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
                 item.difficulty < 1 ||
                 item.difficulty > 10 ||
                 !Number.isSafeInteger(item.reviewCount) ||
-                item.reviewCount < 0,
+                item.reviewCount < 0 ||
+                (item.answerModeStats !== undefined &&
+                    !isValidAnswerModeStats(item.answerModeStats)),
         )
     ) {
         return { message: "Invalid memory update" };
@@ -98,6 +103,7 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
         updated_at: item.updatedAt ?? new Date().toISOString(),
         learning_state: item.learningState ?? null,
         last_presented_at: item.lastPresentedAt ?? null,
+        answer_mode_stats: item.answerModeStats ?? null,
     }));
 
     const { error } = await supabase
