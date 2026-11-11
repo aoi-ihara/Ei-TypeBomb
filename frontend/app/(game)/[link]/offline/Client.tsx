@@ -4,24 +4,18 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
-import type { Item, Position, Room, User } from "@/type";
-import { useBombExplosion } from "@/components/game/BombExplosion";
+import type { Item, Room, User } from "@/type";
 import GameView from "@/components/game/GameView";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
 import type { OfflineVoiceReading } from "@/lib/settings";
-import { newPositions } from "@/lib/ui/position";
-import { useFeatureFlagPayload } from "@posthog/react";
 import posthog from "posthog-js";
-import { advanceBombClock } from "@/lib/playground/bomb-clock";
 import {
     applyRecallObservation,
     createTurnPlan,
-    shouldRecommendStop,
     evaluateRecall,
     getRetrievability,
-    recordAnswerExposure,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -33,16 +27,13 @@ import {
     saveSchedulerState,
     nextSuspendedReviewAt,
     chooseNextUserItem,
-    chooseBotItem,
     recordUserAnswer,
-    recordBotPresentation,
     type SchedulerState,
 } from "@/lib/playground/scheduler";
 import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
 
@@ -148,7 +139,7 @@ const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
         return {};
     }
 };
-const BOT_USERS: User[] = [{ id: "playground-bot-1", displayName: "練習相手" }];
+const SOLO_USERS: User[] = [{ id: LOCAL_USER_ID, displayName: "あなた" }];
 
 const DEFAULT_TYPING_DELAY_MS = 220;
 const MIN_TYPING_DELAY_MS = 80;
@@ -164,33 +155,18 @@ export default function Client({
     initialSounDeffects,
     initialOfflineVoiceReading,
 }: Readonly<Props>) {
-    const bombDurationVariant = useFeatureFlagPayload("bomb-duration");
-    const configuredBombDuration =
-        typeof bombDurationVariant === "string"
-            ? Number(bombDurationVariant)
-            : Number.NaN;
-    const bombDurationSeconds =
-        Number.isFinite(configuredBombDuration) && configuredBombDuration > 0
-            ? configuredBombDuration
-            : 30;
     const router = useRouter();
-    const { bombRef, explode, resetExplosion, explosionLayer } =
-        useBombExplosion();
 
-    const [displayName, setDisplayName] = useState("あなた");
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
     const offlineVoiceReading = initialOfflineVoiceReading;
-    const users = useMemo<User[]>(
-        () => [{ id: LOCAL_USER_ID, displayName }, ...BOT_USERS],
-        [displayName],
-    );
+    const users = SOLO_USERS;
     const room = useMemo<Room>(
         () => ({
             ...sourceRoom,
-            maxPlayers: 2,
+            maxPlayers: 1,
         }),
         [sourceRoom],
     );
@@ -213,14 +189,6 @@ export default function Client({
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [nextReviewAt, setNextReviewAt] = useState<number | null>(null);
     const currentItemRef = useRef<Item | null>(null);
-    const [currentTurn, setCurrentTurn] = useState(0);
-    const currentTurnRef = useRef(0);
-    const [bombStatus, setBombStatus] = useState(0);
-    const bombStageProgressRef = useRef(0);
-    const bombPlanRef = useRef<{ duration: number; paused: boolean }>({
-        duration: bombDurationSeconds * 1000,
-        paused: true,
-    });
     const [isStarted, setIsStarted] = useState(false);
     const [showInstructions, setShowInstructions] = useState(true);
     const [notice, setNotice] = useState<GameNoticeProps>({
@@ -229,22 +197,14 @@ export default function Client({
         title: "半角で入力してください",
         description: "単語は日本語でも英語でも、半角で入力してください。",
     });
-    const [result, setResult] = useState<boolean | null>(null);
+    const [isPaused, setIsPaused] = useState(false);
     const [currentInput, setCurrentInput] = useState("");
-    const [lostDisplayName, setLostDisplayName] = useState<string | null>(null);
-    const [stopRecommended, setStopRecommended] = useState(false);
-    const [recallPressurePaused, setRecallPressurePaused] = useState(false);
 
     const sessionTurnNumberRef = useRef(0);
     const [itemPresentationKey, setItemPresentationKey] = useState(0);
     const recallProgressRef = useRef<RecallProgress | null>(null);
     const userReviewCountRef = useRef(0);
-    const sessionStartedAtRef = useRef(0);
     const initialGameStartedRef = useRef(false);
-    const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    );
-    const usersRef = useRef(users);
     const userTypingDelayRef = useRef(DEFAULT_TYPING_DELAY_MS);
     const previousInputAtRef = useRef<number | null>(null);
     const previousInputLengthRef = useRef(0);
@@ -252,43 +212,12 @@ export default function Client({
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    const userPositions = useMemo<Position[]>(
-        () =>
-            newPositions(
-                users,
-                Array.from({ length: users.length }, () => ({
-                    x: 0,
-                    y: 0,
-                    w: 24,
-                    h: 24,
-                    opacity: 0,
-                })),
-            ),
-        [users],
-    );
-
     useEffect(() => {
         const timer = window.setTimeout(() => {
             setNotice((current) => ({ ...current, visible: false }));
         }, 5000);
         return () => window.clearTimeout(timer);
     }, []);
-
-    useEffect(() => {
-        console.log(bombDurationSeconds, bombDurationVariant);
-        const timer = setTimeout(
-            () =>
-                setDisplayName(
-                    localStorage.getItem("display-name") || "あなた",
-                ),
-            0,
-        );
-        return () => clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
-        usersRef.current = users;
-    }, [users]);
 
     useEffect(() => {
         let cancelled = false;
@@ -377,194 +306,74 @@ export default function Client({
         };
     }, [room.id, items]);
 
-    const saveBotExposure = useCallback(
-        (item: Item) => {
-            const memory = memoryByItemRef.current[item.id];
-            if (!memory) return;
-            const exposed = recordAnswerExposure(memory);
-            memoryByItemRef.current = {
-                ...memoryByItemRef.current,
-                [item.id]: exposed,
-            };
-            if (authenticatedUserIdRef.current) {
-                pendingMemoryRef.current.set(item.id, exposed);
-            } else {
-                memoryByItemRef.current = saveGuestMemory(
-                    room.id,
-                    memoryByItemRef.current,
-                );
-            }
-            setMemoryByItem(memoryByItemRef.current);
-        },
-        [room.id],
-    );
+    const setTrackedItem = useCallback((item: Item | null) => {
+        currentItemRef.current = item;
+        setCurrentItem(item);
+        recallProgressRef.current = null;
+        if (!item) return;
 
-    const setTrackedItem = useCallback(
-        (item: Item | null) => {
-            currentItemRef.current = item;
-            setCurrentItem(item);
-            recallProgressRef.current = null;
-            setRecallPressurePaused(false);
-            if (!item) return;
-            sessionTurnNumberRef.current += 1;
-            setItemPresentationKey(sessionTurnNumberRef.current);
-            const local =
-                usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
-            if (local) {
-                const memory = memoryByItemRef.current[item.id];
-                predictedRetrievabilityAtPromptRef.current =
-                    memory && memory.reviewCount > 0 && memory.lastReviewedAt
-                        ? getRetrievability(memory)
-                        : null;
-                const exposure =
-                    memory?.lastPresentedAt ?? memory?.lastReviewedAt;
-                // Measure before answering: a long typing delay does not undo a BOT preview.
-                exposureGapAtStartRef.current = exposure
-                    ? Math.max(0, Date.now() - Date.parse(exposure))
-                    : null;
-                expectedTypingAtStartRef.current =
-                    item.answer.length * userTypingDelayRef.current;
-            } else {
-                predictedRetrievabilityAtPromptRef.current = null;
-                if (schedulerRef.current) {
-                    recordBotPresentation(schedulerRef.current, item.id);
-                    saveSchedulerState(
-                        "playground",
-                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
-                        room.id,
-                        schedulerRef.current,
-                    );
-                }
-                saveBotExposure(item);
-            }
-        },
-        [room.id, saveBotExposure],
-    );
-
-    const chooseItemForTurn = useCallback(
-        (turnIndex: number) => {
-            const scheduler =
-                schedulerRef.current ??
-                (schedulerRef.current = createScheduler(
-                    items.map((item) => item.id),
-                ));
-            const id =
-                usersRef.current[turnIndex]?.id === LOCAL_USER_ID
-                    ? chooseNextUserItem(scheduler, memoryByItemRef.current)
-                          ?.itemId
-                    : chooseBotItem(scheduler);
-            saveSchedulerState(
-                "playground",
-                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
-                room.id,
-                scheduler,
-            );
-            return items.find((item) => item.id === id) ?? null;
-        },
-        [items, room.id],
-    );
-
-    const resolveTurnWithItem = useCallback(
-        (requestedTurnIndex: number) => {
-            const requestedItem = chooseItemForTurn(requestedTurnIndex);
-            if (requestedItem) {
-                return {
-                    turnIndex: requestedTurnIndex,
-                    item: requestedItem,
-                };
-            }
-
-            const localTurnIndex = usersRef.current.findIndex(
-                (user) => user.id === LOCAL_USER_ID,
-            );
-            if (localTurnIndex < 0) {
-                return {
-                    turnIndex: requestedTurnIndex,
-                    item: null,
-                };
-            }
-
-            const localItem = chooseItemForTurn(localTurnIndex);
-            if (!localItem) {
-                setNextReviewAt(
-                    schedulerRef.current
-                        ? nextSuspendedReviewAt(schedulerRef.current)
-                        : null,
-                );
-                setIsStarted(false);
-            }
-            return {
-                turnIndex: localTurnIndex,
-                item: localItem,
-            };
-        },
-        [chooseItemForTurn],
-    );
-
-    const setTrackedTurn = useCallback((turnIndex: number) => {
-        currentTurnRef.current = turnIndex;
-        setCurrentTurn(turnIndex);
+        sessionTurnNumberRef.current += 1;
+        setItemPresentationKey(sessionTurnNumberRef.current);
+        const memory = memoryByItemRef.current[item.id];
+        predictedRetrievabilityAtPromptRef.current =
+            memory && memory.reviewCount > 0 && memory.lastReviewedAt
+                ? getRetrievability(memory)
+                : null;
+        const exposure = memory?.lastPresentedAt ?? memory?.lastReviewedAt;
+        exposureGapAtStartRef.current = exposure
+            ? Math.max(0, Date.now() - Date.parse(exposure))
+            : null;
+        expectedTypingAtStartRef.current =
+            item.answer.length * userTypingDelayRef.current;
     }, []);
 
-    const startGame = useCallback(
-        (countdownDurationMs = 3000) => {
-            if (!memoryReady || items.length === 0) return;
+    const chooseItemForTurn = useCallback(() => {
+        const scheduler =
+            schedulerRef.current ??
+            (schedulerRef.current = createScheduler(
+                items.map((item) => item.id),
+            ));
+        const id = chooseNextUserItem(
+            scheduler,
+            memoryByItemRef.current,
+        )?.itemId;
+        saveSchedulerState(
+            "playground",
+            authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+            room.id,
+            scheduler,
+        );
+        return items.find((item) => item.id === id) ?? null;
+    }, [items, room.id]);
 
-            if (countdownTimerRef.current) {
-                clearTimeout(countdownTimerRef.current);
-            }
-
-            if (sessionStartedAtRef.current === 0)
-                sessionStartedAtRef.current = Date.now();
-            resetExplosion();
-            setIsStarted(true);
-            setNextReviewAt(null);
-            setBombStatus(0);
-            bombStageProgressRef.current = 0;
-            setCurrentInput("");
-            setResult(null);
-            setLostDisplayName(null);
-            setStopRecommended(false);
-            setTrackedItem(null);
-
-            const requestedFirstTurn = Math.floor(
-                Math.random() * usersRef.current.length,
+    const resolveTurnWithItem = useCallback(() => {
+        const item = chooseItemForTurn();
+        if (!item) {
+            setNextReviewAt(
+                schedulerRef.current
+                    ? nextSuspendedReviewAt(schedulerRef.current)
+                    : null,
             );
+            setIsStarted(false);
+        }
+        return item;
+    }, [chooseItemForTurn]);
 
-            const revealFirstItem = () => {
-                const resolved = resolveTurnWithItem(requestedFirstTurn);
-                setTrackedTurn(resolved.turnIndex);
-                setTrackedItem(resolved.item);
-                countdownTimerRef.current = null;
-            };
+    const startGame = useCallback(() => {
+        if (!memoryReady || items.length === 0) return;
 
-            if (countdownDurationMs <= 0) {
-                revealFirstItem();
-                return;
-            }
-
-            countdownTimerRef.current = setTimeout(
-                revealFirstItem,
-                countdownDurationMs,
-            );
-        },
-        [
-            items.length,
-            resolveTurnWithItem,
-            memoryReady,
-            resetExplosion,
-            setTrackedItem,
-            setTrackedTurn,
-        ],
-    );
+        setIsStarted(true);
+        setIsPaused(false);
+        setNextReviewAt(null);
+        setCurrentInput("");
+        previousInputAtRef.current = null;
+        previousInputLengthRef.current = 0;
+        setTrackedItem(resolveTurnWithItem());
+    }, [items.length, memoryReady, resolveTurnWithItem, setTrackedItem]);
 
     useEffect(() => {
         successAudioRef.current = new Audio("/Blip_select_8.wav");
-
         return () => {
-            if (countdownTimerRef.current) {
-                clearTimeout(countdownTimerRef.current);
-            }
             successAudioRef.current?.pause();
         };
     }, []);
@@ -586,8 +395,8 @@ export default function Client({
         });
 
         // The instruction screen replaces the initial three-second start screen.
-        startGame(0);
-    }, [items.length, memoryReady, room.id, startGame, users.length]);
+        startGame();
+    }, [items.length, memoryReady, room.id, startGame]);
 
     useEffect(() => {
         if (
@@ -849,36 +658,17 @@ export default function Client({
     }, [memoryReady, cachePendingMemory, flushPendingMemory]);
 
     const handleRecallProgress = useCallback((progress: RecallProgress) => {
-        if (usersRef.current[currentTurnRef.current]?.id !== LOCAL_USER_ID) {
-            return;
-        }
-
         recallProgressRef.current = progress;
-        const item = currentItemRef.current;
-        if (
-            item?.type === "typed_recall" &&
-            (progress.hintCount > 0 ||
-                progress.answerWasFullyRevealed ||
-                progress.revealedHintChars >= item.answer.length)
-        ) {
-            setRecallPressurePaused(true);
-        }
     }, []);
 
     const handleRecallComplete = useCallback(
         (observation: RecallObservation) => {
             const item = currentItemRef.current;
-            if (
-                usersRef.current[currentTurnRef.current]?.id !==
-                    LOCAL_USER_ID ||
-                !item
-            ) {
-                return;
-            }
+            if (!item || isPaused) return;
 
             updateLocalMemory(item, observation);
         },
-        [updateLocalMemory],
+        [isPaused, updateLocalMemory],
     );
 
     const handleInputChange = useCallback((input: string) => {
@@ -904,8 +694,9 @@ export default function Client({
     }, []);
 
     const handleSuccess = useCallback(() => {
+        if (isPaused || !currentItemRef.current) return;
+
         const wasAnswerRevealed =
-            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID &&
             recallProgressRef.current?.answerWasFullyRevealed === true;
         if (!wasAnswerRevealed && successAudioRef.current && soundEffects) {
             successAudioRef.current.currentTime = 0;
@@ -914,14 +705,10 @@ export default function Client({
         }
 
         const presentedItem = currentItemRef.current;
-        const isLocalAnswer =
-            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
-        // Speak after completed input even when a full hint was used.
-        // Hint use affects memory evidence, not whether correct input is read aloud.
+        // Speech also plays when the answer was entered after a full hint.
         if (
-            isLocalAnswer &&
             offlineVoiceReading === "answer" &&
-            presentedItem?.answer.trim() &&
+            presentedItem.answer.trim() &&
             typeof window !== "undefined" &&
             "speechSynthesis" in window &&
             typeof SpeechSynthesisUtterance !== "undefined"
@@ -932,44 +719,30 @@ export default function Client({
             utterance.lang = "en-US";
             synthesis.speak(utterance);
         }
-        if (presentedItem && !isLocalAnswer) {
-            saveBotExposure(presentedItem);
-        }
+
         setCurrentInput("");
         previousInputAtRef.current = null;
         previousInputLengthRef.current = 0;
-
-        const requestedNextTurn =
-            (currentTurnRef.current + 1) % usersRef.current.length;
-        const resolved = resolveTurnWithItem(requestedNextTurn);
-        setTrackedTurn(resolved.turnIndex);
-        setTrackedItem(resolved.item);
+        setTrackedItem(resolveTurnWithItem());
 
         posthog.capture(
             wasAnswerRevealed ? "word_reviewed" : "word_succeeded",
-            {
-                mode: "playground",
-                room_id: room.id,
-            },
+            { mode: "playground", room_id: room.id },
         );
     }, [
+        isPaused,
         soundEffects,
         offlineVoiceReading,
-        saveBotExposure,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
-        setTrackedTurn,
     ]);
-
-    const currentTurnUser = users[currentTurn];
 
     useEffect(() => {
         if (
             !isStarted ||
-            result !== null ||
+            isPaused ||
             !currentItem ||
-            currentTurnUser?.id !== LOCAL_USER_ID ||
             offlineVoiceReading !== "question"
         ) {
             return;
@@ -996,168 +769,16 @@ export default function Client({
         return () => synthesis.cancel();
     }, [
         currentItem,
-        currentTurnUser?.id,
         isStarted,
         itemPresentationKey,
         offlineVoiceReading,
-        result,
+        isPaused,
     ]);
 
-    const currentTurnPlan = useMemo(() => {
-        if (currentTurnUser?.id !== LOCAL_USER_ID || !currentItem) {
-            return null;
-        }
-
-        return createTurnPlan(memoryByItem[currentItem.id]);
-    }, [currentItem, currentTurnUser?.id, memoryByItem]);
-
-    useEffect(() => {
-        bombPlanRef.current = {
-            duration:
-                bombDurationSeconds *
-                1000 *
-                (currentTurnPlan?.bombPressure === "low" ? 1.35 : 1),
-            paused:
-                !currentItem ||
-                currentTurnPlan?.bombPressure === "paused" ||
-                recallPressurePaused,
-        };
-    }, [
-        bombDurationSeconds,
-        currentItem,
-        currentTurnPlan,
-        recallPressurePaused,
-    ]);
-
-    useEffect(() => {
-        if (!memoryReady || !isStarted || result !== null) return;
-        let previousTick = performance.now();
-        const resetTick = () => {
-            previousTick = performance.now();
-        };
-        document.addEventListener("visibilitychange", resetTick);
-        const jitter = 0.94 + Math.random() * 0.12;
-        const timer = setInterval(() => {
-            const now = performance.now();
-            const elapsed = now - previousTick;
-            previousTick = now;
-            const duration = bombPlanRef.current.duration * jitter;
-            bombStageProgressRef.current = advanceBombClock(
-                bombStageProgressRef.current,
-                elapsed,
-                duration,
-                bombPlanRef.current.paused ||
-                    document.visibilityState === "hidden",
-            );
-            if (bombStageProgressRef.current < 1) return;
-            bombStageProgressRef.current = 0;
-            if (bombStatus === 4) {
-                const lostUser = usersRef.current[currentTurnRef.current];
-                const didLose = lostUser?.id === LOCAL_USER_ID;
-                const item = currentItemRef.current;
-
-                if (didLose && item?.type === "typed_recall") {
-                    const progress = recallProgressRef.current ?? {
-                        attemptCount: 1,
-                        hintCount: 0,
-                        revealedHintChars: 0,
-                        maxCorrectPrefixLength: 0,
-                        recallLatencyMs: null,
-                        elapsedMs: duration,
-                    };
-
-                    updateLocalMemory(item, {
-                        ...progress,
-                        success: false,
-                        answerLength: item.answer.length,
-                        firstAttemptCorrect: false,
-                    });
-                }
-
-                const recommendStop = shouldRecommendStop({
-                    sessionStartedAt: sessionStartedAtRef.current,
-                });
-
-                setStopRecommended(recommendStop);
-                explode();
-                setResult(didLose);
-                setLostDisplayName(lostUser?.displayName ?? "練習相手");
-                setBombStatus(0);
-
-                posthog.capture(didLose ? "game_lost" : "game_won", {
-                    mode: "playground",
-                    room_id: room.id,
-                    stop_recommended: recommendStop,
-                });
-
-                void flushPendingMemory();
-                return;
-            }
-
-            setBombStatus((previous) => previous + 1);
-        }, 200);
-
-        return () => {
-            clearInterval(timer);
-            document.removeEventListener("visibilitychange", resetTick);
-        };
-    }, [
-        bombStatus,
-        explode,
-        flushPendingMemory,
-        isStarted,
-        items,
-        memoryReady,
-        result,
-        room.id,
-        updateLocalMemory,
-    ]);
-
-    useEffect(() => {
-        if (
-            !isStarted ||
-            result !== null ||
-            !currentItem ||
-            currentTurnUser?.id === LOCAL_USER_ID ||
-            currentItem.type !== "typed_recall"
-        ) {
-            return;
-        }
-
-        const charDelay = clampTypingDelay(userTypingDelayRef.current);
-        const initialDelay = Math.min(1000, Math.max(250, charDelay * 2.5));
-
-        const typingFrames = getBotTypingFrames(currentItem.answer);
-        let charIndex = 0;
-        let cancelled = false;
-        let timer: ReturnType<typeof setTimeout>;
-
-        const typeNextCharacter = () => {
-            if (cancelled) return;
-
-            if (charIndex < typingFrames.length) {
-                setCurrentInput(typingFrames[charIndex]);
-                charIndex += 1;
-                const jitter = 0.9 + Math.random() * 0.2;
-                timer = setTimeout(
-                    typeNextCharacter,
-                    Math.round(charDelay * jitter),
-                );
-                return;
-            }
-
-            timer = setTimeout(() => {
-                if (!cancelled) handleSuccess();
-            }, 200);
-        };
-
-        timer = setTimeout(typeNextCharacter, initialDelay);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [currentItem, currentTurnUser, handleSuccess, isStarted, result]);
+    const currentTurnPlan = useMemo(
+        () => (currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null),
+        [currentItem, memoryByItem],
+    );
 
     useEffect(() => {
         audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
@@ -1193,18 +814,17 @@ export default function Client({
         };
     }, [backgroundMusic]);
 
-    const activeLearningPlan =
-        currentTurnUser?.id === LOCAL_USER_ID ? currentTurnPlan : null;
+    const activeLearningPlan = currentTurnPlan;
 
     return (
         <>
             <GameView
                 room={memoryReady ? room : null}
                 users={users}
-                positions={userPositions}
+                positions={[]}
                 userId={LOCAL_USER_ID}
-                currentTurn={currentTurn}
-                bombStatus={bombStatus}
+                currentTurn={0}
+                bombStatus={0}
                 currentItem={currentItem}
                 itemPresentationKey={itemPresentationKey}
                 currentInput={currentInput}
@@ -1231,7 +851,7 @@ export default function Client({
                                 className="w-full"
                                 variant="primary"
                                 iconName="rotateCcw"
-                                onClick={() => startGame(0)}
+                                onClick={startGame}
                             >
                                 復習を確認
                             </Button>
@@ -1292,10 +912,10 @@ export default function Client({
                 }
                 serverError={memoryError}
                 notice={notice}
-                result={result}
-                lostDisplayName={lostDisplayName}
-                bombRef={bombRef}
-                explosionLayer={explosionLayer}
+                result={null}
+                soloMode
+                isPaused={isPaused}
+                onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}
                 onRecallProgress={handleRecallProgress}
@@ -1310,7 +930,6 @@ export default function Client({
                     router.push(getSignInUrl());
                 }}
                 enableRemoteTypingSync={false}
-                stopRecommended={stopRecommended}
                 onStop={() => {
                     void flushPendingMemory().finally(() => {
                         startNavigationProgress();
@@ -1333,6 +952,17 @@ export default function Client({
                 }
             />
             <header className="w-full flex absolute justify-end p-4 gap-4">
+                <Button
+                    iconName="pause"
+                    padding="small"
+                    aria-label="一時停止"
+                    className="w-10 shrink-0"
+                    disabled={!isStarted || !currentItem || isPaused}
+                    onClick={() => {
+                        setIsPaused(true);
+                        void flushPendingMemory();
+                    }}
+                />
                 <div>
                     <OfflineVoicePicker
                         initialValue={initialOfflineVoiceReading}
