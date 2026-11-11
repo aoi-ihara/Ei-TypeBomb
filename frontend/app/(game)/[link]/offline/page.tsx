@@ -3,13 +3,19 @@ import { redirect } from "next/navigation";
 import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
 import { parseOfflineVoiceReading } from "@/lib/settings";
+import { isAnswerMode } from "@/lib/answer-mode";
 
 export default async function OfflinePlayPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ link: string }>;
+    searchParams: Promise<{ answerMode?: string }>;
 }) {
-    const { link } = await params;
+    const [{ link }, query] = await Promise.all([params, searchParams]);
+    const answerMode = isAnswerMode(query.answerMode)
+        ? query.answerMode
+        : "auto";
     const [cookieStore, room] = await Promise.all([
         cookies(),
         getPlaygroundRoom(),
@@ -33,6 +39,7 @@ export default async function OfflinePlayPage({
     return (
         <Client
             room={room}
+            answerMode={answerMode}
             initialSounDeffects={soundEffects}
             initialBackgroundMusic={backgroundMusic}
             initialOfflineVoiceReading={offlineVoiceReading}
