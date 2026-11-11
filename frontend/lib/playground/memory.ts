@@ -356,6 +356,12 @@ export const applyRecallObservation = ({
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const evaluation = evaluateRecall(observation);
+    const independentInputSuccess =
+        observation.success &&
+        evaluation.independent &&
+        !observation.answerWasFullyRevealed &&
+        (observation.finalCueRatio ?? 0) === 0 &&
+        (observation.additionalHintCount ?? 0) === 0;
     let stability = current.stability;
     let difficulty = current.difficulty;
     let lastReviewedAt = current.lastReviewedAt;
@@ -403,7 +409,7 @@ export const applyRecallObservation = ({
         answerModeStats: updateAnswerModeStats(
             current.answerModeStats,
             "input",
-            observation.success,
+            independentInputSuccess,
             now,
         ),
     };
