@@ -13,6 +13,7 @@ import type { OfflineVoiceReading } from "@/lib/settings";
 import posthog from "posthog-js";
 import {
     applyRecallObservation,
+    recordAnswerModeResult,
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
@@ -28,6 +29,7 @@ import {
     nextSuspendedReviewAt,
     chooseNextUserItem,
     recordUserAnswer,
+    recordRecognitionAnswer,
     type SchedulerState,
 } from "@/lib/playground/scheduler";
 import {
@@ -573,6 +575,51 @@ export default function Client({
         [room.id, items],
     );
 
+    const updateAnswerModeMemory = useCallback(
+        (item: Item, mode: "selection" | "input", success: boolean) => {
+            const userId =
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
+            const freshestMemory = authenticatedUserIdRef.current
+                ? memoryByItemRef.current
+                : mergeGuestMemory(
+                      memoryByItemRef.current,
+                      loadGuestMemory(
+                          room.id,
+                          new Set(items.map((entry) => entry.id)),
+                      ),
+                  );
+            const updated = recordAnswerModeResult({
+                memory: freshestMemory[item.id],
+                userId,
+                roomId: room.id,
+                itemId: item.id,
+                mode,
+                success,
+            });
+            let nextMemoryByItem = {
+                ...freshestMemory,
+                [item.id]: updated,
+            };
+            if (authenticatedUserIdRef.current) {
+                pendingMemoryRef.current.set(item.id, updated);
+                try {
+                    localStorage.setItem(
+                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
+                        JSON.stringify([...pendingMemoryRef.current.values()]),
+                    );
+                } catch {
+                    // The current session can continue if storage is unavailable.
+                }
+            } else {
+                nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
+            }
+            memoryByItemRef.current = nextMemoryByItem;
+            setMemoryByItem(nextMemoryByItem);
+            return updated;
+        },
+        [room.id, items],
+    );
+
     const cachePendingMemory = useCallback(() => {
         const userId = authenticatedUserIdRef.current;
         if (!userId) return;
@@ -669,7 +716,10 @@ export default function Client({
         [isPaused, updateLocalMemory],
     );
 
-    const handleInputChange = useCallback((input: string) => {
+    const handleInputChange = useCallback((input: string, failed?: boolean) => {
+        if (failed && !isPaused && currentItemRef.current) {
+            updateAnswerModeMemory(currentItemRef.current, "input", false);
+        }
         const now = Date.now();
         const previousLength = previousInputLengthRef.current;
         const previousInputAt = previousInputAtRef.current;
@@ -689,7 +739,28 @@ export default function Client({
         previousInputLengthRef.current = input.length;
         previousInputAtRef.current = input.length === 0 ? null : now;
         setCurrentInput(input);
-    }, []);
+    }, [isPaused, updateAnswerModeMemory]);
+
+    const handleSelectionAnswer = useCallback(
+        (correct: boolean) => {
+            const item = currentItemRef.current;
+            if (!item || isPaused) return;
+            if (correct) {
+                recordRecognitionAnswer(schedulerRef.current!, item.id);
+                const scheduler = schedulerRef.current;
+                if (scheduler)
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                        room.id,
+                        scheduler,
+                    );
+                recallProgressRef.current = null;
+            }
+            updateAnswerModeMemory(item, "selection", correct);
+        },
+        [isPaused, room.id, updateAnswerModeMemory],
+    );
 
     const handleSuccess = useCallback(() => {
         if (isPaused || !currentItemRef.current) return;
@@ -929,6 +1000,11 @@ export default function Client({
                 result={null}
                 soloMode
                 isPaused={isPaused}
+                answerMode={answerMode}
+                answerModeMemory={
+                    currentItem ? memoryByItem[currentItem.id] : undefined
+                }
+                onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}
