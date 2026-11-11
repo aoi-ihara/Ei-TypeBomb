@@ -153,6 +153,19 @@ export const nextOnlineRecommendation = (session: OnlineMemorySession) => {
     return selected?.itemId ?? null;
 };
 
+// Room snapshots may arrive several times for the same turn. Only a newly
+// selected turn (or a fresh transport connection) needs to be recommended.
+export const nextUnsentOnlineRecommendation = (
+    session: OnlineMemorySession,
+    last: { itemId: string; turn: number } | null,
+): { itemId: string; turn: number } | null => {
+    const itemId = nextOnlineRecommendation(session);
+    if (!itemId) return null;
+    const turn = session.scheduler.turn;
+    if (last?.itemId === itemId && last.turn === turn) return null;
+    return { itemId, turn };
+};
+
 export const recordOnlineRecall = (
     session: OnlineMemorySession,
     itemId: string,
