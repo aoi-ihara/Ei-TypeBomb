@@ -2,6 +2,7 @@ import {
     applyRecallObservation,
     evaluateRecall,
     recordAnswerModeResult,
+    isValidAnswerModeStats,
     type AnswerModeResult,
     type ItemMemoryState,
     type RecallObservation,
@@ -51,7 +52,9 @@ export const loadOnlinePendingMemory = (
                 allowed.has(value.itemId) &&
                 Number.isFinite(value.stability) &&
                 Number.isFinite(value.difficulty) &&
-                Number.isInteger(value.reviewCount),
+                Number.isInteger(value.reviewCount) &&
+                (value.answerModeStats == null ||
+                    isValidAnswerModeStats(value.answerModeStats)),
         );
     } catch {
         return [];
@@ -91,7 +94,9 @@ export const loadOnlineGuestMemory = (
                     memory.userId === guestUserId &&
                     typeof memory.stability === "number" &&
                     typeof memory.difficulty === "number" &&
-                    typeof memory.reviewCount === "number"
+                    typeof memory.reviewCount === "number" &&
+                    (memory.answerModeStats == null ||
+                        isValidAnswerModeStats(memory.answerModeStats))
                 );
             }),
         ) as Record<string, ItemMemoryState>;
