@@ -228,7 +228,14 @@ export default function Clinet({
         userId && users.some((player) => player.id === userId),
     );
     useEffect(() => {
-        if (!isOnlineParticipant || !room?.id) return;
+        if (!isOnlineParticipant) {
+            // The server discards a player's pending recommendation on leave.
+            // Reset the client-side deduplication state so rejoining can send
+            // a fresh recommendation even when the socket and turn are reused.
+            lastRecommendationRef.current = null;
+            return;
+        }
+        if (!room?.id) return;
         if (onlineMemoryRef.current?.roomId !== room.id) return;
         publishOnlineRecommendation();
     }, [
@@ -1091,6 +1098,8 @@ export default function Clinet({
     };
 
     const handleLeave = () => {
+        // Clear immediately; the participant snapshot may arrive later.
+        lastRecommendationRef.current = null;
         socketRef.current?.emit("room:leave");
     };
 
