@@ -36,9 +36,11 @@ import {
 } from "@/lib/playground/memory-client";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
+import type { AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
+    answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
     initialOfflineVoiceReading: OfflineVoiceReading;
@@ -146,6 +148,7 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
+    answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
     initialOfflineVoiceReading,
