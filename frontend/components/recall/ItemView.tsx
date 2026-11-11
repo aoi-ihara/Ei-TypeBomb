@@ -1,4 +1,9 @@
 import TypedRecallView from "@/components/recall/TypedRecallView";
+import SelectionQuestionView from "@/components/recall/SelectionQuestionView";
+import {
+    resolveQuestionPresentation,
+    type AnswerMode,
+} from "@/lib/answer-mode";
 import type { Item } from "@/type";
 import type {
     LearningMode,
@@ -24,11 +29,42 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    items: Item[];
+    answerMode: AnswerMode;
+    answerModeMemory?: import("@/lib/playground/memory").ItemMemoryState;
+    onSelectionAnswer?: (correct: boolean) => void;
 };
 
 export default function ItemView(props: Readonly<Props>) {
     switch (props.item.type) {
-        case "typed_recall":
-            return <TypedRecallView {...props} item={props.item} />;
+        case "typed_recall": {
+            const presentation = resolveQuestionPresentation(
+                props.answerMode,
+                props.item,
+                props.answerModeMemory,
+            );
+            if (presentation === "selection") {
+                return (
+                    <SelectionQuestionView
+                        item={props.item}
+                        items={props.items}
+                        currentInput={props.currentInput}
+                        onAnswer={(correct) =>
+                            props.onSelectionAnswer?.(correct)
+                        }
+                        onSuccess={props.onSuccess}
+                        isPaused={props.isPaused}
+                    />
+                );
+            }
+            const {
+                items: _items,
+                answerMode: _answerMode,
+                answerModeMemory: _answerModeMemory,
+                onSelectionAnswer: _onSelectionAnswer,
+                ...typingProps
+            } = props;
+            return <TypedRecallView {...typingProps} item={props.item} />;
+        }
     }
 }
