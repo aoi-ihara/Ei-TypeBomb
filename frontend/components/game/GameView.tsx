@@ -168,6 +168,11 @@ export default function GameView({
         previousFailureRef.current = { count: failureCount ?? 0, key: failureKey };
     }, [failureCount, failureKey, currentTurnUser?.id, userId, triggerFailAnimation]);
 
+    // A newly presented word should not inherit the previous word's shake.
+    useEffect(() => {
+        activeGameRef.current?.classList.remove("wrong-answer");
+    }, [failureKey]);
+
     const activeGame =
         currentItem === null ? (
             <div
