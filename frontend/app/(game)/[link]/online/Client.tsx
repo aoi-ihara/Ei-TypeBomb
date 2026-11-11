@@ -30,10 +30,7 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import type {
-    ItemMemoryState,
-    RecallObservation,
-} from "@/lib/playground/memory";
+import type { RecallObservation } from "@/lib/playground/memory";
 import type { AnswerMode } from "@/lib/answer-mode";
 import {
     createOnlineMemorySession,
