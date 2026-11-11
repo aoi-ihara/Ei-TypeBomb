@@ -3,7 +3,7 @@ import {
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock.mjs";
+import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
 import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import {
     advanceKanaInput,
