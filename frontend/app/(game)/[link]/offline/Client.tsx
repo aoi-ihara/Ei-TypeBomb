@@ -338,8 +338,10 @@ export default function Client({
             setIsSignedIn(Boolean(loaded.userId));
             // A legacy schema can be read, but must not be overwritten until
             // answer_mode_stats has been migrated into the database.
-            memoryPersistenceDisabledRef.current =
-                loaded.persistenceDisabled ?? false;
+            const legacySchema =
+                "persistenceDisabled" in loaded &&
+                loaded.persistenceDisabled === true;
+            memoryPersistenceDisabledRef.current = legacySchema;
 
             if (!loaded.userId) {
                 authenticatedUserIdRef.current = null;
@@ -359,7 +361,7 @@ export default function Client({
             }
 
             authenticatedUserIdRef.current = loaded.userId;
-            if (loaded.persistenceDisabled) {
+            if (legacySchema) {
                 setNotice({
                     visible: true,
                     iconName: "info",
