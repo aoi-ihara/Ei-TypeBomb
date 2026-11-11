@@ -31,6 +31,7 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import type { RecallObservation } from "@/lib/playground/memory";
+import type { AnswerMode } from "@/lib/answer-mode";
 import {
     createOnlineMemorySession,
     cacheOnlinePendingMemory,
@@ -43,6 +44,7 @@ import {
 
 type Props = {
     clusterServers: string[];
+    answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
@@ -58,6 +60,7 @@ const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
 
 export default function Clinet({
     clusterServers,
+    answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Props) {
