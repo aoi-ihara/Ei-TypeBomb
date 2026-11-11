@@ -57,14 +57,27 @@ export default function ItemView(props: Readonly<Props>) {
                     />
                 );
             }
-            const {
-                items: _items,
-                answerMode: _answerMode,
-                answerModeMemory: _answerModeMemory,
-                onSelectionAnswer: _onSelectionAnswer,
-                ...typingProps
-            } = props;
-            return <TypedRecallView {...typingProps} item={props.item} />;
+            return (
+                <TypedRecallView
+                    item={props.item}
+                    currentInput={props.currentInput}
+                    failureCount={props.failureCount}
+                    bombStatus={props.bombStatus}
+                    hasDuplicatePrompt={props.hasDuplicatePrompt}
+                    onSuccess={props.onSuccess}
+                    onChangeInput={props.onChangeInput}
+                    enableRemoteTypingSync={props.enableRemoteTypingSync}
+                    remoteHintLength={props.remoteHintLength}
+                    onHintChange={props.onHintChange}
+                    learningMode={props.learningMode}
+                    initialCueRatio={props.initialCueRatio}
+                    cueSteps={props.cueSteps}
+                    hintDelaysMs={props.hintDelaysMs}
+                    onRecallProgress={props.onRecallProgress}
+                    onRecallComplete={props.onRecallComplete}
+                    isPaused={props.isPaused}
+                />
+            );
         }
     }
 }
