@@ -3,13 +3,19 @@ import { redirect } from "next/navigation";
 import Client from "./Client";
 import { parseETBClusterConfig } from "@/lib/room/clusterConfig";
 import { getPlaygroundRoomRoute } from "@/lib/room/playground";
+import { isAnswerMode } from "@/lib/answer-mode";
 
 export default async function OnlinePlayPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ link: string }>;
+    searchParams: Promise<{ answerMode?: string }>;
 }) {
-    const { link } = await params;
+    const [{ link }, query] = await Promise.all([params, searchParams]);
+    const answerMode = isAnswerMode(query.answerMode)
+        ? query.answerMode
+        : "auto";
     const room = await getPlaygroundRoomRoute();
     if (!room) redirect("/" + link);
 
@@ -32,6 +38,7 @@ export default async function OnlinePlayPage({
     return (
         <Client
             clusterServers={clusterServers}
+            answerMode={answerMode}
             initialSounDeffects={soundEffects}
             initialBackgroundMusic={backgroundMusic}
         />
