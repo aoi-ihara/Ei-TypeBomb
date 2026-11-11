@@ -51,15 +51,21 @@ export default function TypingSyncOverlay({
             }
         });
 
-        socket.on("typing:input", ({ input, hintLength: remoteHintLength }: {
-            input: string;
-            hintLength?: number;
-        }) => {
-            setCurrentInput(input);
-            if (typeof remoteHintLength === "number") {
-                setHintLength(remoteHintLength);
-            }
-        });
+        socket.on(
+            "typing:input",
+            ({
+                input,
+                hintLength: remoteHintLength,
+            }: {
+                input: string;
+                hintLength?: number;
+            }) => {
+                setCurrentInput(input);
+                if (typeof remoteHintLength === "number") {
+                    setHintLength(remoteHintLength);
+                }
+            },
+        );
 
         return () => {
             socket.disconnect();

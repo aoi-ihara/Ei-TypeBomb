@@ -274,7 +274,7 @@ export default function GameView({
                 )}
                 <div
                     inert={isReconnecting || isPaused}
-                    className={`flex flex-col ${!soloMode && "bg-(--color-background-secondary)"} transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${soloMode ? "h-full items-center" : !room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col ${!soloMode && "bg-(--color-background-secondary)"} transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${soloMode ? "h-full items-center" : !room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} ${!soloMode && "rounded-2xl p-2 w-full"}`}
                 >
                     {room && !serverError ? (
                         isParticipant ? (

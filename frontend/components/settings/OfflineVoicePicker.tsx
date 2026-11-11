@@ -40,8 +40,8 @@ export default function OfflineVoicePicker({ initialValue }: Readonly<Props>) {
     return (
         <div className="flex w-full flex-col gap-2">
             <Picker
-                name="読み上げ（オフライン）"
-                labelPrefix="読み上げ（オフライン）"
+                name="読み上げ"
+                labelPrefix="読み上げ"
                 padding="small"
                 items={VOICE_READING_OPTIONS.map(({ label }) => label)}
                 selection={VOICE_READING_OPTIONS.findIndex(
