@@ -14,6 +14,7 @@ import posthog from "posthog-js";
 import {
     applyRecallObservation,
     recordAnswerModeResult,
+    isValidAnswerModeStats,
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
@@ -79,7 +80,9 @@ const loadGuestMemory = (
                     (m.lastPresentedAt == null ||
                         !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
                     (m.updatedAt == null ||
-                        !Number.isNaN(Date.parse(m.updatedAt)))
+                        !Number.isNaN(Date.parse(m.updatedAt))) &&
+                    (m.answerModeStats == null ||
+                        isValidAnswerModeStats(m.answerModeStats))
                 );
             }),
         ) as Record<string, ItemMemoryState>;
