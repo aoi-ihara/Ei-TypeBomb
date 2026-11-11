@@ -360,7 +360,9 @@ export const applyRecallObservation = ({
         observation.success &&
         evaluation.independent &&
         !observation.answerWasFullyRevealed &&
+        (observation.initialCueRatio ?? 0) === 0 &&
         (observation.finalCueRatio ?? 0) === 0 &&
+        (observation.hintCount ?? 0) === 0 &&
         (observation.additionalHintCount ?? 0) === 0;
     let stability = current.stability;
     let difficulty = current.difficulty;
