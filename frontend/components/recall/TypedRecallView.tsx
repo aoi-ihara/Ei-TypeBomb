@@ -64,6 +64,7 @@ export default function TypedRecallView({
             hintDelaysMs={hintDelaysMs}
             onRecallProgress={onRecallProgress}
             onRecallComplete={onRecallComplete}
+            isPaused={isPaused}
         />
     );
 }
