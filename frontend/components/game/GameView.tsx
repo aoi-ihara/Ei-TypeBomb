@@ -138,7 +138,10 @@ export default function GameView({
                 ゲーム開始
             </div>
         ) : (
-            <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
+            <div
+                key={soloMode ? itemPresentationKey : undefined}
+                className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full"
+            >
                 {soloMode ? null : currentTurnUser?.id === userId ? (
                     <div
                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -389,9 +392,17 @@ export default function GameView({
                             </div>
                         )
                     ) : (
-                        <div className="w-full h-full flex animate-appear items-center">
+                        <div
+                            className={`w-full h-full flex animate-appear items-center ${
+                                soloMode
+                                    ? "fixed inset-0 justify-center pointer-events-none"
+                                    : ""
+                            }`}
+                        >
                             <div
-                                className="w-fit pl-4 font-bold gradient-text"
+                                className={`w-fit font-bold gradient-text ${
+                                    soloMode ? "text-center" : "pl-4"
+                                }`}
                                 data-cursor="text"
                             >
                                 読み込み中…
