@@ -1022,6 +1022,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     const flush = getCallback("flushPendingMemory", {
         cachePendingMemory: () => {},
         authenticatedUserIdRef: { current: "u" },
+        memoryPersistenceDisabledRef: { current: false },
         pendingMemoryRef: pending,
         syncInFlightRef: inFlight,
         setSaveError: (value) => {
