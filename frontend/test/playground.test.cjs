@@ -898,7 +898,7 @@ test("paused solo practice does not advance a question", () => {
 });
 
 test("active recall clock excludes paused intervals before and after resume", () => {
-    const { getActiveElapsedMs } = load("lib/playground/active-clock.mjs");
+    const { getActiveElapsedMs } = load("lib/playground/active-clock.ts");
 
     // A pause starts at 2s. While paused, elapsed time stays frozen at 1s.
     assert.equal(getActiveElapsedMs(62_000, 1_000, 0, 2_000), 1_000);
@@ -1290,7 +1290,7 @@ function getInputFunction(name, globals) {
     return evaluate(
         "export const callback = " +
             ts.createPrinter().printNode(ts.EmitHint.Expression, found, ast),
-        globals,
+        { getActiveElapsedMs: () => 0, ...globals },
     ).callback;
 }
 
