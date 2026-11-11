@@ -1153,6 +1153,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             expectedTypingAtStartRef: ref(0),
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),
+            memoryPersistenceDisabledRef: ref(false),
             pendingMemoryRef: ref(new Map()),
             userReviewCountRef: ref(0),
             previousInputAtRef: ref(null),
