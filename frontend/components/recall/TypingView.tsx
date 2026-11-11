@@ -44,7 +44,6 @@ function TypingAttempt({
     english,
     onSuccess,
     onChangeInput,
-    failureCount = 0,
     currentInput,
     bombStatus,
     hasDuplicateMeaning = false,
@@ -64,7 +63,6 @@ function TypingAttempt({
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     currentInput: string | null;
-    failureCount?: number;
     bombStatus?: number | null;
     hasDuplicateMeaning?: boolean;
     enableRemoteTypingSync?: boolean;
@@ -99,9 +97,7 @@ function TypingAttempt({
     const onHintChangeRef = useRef(onHintChange);
     const [currentSelection, setCurrentSelection] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
-    const inputFrameRef = useRef<HTMLDivElement | null>(null);
     const [charInput, setCharInput] = useState("");
-    const [isFailAnimating, setIsFailAnimating] = useState(false);
     const [syncedInput, setSyncedInput] = useState("");
     const wordKey = JSON.stringify([japanese, english]);
     const recallStartedAtRef = useRef(0);
@@ -345,26 +341,6 @@ function TypingAttempt({
         };
     }, [enableRemoteTypingSync, isReadonly, isPaused]);
 
-    // Explicit failures avoid confusing Backspace corrections with wrong answers.
-    const previousFailureCountRef = useRef(failureCount);
-    useEffect(() => {
-        if (!isReadonly || previousFailureCountRef.current === failureCount)
-            return;
-        previousFailureCountRef.current = failureCount;
-        inputFrameRef.current?.getAnimations().forEach((animation) => {
-            animation.currentTime = 0;
-        });
-        setIsFailAnimating(true);
-    }, [failureCount, isReadonly]);
-
-    const triggerFailAnimation = () => {
-        // Restart an in-flight shake without an older timer stopping it early.
-        inputFrameRef.current?.getAnimations().forEach((animation) => {
-            animation.currentTime = 0;
-        });
-        setIsFailAnimating(true);
-    };
-
     const resetInput = () => {
         if (!english) return;
         if (kanaComposing || input.some((character) => character !== "")) {
@@ -375,7 +351,6 @@ function TypingAttempt({
         kanaCommitSpansRef.current = [];
         setCurrentSelection(0);
         setCharInput("");
-        triggerFailAnimation();
         onChangeInput("", true);
     };
 
@@ -584,8 +559,7 @@ function TypingAttempt({
                     onChangeInput(next.join(""));
                     setInput([]);
                     setCurrentSelection(0);
-                    triggerFailAnimation();
-                    onChangeInput("", true);
+                                onChangeInput("", true);
                 } else resetInput();
             }
         }
@@ -631,12 +605,7 @@ function TypingAttempt({
             </div>
             <div className="w-full flex justify-center">
                 <div
-                    ref={inputFrameRef}
-                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "wrong-answer" : ""}`}
-                    onAnimationEnd={(event) => {
-                        if (event.target === event.currentTarget)
-                            setIsFailAnimating(false);
-                    }}
+                    className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start"
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}
