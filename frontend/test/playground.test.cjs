@@ -899,6 +899,21 @@ test("paused solo practice does not advance a question", () => {
     assert.equal(advanced, false);
 });
 
+test("solo pause time is excluded from recall timings", () => {
+    const observations = [];
+    const complete = getCallback("handleRecallComplete", {
+        isPaused: false,
+        currentItemRef: { current: { id: "a", answer: "apple" } },
+        pausedDurationRef: { current: 60_000 },
+        pauseBeforeFirstKeyRef: { current: 60_000 },
+        updateLocalMemory: (_item, observation) => observations.push(observation),
+    });
+    complete({ elapsedMs: 61_300, recallLatencyMs: 60_500 });
+    assert.equal(observations.length, 1);
+    assert.equal(observations[0].elapsedMs, 1_300);
+    assert.equal(observations[0].recallLatencyMs, 500);
+});
+
 test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
     const pending = { current: new Map([["a", initial()]]) };
     const inFlight = { current: null };
