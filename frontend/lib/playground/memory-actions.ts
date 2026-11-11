@@ -8,6 +8,9 @@ import {
     toMemoryState,
 } from "@/lib/playground/memory";
 
+const LEGACY_MEMORY_COLUMNS =
+    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
+
 const MEMORY_COLUMNS =
     "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at, answer_mode_stats";
 
@@ -43,18 +46,35 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         .eq("room_id", roomId)
         .eq("user_id", userId);
 
-    if (error) {
+    // Older databases may not have the answer-mode column yet. Read existing
+    // memory without it, but prevent writes until the migration is applied.
+    const missingAnswerModeStats =
+        Boolean(error) &&
+        /answer_mode_stats/i.test(error!.message) &&
+        (/does not exist/i.test(error!.message) ||
+            /schema cache/i.test(error!.message));
+    const legacyResult = missingAnswerModeStats
+        ? await supabase
+              .from("ei_typebomb_item_memory")
+              .select(LEGACY_MEMORY_COLUMNS)
+              .eq("room_id", roomId)
+              .eq("user_id", userId)
+        : null;
+    const readError = legacyResult?.error ?? (missingAnswerModeStats ? null : error);
+    if (readError) {
         return {
             userId,
             memoryByItem: {} as Record<string, ItemMemoryState>,
-            error: { message: error.message },
+            error: { message: readError.message },
+            persistenceDisabled: true,
         };
     }
 
     return {
         userId,
+        persistenceDisabled: missingAnswerModeStats,
         memoryByItem: Object.fromEntries(
-            (data ?? []).map((row) => {
+            ((legacyResult?.data ?? data) ?? []).map((row) => {
                 const memory = toMemoryState(row);
                 return [memory.itemId, memory];
             }),
