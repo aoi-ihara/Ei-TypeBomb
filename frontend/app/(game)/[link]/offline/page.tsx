@@ -25,7 +25,10 @@ export default async function OfflinePlayPage({
 
     const canonicalLink = room.link ?? room.id;
     if (link !== canonicalLink) {
-        if (link === room.id) redirect("/" + canonicalLink + "/offline");
+        if (link === room.id)
+            redirect(
+                "/" + canonicalLink + "/offline?answerMode=" + answerMode,
+            );
         redirect("/" + link);
     }
 
