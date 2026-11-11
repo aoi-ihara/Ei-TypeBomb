@@ -92,12 +92,7 @@ export default function Clinet({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const [notice, setNotice] = useState<GameNoticeProps>({
-        visible: false,
-        iconName: "globeOff",
-        title: "接続が切れました",
-        description: "プレイヤーがルームから退出しました。",
-    });
+    const [notice, setNotice] = useState<GameNoticeProps>();
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
     const [hintLengths, setHintLengths] = useState<Record<string, number>>({});
@@ -201,9 +196,6 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-        // The item catalog is fixed within a room. Broadcast revisions must not
-        // reset scheduler progress or restart the asynchronous memory load.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [memoryRoomId]);
 
     useEffect(() => {
@@ -245,10 +237,8 @@ export default function Clinet({
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
-        // SOCKET
         const configuredServers = getEffectiveClusterServers(clusterServers);
         const primaryUrl = configuredServers[0] ?? resolveServerUrl();
-        // One signed player identity per mounted page, shared across reconnects.
         const sessionTokenPromise = getClientSessionToken().catch(() => null);
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
         let disposed = false;
@@ -284,10 +274,9 @@ export default function Clinet({
             });
 
             noticeTimer = setTimeout(() => {
-                setNotice((current) => ({
-                    ...current,
-                    visible: false,
-                }));
+                setNotice((current) =>
+                    current ? { ...current, visible: false } : undefined,
+                );
                 noticeTimer = null;
             }, 5000);
         };

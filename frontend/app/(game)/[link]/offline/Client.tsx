@@ -80,12 +80,10 @@ const loadGuestMemory = (
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
-        // Ignore corrupted or blocked storage.
         return {};
     }
 };
 
-// Preserve newer updates from other tabs instead of overwriting the whole room.
 const mergeGuestMemory = (
     current: Record<string, ItemMemoryState>,
     incoming: Record<string, ItemMemoryState>,
@@ -120,13 +118,10 @@ const saveGuestMemory = (
     );
     try {
         localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(merged));
-    } catch {
-        // Storage may be unavailable or full; practice remains playable.
-    }
+    } catch {}
     return merged;
 };
 
-// Read only keys here; loadGuestMemory validates the actual values.
 const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
     try {
         const value: unknown = JSON.parse(
@@ -191,18 +186,14 @@ export default function Client({
     const currentItemRef = useRef<Item | null>(null);
     const [isStarted, setIsStarted] = useState(false);
     const [showInstructions, setShowInstructions] = useState(true);
-    const [notice, setNotice] = useState<GameNoticeProps>({
-        visible: true,
-        iconName: "keyboard",
-        title: "半角で入力してください",
-        description: "単語は日本語でも英語でも、半角で入力してください。",
-    });
+    const [notice, setNotice] = useState<GameNoticeProps>();
     const [isPaused, setIsPaused] = useState(false);
     const [currentInput, setCurrentInput] = useState("");
 
     const sessionTurnNumberRef = useRef(0);
     const [itemPresentationKey, setItemPresentationKey] = useState(0);
     const recallProgressRef = useRef<RecallProgress | null>(null);
+    const [isSignedIn, setIsSignedIn] = useState(false);
     const userReviewCountRef = useRef(0);
     const initialGameStartedRef = useRef(false);
     const userTypingDelayRef = useRef(DEFAULT_TYPING_DELAY_MS);
@@ -214,8 +205,11 @@ export default function Client({
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
-            setNotice((current) => ({ ...current, visible: false }));
+            setNotice((current) =>
+                current ? { ...current, visible: false } : undefined,
+            );
         }, 5000);
+
         return () => window.clearTimeout(timer);
     }, []);
 
@@ -225,6 +219,10 @@ export default function Client({
         const loadMemory = async () => {
             const loaded = await loadPlaygroundMemory(room.id);
             if (cancelled) return;
+
+            if (!loaded.error) {
+                setIsSignedIn(Boolean(loaded.userId));
+            }
 
             if (loaded.error) {
                 console.error("Failed to load playground memory", loaded.error);
@@ -283,9 +281,7 @@ export default function Client({
                         pendingMemoryRef.current.set(pending.itemId, pending);
                     }
                 }
-            } catch {
-                // A damaged/unavailable local cache must not prevent practice.
-            }
+            } catch {}
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
                 loadSchedulerState(
@@ -394,7 +390,6 @@ export default function Client({
             player_count: users.length,
         });
 
-        // The instruction screen replaces the initial three-second start screen.
         startGame();
     }, [items.length, memoryReady, room.id, startGame]);
 
@@ -477,7 +472,9 @@ export default function Client({
                     room_id: room.id,
                     item_id: item.id,
                     suspension_level: currentStruggle.suspensionLevel,
-                    suspended_until: new Date(currentStruggle.suspendedUntil).toISOString(),
+                    suspended_until: new Date(
+                        currentStruggle.suspendedUntil,
+                    ).toISOString(),
                 });
             }
             const freshestMemory = authenticatedUserIdRef.current
@@ -581,9 +578,7 @@ export default function Client({
                 `playground-pending:${userId}:${room.id}`,
                 JSON.stringify([...pendingMemoryRef.current.values()]),
             );
-        } catch {
-            // Network sync still works when local storage is unavailable.
-        }
+        } catch {}
     }, [room.id]);
 
     const flushPendingMemory = useCallback(async () => {
@@ -666,7 +661,6 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused) return;
 
-            // Pausing must not make the learner's response look slower.
             updateLocalMemory(item, observation);
         },
         [isPaused, updateLocalMemory],
@@ -716,7 +710,9 @@ export default function Client({
         ) {
             const synthesis = window.speechSynthesis;
             synthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(presentedItem.answer);
+            const utterance = new SpeechSynthesisUtterance(
+                presentedItem.answer,
+            );
             utterance.lang = "en-US";
             synthesis.speak(utterance);
         }
@@ -777,7 +773,8 @@ export default function Client({
     ]);
 
     const currentTurnPlan = useMemo(
-        () => (currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null),
+        () =>
+            currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null,
         [currentItem, memoryByItem],
     );
 
@@ -833,10 +830,11 @@ export default function Client({
                 preGameContent={
                     memoryReady && nextReviewAt !== null ? (
                         <div className="flex flex-col gap-4 px-2" role="status">
-                            <p className="font-bold">すべての単語が復習待ちです</p>
+                            <p className="font-bold">
+                                すべての単語が復習待ちです
+                            </p>
                             <p>
-                                難しい単語はいったん保留しました。
-                                次の復習は
+                                難しい単語はいったん保留しました。 次の復習は
                                 {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
                                     {
@@ -859,7 +857,9 @@ export default function Client({
                             <Button
                                 className="w-full"
                                 iconName="arrowLeft"
-                                onClick={() => router.push("/" + (room.link ?? room.id))}
+                                onClick={() =>
+                                    router.push("/" + (room.link ?? room.id))
+                                }
                             >
                                 ルームへ戻る
                             </Button>
@@ -891,6 +891,16 @@ export default function Client({
                                         と解答を見ることができます。
                                     </span>
                                 </div>
+                                {!isSignedIn && (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="user" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            サインインすることで、ブラウザを超えて単語の学習データが同期されます。
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-4">
