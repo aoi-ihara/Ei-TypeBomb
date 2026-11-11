@@ -80,12 +80,10 @@ const loadGuestMemory = (
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
-        // Ignore corrupted or blocked storage.
         return {};
     }
 };
 
-// Preserve newer updates from other tabs instead of overwriting the whole room.
 const mergeGuestMemory = (
     current: Record<string, ItemMemoryState>,
     incoming: Record<string, ItemMemoryState>,
@@ -120,13 +118,10 @@ const saveGuestMemory = (
     );
     try {
         localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(merged));
-    } catch {
-        // Storage may be unavailable or full; practice remains playable.
-    }
+    } catch {}
     return merged;
 };
 
-// Read only keys here; loadGuestMemory validates the actual values.
 const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
     try {
         const value: unknown = JSON.parse(
@@ -198,6 +193,7 @@ export default function Client({
     const sessionTurnNumberRef = useRef(0);
     const [itemPresentationKey, setItemPresentationKey] = useState(0);
     const recallProgressRef = useRef<RecallProgress | null>(null);
+    const [isSignedIn, setIsSignedIn] = useState(false);
     const userReviewCountRef = useRef(0);
     const initialGameStartedRef = useRef(false);
     const userTypingDelayRef = useRef(DEFAULT_TYPING_DELAY_MS);
@@ -223,6 +219,10 @@ export default function Client({
         const loadMemory = async () => {
             const loaded = await loadPlaygroundMemory(room.id);
             if (cancelled) return;
+
+            if (!loaded.error) {
+                setIsSignedIn(Boolean(loaded.userId));
+            }
 
             if (loaded.error) {
                 console.error("Failed to load playground memory", loaded.error);
@@ -578,9 +578,7 @@ export default function Client({
                 `playground-pending:${userId}:${room.id}`,
                 JSON.stringify([...pendingMemoryRef.current.values()]),
             );
-        } catch {
-            // Network sync still works when local storage is unavailable.
-        }
+        } catch {}
     }, [room.id]);
 
     const flushPendingMemory = useCallback(async () => {
@@ -663,7 +661,6 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused) return;
 
-            // Pausing must not make the learner's response look slower.
             updateLocalMemory(item, observation);
         },
         [isPaused, updateLocalMemory],
@@ -894,6 +891,16 @@ export default function Client({
                                         と解答を見ることができます。
                                     </span>
                                 </div>
+                                {!isSignedIn && (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="user" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            サインインすることで、ブラウザを超えて単語の学習データが同期されます。
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-4">
