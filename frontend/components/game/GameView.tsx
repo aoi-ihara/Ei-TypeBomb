@@ -61,6 +61,9 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     stopRecommended?: boolean;
+    soloMode?: boolean;
+    isPaused?: boolean;
+    onResume?: () => void;
     onStop?: () => void;
 };
 
@@ -108,6 +111,9 @@ export default function GameView({
     onRecallProgress,
     onRecallComplete,
     stopRecommended = false,
+    soloMode = false,
+    isPaused = false,
+    onResume,
     onStop,
 }: Readonly<Props>) {
     const currentTurnUser = users[currentTurn] as User | undefined;
@@ -136,7 +142,7 @@ export default function GameView({
             </div>
         ) : (
             <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                {currentTurnUser?.id === userId ? (
+                {soloMode ? null : currentTurnUser?.id === userId ? (
                     <div
                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
                         data-cursor="text"
@@ -183,22 +189,42 @@ export default function GameView({
         );
 
     return (
-        <div className="flex flex-col md:flex-row w-full h-full">
+        <div className={`flex flex-col ${soloMode ? "" : "md:flex-row"} w-full h-full`}>
             {explosionLayer}
             {notice && <GameNotice {...notice} />}
 
-            {result !== null && (
+            {(isPaused || result !== null) && (
                 <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-full max-w-sm px-4 flex flex-col gap-4 items-center animate-appear">
                         <div
                             data-cursor="text"
                             className="font-bold text-4xl text-center wrap-break-words"
                         >
-                            {loserNames?.length
-                                ? `${loserNames.join(", ")}の負け`
-                                : `${lostDisplayName ?? "相手"}の負け`}
+                            {isPaused
+                                ? "一時停止"
+                                : loserNames?.length
+                                  ? `${loserNames.join(", ")}の負け`
+                                  : `${lostDisplayName ?? "相手"}の負け`}
                         </div>
-                        {stopRecommended && onStop ? (
+                        {isPaused ? (
+                            <>
+                                <Button
+                                    iconName="play"
+                                    className="w-full"
+                                    variant="primary"
+                                    onClick={onResume}
+                                >
+                                    再開
+                                </Button>
+                                <Button
+                                    iconName="rotateCcw"
+                                    className="w-full"
+                                    onClick={onPlayAgain}
+                                >
+                                    もう一度プレイ
+                                </Button>
+                            </>
+                        ) : stopRecommended && onStop ? (
                             <>
                                 <Button
                                     iconName="check"
@@ -236,7 +262,7 @@ export default function GameView({
                 </div>
             )}
 
-            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col">
+            <div className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}>
                 {onReload && (!room || connection) && (
                     <ReconnectStatus
                         reconnecting={isReconnecting}
@@ -245,7 +271,7 @@ export default function GameView({
                     />
                 )}
                 <div
-                    inert={isReconnecting}
+                    inert={isReconnecting || isPaused}
                     className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room && !serverError ? (
@@ -373,25 +399,34 @@ export default function GameView({
                 </div>
             </div>
 
-            <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+            {soloMode ? (
                 <div
-                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
+                    className="absolute top-0 left-0 pl-4 w-full max-w-[calc(100%-23rem)] truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     {room?.title}
                 </div>
-                <UsersView
-                    bombRef={bombRef}
-                    exploded={result !== null}
-                    users={users}
-                    positions={positions}
-                    userId={userId}
-                    currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
-                    bombs={bombs}
-                    loserIds={loserIds}
-                />
-            </div>
+            ) : (
+                <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+                    <div
+                        className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
+                        data-cursor="text"
+                    >
+                        {room?.title}
+                    </div>
+                    <UsersView
+                        bombRef={bombRef}
+                        exploded={result !== null}
+                        users={users}
+                        positions={positions}
+                        userId={userId}
+                        currentTurn={isStarted ? currentTurn : null}
+                        bombStatus={bombStatus}
+                        bombs={bombs}
+                        loserIds={loserIds}
+                    />
+                </div>
+            )}
         </div>
     );
 }
