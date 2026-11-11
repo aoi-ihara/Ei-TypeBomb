@@ -1,4 +1,3 @@
-import { isAllowedTypingAnswer } from "@/lib/room/importWords";
 import type { Item } from "@/type";
 
 export const validateEmail = (email?: string) => {
@@ -61,12 +60,8 @@ export const validateItems = (items?: Item[]) => {
                 return "問題文は32文字以内で入力してください。";
             }
 
-            if (item.answer.length > MAX_TEXT_LENGTH) {
-                return "回答は32文字以内で入力してください。";
-            }
-
-            if (!isAllowedTypingAnswer(item.answer)) {
-                return "回答には英数字、ひらがな、スペース、ハイフン、長音符（ー）、句読点（,.!?、。！？）のみ使用できます。";
+            if (!item.answer.trim()) {
+                return "回答を入力してください。";
             }
         }
     }
