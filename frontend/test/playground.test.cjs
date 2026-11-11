@@ -1218,6 +1218,40 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
     }
 });
 
+test("fallback answer-mode observations never enter authenticated sync queue", async () => {
+    const m = load("lib/playground/memory.ts");
+    const ref = (current) => ({ current });
+    const item = { id: "a", type: "typed_recall", answer: "abcdefgh" };
+    const pending = ref(new Map());
+    const memory = ref({});
+    let syncCalls = 0;
+    const globals = {
+        ...m,
+        room: { id: "r" },
+        items: [item],
+        authenticatedUserIdRef: ref("u"),
+        memoryPersistenceDisabledRef: ref(true),
+        memoryByItemRef: memory,
+        pendingMemoryRef: pending,
+        setMemoryByItem: () => {},
+        syncPlaygroundMemory: async () => {
+            syncCalls++;
+            return null;
+        },
+    };
+    const actual = clientCallbacks(
+        ["updateAnswerModeMemory", "flushPendingMemory"],
+        globals,
+    );
+
+    actual.updateAnswerModeMemory(item, "input", true);
+    await actual.flushPendingMemory();
+
+    assert(memory.current.a, "the current session still updates its memory");
+    assert.equal(pending.current.size, 0);
+    assert.equal(syncCalls, 0);
+});
+
 test("actual input callbacks retain a wrong character through Backspace correction", () => {
     const source = fs.readFileSync(
         path.join(root, "components/recall/TypingView.tsx"),
