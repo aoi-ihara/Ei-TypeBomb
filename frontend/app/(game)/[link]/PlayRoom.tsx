@@ -44,21 +44,20 @@ export default function PlayRoom({
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
-    const [displayName, setDisplayName] = useState(() => {
+    const [displayName, setDisplayName] = useState("");
+    const [answerMode, setAnswerMode] = useState<AnswerMode>("auto");
+
+    useEffect(() => {
         try {
-            return (localStorage.getItem("display-name") ?? "").slice(0, 50);
-        } catch {
-            return "";
-        }
-    });
-    const [answerMode, setAnswerMode] = useState<AnswerMode>(() => {
-        try {
+            setDisplayName(
+                (localStorage.getItem("display-name") ?? "").slice(0, 50),
+            );
             const saved = localStorage.getItem("answer-mode");
-            return isAnswerMode(saved) ? saved : "auto";
+            if (isAnswerMode(saved)) setAnswerMode(saved);
         } catch {
-            return "auto";
+            // The dialog remains usable when browser storage is unavailable.
         }
-    });
+    }, []);
     const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
     const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
     const answerModeSelection = Math.max(
@@ -222,7 +221,9 @@ export default function PlayRoom({
                 title={title}
                 description={
                     showPasswordField && !alreadyAuthorized
-                        ? "ルームのパスワードを入力してください。"
+                        ? isOnline
+                            ? "表示名・出題形式・パスワードを入力してください。"
+                            : "出題形式とパスワードを入力してください。"
                         : isOnline
                           ? "表示名と出題形式を選択してください。"
                           : "出題形式を選択してください。"
