@@ -316,6 +316,33 @@ export const recordUserAnswer = (
     state.current = null;
 };
 
+// A correct choice proves recognition, not free recall. Advance the current
+// question without changing FSRS stability or clearing a struggle hold.
+export const recordRecognitionAnswer = (
+    state: SchedulerState,
+    itemId: string,
+): boolean => {
+    const selected = state.current;
+    if (!selected || selected.itemId !== itemId) return false;
+
+    state.userAnswered[itemId] = (state.userAnswered[itemId] ?? 0) + 1;
+    if (selected.retry) {
+        delete state.retries[itemId];
+        const successes = selected.retry.successCount + 1;
+        if (successes < REQUIRED_RETRY_SUCCESSES) {
+            enqueueRetry(
+                state,
+                itemId,
+                "uncertain_recall",
+                successes,
+                CONFIRM_RETRY_GAP,
+            );
+        }
+    }
+    state.current = null;
+    return true;
+};
+
 export const chooseNextUserItem = (
     state: SchedulerState,
     memories: Record<string, ItemMemoryState> = {},

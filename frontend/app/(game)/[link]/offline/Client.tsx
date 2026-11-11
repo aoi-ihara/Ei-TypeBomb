@@ -13,6 +13,8 @@ import type { OfflineVoiceReading } from "@/lib/settings";
 import posthog from "posthog-js";
 import {
     applyRecallObservation,
+    recordAnswerModeResult,
+    isValidAnswerModeStats,
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
@@ -28,6 +30,7 @@ import {
     nextSuspendedReviewAt,
     chooseNextUserItem,
     recordUserAnswer,
+    recordRecognitionAnswer,
     type SchedulerState,
 } from "@/lib/playground/scheduler";
 import {
@@ -36,9 +39,11 @@ import {
 } from "@/lib/playground/memory-client";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
+import type { AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
+    answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
     initialOfflineVoiceReading: OfflineVoiceReading;
@@ -75,7 +80,9 @@ const loadGuestMemory = (
                     (m.lastPresentedAt == null ||
                         !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
                     (m.updatedAt == null ||
-                        !Number.isNaN(Date.parse(m.updatedAt)))
+                        !Number.isNaN(Date.parse(m.updatedAt))) &&
+                    (m.answerModeStats == null ||
+                        isValidAnswerModeStats(m.answerModeStats))
                 );
             }),
         ) as Record<string, ItemMemoryState>;
@@ -146,6 +153,7 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
+    answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
     initialOfflineVoiceReading,
@@ -570,6 +578,51 @@ export default function Client({
         [room.id, items],
     );
 
+    const updateAnswerModeMemory = useCallback(
+        (item: Item, mode: "selection" | "input", success: boolean) => {
+            const userId =
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
+            const freshestMemory = authenticatedUserIdRef.current
+                ? memoryByItemRef.current
+                : mergeGuestMemory(
+                      memoryByItemRef.current,
+                      loadGuestMemory(
+                          room.id,
+                          new Set(items.map((entry) => entry.id)),
+                      ),
+                  );
+            const updated = recordAnswerModeResult({
+                memory: freshestMemory[item.id],
+                userId,
+                roomId: room.id,
+                itemId: item.id,
+                mode,
+                success,
+            });
+            let nextMemoryByItem = {
+                ...freshestMemory,
+                [item.id]: updated,
+            };
+            if (authenticatedUserIdRef.current) {
+                pendingMemoryRef.current.set(item.id, updated);
+                try {
+                    localStorage.setItem(
+                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
+                        JSON.stringify([...pendingMemoryRef.current.values()]),
+                    );
+                } catch {
+                    // The current session can continue if storage is unavailable.
+                }
+            } else {
+                nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
+            }
+            memoryByItemRef.current = nextMemoryByItem;
+            setMemoryByItem(nextMemoryByItem);
+            return updated;
+        },
+        [room.id, items],
+    );
+
     const cachePendingMemory = useCallback(() => {
         const userId = authenticatedUserIdRef.current;
         if (!userId) return;
@@ -666,7 +719,10 @@ export default function Client({
         [isPaused, updateLocalMemory],
     );
 
-    const handleInputChange = useCallback((input: string) => {
+    const handleInputChange = useCallback((input: string, failed?: boolean) => {
+        if (failed && !isPaused && currentItemRef.current) {
+            updateAnswerModeMemory(currentItemRef.current, "input", false);
+        }
         const now = Date.now();
         const previousLength = previousInputLengthRef.current;
         const previousInputAt = previousInputAtRef.current;
@@ -686,7 +742,29 @@ export default function Client({
         previousInputLengthRef.current = input.length;
         previousInputAtRef.current = input.length === 0 ? null : now;
         setCurrentInput(input);
-    }, []);
+    }, [isPaused, updateAnswerModeMemory]);
+
+    const handleSelectionAnswer = useCallback(
+        (correct: boolean) => {
+            const item = currentItemRef.current;
+            if (!item || isPaused) return;
+            if (correct) {
+                const scheduler = schedulerRef.current;
+                if (scheduler) {
+                    recordRecognitionAnswer(scheduler, item.id);
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                        room.id,
+                        scheduler,
+                    );
+                }
+                recallProgressRef.current = null;
+            }
+            updateAnswerModeMemory(item, "selection", correct);
+        },
+        [isPaused, room.id, updateAnswerModeMemory],
+    );
 
     const handleSuccess = useCallback(() => {
         if (isPaused || !currentItemRef.current) return;
@@ -871,26 +949,39 @@ export default function Client({
                             aria-labelledby="offline-instructions-title"
                         >
                             <div className="flex flex-col gap-4">
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="keyboard" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        単語は英語でも日本語でも、
-                                        <strong>半角</strong>
-                                        で入力してください。
-                                    </span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="lightbulb" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        オフラインプレイの場合は、
-                                        <strong>スペースキーを2回押す</strong>
-                                        と解答を見ることができます。
-                                    </span>
-                                </div>
+                                {answerMode === "selection" ? (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="list-check" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            表示された選択肢から、正しい回答を選んでください。
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="keyboard" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                入力問題では、英語・日本語ともに
+                                                <strong>半角</strong>
+                                                で入力してください。
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="lightbulb" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                オフラインプレイの場合は、
+                                                <strong>スペースキーを2回押す</strong>
+                                                と解答を見ることができます。
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                                 {!isSignedIn && (
                                     <div className="flex gap-2">
                                         <span className="shrink-0">
@@ -926,6 +1017,11 @@ export default function Client({
                 result={null}
                 soloMode
                 isPaused={isPaused}
+                answerMode={answerMode}
+                answerModeMemory={
+                    currentItem ? memoryByItem[currentItem.id] : undefined
+                }
+                onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}

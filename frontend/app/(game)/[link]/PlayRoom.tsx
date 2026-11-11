@@ -6,6 +6,12 @@ import { startNavigationProgress } from "@/lib/navigation-progress";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import MorphDialog from "@/components/ui/MorphDialog";
+import Selection from "@/components/ui/Selection";
+import {
+    getAnswerModeOptions,
+    isAnswerMode,
+    type AnswerMode,
+} from "@/lib/answer-mode";
 import { PopUp } from "@/components/ui/PopUp";
 import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
 import { getRoomStatusFromId } from "@/lib/room/get";
@@ -23,12 +29,14 @@ export default function PlayRoom({
     roomId,
     alreadyAuthorized,
     itemCount,
+    hasTypingAnswers,
     isOwner,
     link,
 }: {
     roomId: string;
     alreadyAuthorized: boolean;
     itemCount: number;
+    hasTypingAnswers: boolean;
     isOwner: boolean;
     link: string;
 }) {
@@ -36,17 +44,34 @@ export default function PlayRoom({
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
-    const [displayName, setDisplayName] = useState(() => {
+    const [displayName, setDisplayName] = useState("");
+    const [answerMode, setAnswerMode] = useState<AnswerMode>("auto");
+
+    useEffect(() => {
         try {
-            return (localStorage.getItem("display-name") ?? "").slice(0, 50);
+            setDisplayName(
+                (localStorage.getItem("display-name") ?? "").slice(0, 50),
+            );
+            const saved = localStorage.getItem("answer-mode");
+            if (isAnswerMode(saved)) setAnswerMode(saved);
         } catch {
-            return "";
+            // The dialog remains usable when browser storage is unavailable.
         }
-    });
+    }, []);
+    const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
+    const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
+    const answerModeSelection = Math.max(
+        0,
+        availableAnswerModes.findIndex(
+            (option) => option.value === effectiveAnswerMode,
+        ),
+    );
     const [activeDialog, setActiveDialog] = useState<PlayMode | null>(null);
     const [joining, setJoining] = useState<PlayMode | null>(null);
     const [turnstile, setTurnstile] = useState(false);
     const [turnstileMode, setTurnstileMode] = useState<PlayMode | null>(null);
+    const [turnstileAnswerMode, setTurnstileAnswerMode] =
+        useState<AnswerMode>("auto");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -80,19 +105,25 @@ export default function PlayRoom({
         };
     }, [roomId, alreadyAuthorized]);
 
-    const navigateToMode = async (mode: PlayMode) => {
+    const navigateToMode = async (
+        mode: PlayMode,
+        selectedAnswerMode: AnswerMode,
+    ) => {
         await recordRoomPlay(roomId, mode);
         posthog.capture("room_entered", {
             room_id: roomId,
             play_mode: mode,
         });
         startNavigationProgress();
-        router.push("/" + link + "/" + mode);
+        router.push(
+            "/" + link + "/" + mode + "?answerMode=" + selectedAnswerMode,
+        );
     };
 
     const handleSignIn = async (
         turnstileToken: string | undefined,
         mode: PlayMode,
+        selectedAnswerMode: AnswerMode,
     ) => {
         if (itemCount === 0) {
             setError(
@@ -114,7 +145,7 @@ export default function PlayRoom({
             );
 
             if (result === null) {
-                await navigateToMode(mode);
+                await navigateToMode(mode, selectedAnswerMode);
                 return;
             }
 
@@ -141,6 +172,12 @@ export default function PlayRoom({
         }
 
         setError("");
+        const selectedAnswerMode = effectiveAnswerMode;
+        try {
+            localStorage.setItem("answer-mode", selectedAnswerMode);
+        } catch {
+            // The selected mode still applies to this session.
+        }
         if (mode === "online") {
             if (!validDisplayName(displayName)) {
                 setError("表示名を入力してください（50文字以内）。");
@@ -152,15 +189,16 @@ export default function PlayRoom({
         }
         if (showPasswordField && !alreadyAuthorized) {
             setTurnstileMode(mode);
+            setTurnstileAnswerMode(selectedAnswerMode);
             setTurnstile(true);
             return;
         }
-        void handleSignIn(undefined, mode);
+        void handleSignIn(undefined, mode, selectedAnswerMode);
     };
 
     const renderModeDialog = (mode: PlayMode) => {
         const isOnline = mode === "online";
-        const title = isOnline ? "表示名を入力" : "オフライン";
+        const title = isOnline ? "表示名と出題形式" : "出題形式";
         const isActive = activeDialog === mode;
 
         return (
@@ -170,14 +208,7 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
-                            if (
-                                !isOnline &&
-                                (!showPasswordField || alreadyAuthorized)
-                            ) {
-                                handleContinue(mode);
-                            } else {
-                                setActiveDialog(mode);
-                            }
+                            setActiveDialog(mode);
                         }}
                         className="w-full"
                         variant="primary"
@@ -190,10 +221,12 @@ export default function PlayRoom({
                 title={title}
                 description={
                     showPasswordField && !alreadyAuthorized
-                        ? "ルームに参加するための情報を入力してください。"
+                        ? isOnline
+                            ? "表示名・出題形式・パスワードを入力してください。"
+                            : "出題形式とパスワードを入力してください。"
                         : isOnline
-                          ? ""
-                          : undefined
+                          ? "表示名と出題形式を選択してください。"
+                          : "出題形式を選択してください。"
                 }
                 alignment="vertical"
                 size="middle"
@@ -211,6 +244,17 @@ export default function PlayRoom({
                         disabled={joining !== null}
                     />
                 )}
+                <div className="w-full flex flex-col gap-2">
+                    <Selection
+                        items={availableAnswerModes.map(
+                            (option) => option.label,
+                        )}
+                        selection={answerModeSelection}
+                        onSelected={(index) =>
+                            setAnswerMode(availableAnswerModes[index].value)
+                        }
+                    />
+                </div>
                 {showPasswordField && !alreadyAuthorized && (
                     <Input
                         value={roomPassword}
@@ -284,7 +328,8 @@ export default function PlayRoom({
                         setTurnstile(false);
                         const mode = turnstileMode;
                         setTurnstileMode(null);
-                        if (mode) void handleSignIn(token, mode);
+                        if (mode)
+                            void handleSignIn(token, mode, turnstileAnswerMode);
                     }}
                     onFail={(reason) => {
                         setTurnstile(false);

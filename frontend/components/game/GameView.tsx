@@ -10,7 +10,9 @@ import type {
     LearningMode,
     RecallObservation,
     RecallProgress,
+    ItemMemoryState,
 } from "@/lib/playground/memory";
+import type { AnswerMode } from "@/lib/answer-mode";
 import { getRoomItems } from "@/lib/item";
 import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
 
@@ -59,6 +61,9 @@ type Props = {
     stopRecommended?: boolean;
     soloMode?: boolean;
     isPaused?: boolean;
+    answerMode: AnswerMode;
+    answerModeMemory?: ItemMemoryState;
+    onSelectionAnswer?: (correct: boolean) => void;
     onResume?: () => void;
     onStop?: () => void;
 };
@@ -108,6 +113,9 @@ export default function GameView({
     stopRecommended = false,
     soloMode = false,
     isPaused = false,
+    answerMode,
+    answerModeMemory,
+    onSelectionAnswer,
     onResume,
     onStop,
 }: Readonly<Props>) {
@@ -157,6 +165,13 @@ export default function GameView({
                 <ItemView
                     key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
                     item={currentItem}
+                    items={getRoomItems(room)}
+                    answerMode={answerMode}
+                    answerModeMemory={answerModeMemory}
+                    onSelectionAnswer={(correct) => {
+                        if (userId === currentTurnUser?.id)
+                            onSelectionAnswer?.(correct);
+                    }}
                     failureCount={failureCount}
                     remoteHintLength={remoteHintLength}
                     onHintChange={onHintChange}

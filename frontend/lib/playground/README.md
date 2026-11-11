@@ -126,3 +126,24 @@ The playground uses manual hints; multiplayer retains the existing timed prefix 
 This is the first implementation of the hint proposal, not a validated retention improvement. Optional timed assistance, semantic cues, cross-session cue fading, and memory-model calibration remain future experiments. The six-second suggestion and cue thresholds are product hypotheses. Compare next-day/seven-day recall without letter hints at matched study time, along with practice throughput and abandonment.
 
 Research: [Qu et al. (2026), diminishing cues](https://pubmed.ncbi.nlm.nih.gov/42322471/) supports testing reduced support across practice, but its abstract does not establish an optimal timer. [van den Broek et al. (2019)](https://doi.org/10.1037/xap0000212) cautions that elaborate hints can consume repetition time without improving later unaided recall. The implementation therefore offers short, optional assistance and direct answer feedback rather than a mandatory long hint ladder.
+
+## Answer formats
+
+Each player chooses `selection`, `auto`, or `input` when entering a room.
+Selection questions use up to four unique answers from the same room, with the
+correct answer and distractors shuffled for each presented turn. Duplicate
+answers are excluded to avoid ambiguous options.
+
+Automatic mode starts uncertain or new items as recognition choices. Three
+consecutive correct choices promote a typable item to input; an independent,
+unaided typed recall keeps it in input for up to seven days. A failed typed
+attempt or hint-assisted completion returns it to recognition practice.
+Existing memory rows without answer-mode statistics can enter input when they
+have at least three reviews and predicted retrievability of 0.7 or higher.
+
+Typing support is determined per answer. Unsupported characters always force
+that item to selection, even in input mode. If no item in a room is typable,
+the room offers selection only. Answer text is no longer restricted to the
+typing character set or the old 32-character limit; empty answers remain
+invalid. Recognition and typed recall statistics are stored separately in
+`ei_typebomb_item_memory.answer_mode_stats`.

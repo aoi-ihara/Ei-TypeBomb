@@ -1,6 +1,9 @@
 import {
     applyRecallObservation,
     evaluateRecall,
+    recordAnswerModeResult,
+    isValidAnswerModeStats,
+    type AnswerModeResult,
     type ItemMemoryState,
     type RecallObservation,
 } from "../playground/memory";
@@ -10,6 +13,7 @@ import {
     loadSchedulerState,
     saveSchedulerState,
     recordUserAnswer,
+    recordRecognitionAnswer,
     type SchedulerState,
 } from "../playground/scheduler";
 
@@ -48,7 +52,9 @@ export const loadOnlinePendingMemory = (
                 allowed.has(value.itemId) &&
                 Number.isFinite(value.stability) &&
                 Number.isFinite(value.difficulty) &&
-                Number.isInteger(value.reviewCount),
+                Number.isInteger(value.reviewCount) &&
+                (value.answerModeStats == null ||
+                    isValidAnswerModeStats(value.answerModeStats)),
         );
     } catch {
         return [];
@@ -88,7 +94,9 @@ export const loadOnlineGuestMemory = (
                     memory.userId === guestUserId &&
                     typeof memory.stability === "number" &&
                     typeof memory.difficulty === "number" &&
-                    typeof memory.reviewCount === "number"
+                    typeof memory.reviewCount === "number" &&
+                    (memory.answerModeStats == null ||
+                        isValidAnswerModeStats(memory.answerModeStats))
                 );
             }),
         ) as Record<string, ItemMemoryState>;
@@ -166,6 +174,72 @@ export const nextUnsentOnlineRecommendation = (
     return { itemId, turn };
 };
 
+const reconcileOnlineSchedulerItem = (
+    scheduler: SchedulerState,
+    itemId: string,
+) => {
+    if (scheduler.current?.itemId === itemId) return;
+    const selected = scheduler.current;
+    if (selected) {
+        if (
+            selected.advancesCycle &&
+            !scheduler.cycleQueue.includes(selected.itemId)
+        ) scheduler.cycleQueue.unshift(selected.itemId);
+        if (selected.retry)
+            scheduler.retries[selected.itemId] = selected.retry;
+    } else {
+        scheduler.turn++;
+    }
+    const retry = scheduler.retries[itemId];
+    const advancesCycle = scheduler.cycleQueue.includes(itemId);
+    if (advancesCycle) {
+        scheduler.cycleQueue = scheduler.cycleQueue.filter(
+            (id) => id !== itemId,
+        );
+        if (scheduler.cycleQueue.length === 0) scheduler.completedCycles++;
+    }
+    delete scheduler.retries[itemId];
+    scheduler.current = {
+        itemId,
+        turn: scheduler.turn,
+        cycle: scheduler.cycle,
+        reason: retry ? "retry" : "cycle",
+        retry,
+        advancesCycle,
+    };
+};
+
+export const recordOnlineAnswerModeResult = (
+    session: OnlineMemorySession,
+    itemId: string,
+    mode: AnswerModeResult,
+    success: boolean,
+): ItemMemoryState | null => {
+    if (!session.scheduler.itemIds.includes(itemId)) return null;
+    const updated = recordAnswerModeResult({
+        memory: session.memory[itemId],
+        userId: session.userId ?? guestUserId,
+        roomId: session.roomId,
+        itemId,
+        mode,
+        success,
+    });
+    if (mode === "selection" && success) {
+        reconcileOnlineSchedulerItem(session.scheduler, itemId);
+        recordRecognitionAnswer(session.scheduler, itemId);
+    }
+    session.memory = { ...session.memory, [itemId]: updated };
+    if (session.userId) session.pending.set(itemId, updated);
+    else saveOnlineGuestMemory(session);
+    saveSchedulerState(
+        "online",
+        session.userId ?? guestUserId,
+        session.roomId,
+        session.scheduler,
+    );
+    return updated;
+};
+
 export const recordOnlineRecall = (
     session: OnlineMemorySession,
     itemId: string,
@@ -173,40 +247,7 @@ export const recordOnlineRecall = (
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const scheduler = session.scheduler;
-    const selected = scheduler.current;
-    if (selected?.itemId !== itemId) {
-        // A server may have fallen back to random before the suggestion arrived.
-        // Reconcile against the actual displayed item, rather than crediting
-        // an unpresented recommendation.
-        if (selected) {
-            if (
-                selected.advancesCycle &&
-                !scheduler.cycleQueue.includes(selected.itemId)
-            )
-                scheduler.cycleQueue.unshift(selected.itemId);
-            if (selected.retry)
-                scheduler.retries[selected.itemId] = selected.retry;
-        } else {
-            scheduler.turn++;
-        }
-        const entry = scheduler.retries[itemId];
-        const advancesCycle = scheduler.cycleQueue.includes(itemId);
-        if (advancesCycle) {
-            scheduler.cycleQueue = scheduler.cycleQueue.filter(
-                (id) => id !== itemId,
-            );
-            if (scheduler.cycleQueue.length === 0) scheduler.completedCycles++;
-        }
-        delete scheduler.retries[itemId];
-        scheduler.current = {
-            itemId,
-            turn: scheduler.turn,
-            cycle: scheduler.cycle,
-            reason: entry ? "retry" : "cycle",
-            retry: entry,
-            advancesCycle,
-        };
-    }
+    reconcileOnlineSchedulerItem(scheduler, itemId);
 
     const previous = session.memory[itemId];
     const exposureAt = previous?.lastPresentedAt;

@@ -31,6 +31,7 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import type { RecallObservation } from "@/lib/playground/memory";
+import type { AnswerMode } from "@/lib/answer-mode";
 import {
     createOnlineMemorySession,
     cacheOnlinePendingMemory,
@@ -38,11 +39,13 @@ import {
     loadOnlineGuestMemory,
     nextUnsentOnlineRecommendation,
     recordOnlineRecall,
+    recordOnlineAnswerModeResult,
     type OnlineMemorySession,
 } from "@/lib/online/memory-session";
 
 type Props = {
     clusterServers: string[];
+    answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
@@ -52,12 +55,13 @@ const CONNECTING_MESSAGE = "接続中…";
 const UNAVAILABLE_MESSAGE =
     "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
-const MAX_CURRENT_INPUT_LENGTH = 32;
+const MAX_CURRENT_INPUT_LENGTH = 4096;
 // Faster cues in competitive play; Playground keeps its existing pacing.
 const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
 
 export default function Clinet({
     clusterServers,
+    answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Props) {
@@ -1130,6 +1134,33 @@ export default function Clinet({
                     focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
                 }
                 currentInput={currentInput}
+                answerMode={answerMode}
+                answerModeMemory={
+                    focusedItem
+                        ? onlineMemoryRef.current?.memory[focusedItem.id]
+                        : undefined
+                }
+                onSelectionAnswer={(correct) => {
+                    if (
+                        !focusedItem ||
+                        !focusedBomb ||
+                        !userId ||
+                        users[focusedBomb.holder]?.id !== userId
+                    ) return;
+                    const session = onlineMemoryRef.current;
+                    if (!session || session.roomId !== room?.id) return;
+                    const updated = recordOnlineAnswerModeResult(
+                        session,
+                        focusedItem.id,
+                        "selection",
+                        correct,
+                    );
+                    if (!updated) return;
+                    cacheOnlinePendingMemory(session);
+                    setOnlineMemoryReady((revision) => revision + 1);
+                    if (correct) publishOnlineRecommendation();
+                    void flushOnlineMemory();
+                }}
                 hintDelaysMs={ONLINE_HINT_DELAYS_MS}
                 remoteHintLength={
                     hintLengths[focusedBomb?.id ?? ""] ??
@@ -1170,6 +1201,7 @@ export default function Clinet({
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
+                    setOnlineMemoryReady((revision) => revision + 1);
                     publishOnlineRecommendation();
                     void flushOnlineMemory();
                 }}
@@ -1179,6 +1211,28 @@ export default function Clinet({
                     socketRef.current?.emit("word:success");
                 }}
                 onChangeInput={(input, failed) => {
+                    if (
+                        failed &&
+                        focusedItem &&
+                        focusedBomb &&
+                        userId &&
+                        users[focusedBomb.holder]?.id === userId
+                    ) {
+                        const session = onlineMemoryRef.current;
+                        if (session && session.roomId === room?.id) {
+                            const updated = recordOnlineAnswerModeResult(
+                                session,
+                                focusedItem.id,
+                                "input",
+                                false,
+                            );
+                            if (updated) {
+                                cacheOnlinePendingMemory(session);
+                                setOnlineMemoryReady((revision) => revision + 1);
+                                void flushOnlineMemory();
+                            }
+                        }
+                    }
                     const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
                     socketRef.current?.emit(
                         "currentInput",
