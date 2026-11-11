@@ -746,15 +746,16 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused) return;
             if (correct) {
-                recordRecognitionAnswer(schedulerRef.current!, item.id);
                 const scheduler = schedulerRef.current;
-                if (scheduler)
+                if (scheduler) {
+                    recordRecognitionAnswer(scheduler, item.id);
                     saveSchedulerState(
                         "playground",
                         authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
                         room.id,
                         scheduler,
                     );
+                }
                 recallProgressRef.current = null;
             }
             updateAnswerModeMemory(item, "selection", correct);
