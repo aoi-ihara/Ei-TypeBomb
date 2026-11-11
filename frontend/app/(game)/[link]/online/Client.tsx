@@ -53,6 +53,8 @@ const UNAVAILABLE_MESSAGE =
     "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 const MAX_CURRENT_INPUT_LENGTH = 32;
+// Faster cues in competitive play; Playground keeps its existing pacing.
+const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
 
 export default function Clinet({
     clusterServers,
@@ -1133,7 +1135,7 @@ export default function Clinet({
                     focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
                 }
                 currentInput={currentInput}
-                hintDelaysMs={[700, 1_000, 1_400, 1_800]}
+                hintDelaysMs={ONLINE_HINT_DELAYS_MS}
                 remoteHintLength={
                     hintLengths[focusedBomb?.id ?? ""] ??
                     focusedBomb?.hintLength ??
