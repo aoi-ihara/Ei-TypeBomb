@@ -1104,14 +1104,6 @@ export default function Clinet({
               ? "failed"
               : "reconnecting";
 
-    const handleReload = () => {
-        posthog.capture("game_reload_clicked", {
-            has_room: room !== null,
-            connection_failed: connection === "failed",
-        });
-        window.location.reload();
-    };
-
     const focusedBomb =
         room?.bombs?.find((bomb) => users[bomb.holder]?.id === userId) ??
         room?.bombs?.find(
@@ -1151,7 +1143,6 @@ export default function Clinet({
                 isStarted={isStarted}
                 isSpectator={isSpectator}
                 connection={connection}
-                onReload={handleReload}
                 notice={notice}
                 result={result}
                 lostDisplayName={lostDisplayName}
