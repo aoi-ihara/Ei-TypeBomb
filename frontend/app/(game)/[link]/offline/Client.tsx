@@ -191,12 +191,7 @@ export default function Client({
     const currentItemRef = useRef<Item | null>(null);
     const [isStarted, setIsStarted] = useState(false);
     const [showInstructions, setShowInstructions] = useState(true);
-    const [notice, setNotice] = useState<GameNoticeProps>({
-        visible: true,
-        iconName: "keyboard",
-        title: "半角で入力してください",
-        description: "単語は日本語でも英語でも、半角で入力してください。",
-    });
+    const [notice, setNotice] = useState<GameNoticeProps>();
     const [isPaused, setIsPaused] = useState(false);
     const [currentInput, setCurrentInput] = useState("");
 
@@ -214,8 +209,11 @@ export default function Client({
 
     useEffect(() => {
         const timer = window.setTimeout(() => {
-            setNotice((current) => ({ ...current, visible: false }));
+            setNotice((current) =>
+                current ? { ...current, visible: false } : undefined,
+            );
         }, 5000);
+
         return () => window.clearTimeout(timer);
     }, []);
 
@@ -283,9 +281,7 @@ export default function Client({
                         pendingMemoryRef.current.set(pending.itemId, pending);
                     }
                 }
-            } catch {
-                // A damaged/unavailable local cache must not prevent practice.
-            }
+            } catch {}
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
                 loadSchedulerState(
@@ -837,10 +833,11 @@ export default function Client({
                 preGameContent={
                     memoryReady && nextReviewAt !== null ? (
                         <div className="flex flex-col gap-4 px-2" role="status">
-                            <p className="font-bold">すべての単語が復習待ちです</p>
+                            <p className="font-bold">
+                                すべての単語が復習待ちです
+                            </p>
                             <p>
-                                難しい単語はいったん保留しました。
-                                次の復習は
+                                難しい単語はいったん保留しました。 次の復習は
                                 {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
                                     {
@@ -863,7 +860,9 @@ export default function Client({
                             <Button
                                 className="w-full"
                                 iconName="arrowLeft"
-                                onClick={() => router.push("/" + (room.link ?? room.id))}
+                                onClick={() =>
+                                    router.push("/" + (room.link ?? room.id))
+                                }
                             >
                                 ルームへ戻る
                             </Button>
