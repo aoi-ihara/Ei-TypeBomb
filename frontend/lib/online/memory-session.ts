@@ -1,6 +1,8 @@
 import {
     applyRecallObservation,
     evaluateRecall,
+    recordAnswerModeResult,
+    type AnswerModeResult,
     type ItemMemoryState,
     type RecallObservation,
 } from "../playground/memory";
@@ -164,6 +166,35 @@ export const nextUnsentOnlineRecommendation = (
     const turn = session.scheduler.turn;
     if (last?.itemId === itemId && last.turn === turn) return null;
     return { itemId, turn };
+};
+
+export const recordOnlineAnswerModeResult = (
+    session: OnlineMemorySession,
+    itemId: string,
+    mode: AnswerModeResult,
+    success: boolean,
+): ItemMemoryState | null => {
+    if (!session.scheduler.itemIds.includes(itemId)) return null;
+    const updated = recordAnswerModeResult({
+        memory: session.memory[itemId],
+        userId: session.userId ?? guestUserId,
+        roomId: session.roomId,
+        itemId,
+        mode,
+        success,
+    });
+    if (mode === "selection" && success)
+        recordRecognitionAnswer(session.scheduler, itemId);
+    session.memory = { ...session.memory, [itemId]: updated };
+    if (session.userId) session.pending.set(itemId, updated);
+    else saveOnlineGuestMemory(session);
+    saveSchedulerState(
+        "online",
+        session.userId ?? guestUserId,
+        session.roomId,
+        session.scheduler,
+    );
+    return updated;
 };
 
 export const recordOnlineRecall = (
