@@ -57,7 +57,7 @@ export default function UsersView({
                         >
                             <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb">
                                 <div
-                                    className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
+                                    className="absolute flex-col pointer-events-none rounded-full transition-all font-bold duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
                                         left: `calc(${position.w / 2}px - 64px)`,
                                         bottom: `calc(${position.h}px + 4px)`,

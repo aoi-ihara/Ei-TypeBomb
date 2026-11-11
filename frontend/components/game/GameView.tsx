@@ -34,7 +34,6 @@ type Props = {
     isSpectator?: boolean;
     serverError?: string | null;
     connection?: "reconnecting" | "failed" | null;
-    onReload?: () => void;
     notice?: GameNoticeProps;
     result: boolean | null;
     lostDisplayName?: string | null;
@@ -84,7 +83,6 @@ export default function GameView({
     isSpectator = false,
     serverError = null,
     connection = null,
-    onReload,
     notice,
     result,
     lostDisplayName,
