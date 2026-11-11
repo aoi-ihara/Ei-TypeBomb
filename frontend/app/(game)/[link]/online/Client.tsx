@@ -14,6 +14,9 @@ import {
 import { useBombExplosion } from "@/components/game/BombExplosion";
 import GameView from "@/components/game/GameView";
 import GameSettings from "@/components/settings/GameSettings";
+import Input from "@/components/ui/Input";
+import Button from "@/components/ui/Button";
+import Shell from "@/components/layout/Shell";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
 import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
@@ -70,14 +73,26 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName] = useState<string>(() => {
+    const [displayName, setDisplayName] = useState<string>(() => {
         if (typeof window === "undefined") return "";
-        return localStorage.getItem("display-name") ?? "";
+        try {
+            return localStorage.getItem("display-name") ?? "";
+        } catch {
+            return "";
+        }
     });
+    // Always ask before joining, even when a saved display name exists.
+    const [displayNameConfirmed, setDisplayNameConfirmed] = useState(false);
     const [bombStatus, setBombStatus] = useState<number | null>(0);
 
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const onlineMemoryRef = useRef<OnlineMemorySession | null>(null);
+    const lastRecommendationRef = useRef<{
+        socket: ReturnType<typeof io>;
+        turn: number;
+        itemId: string;
+    } | null>(null);
+    const [authSessionGeneration, setAuthSessionGeneration] = useState(0);
     const memoryFlushRef = useRef<Promise<void> | null>(null);
     const [onlineMemoryReady, setOnlineMemoryReady] = useState(0);
 
@@ -198,18 +213,36 @@ export default function Clinet({
         };
     }, [memoryRoomId]);
 
-    useEffect(() => {
+    const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
-        if (
-            !session ||
-            session.roomId !== room?.id ||
-            !userId ||
-            !users.some((player) => player.id === userId)
-        )
-            return;
+        const socket = socketRef.current;
+        if (!session || !socket) return;
         const itemId = nextOnlineRecommendation(session);
-        if (itemId) socketRef.current?.emit("item:recommend", { itemId });
-    }, [room, userId, users, onlineMemoryReady]);
+        if (!itemId) return;
+        const turn = session.scheduler.turn;
+        const last = lastRecommendationRef.current;
+        // Room snapshots arrive after every change and must not replay a
+        // recommendation already consumed by the server for a previous turn.
+        if (last?.socket === socket && last.turn === turn && last.itemId === itemId)
+            return;
+        socket.emit("item:recommend", { itemId });
+        lastRecommendationRef.current = { socket, turn, itemId };
+    }, []);
+
+    const isOnlineParticipant = Boolean(
+        userId && users.some((player) => player.id === userId),
+    );
+    useEffect(() => {
+        if (!isOnlineParticipant || !room?.id) return;
+        if (onlineMemoryRef.current?.roomId !== room.id) return;
+        publishOnlineRecommendation();
+    }, [
+        room?.id,
+        isOnlineParticipant,
+        onlineMemoryReady,
+        authSessionGeneration,
+        publishOnlineRecommendation,
+    ]);
 
     useEffect(() => {
         const retry = () => {
@@ -234,6 +267,7 @@ export default function Clinet({
     }, [flushOnlineMemory]);
 
     useEffect(() => {
+        if (!displayNameConfirmed) return;
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
@@ -809,6 +843,10 @@ export default function Clinet({
                 setServerError(null);
                 setUserId(id);
                 userIdRef.current = id;
+                // A reconnect may use the same socket/user ID. Resend once on
+                // successful reauthentication, never on every room snapshot.
+                lastRecommendationRef.current = null;
+                setAuthSessionGeneration((previous) => previous + 1);
             });
 
             socket.on("auth:request", () => {
@@ -944,7 +982,7 @@ export default function Clinet({
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();
         };
-    }, [explode]);
+    }, [explode, displayNameConfirmed, displayName, clusterServers]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -1055,6 +1093,7 @@ export default function Clinet({
         setHintLengths({});
         setSharedFocusPlayerId(null);
         setIsSpectator(false);
+        lastRecommendationRef.current = null;
     };
 
     const handleLeave = () => {
@@ -1087,6 +1126,51 @@ export default function Clinet({
             ? null
             : (room?.items?.[focusedBomb.wordIndex] ?? null)
         : currentItem;
+
+    if (!displayNameConfirmed) {
+        const normalizedName = displayName.trim();
+        return (
+            <main className="w-full pt-12">
+                <Shell title="表示名" size="small">
+                    <form
+                        className="w-full flex flex-col gap-4"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            if (
+                                !normalizedName ||
+                                normalizedName.length > 50 ||
+                                /[\\p{Cc}\\p{Cf}]/u.test(normalizedName)
+                            ) return;
+                            setDisplayName(normalizedName);
+                            try {
+                                localStorage.setItem("display-name", normalizedName);
+                            } catch {
+                                // A blocked localStorage must not prevent joining.
+                            }
+                            setDisplayNameConfirmed(true);
+                        }}
+                    >
+                        <Input
+                            value={displayName}
+                            onChange={(event) =>
+                                setDisplayName(event.target.value.slice(0, 50))
+                            }
+                            label="表示名"
+                            autoComplete="nickname"
+                        />
+                        <Button
+                            variant="primary"
+                            className="w-full"
+                            type="submit"
+                            disabled={!normalizedName || /[\\p{Cc}\\p{Cf}]/u.test(normalizedName)}
+                        >
+                            続ける
+                        </Button>
+                    </form>
+                </Shell>
+            </main>
+        );
+    }
 
     return (
         <>
@@ -1142,11 +1226,7 @@ export default function Clinet({
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
-                    const nextItemId = nextOnlineRecommendation(session);
-                    if (nextItemId)
-                        socketRef.current?.emit("item:recommend", {
-                            itemId: nextItemId,
-                        });
+                    publishOnlineRecommendation();
                     void flushOnlineMemory();
                 }}
                 onSuccess={() => {
