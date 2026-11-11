@@ -1073,6 +1073,8 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             "setItemPresentationKey",
             "setMemoryByItem",
             "setCurrentInput",
+            "setNextReviewAt",
+            "setIsStarted",
         ]) globals[setter] = noop;
         const actual = clientCallbacks(
             [
