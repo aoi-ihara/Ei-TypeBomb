@@ -1139,7 +1139,7 @@ export default function Clinet({
                             if (
                                 !normalizedName ||
                                 normalizedName.length > 50 ||
-                                /[\\p{Cc}\\p{Cf}]/u.test(normalizedName)
+                                /[\p{Cc}\p{Cf}]/u.test(normalizedName)
                             ) return;
                             setDisplayName(normalizedName);
                             try {
@@ -1162,7 +1162,7 @@ export default function Clinet({
                             variant="primary"
                             className="w-full"
                             type="submit"
-                            disabled={!normalizedName || /[\\p{Cc}\\p{Cf}]/u.test(normalizedName)}
+                            disabled={!normalizedName || /[\p{Cc}\p{Cf}]/u.test(normalizedName)}
                         >
                             続ける
                         </Button>
