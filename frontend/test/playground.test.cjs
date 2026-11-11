@@ -864,8 +864,6 @@ test("solo answer speech plays after success, including after a full hint", () =
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
             isPaused: false,
-            pausedDurationRef: { current: 0 },
-            pauseBeforeFirstKeyRef: { current: 0 },
             offlineVoiceReading: scenario.mode,
             soundEffects: false,
             successAudioRef: { current: null },
@@ -899,19 +897,17 @@ test("paused solo practice does not advance a question", () => {
     assert.equal(advanced, false);
 });
 
-test("solo pause time is excluded from recall timings", () => {
-    const observations = [];
-    const complete = getCallback("handleRecallComplete", {
-        isPaused: false,
-        currentItemRef: { current: { id: "a", answer: "apple" } },
-        pausedDurationRef: { current: 60_000 },
-        pauseBeforeFirstKeyRef: { current: 60_000 },
-        updateLocalMemory: (_item, observation) => observations.push(observation),
-    });
-    complete({ elapsedMs: 61_300, recallLatencyMs: 60_500 });
-    assert.equal(observations.length, 1);
-    assert.equal(observations[0].elapsedMs, 1_300);
-    assert.equal(observations[0].recallLatencyMs, 500);
+test("active recall clock excludes paused intervals before and after resume", () => {
+    const { getActiveElapsedMs } = load("lib/playground/active-clock.mjs");
+
+    // A pause starts at 2s. While paused, elapsed time stays frozen at 1s.
+    assert.equal(getActiveElapsedMs(62_000, 1_000, 0, 2_000), 1_000);
+
+    // After a 60s pause, one more active second brings elapsed time to 2s.
+    assert.equal(getActiveElapsedMs(63_000, 1_000, 60_000, null), 2_000);
+
+    // A later pause also stays excluded while it is still in progress.
+    assert.equal(getActiveElapsedMs(100_000, 1_000, 60_000, 80_000), 19_000);
 });
 
 test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
@@ -1043,10 +1039,6 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             items,
             room: { id: "r" },
             isPaused: false,
-            pauseStartedAtRef: ref(null),
-            pausedDurationRef: ref(0),
-            pauseBeforeFirstKeyRef: ref(0),
-            hasTypedRef: ref(false),
             offlineVoiceReading: "none",
             soundEffects: false,
             schedulerRef: ref(sch.createScheduler(items.map((x) => x.id), rng(17))),
