@@ -271,7 +271,6 @@ function TypingAttempt({
                     kanaCommitSpansRef.current = [];
                     setCurrentSelection(0);
                     setCharInput("");
-                    setIsFailAnimating(true);
                     onChangeInputRef.current("");
                 }
 
