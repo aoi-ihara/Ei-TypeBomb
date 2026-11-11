@@ -10,7 +10,10 @@ export default async function OfflinePlayPage({
     searchParams,
 }: {
     params: Promise<{ link: string }>;
-    searchParams: Promise<{ answerMode?: string }>;
+    searchParams: Promise<{
+        answerMode?: string | string[];
+        [key: string]: string | string[] | undefined;
+    }>;
 }) {
     const [{ link }, query] = await Promise.all([params, searchParams]);
     const answerMode = isAnswerMode(query.answerMode)
