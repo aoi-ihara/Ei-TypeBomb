@@ -949,26 +949,39 @@ export default function Client({
                             aria-labelledby="offline-instructions-title"
                         >
                             <div className="flex flex-col gap-4">
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="keyboard" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        単語は英語でも日本語でも、
-                                        <strong>半角</strong>
-                                        で入力してください。
-                                    </span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="lightbulb" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        オフラインプレイの場合は、
-                                        <strong>スペースキーを2回押す</strong>
-                                        と解答を見ることができます。
-                                    </span>
-                                </div>
+                                {answerMode === "selection" ? (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="list-check" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            表示された選択肢から、正しい回答を選んでください。
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="keyboard" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                入力問題では、英語・日本語ともに
+                                                <strong>半角</strong>
+                                                で入力してください。
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="lightbulb" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                オフラインプレイの場合は、
+                                                <strong>スペースキーを2回押す</strong>
+                                                と解答を見ることができます。
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                                 {!isSignedIn && (
                                     <div className="flex gap-2">
                                         <span className="shrink-0">
