@@ -14,7 +14,7 @@ export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
-export type SchedulerReason = "cycle" | "retry" | "long_term_due" | "suspension_due";
+export type SchedulerReason = "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
 export type RecallProgress = {
     attemptCount: number;
     incorrectInputCount?: number;

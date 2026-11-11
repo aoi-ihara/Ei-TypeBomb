@@ -53,6 +53,26 @@ These times and failure thresholds are **uncalibrated product hypotheses**.
 Compare delayed unaided recall and overall practice throughput before deciding
 whether the feature actually improves retention.
 
+## Interleaved reviews of previously learned words
+
+After at least five user questions, each normal (non-retry) selection gets a
+15% chance to revisit an earlier answered word when a suitable candidate exists.
+This does not override a due retry, a returning suspension, or the four-word
+active relearning limit. Candidates must have a valid recall history, have
+already been answered during the session and removed from the current cycle,
+and have had no answer/BOT exposure in the last two minutes. The last user
+question is excluded. Among eligible candidates the lowest predicted
+retrievability wins (with difficulty as a tie-breaker, then random ties).
+The interleaved review does not advance or remove items from the main cycle.
+When no candidate exists or the random check fails, normal cycle selection
+continues. The same scheduler is shared by Playground and online play.
+
+The 15% probability and two-minute exposure cooldown are **uncalibrated
+hypotheses**, not validated retention thresholds. Compare delayed recall,
+repetitions per session, and time to first complete room coverage. No new
+Supabase columns or migration are needed; existing per-item memory and the
+local scheduler snapshot are sufficient.
+
 ## Historical context
 
 The earlier scheduler reserved alternate user turns for complete room coverage

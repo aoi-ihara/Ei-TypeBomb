@@ -14,6 +14,11 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
+// Optional reviews never displace due retries or held words returning from a hold.
+// Both the probability and spacing threshold are uncalibrated product hypotheses.
+export const SPACED_REVIEW_CHANCE = 0.15;
+export const SPACED_REVIEW_MIN_TURNS = 5;
+export const SPACED_REVIEW_MIN_EXPOSURE_MS = 2 * 60_000;
 
 // Product hypotheses to calibrate with retention outcomes.
 export const INITIAL_SUSPENSION_FAILURES = 4;
@@ -148,6 +153,51 @@ const enqueueRetry = (
 };
 const isOnHold = (state: SchedulerState, itemId: string) =>
     state.struggles[itemId]?.suspendedUntil != null;
+
+// Revisit previously answered words without waiting for the whole room cycle.
+// Only completed cycle entries are eligible, so an upcoming regular question
+// never gets duplicated or removed from the queue by an optional review.
+const pickSpacedReview = (
+    state: SchedulerState,
+    memories: Record<string, ItemMemoryState>,
+    random: () => number,
+    now: number,
+): string | null => {
+    if (state.turn < SPACED_REVIEW_MIN_TURNS) return null;
+
+    const queued = new Set(state.cycleQueue);
+    const candidates = state.itemIds.filter((id) => {
+        const memory = memories[id];
+        if (
+            !hasRecallHistory(memory) ||
+            (state.userAnswered[id] ?? 0) === 0 ||
+            queued.has(id) ||
+            state.retries[id] ||
+            isOnHold(state, id) ||
+            id === state.lastUserItem
+        ) return false;
+
+        // lastPresentedAt includes BOT exposure, which is not independent recall.
+        const lastExposure = Date.parse(
+            memory.lastPresentedAt ?? memory.lastReviewedAt ?? "",
+        );
+        return (
+            Number.isFinite(lastExposure) &&
+            now - lastExposure >= SPACED_REVIEW_MIN_EXPOSURE_MS
+        );
+    });
+    if (candidates.length === 0 || random() >= SPACED_REVIEW_CHANCE)
+        return null;
+
+    // Choose the least retrievable word; break equal priorities randomly.
+    let best = [candidates[0]];
+    for (const id of candidates.slice(1)) {
+        const comparison = compareMemoryPriority(id, best[0], memories, now);
+        if (comparison < 0) best = [id];
+        else if (comparison === 0) best.push(id);
+    }
+    return best[Math.floor(random() * best.length)];
+};
 
 /** Return a deadline only when every room word is on hold. */
 export const nextSuspendedReviewAt = (state: SchedulerState): number | null => {
@@ -308,6 +358,7 @@ export const chooseNextUserItem = (
         pending.length < MAX_ACTIVE_RELEARNING &&
         dueHolds.length > 0;
     if (resumedFromHold) itemId = dueHolds[0][0];
+    let spacedReview = false;
 
     const pickFromCycle = () => {
         if (state.cycleQueue.length === 0) {
@@ -322,7 +373,13 @@ export const chooseNextUserItem = (
     };
 
     if (!itemId && pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)) {
-        itemId = pickFromCycle();
+        const reviewId = pickSpacedReview(state, memories, random, now);
+        if (reviewId) {
+            itemId = reviewId;
+            spacedReview = true;
+        } else {
+            itemId = pickFromCycle();
+        }
         // If the new cycle contains only pending words, choose a previously
         // answered filler instead of breaking the earliest-retry boundary.
     }
@@ -379,6 +436,8 @@ export const chooseNextUserItem = (
             ? "suspension_due"
             : entry
               ? "retry"
+              : spacedReview
+                ? "spaced_review"
               : hasRecallHistory(memories[itemId]) &&
                 getRetrievability(memories[itemId], now) < 0.8
               ? "long_term_due"
@@ -623,7 +682,7 @@ export const loadSchedulerState = (
             isNonNegativeInteger(selected.cycle) &&
             selected.cycle >= 1 &&
             typeof selected.advancesCycle === "boolean" &&
-            ["cycle", "retry", "long_term_due", "suspension_due"].includes(selected.reason) &&
+            ["cycle", "retry", "long_term_due", "suspension_due", "spaced_review"].includes(selected.reason) &&
             struggles[selected.itemId]?.suspendedUntil == null
         ) {
             const retry = selected.retry

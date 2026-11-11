@@ -242,6 +242,91 @@ test("the first cycle reviews due words before untouched words", () => {
     assert.equal(state.initialPriorityApplied, true);
 });
 
+test("interleaved review targets the weakest previously answered word without consuming the cycle", () => {
+    const timestamp = now.getTime();
+    const oldReview = new Date(timestamp - 2 * 60 * 60_000).toISOString();
+    const state = scheduler.createScheduler(["old", "older", "new", "next"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new", "next"];
+    state.userAnswered = { old: 1, older: 1 };
+    state.lastUserItem = "next";
+    const memories = {
+        old: { ...initial("old"), stability: 3, lastReviewedAt: oldReview },
+        older: { ...initial("older"), stability: 0.4, lastReviewedAt: oldReview },
+    };
+    const queueBefore = [...state.cycleQueue];
+    const chosen = scheduler.chooseNextUserItem(state, memories, () => 0, timestamp);
+    assert.equal(chosen.itemId, "older");
+    assert.equal(chosen.reason, "spaced_review");
+    assert.equal(chosen.advancesCycle, false);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+
+    scheduler.saveSchedulerState("playground", "review-user", "review-room", state, timestamp);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "review-user", "review-room",
+        state.itemIds, memories, timestamp + 1000,
+    );
+    assert.equal(restored.current.itemId, "older");
+    assert.equal(restored.current.reason, "spaced_review");
+
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+});
+
+test("interleaved review is optional and respects exposure cooldowns", () => {
+    const timestamp = now.getTime();
+    const oldReview = new Date(timestamp - 10 * 60_000).toISOString();
+    const state = scheduler.createScheduler(["old", "new", "next"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new", "next"];
+    state.userAnswered = { old: 1 };
+    const memories = { old: { ...initial("old"), lastReviewedAt: oldReview } };
+
+    const noProbe = scheduler.chooseNextUserItem(
+        state, memories, () => 0.9, timestamp,
+    );
+    assert.equal(noProbe.itemId, "new");
+    assert.equal(noProbe.reason, "cycle");
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+
+    const recent = scheduler.createScheduler(["old", "new"], () => 0.5);
+    recent.initialPriorityApplied = true;
+    recent.turn = 6;
+    recent.userAnswered = { old: 1 };
+    recent.cycleQueue = ["new"];
+    const recentlyShown = {
+        old: { ...memories.old, lastPresentedAt: new Date(timestamp - 30_000).toISOString() },
+    };
+    assert.equal(
+        scheduler.chooseNextUserItem(recent, recentlyShown, () => 0, timestamp).itemId,
+        "new",
+    );
+});
+
+test("due relearning takes priority over an optional spaced review", () => {
+    const timestamp = now.getTime();
+    const state = scheduler.createScheduler(["old", "retry", "new"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new"];
+    state.userAnswered = { old: 1, retry: 1 };
+    state.retries.retry = {
+        itemId: "retry", earliestTurn: 7, latestTurn: 10,
+        reason: "failed_recall", successCount: 0,
+    };
+    const memories = {
+        old: {
+            ...initial("old"),
+            lastReviewedAt: new Date(timestamp - 2 * 60 * 60_000).toISOString(),
+        },
+    };
+    const selected = scheduler.chooseNextUserItem(state, memories, () => 0, timestamp);
+    assert.equal(selected.itemId, "retry");
+    assert.equal(selected.reason, "retry");
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
