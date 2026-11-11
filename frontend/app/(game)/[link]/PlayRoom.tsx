@@ -255,6 +255,13 @@ export default function PlayRoom({
                             setAnswerMode(availableAnswerModes[index].value)
                         }
                     />
+                    <p className="text-xs opacity-60" data-cursor="text">
+                        {effectiveAnswerMode === "selection"
+                            ? "毎回、ルーム内の回答から作られた選択肢で回答します。"
+                            : effectiveAnswerMode === "auto"
+                              ? "覚え具合に応じて、選択問題と入力問題を自動で切り替えます。"
+                              : "キーボードで回答します。入力に対応していない回答は選択問題になります。"}
+                    </p>
                 </div>
                 {showPasswordField && !alreadyAuthorized && (
                     <Input
