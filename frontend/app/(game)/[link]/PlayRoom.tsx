@@ -36,15 +36,13 @@ export default function PlayRoom({
     const [roomLoading, setRoomLoading] = useState(!alreadyAuthorized);
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
-    const [displayName, setDisplayName] = useState("");
-
-    useEffect(() => {
+    const [displayName, setDisplayName] = useState(() => {
         try {
-            setDisplayName((localStorage.getItem("display-name") ?? "").slice(0, 50));
+            return (localStorage.getItem("display-name") ?? "").slice(0, 50);
         } catch {
-            // Local storage may be blocked; players can still enter a name.
+            return "";
         }
-    }, []);
+    });
     const [activeDialog, setActiveDialog] = useState<PlayMode | null>(null);
     const [joining, setJoining] = useState<PlayMode | null>(null);
     const [turnstile, setTurnstile] = useState(false);
@@ -150,9 +148,7 @@ export default function PlayRoom({
             }
             try {
                 localStorage.setItem("display-name", displayName.trim());
-            } catch {
-                // The current name still works when storage is disabled.
-            }
+            } catch {}
         }
         if (showPasswordField && !alreadyAuthorized) {
             setTurnstileMode(mode);
@@ -164,7 +160,7 @@ export default function PlayRoom({
 
     const renderModeDialog = (mode: PlayMode) => {
         const isOnline = mode === "online";
-        const title = isOnline ? "オンライン" : "オフライン";
+        const title = isOnline ? "表示名を入力" : "オフライン";
         const isActive = activeDialog === mode;
 
         return (
@@ -174,7 +170,10 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
-                            if (!isOnline && (!showPasswordField || alreadyAuthorized)) {
+                            if (
+                                !isOnline &&
+                                (!showPasswordField || alreadyAuthorized)
+                            ) {
                                 handleContinue(mode);
                             } else {
                                 setActiveDialog(mode);
@@ -193,7 +192,7 @@ export default function PlayRoom({
                     showPasswordField && !alreadyAuthorized
                         ? "ルームに参加するための情報を入力してください。"
                         : isOnline
-                          ? "オンライン対戦で使用する表示名を入力してください。"
+                          ? ""
                           : undefined
                 }
                 alignment="vertical"
@@ -204,7 +203,9 @@ export default function PlayRoom({
                 {isOnline && (
                     <Input
                         value={displayName}
-                        onChange={(event) => setDisplayName(event.target.value.slice(0, 50))}
+                        onChange={(event) =>
+                            setDisplayName(event.target.value.slice(0, 50))
+                        }
                         label="表示名"
                         autoComplete="nickname"
                         disabled={joining !== null}
