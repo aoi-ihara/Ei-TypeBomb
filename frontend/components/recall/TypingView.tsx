@@ -84,6 +84,7 @@ function TypingAttempt({
         ? getInitialCueLength(english.length, initialCueRatio, baseHintCount)
         : baseHintCount;
     const [timedHintCount, setTimedHintCount] = useState(0);
+    const timedHintIndexRef = useRef(0);
     const [revealedHintLength, setRevealedHintLength] =
         useState(initialCueLength);
     const [input, setInput] = useState<string[]>(
@@ -155,6 +156,7 @@ function TypingAttempt({
         attemptCountRef.current = 1;
         incorrectInputCountRef.current = 0;
         maxCorrectPrefixRef.current = 0;
+        timedHintIndexRef.current = 0;
         lastCorrectProgressAtRef.current = 0;
         lastHintAtRef.current = 0;
     }, [english, isReadonly, wordKey]);
@@ -174,10 +176,14 @@ function TypingAttempt({
     }, [isPaused]);
 
     useEffect(() => {
-        if (isReadonly || !english || isPaused) return;
+        if (isReadonly || !english) return;
         revealedHintLengthRef.current = initialCueLength;
         lastCorrectProgressAtRef.current = getActiveElapsedMs();
         lastHintAtRef.current = 0;
+    }, [english, initialCueLength, isReadonly, wordKey, getActiveElapsedMs]);
+
+    useEffect(() => {
+        if (isReadonly || !english || isPaused) return;
 
         const activeHintDelays = hintDelaysMs;
         if (
@@ -190,7 +196,7 @@ function TypingAttempt({
 
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout> | null = null;
-        let hintIndex = timedHintCount;
+        let hintIndex = timedHintIndexRef.current;
 
         const getHintDelay = () =>
             Math.max(
@@ -256,6 +262,7 @@ function TypingAttempt({
                 onHintChangeRef.current?.(nextLength);
                 setTimedHintCount((count) => count + 1);
                 lastHintAtRef.current = firedAt;
+                timedHintIndexRef.current = ++hintIndex;
 
                 // Kana text remains editable even when a timed hint expands
                 // across a nonmatching cell. Previously this branch cleared
@@ -295,7 +302,6 @@ function TypingAttempt({
         english,
         hintDelaysKey,
         hintDelaysMs,
-        timedHintCount,
         isPaused,
         getActiveElapsedMs,
         initialCueLength,
