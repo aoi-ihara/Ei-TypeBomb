@@ -53,9 +53,7 @@ export default function AuthForm({
                     );
                     if (result) setError(result);
                     else if (mode === "sign-in")
-                        window.location.assign(
-                            next ? safeReturnPath(next) : "/account",
-                        );
+                        window.location.assign("/mine");
                     else {
                         setPassword("");
                         setConfirmation("");
