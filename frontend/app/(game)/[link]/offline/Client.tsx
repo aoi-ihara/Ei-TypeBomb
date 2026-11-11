@@ -477,7 +477,9 @@ export default function Client({
                     room_id: room.id,
                     item_id: item.id,
                     suspension_level: currentStruggle.suspensionLevel,
-                    suspended_until: new Date(currentStruggle.suspendedUntil).toISOString(),
+                    suspended_until: new Date(
+                        currentStruggle.suspendedUntil,
+                    ).toISOString(),
                 });
             }
             const freshestMemory = authenticatedUserIdRef.current
@@ -716,7 +718,9 @@ export default function Client({
         ) {
             const synthesis = window.speechSynthesis;
             synthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(presentedItem.answer);
+            const utterance = new SpeechSynthesisUtterance(
+                presentedItem.answer,
+            );
             utterance.lang = "en-US";
             synthesis.speak(utterance);
         }
@@ -777,7 +781,8 @@ export default function Client({
     ]);
 
     const currentTurnPlan = useMemo(
-        () => (currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null),
+        () =>
+            currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null,
         [currentItem, memoryByItem],
     );
 
@@ -833,10 +838,11 @@ export default function Client({
                 preGameContent={
                     memoryReady && nextReviewAt !== null ? (
                         <div className="flex flex-col gap-4 px-2" role="status">
-                            <p className="font-bold">すべての単語が復習待ちです</p>
+                            <p className="font-bold">
+                                すべての単語が復習待ちです
+                            </p>
                             <p>
-                                難しい単語はいったん保留しました。
-                                次の復習は
+                                難しい単語はいったん保留しました。 次の復習は
                                 {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
                                     {
@@ -859,7 +865,9 @@ export default function Client({
                             <Button
                                 className="w-full"
                                 iconName="arrowLeft"
-                                onClick={() => router.push("/" + (room.link ?? room.id))}
+                                onClick={() =>
+                                    router.push("/" + (room.link ?? room.id))
+                                }
                             >
                                 ルームへ戻る
                             </Button>
