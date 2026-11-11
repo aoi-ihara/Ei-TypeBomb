@@ -12,9 +12,7 @@ import type {
     RecallProgress,
 } from "@/lib/playground/memory";
 import { getRoomItems } from "@/lib/item";
-import GameNotice, {
-    type GameNoticeProps,
-} from "@/components/game/GameNotice";
+import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
 import ReconnectStatus from "@/components/game/ReconnectStatus";
 
 type Props = {
@@ -117,7 +115,6 @@ export default function GameView({
     onStop,
 }: Readonly<Props>) {
     const currentTurnUser = users[currentTurn] as User | undefined;
-    // Keep the last snapshot on screen, read-only, until the server answers.
     const isReconnecting = room !== null && connection !== null;
     const isParticipant = users.some((user) => user.id === userId);
     const hasDuplicatePrompt =
@@ -190,7 +187,9 @@ export default function GameView({
         );
 
     return (
-        <div className={`flex flex-col ${soloMode ? "" : "md:flex-row"} w-full h-full`}>
+        <div
+            className={`flex flex-col ${soloMode ? "" : "md:flex-row"} w-full h-full`}
+        >
             {explosionLayer}
             {notice && <GameNotice {...notice} />}
 
@@ -263,7 +262,9 @@ export default function GameView({
                 </div>
             )}
 
-            <div className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}>
+            <div
+                className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
+            >
                 {onReload && (!room || connection) && (
                     <ReconnectStatus
                         reconnecting={isReconnecting}
@@ -273,7 +274,7 @@ export default function GameView({
                 )}
                 <div
                     inert={isReconnecting || isPaused}
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    className={`flex flex-col ${!soloMode && "bg-(--color-background-secondary)"} transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${soloMode ? "h-full items-center" : !room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
                 >
                     {room && !serverError ? (
                         isParticipant ? (
@@ -402,7 +403,7 @@ export default function GameView({
 
             {soloMode ? (
                 <div
-                    className="absolute top-0 left-0 pl-4 w-1/2 truncate line-clamp-1 font-bold font-mono text-lg"
+                    className="absolute top-0 left-0 pl-4 pt-3 w-1/2 truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     {room?.title}

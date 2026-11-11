@@ -394,7 +394,6 @@ export default function Client({
             player_count: users.length,
         });
 
-        // The instruction screen replaces the initial three-second start screen.
         startGame();
     }, [items.length, memoryReady, room.id, startGame]);
 
@@ -836,43 +835,7 @@ export default function Client({
                 currentInput={currentInput}
                 isStarted={isStarted}
                 preGameContent={
-                    memoryReady && nextReviewAt !== null ? (
-                        <div className="flex flex-col gap-4 px-2" role="status">
-                            <p className="font-bold">
-                                すべての単語が復習待ちです
-                            </p>
-                            <p>
-                                難しい単語はいったん保留しました。 次の復習は
-                                {new Date(nextReviewAt).toLocaleString(
-                                    "ja-JP",
-                                    {
-                                        month: "numeric",
-                                        day: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                    },
-                                )}
-                                以降にできます。
-                            </p>
-                            <Button
-                                className="w-full"
-                                variant="primary"
-                                iconName="rotateCcw"
-                                onClick={startGame}
-                            >
-                                復習を確認
-                            </Button>
-                            <Button
-                                className="w-full"
-                                iconName="arrowLeft"
-                                onClick={() =>
-                                    router.push("/" + (room.link ?? room.id))
-                                }
-                            >
-                                ルームへ戻る
-                            </Button>
-                        </div>
-                    ) : memoryReady && showInstructions ? (
+                    memoryReady && showInstructions ? (
                         <div
                             className="flex flex-col gap-4 px-2"
                             role="region"
