@@ -1230,12 +1230,12 @@ export default function EditorClient({
                                                             {!isAllowedTypingAnswer(
                                                                 item.answer,
                                                             ) &&
-                                                                item.answer && (
+                                                                item.answer.trim() && (
                                                                     <div className="text-cyan-600" data-cursor="text">
                                                                         この回答は入力形式に対応していないため、選択問題として出題されます。
                                                                     </div>
                                                                 )}
-                                                            {!item.answer && (
+                                                            {!item.answer.trim() && (
                                                                 <div
                                                                     className="text-red-500"
                                                                     data-cursor="text"
