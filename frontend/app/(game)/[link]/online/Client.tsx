@@ -39,7 +39,7 @@ import {
     cacheOnlinePendingMemory,
     loadOnlinePendingMemory,
     loadOnlineGuestMemory,
-    nextOnlineRecommendation,
+    nextUnsentOnlineRecommendation,
     recordOnlineRecall,
     type OnlineMemorySession,
 } from "@/lib/online/memory-session";
@@ -217,16 +217,14 @@ export default function Clinet({
         const session = onlineMemoryRef.current;
         const socket = socketRef.current;
         if (!session || !socket) return;
-        const itemId = nextOnlineRecommendation(session);
-        if (!itemId) return;
-        const turn = session.scheduler.turn;
         const last = lastRecommendationRef.current;
-        // Room snapshots arrive after every change and must not replay a
-        // recommendation already consumed by the server for a previous turn.
-        if (last?.socket === socket && last.turn === turn && last.itemId === itemId)
-            return;
-        socket.emit("item:recommend", { itemId });
-        lastRecommendationRef.current = { socket, turn, itemId };
+        const recommendation = nextUnsentOnlineRecommendation(
+            session,
+            last?.socket === socket ? last : null,
+        );
+        if (!recommendation) return;
+        socket.emit("item:recommend", { itemId: recommendation.itemId });
+        lastRecommendationRef.current = { socket, ...recommendation };
     }, []);
 
     const isOnlineParticipant = Boolean(
