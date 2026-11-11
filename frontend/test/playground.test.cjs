@@ -1215,6 +1215,15 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             Object.keys(globals.schedulerRef.current.retries).length,
             0,
         );
+
+        globals.pendingMemoryRef.current.clear();
+        globals.memoryPersistenceDisabledRef.current = true;
+        actual.updateLocalMemory(items[0], observation());
+        assert.equal(
+            globals.pendingMemoryRef.current.size,
+            0,
+            "fallback recall observations must stay out of the authenticated sync queue",
+        );
     }
 });
 
