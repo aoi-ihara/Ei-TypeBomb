@@ -559,7 +559,7 @@ function TypingAttempt({
                     onChangeInput(next.join(""));
                     setInput([]);
                     setCurrentSelection(0);
-                                onChangeInput("", true);
+                    onChangeInput("", true);
                 } else resetInput();
             }
         }
