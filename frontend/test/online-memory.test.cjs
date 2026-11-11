@@ -61,6 +61,25 @@ test("online recommends through the same Playground scheduler", () => {
     assert.notEqual(second, first);
     assert.equal(session.scheduler.turn, 2);
 });
+test("room snapshots do not resend consumed recommendations", () => {
+    const session = online.createOnlineMemorySession("dedupe-room", ids, null, {});
+    const first = online.nextUnsentOnlineRecommendation(session, null);
+    assert.ok(first);
+    assert.equal(
+        online.nextUnsentOnlineRecommendation(session, first),
+        null,
+    );
+    const again = online.nextUnsentOnlineRecommendation(session, null);
+    assert.equal(again.itemId, first.itemId);
+    assert.equal(again.turn, first.turn);
+
+    online.recordOnlineRecall(session, first.itemId, recall);
+    const second = online.nextUnsentOnlineRecommendation(session, first);
+    assert.ok(second);
+    assert.notEqual(second.turn, first.turn);
+    assert.equal(online.nextUnsentOnlineRecommendation(session, second), null);
+});
+
 test("guest online memory is visible to Playground and survives reload", () => {
     const session = online.createOnlineMemorySession("room", ids, null, {});
     const itemId = online.nextOnlineRecommendation(session);
