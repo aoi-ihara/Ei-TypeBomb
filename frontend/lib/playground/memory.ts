@@ -319,7 +319,13 @@ export const recordAnswerModeResult = ({
             success,
             now,
         ),
-        lastPresentedAt: iso,
+        // A typing failure is an intermediate attempt within the current
+        // presentation, not a new exposure. Preserve the previous timestamp
+        // so the eventual successful recall uses the original exposure gap.
+        lastPresentedAt:
+            mode === "input" && !success
+                ? (current.lastPresentedAt ?? null)
+                : iso,
         updatedAt: iso,
     };
 };
