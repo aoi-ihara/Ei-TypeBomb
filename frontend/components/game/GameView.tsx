@@ -138,7 +138,7 @@ export default function GameView({
                 ゲーム開始
             </div>
         ) : (
-            <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
+            <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
                 {soloMode ? null : currentTurnUser?.id === userId ? (
                     <div
                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -278,7 +278,7 @@ export default function GameView({
                 >
                     {room && !serverError ? (
                         isParticipant ? (
-                            <div className="flex flex-col h-full animate-appear">
+                            <div className="flex flex-col animate-appear h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
