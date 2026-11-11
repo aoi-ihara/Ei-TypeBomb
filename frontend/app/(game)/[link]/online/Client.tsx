@@ -73,15 +73,15 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName, setDisplayName] = useState<string>(() => {
-        if (typeof window === "undefined") return "";
+    const [displayName, setDisplayName] = useState("");
+    // Hydrate the saved suggestion after mount; the textbox appears every visit.
+    useEffect(() => {
         try {
-            return localStorage.getItem("display-name") ?? "";
+            setDisplayName((localStorage.getItem("display-name") ?? "").slice(0, 50));
         } catch {
-            return "";
+            // Browser storage may be unavailable.
         }
-    });
-    // Always ask before joining, even when a saved display name exists.
+    }, []);
     const [displayNameConfirmed, setDisplayNameConfirmed] = useState(false);
     const [bombStatus, setBombStatus] = useState<number | null>(0);
 
