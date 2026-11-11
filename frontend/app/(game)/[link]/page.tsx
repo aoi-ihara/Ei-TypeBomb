@@ -20,9 +20,12 @@ export default async function RoomPage({
 
     if (result.requiresPassword && !result.authorized) {
         return (
-            <Shell title="パスワードを入力" size="medium" animateAppear>
-                <RoomPasswordGate roomId={result.id} />
-            </Shell>
+            <>
+                <Header />
+                <Shell title="パスワードを入力" size="medium" animateAppear>
+                    <RoomPasswordGate roomId={result.id} />
+                </Shell>
+            </>
         );
     }
 

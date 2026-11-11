@@ -786,12 +786,15 @@ test("a recommendation is single-use, and a refreshed recommendation is respecte
 
     await f.runtime.command(f.command("a", "word:success"), "a");
     await f.runtime.command(f.command("b", "word:success"), "b");
-    // No new recommendation: the old one must not pin the next turn to r.
-    assert.equal(f.runtime.state.room.wordIndex, 0);
+    // No new recommendation: fallback avoids the immediately previous bomb
+    // word, even if that happens to select the former recommended ID again.
+    assert.equal(f.runtime.state.room.wordIndex, 1);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 
-    f.runtime.recommend("a", "r");
+    // A fresh recommendation overrides fallback's no-repeat preference.
+    f.runtime.recommend("a", "q");
     await f.runtime.command(f.command("a", "word:success"), "a");
     await f.runtime.command(f.command("b", "word:success"), "b");
-    assert.equal(f.runtime.state.room.wordIndex, 1);
+    assert.equal(f.runtime.state.room.wordIndex, 0);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 });
