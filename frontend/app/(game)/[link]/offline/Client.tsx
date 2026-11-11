@@ -51,6 +51,7 @@ type Props = {
 
 const LOCAL_USER_ID = "playground-player";
 const GUEST_MEMORY_USER_ID = "playground-guest";
+const SESSION_MEMORY_USER_ID = "playground-session";
 const guestMemoryKey = (roomId: string) => `playground-memory:guest:${roomId}`;
 
 const loadGuestMemory = (
@@ -186,6 +187,7 @@ export default function Client({
     const expectedTypingAtStartRef = useRef(0);
     const predictedRetrievabilityAtPromptRef = useRef<number | null>(null);
     const authenticatedUserIdRef = useRef<string | null>(null);
+    const memoryPersistenceDisabledRef = useRef(false);
     const [memoryReady, setMemoryReady] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
@@ -212,6 +214,8 @@ export default function Client({
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
+        if (!notice?.visible) return;
+
         const timer = window.setTimeout(() => {
             setNotice((current) =>
                 current ? { ...current, visible: false } : undefined,
@@ -219,86 +223,147 @@ export default function Client({
         }, 5000);
 
         return () => window.clearTimeout(timer);
-    }, []);
+    }, [notice?.visible, notice?.title, notice?.description]);
 
     useEffect(() => {
         let cancelled = false;
+        const itemIds = items.map((item) => item.id);
+        const itemIdSet = new Set(itemIds);
 
-        const loadMemory = async () => {
-            const loaded = await loadPlaygroundMemory(room.id);
-            if (cancelled) return;
+        const restorePendingMemory = (
+            userId: string,
+            memory: Record<string, ItemMemoryState>,
+        ) => {
+            try {
+                const queued: unknown = JSON.parse(
+                    localStorage.getItem(
+                        `playground-pending:${userId}:${room.id}`,
+                    ) ?? "[]",
+                );
+                if (!Array.isArray(queued)) return;
 
-            if (!loaded.error) {
-                setIsSignedIn(Boolean(loaded.userId));
+                for (const value of queued) {
+                    if (!value || typeof value !== "object") continue;
+                    const pending = value as ItemMemoryState;
+                    if (
+                        pending.userId !== userId ||
+                        pending.roomId !== room.id ||
+                        !itemIdSet.has(pending.itemId) ||
+                        !Number.isFinite(pending.stability) ||
+                        !Number.isFinite(pending.difficulty) ||
+                        !Number.isFinite(pending.reviewCount)
+                    )
+                        continue;
+
+                    const remote = memory[pending.itemId];
+                    const pendingUpdatedAt =
+                        Date.parse(pending.updatedAt ?? "") || 0;
+                    const remoteUpdatedAt =
+                        Date.parse(remote?.updatedAt ?? "") || 0;
+                    if (!remote || pendingUpdatedAt >= remoteUpdatedAt) {
+                        memory[pending.itemId] = pending;
+                        pendingMemoryRef.current.set(pending.itemId, pending);
+                    }
+                }
+            } catch {
+                // A damaged or unavailable local cache must not prevent practice.
+            }
+        };
+
+        const initializeFallback = (userId: string | null) => {
+            authenticatedUserIdRef.current = userId;
+            // Never write guest data when authentication could not be verified.
+            memoryPersistenceDisabledRef.current = !userId;
+
+            const fallbackMemory: Record<string, ItemMemoryState> = {};
+            if (userId) {
+                restorePendingMemory(userId, fallbackMemory);
+                schedulerRef.current =
+                    loadSchedulerState(
+                        "playground",
+                        userId,
+                        room.id,
+                        itemIds,
+                        fallbackMemory,
+                    ) ?? createScheduler(itemIds);
+            } else {
+                schedulerRef.current = createScheduler(itemIds);
             }
 
-            if (loaded.error) {
-                console.error("Failed to load playground memory", loaded.error);
+            memoryByItemRef.current = fallbackMemory;
+            setMemoryByItem(fallbackMemory);
+            setMemoryError(null);
+            setMemoryReady(true);
+            setNotice({
+                visible: true,
+                iconName: "info",
+                title: "学習データを取得できませんでした",
+                description:
+                    "プレイは続けられます。学習データの同期は復旧後に再試行されます。",
+            });
+        };
+
+        const loadMemory = async () => {
+            let loaded: Awaited<ReturnType<typeof loadPlaygroundMemory>>;
+            try {
+                loaded = await loadPlaygroundMemory(room.id);
+            } catch (error) {
+                if (cancelled) return;
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                console.error("Failed to load playground memory", message);
                 posthog.capture("playground_memory_load_failed", {
                     room_id: room.id,
+                    error_message: message,
                 });
-                setMemoryError(
-                    "学習データを取得できませんでした。もう一度お試しください。",
-                );
+                initializeFallback(null);
+                return;
+            }
+            if (cancelled) return;
+
+            if (loaded.error) {
+                const message = loaded.error.message || "Unknown error";
+                console.error("Failed to load playground memory", message);
+                posthog.capture("playground_memory_load_failed", {
+                    room_id: room.id,
+                    error_message: message,
+                });
+                if (loaded.userId) setIsSignedIn(true);
+                initializeFallback(loaded.userId);
                 return;
             }
 
+            setIsSignedIn(Boolean(loaded.userId));
+            memoryPersistenceDisabledRef.current = false;
+
             if (!loaded.userId) {
-                const saved = loadGuestMemory(
-                    room.id,
-                    new Set(items.map((item) => item.id)),
-                );
+                authenticatedUserIdRef.current = null;
+                const saved = loadGuestMemory(room.id, itemIdSet);
                 memoryByItemRef.current = saved;
                 schedulerRef.current =
                     loadSchedulerState(
                         "playground",
                         GUEST_MEMORY_USER_ID,
                         room.id,
-                        items.map((item) => item.id),
+                        itemIds,
                         saved,
-                    ) ?? createScheduler(items.map((item) => item.id));
+                    ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
                 return;
             }
 
             authenticatedUserIdRef.current = loaded.userId;
-            // Recover unsent observations after reload, scoped to the authenticated user.
-            try {
-                const queued: ItemMemoryState[] = JSON.parse(
-                    localStorage.getItem(
-                        `playground-pending:${loaded.userId}:${room.id}`,
-                    ) ?? "[]",
-                );
-                for (const pending of queued) {
-                    if (
-                        pending.userId !== loaded.userId ||
-                        pending.roomId !== room.id ||
-                        !items.some((item) => item.id === pending.itemId) ||
-                        !Number.isFinite(pending.stability) ||
-                        !Number.isFinite(pending.difficulty)
-                    )
-                        continue;
-                    const remote = loaded.memoryByItem[pending.itemId];
-                    if (
-                        !remote ||
-                        Date.parse(pending.updatedAt ?? "") >=
-                            Date.parse(remote.updatedAt ?? "")
-                    ) {
-                        loaded.memoryByItem[pending.itemId] = pending;
-                        pendingMemoryRef.current.set(pending.itemId, pending);
-                    }
-                }
-            } catch {}
+            restorePendingMemory(loaded.userId, loaded.memoryByItem);
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
                 loadSchedulerState(
                     "playground",
                     loaded.userId,
                     room.id,
-                    items.map((item) => item.id),
+                    itemIds,
                     loaded.memoryByItem,
-                ) ?? createScheduler(items.map((item) => item.id));
+                ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
         };
@@ -341,12 +406,14 @@ export default function Client({
             scheduler,
             memoryByItemRef.current,
         )?.itemId;
-        saveSchedulerState(
-            "playground",
-            authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
-            room.id,
-            scheduler,
-        );
+        if (!memoryPersistenceDisabledRef.current) {
+            saveSchedulerState(
+                "playground",
+                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                room.id,
+                scheduler,
+            );
+        }
         return items.find((item) => item.id === id) ?? null;
     }, [items, room.id]);
 
@@ -441,7 +508,10 @@ export default function Client({
     const updateLocalMemory = useCallback(
         (item: Item, observation: RecallObservation) => {
             const userId =
-                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
+                authenticatedUserIdRef.current ??
+                (memoryPersistenceDisabledRef.current
+                    ? SESSION_MEMORY_USER_ID
+                    : GUEST_MEMORY_USER_ID);
 
             const scheduler = schedulerRef.current;
             const selected = scheduler?.current;
@@ -485,15 +555,17 @@ export default function Client({
                     ).toISOString(),
                 });
             }
-            const freshestMemory = authenticatedUserIdRef.current
-                ? memoryByItemRef.current
-                : mergeGuestMemory(
-                      memoryByItemRef.current,
-                      loadGuestMemory(
-                          room.id,
-                          new Set(items.map((entry) => entry.id)),
-                      ),
-                  );
+            const freshestMemory =
+                authenticatedUserIdRef.current ||
+                memoryPersistenceDisabledRef.current
+                    ? memoryByItemRef.current
+                    : mergeGuestMemory(
+                          memoryByItemRef.current,
+                          loadGuestMemory(
+                              room.id,
+                              new Set(items.map((entry) => entry.id)),
+                          ),
+                      );
             const nextMemory = applyRecallObservation({
                 memory: freshestMemory[item.id],
                 observation: evidence,
@@ -519,12 +591,12 @@ export default function Client({
                 } catch {
                     // Local storage may be unavailable; the current game continues.
                 }
-            } else {
+            } else if (!memoryPersistenceDisabledRef.current) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
-            if (scheduler)
+            if (scheduler && !memoryPersistenceDisabledRef.current)
                 saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
 
@@ -581,16 +653,21 @@ export default function Client({
     const updateAnswerModeMemory = useCallback(
         (item: Item, mode: "selection" | "input", success: boolean) => {
             const userId =
-                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
-            const freshestMemory = authenticatedUserIdRef.current
-                ? memoryByItemRef.current
-                : mergeGuestMemory(
-                      memoryByItemRef.current,
-                      loadGuestMemory(
-                          room.id,
-                          new Set(items.map((entry) => entry.id)),
-                      ),
-                  );
+                authenticatedUserIdRef.current ??
+                (memoryPersistenceDisabledRef.current
+                    ? SESSION_MEMORY_USER_ID
+                    : GUEST_MEMORY_USER_ID);
+            const freshestMemory =
+                authenticatedUserIdRef.current ||
+                memoryPersistenceDisabledRef.current
+                    ? memoryByItemRef.current
+                    : mergeGuestMemory(
+                          memoryByItemRef.current,
+                          loadGuestMemory(
+                              room.id,
+                              new Set(items.map((entry) => entry.id)),
+                          ),
+                      );
             const updated = recordAnswerModeResult({
                 memory: freshestMemory[item.id],
                 userId,
@@ -613,7 +690,7 @@ export default function Client({
                 } catch {
                     // The current session can continue if storage is unavailable.
                 }
-            } else {
+            } else if (!memoryPersistenceDisabledRef.current) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
@@ -752,12 +829,14 @@ export default function Client({
                 const scheduler = schedulerRef.current;
                 if (scheduler) {
                     recordRecognitionAnswer(scheduler, item.id);
-                    saveSchedulerState(
-                        "playground",
-                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
-                        room.id,
-                        scheduler,
-                    );
+                    if (!memoryPersistenceDisabledRef.current) {
+                        saveSchedulerState(
+                            "playground",
+                            authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                            room.id,
+                            scheduler,
+                        );
+                    }
                 }
                 recallProgressRef.current = null;
             }
