@@ -52,7 +52,7 @@ const CONNECTING_MESSAGE = "接続中…";
 const UNAVAILABLE_MESSAGE =
     "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
-const MAX_CURRENT_INPUT_LENGTH = 32;
+const MAX_CURRENT_INPUT_LENGTH = 4096;
 // Faster cues in competitive play; Playground keeps its existing pacing.
 const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
 
