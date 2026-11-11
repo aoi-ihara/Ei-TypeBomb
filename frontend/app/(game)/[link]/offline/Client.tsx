@@ -960,6 +960,7 @@ export default function Client({
                     className="w-10 shrink-0"
                     disabled={!isStarted || !currentItem || isPaused}
                     onClick={() => {
+                        previousInputAtRef.current = null;
                         setIsPaused(true);
                         void flushPendingMemory();
                     }}
