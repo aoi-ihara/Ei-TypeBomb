@@ -195,7 +195,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .bomb-shake {
+    .bomb-shake,
+    .wrong-answer {
         animation: none !important;
     }
 }

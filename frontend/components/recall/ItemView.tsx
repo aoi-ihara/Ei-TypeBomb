@@ -14,7 +14,6 @@ import type {
 type Props = {
     item: Item;
     currentInput: string | null;
-    failureCount?: number;
     bombStatus: number;
     hasDuplicatePrompt?: boolean;
     onSuccess: () => void;
@@ -61,7 +60,6 @@ export default function ItemView(props: Readonly<Props>) {
                 <TypedRecallView
                     item={props.item}
                     currentInput={props.currentInput}
-                    failureCount={props.failureCount}
                     bombStatus={props.bombStatus}
                     hasDuplicatePrompt={props.hasDuplicatePrompt}
                     onSuccess={props.onSuccess}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/recall/ItemView";
 import UsersView from "@/components/game/UsersView";
@@ -134,6 +135,44 @@ export default function GameView({
         room.maxPlayers > 0 &&
         users.length < room.maxPlayers;
 
+    const activeGameRef = useRef<HTMLDivElement>(null);
+    const triggerFailAnimation = useCallback(() => {
+        const element = activeGameRef.current;
+        if (!element) return;
+
+        // Rewind an in-flight shake so consecutive errors each give feedback.
+        const animations = element.getAnimations();
+        if (animations.length > 0 && element.classList.contains("wrong-answer")) {
+            animations.forEach((animation) => {
+                animation.currentTime = 0;
+            });
+        } else {
+            element.classList.remove("wrong-answer");
+            // Restart the animation when a previous run has already finished.
+            void element.offsetWidth;
+            element.classList.add("wrong-answer");
+        }
+    }, []);
+
+    const failureKey = `${currentItem?.id ?? ""}:${currentTurn}:${itemPresentationKey}`;
+    const previousFailureRef = useRef({ count: failureCount ?? 0, key: failureKey });
+    useEffect(() => {
+        const previous = previousFailureRef.current;
+        // Remote wrong-answer notifications should shake the whole question
+        // as well, but never shake a newly presented word.
+        if (
+            previous.key === failureKey &&
+            (failureCount ?? 0) > previous.count &&
+            currentTurnUser?.id !== userId
+        ) triggerFailAnimation();
+        previousFailureRef.current = { count: failureCount ?? 0, key: failureKey };
+    }, [failureCount, failureKey, currentTurnUser?.id, userId, triggerFailAnimation]);
+
+    // A newly presented word should not inherit the previous word's shake.
+    useEffect(() => {
+        activeGameRef.current?.classList.remove("wrong-answer");
+    }, [failureKey]);
+
     const activeGame =
         currentItem === null ? (
             <div
@@ -145,59 +184,69 @@ export default function GameView({
         ) : (
             <div
                 key={soloMode ? itemPresentationKey : undefined}
-                className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full"
+                ref={activeGameRef}
+                className="flex h-full items-center justify-center flex-col gap-2 w-full"
+                onAnimationEnd={(event) => {
+                    if (
+                        event.target === event.currentTarget &&
+                        event.animationName === "wrongAnswer"
+                    ) event.currentTarget.classList.remove("wrong-answer");
+                }}
             >
-                {soloMode ? null : currentTurnUser?.id === userId ? (
-                    <div
-                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                        data-cursor="text"
-                    >
-                        あなたの番です
-                    </div>
-                ) : currentTurnUser ? (
-                    <div
-                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                        data-cursor="text"
-                    >
-                        {currentTurnUser.displayName + "の番です"}
-                    </div>
-                ) : null}
-                <ItemView
-                    key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
-                    item={currentItem}
-                    items={getRoomItems(room)}
-                    answerMode={answerMode}
-                    answerModeMemory={answerModeMemory}
-                    onSelectionAnswer={(correct) => {
-                        if (userId === currentTurnUser?.id)
+                <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
+                    {soloMode ? null : currentTurnUser?.id === userId ? (
+                        <div
+                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                            data-cursor="text"
+                        >
+                            あなたの番です
+                        </div>
+                    ) : currentTurnUser ? (
+                        <div
+                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                            data-cursor="text"
+                        >
+                            {currentTurnUser.displayName + "の番です"}
+                        </div>
+                    ) : null}
+                    <ItemView
+                        key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
+                        item={currentItem}
+                        items={getRoomItems(room)}
+                        answerMode={answerMode}
+                        answerModeMemory={answerModeMemory}
+                        onSelectionAnswer={(correct) => {
+                            if (userId !== currentTurnUser?.id) return;
+                            if (!correct) triggerFailAnimation();
                             onSelectionAnswer?.(correct);
-                    }}
-                    failureCount={failureCount}
-                    remoteHintLength={remoteHintLength}
-                    onHintChange={onHintChange}
-                    hasDuplicatePrompt={hasDuplicatePrompt}
-                    bombStatus={bombStatus}
-                    onSuccess={onSuccess}
-                    onChangeInput={(input, failed) => {
-                        if (userId === currentTurnUser?.id)
+                        }}
+                        remoteHintLength={remoteHintLength}
+                        onHintChange={onHintChange}
+                        hasDuplicatePrompt={hasDuplicatePrompt}
+                        bombStatus={bombStatus}
+                        onSuccess={onSuccess}
+                        onChangeInput={(input, failed) => {
+                            if (userId !== currentTurnUser?.id) return;
+                            if (failed) triggerFailAnimation();
                             onChangeInput(input, failed);
-                    }}
-                    currentInput={
-                        result !== null
-                            ? ""
-                            : userId === currentTurnUser?.id && !isReconnecting
-                              ? null
-                              : currentInput
-                    }
-                    enableRemoteTypingSync={enableRemoteTypingSync}
-                    learningMode={learningMode}
-                    initialCueRatio={initialCueRatio}
-                    cueSteps={cueSteps}
-                    hintDelaysMs={hintDelaysMs}
-                    onRecallProgress={onRecallProgress}
-                    onRecallComplete={onRecallComplete}
-                    isPaused={isPaused}
-                />
+                        }}
+                        currentInput={
+                            result !== null
+                                ? ""
+                                : userId === currentTurnUser?.id && !isReconnecting
+                                  ? null
+                                  : currentInput
+                        }
+                        enableRemoteTypingSync={enableRemoteTypingSync}
+                        learningMode={learningMode}
+                        initialCueRatio={initialCueRatio}
+                        cueSteps={cueSteps}
+                        hintDelaysMs={hintDelaysMs}
+                        onRecallProgress={onRecallProgress}
+                        onRecallComplete={onRecallComplete}
+                        isPaused={isPaused}
+                    />
+                </div>
             </div>
         );
 

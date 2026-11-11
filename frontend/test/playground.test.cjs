@@ -1229,7 +1229,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
             true,
             ts.ScriptKind.TSX,
         ),
-        names = ["triggerFailAnimation", "resetInput", "moveToNext"],
+        names = ["resetInput", "moveToNext"],
         found = {};
     function visit(node) {
         if (

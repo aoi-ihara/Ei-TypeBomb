@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Item } from "@/type";
+import Button from "@/components/ui/Button";
 import { createChoiceOptions } from "@/lib/answer-mode";
 
 type Props = {
@@ -21,24 +22,65 @@ export default function SelectionQuestionView({
     onSuccess,
     isPaused = false,
 }: Readonly<Props>) {
-    // The component is keyed by the presented turn, so distractors stay
-    // stable even when online room snapshots rerender the surrounding game.
+    // The component is keyed by the presented turn, so options remain stable
+    // even when online room snapshots rerender the surrounding game.
     const [options] = useState(() => createChoiceOptions(item, items));
-    const [wrongOption, setWrongOption] = useState<string | null>(null);
+    const [wrongOptions, setWrongOptions] = useState<Set<number>>(
+        () => new Set(),
+    );
     const [completed, setCompleted] = useState(false);
     const disabled = currentInput !== null || isPaused || completed;
 
-    const choose = (option: string) => {
-        if (disabled) return;
-        const correct = option === item.answer;
-        onAnswer(correct);
-        if (correct) {
-            setCompleted(true);
-            onSuccess();
-        } else {
-            setWrongOption(option);
-        }
-    };
+    const choose = useCallback(
+        (index: number) => {
+            if (
+                disabled ||
+                index < 0 ||
+                index >= options.length ||
+                wrongOptions.has(index)
+            ) return;
+
+            const correct = options[index] === item.answer;
+            onAnswer(correct);
+            if (correct) {
+                setCompleted(true);
+                onSuccess();
+            } else {
+                // A wrong choice can never be submitted again this turn.
+                setWrongOptions((previous) => new Set(previous).add(index));
+            }
+        },
+        [disabled, options, wrongOptions, item.answer, onAnswer, onSuccess],
+    );
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (
+                event.repeat ||
+                event.isComposing ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                !/^[1-4]$/.test(event.key)
+            ) return;
+
+            const target = event.target;
+            if (
+                target instanceof HTMLElement &&
+                (target.isContentEditable ||
+                    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+            ) return;
+
+            const index = Number(event.key) - 1;
+            if (disabled || index >= options.length || wrongOptions.has(index))
+                return;
+
+            event.preventDefault();
+            choose(index);
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [choose, disabled, options.length, wrongOptions]);
 
     return (
         <div className="flex w-full max-w-2xl flex-col items-center gap-5 px-2">
@@ -52,36 +94,21 @@ export default function SelectionQuestionView({
                 {item.prompt}
             </div>
             <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
-                {options.map((option, index) => {
-                    const isWrong = wrongOption === option;
-                    return (
-                        <button
-                            key={option + ":" + index}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => choose(option)}
-                            aria-pressed={isWrong}
-                            className={[
-                                "min-h-14 w-full rounded-xl border px-4 py-3 text-left font-bold wrap-break-words transition-all duration-(--duration-etb) ease-etb",
-                                isWrong
-                                    ? "border-red-500 bg-red-500/10 text-red-500"
-                                    : "border-(--color-border) bg-(--color-background-secondary) hover:border-cyan-600",
-                                disabled ? "cursor-default opacity-70" : "active:scale-[0.98]",
-                            ].join(" ")}
-                        >
-                            <span className="mr-3 font-mono opacity-40">
-                                {String.fromCharCode(65 + index)}
-                            </span>
-                            {option}
-                        </button>
-                    );
-                })}
+                {options.map((option, index) => (
+                    <Button
+                        key={option + ":" + index}
+                        type="button"
+                        variant="primary"
+                        padding="large"
+                        alignment="left"
+                        className="w-full"
+                        disabled={disabled || wrongOptions.has(index)}
+                        onClick={() => choose(index)}
+                    >
+                        {index + 1}. {option}
+                    </Button>
+                ))}
             </div>
-            {wrongOption !== null && !completed && (
-                <p className="text-sm font-bold text-red-500" role="status">
-                    もう一度選択してください。
-                </p>
-            )}
         </div>
     );
 }
