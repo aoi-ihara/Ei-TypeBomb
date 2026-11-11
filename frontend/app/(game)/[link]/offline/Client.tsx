@@ -208,6 +208,10 @@ export default function Client({
     const userTypingDelayRef = useRef(DEFAULT_TYPING_DELAY_MS);
     const previousInputAtRef = useRef<number | null>(null);
     const previousInputLengthRef = useRef(0);
+    const pauseStartedAtRef = useRef<number | null>(null);
+    const pausedDurationRef = useRef(0);
+    const pauseBeforeFirstKeyRef = useRef(0);
+    const hasTypedRef = useRef(false);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -310,6 +314,10 @@ export default function Client({
         currentItemRef.current = item;
         setCurrentItem(item);
         recallProgressRef.current = null;
+        pauseStartedAtRef.current = null;
+        pausedDurationRef.current = 0;
+        pauseBeforeFirstKeyRef.current = 0;
+        hasTypedRef.current = false;
         if (!item) return;
 
         sessionTurnNumberRef.current += 1;
@@ -666,7 +674,15 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused) return;
 
-            updateLocalMemory(item, observation);
+            // Pausing must not make the learner's response look slower.
+            updateLocalMemory(item, {
+                ...observation,
+                elapsedMs: Math.max(0, observation.elapsedMs - pausedDurationRef.current),
+                recallLatencyMs:
+                    observation.recallLatencyMs === null
+                        ? null
+                        : Math.max(0, observation.recallLatencyMs - pauseBeforeFirstKeyRef.current),
+            });
         },
         [isPaused, updateLocalMemory],
     );
@@ -676,6 +692,7 @@ export default function Client({
         const previousLength = previousInputLengthRef.current;
         const previousInputAt = previousInputAtRef.current;
         const addedCharacters = input.length - previousLength;
+        if (addedCharacters > 0) hasTypedRef.current = true;
 
         if (addedCharacters > 0 && previousInputAt !== null) {
             const sampleDelay = (now - previousInputAt) / addedCharacters;
@@ -814,6 +831,21 @@ export default function Client({
         };
     }, [backgroundMusic]);
 
+    const resumeGame = useCallback(() => {
+        if (pauseStartedAtRef.current !== null) {
+            const pausedMs = performance.now() - pauseStartedAtRef.current;
+            pausedDurationRef.current += pausedMs;
+            if (!hasTypedRef.current) pauseBeforeFirstKeyRef.current += pausedMs;
+            pauseStartedAtRef.current = null;
+        }
+        setIsPaused(false);
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLInputElement>(
+                'input[aria-label="日本語の回答"], input[aria-label="英語の回答"]',
+            )?.focus();
+        });
+    }, []);
+
     const activeLearningPlan = currentTurnPlan;
 
     return (
@@ -915,7 +947,7 @@ export default function Client({
                 result={null}
                 soloMode
                 isPaused={isPaused}
-                onResume={() => setIsPaused(false)}
+                onResume={resumeGame}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}
                 onRecallProgress={handleRecallProgress}
@@ -959,6 +991,7 @@ export default function Client({
                     className="w-10 shrink-0"
                     disabled={!isStarted || !currentItem || isPaused}
                     onClick={() => {
+                        pauseStartedAtRef.current = performance.now();
                         setIsPaused(true);
                         void flushPendingMemory();
                     }}
