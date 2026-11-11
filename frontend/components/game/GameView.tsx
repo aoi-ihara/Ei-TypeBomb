@@ -13,7 +13,6 @@ import type {
 } from "@/lib/playground/memory";
 import { getRoomItems } from "@/lib/item";
 import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
-import ReconnectStatus from "@/components/game/ReconnectStatus";
 
 type Props = {
     room: Room | null;
@@ -268,13 +267,6 @@ export default function GameView({
             <div
                 className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
             >
-                {onReload && (!room || connection) && (
-                    <ReconnectStatus
-                        reconnecting={isReconnecting}
-                        failed={connection === "failed"}
-                        onReload={onReload}
-                    />
-                )}
                 <div
                     inert={isReconnecting || isPaused}
                     className={`flex flex-col ${!soloMode && "bg-(--color-background-secondary)"} transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${soloMode ? "h-full items-center" : !room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} ${!soloMode && "rounded-2xl p-2 w-full"}`}
