@@ -1180,6 +1180,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
         inputFrameRef: ref(null),
         correctPrefixLength: input.correctPrefixLength,
         performance: { now: () => 1200 },
+        getActiveElapsedMs: () => 0,
         onRecallComplete: (o) => observations.push(o),
         onSuccess: noop,
         onChangeInput: noop,
