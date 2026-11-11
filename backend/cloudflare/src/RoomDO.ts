@@ -315,13 +315,18 @@ export class RoomDO extends DurableObject<Env> {
     }
 
     private recommendedIndex(playerId: string, room: Room): number | undefined {
-        const session = this.ctx
+        const ws = this.ctx
             .getWebSockets()
-            .map((ws) => this.session(ws))
-            .find((item) => item?.id === playerId);
+            .find((socket) => this.session(socket)?.id === playerId);
+        const session = ws ? this.session(ws) : null;
         if (!session?.recommendedItemId) return undefined;
+        // WebSocket attachments survive DO hibernation. Clear the consumed
+        // suggestion there as well so stale words cannot repeat forever.
+        const itemId = session.recommendedItemId;
+        delete session.recommendedItemId;
+        ws?.serializeAttachment(session);
         const index = room.items.findIndex(
-            (item) => item.id === session.recommendedItemId,
+            (item) => item.id === itemId,
         );
         return index < 0 ? undefined : index;
     }

@@ -341,7 +341,10 @@ test("preserves existing runtime differences explicitly", () => {
     }
 });
 test("validates names, auth payloads, health IDs, and typing data", () => {
-    for (const name of [null, "", "x".repeat(51), "x\n", "x\u200b"])
+    // Missing names intentionally fall back to the server's default.
+    for (const name of [null, undefined, ""])
+        assert.equal(validateDisplayName(name), "プレイヤー");
+    for (const name of [123, "x".repeat(51), "x\n", "x\u200b"])
         assert.throws(() => validateDisplayName(name));
     assert.equal(validateDisplayName("猫 Player"), "猫 Player");
     assert.throws(() =>
