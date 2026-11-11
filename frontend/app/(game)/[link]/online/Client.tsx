@@ -30,7 +30,10 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import type { RecallObservation } from "@/lib/playground/memory";
+import type {
+    ItemMemoryState,
+    RecallObservation,
+} from "@/lib/playground/memory";
 import type { AnswerMode } from "@/lib/answer-mode";
 import {
     createOnlineMemorySession,
@@ -39,6 +42,7 @@ import {
     loadOnlineGuestMemory,
     nextUnsentOnlineRecommendation,
     recordOnlineRecall,
+    recordOnlineAnswerModeResult,
     type OnlineMemorySession,
 } from "@/lib/online/memory-session";
 
@@ -1133,6 +1137,33 @@ export default function Clinet({
                     focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
                 }
                 currentInput={currentInput}
+                answerMode={answerMode}
+                answerModeMemory={
+                    focusedItem
+                        ? onlineMemoryRef.current?.memory[focusedItem.id]
+                        : undefined
+                }
+                onSelectionAnswer={(correct) => {
+                    if (
+                        !focusedItem ||
+                        !focusedBomb ||
+                        !userId ||
+                        users[focusedBomb.holder]?.id !== userId
+                    ) return;
+                    const session = onlineMemoryRef.current;
+                    if (!session || session.roomId !== room?.id) return;
+                    const updated = recordOnlineAnswerModeResult(
+                        session,
+                        focusedItem.id,
+                        "selection",
+                        correct,
+                    );
+                    if (!updated) return;
+                    cacheOnlinePendingMemory(session);
+                    setOnlineMemoryReady((revision) => revision + 1);
+                    if (correct) publishOnlineRecommendation();
+                    void flushOnlineMemory();
+                }}
                 hintDelaysMs={ONLINE_HINT_DELAYS_MS}
                 remoteHintLength={
                     hintLengths[focusedBomb?.id ?? ""] ??
@@ -1173,6 +1204,7 @@ export default function Clinet({
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
+                    setOnlineMemoryReady((revision) => revision + 1);
                     publishOnlineRecommendation();
                     void flushOnlineMemory();
                 }}
@@ -1182,6 +1214,28 @@ export default function Clinet({
                     socketRef.current?.emit("word:success");
                 }}
                 onChangeInput={(input, failed) => {
+                    if (
+                        failed &&
+                        focusedItem &&
+                        focusedBomb &&
+                        userId &&
+                        users[focusedBomb.holder]?.id === userId
+                    ) {
+                        const session = onlineMemoryRef.current;
+                        if (session?.roomId === room?.id) {
+                            const updated = recordOnlineAnswerModeResult(
+                                session,
+                                focusedItem.id,
+                                "input",
+                                false,
+                            );
+                            if (updated) {
+                                cacheOnlinePendingMemory(session);
+                                setOnlineMemoryReady((revision) => revision + 1);
+                                void flushOnlineMemory();
+                            }
+                        }
+                    }
                     const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
                     socketRef.current?.emit(
                         "currentInput",
