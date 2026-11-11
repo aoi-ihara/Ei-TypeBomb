@@ -184,6 +184,7 @@ export default function GameView({
                     hintDelaysMs={hintDelaysMs}
                     onRecallProgress={onRecallProgress}
                     onRecallComplete={onRecallComplete}
+                    isPaused={isPaused}
                 />
             </div>
         );
