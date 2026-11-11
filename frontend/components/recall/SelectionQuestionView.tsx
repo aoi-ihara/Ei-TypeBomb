@@ -38,7 +38,8 @@ export default function SelectionQuestionView({
                 index < 0 ||
                 index >= options.length ||
                 wrongOptions.has(index)
-            ) return;
+            )
+                return;
 
             const correct = options[index] === item.answer;
             onAnswer(correct);
@@ -62,14 +63,16 @@ export default function SelectionQuestionView({
                 event.ctrlKey ||
                 event.metaKey ||
                 !/^[1-4]$/.test(event.key)
-            ) return;
+            )
+                return;
 
             const target = event.target;
             if (
                 target instanceof HTMLElement &&
                 (target.isContentEditable ||
                     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-            ) return;
+            )
+                return;
 
             const index = Number(event.key) - 1;
             if (disabled || index >= options.length || wrongOptions.has(index))
@@ -83,17 +86,16 @@ export default function SelectionQuestionView({
     }, [choose, disabled, options.length, wrongOptions]);
 
     return (
-        <div className="flex w-full max-w-2xl flex-col items-center gap-5 px-2">
-            <div className="text-sm font-bold text-cyan-600" data-cursor="text">
-                選択問題
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-col items-center">
+                <div
+                    className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    data-cursor="text"
+                >
+                    {item.prompt}
+                </div>
             </div>
-            <div
-                className="w-full text-center text-2xl font-bold wrap-break-words"
-                data-cursor="text"
-            >
-                {item.prompt}
-            </div>
-            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="w-64 flex flex-col gap-4">
                 {options.map((option, index) => (
                     <Button
                         key={option + ":" + index}
