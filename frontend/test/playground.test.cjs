@@ -1043,6 +1043,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             items,
             room: { id: "r" },
             isPaused: false,
+            pauseStartedAtRef: ref(null),
             pausedDurationRef: ref(0),
             pauseBeforeFirstKeyRef: ref(0),
             hasTypedRef: ref(false),
@@ -1377,21 +1378,13 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].source, "manual");
 });
 
-test("actual playground progress callback pauses pressure on first hint", () => {
+test("actual solo progress callback keeps hint state without bomb pressure", () => {
     const saved = { current: null };
-    let paused = false;
     const callback = getCallback("handleRecallProgress", {
-        usersRef: { current: [{ id: "local" }] },
-        currentTurnRef: { current: 0 },
-        LOCAL_USER_ID: "local",
         recallProgressRef: saved,
-        currentItemRef: { current: { type: "typed_recall", answer: "apple" } },
-        setRecallPressurePaused: (value) => {
-            paused = value;
-        },
     });
     callback({ hintCount: 1, revealedHintChars: 1 });
-    assert.equal(paused, true);
+    assert.equal(saved.current.hintCount, 1);
     assert.equal(saved.current.revealedHintChars, 1);
 });
 
