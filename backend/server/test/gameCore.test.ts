@@ -111,6 +111,36 @@ for (const [runtime, rules] of [
             );
         }
     });
+    test(`${runtime}: fallback rotates away from the previous bomb word`, () => {
+        const first = active();
+        assert.equal(first.room.wordIndex, 0);
+        const passed = apply(
+            first,
+            { type: "word:success", playerId: "a" },
+            { random: () => 0 },
+        ).state;
+        assert.equal(passed.room.wordIndex, 1);
+
+        const returned = apply(
+            passed,
+            { type: "word:success", playerId: "b" },
+            { random: () => 0 },
+        ).state;
+        assert.equal(returned.room.wordIndex, 0);
+
+        // An intentional recommendation is still honored, including repeats.
+        const preferred = apply(
+            first,
+            { type: "word:success", playerId: "a" },
+            { chooseItemIndex: () => 0, random: () => 0 },
+        ).state;
+        assert.equal(preferred.room.wordIndex, 0);
+
+        // Single-word rooms must continue to work.
+        const oneWord = { ...first, room: { ...first.room, items: first.room.items.slice(0, 1) } };
+        const only = apply(oneWord, { type: "word:success", playerId: "a" }).state;
+        assert.equal(only.room.wordIndex, 0);
+    });
     test(`${runtime}: assigns personalized words to the actual holder`, () => {
         const state = active();
         const recommendations: Record<string, number> = { a: 1, b: 2 };
