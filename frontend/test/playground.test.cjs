@@ -327,6 +327,23 @@ test("due relearning takes priority over an optional spaced review", () => {
     assert.equal(selected.reason, "retry");
 });
 
+test("recognition answers advance the scheduler without becoming free recall", () => {
+    const state = scheduler.createScheduler(["a", "b", "c"], () => 0.5);
+    const selected = scheduler.chooseNextUserItem(state, {}, () => 0.5);
+    assert.ok(selected);
+    assert.equal(
+        scheduler.recordRecognitionAnswer(state, selected.itemId),
+        true,
+    );
+    assert.equal(state.current, null);
+    assert.equal(state.userAnswered[selected.itemId], 1);
+    assert.equal(state.retries[selected.itemId], undefined);
+
+    const next = scheduler.chooseNextUserItem(state, {}, () => 0.5);
+    assert.ok(next);
+    assert.notEqual(next.itemId, selected.itemId);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
