@@ -43,6 +43,7 @@ export default function TypedRecallView({
     hintDelaysMs,
     onRecallProgress,
     onRecallComplete,
+    isPaused = false,
 }: Readonly<Props>) {
     return (
         <TypingView
