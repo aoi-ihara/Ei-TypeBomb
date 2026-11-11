@@ -23,6 +23,7 @@ type Props = {
     hintDelaysMs?: number[] | null;
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
+    isPaused?: boolean;
 };
 
 export default function TypedRecallView({
