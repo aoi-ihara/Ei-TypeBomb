@@ -12,6 +12,7 @@ import {
     loadSchedulerState,
     saveSchedulerState,
     recordUserAnswer,
+    recordRecognitionAnswer,
     type SchedulerState,
 } from "../playground/scheduler";
 
