@@ -128,8 +128,6 @@ function TypingAttempt({
 
     const isReadonly = currentInput !== null;
     const manualHints = Boolean(learningMode) && !isReadonly;
-    // Duplicate prompts may start with a visible cue before any timed hint.
-    // Publish that initial cue too, so read-only spectators see the same letters.
     useEffect(() => {
         if (!isReadonly && english && initialCueLength > 0)
             onHintChangeRef.current?.(initialCueLength);
@@ -169,8 +167,7 @@ function TypingAttempt({
         }
 
         if (pausedAtRef.current !== null) {
-            totalPausedMsRef.current +=
-                performance.now() - pausedAtRef.current;
+            totalPausedMsRef.current += performance.now() - pausedAtRef.current;
             pausedAtRef.current = null;
         }
     }, [isPaused]);
@@ -264,9 +261,6 @@ function TypingAttempt({
                 lastHintAtRef.current = firedAt;
                 timedHintIndexRef.current = ++hintIndex;
 
-                // Kana text remains editable even when a timed hint expands
-                // across a nonmatching cell. Previously this branch cleared
-                // the entire answer before a user had finished correcting it.
                 if (
                     shouldClearForTimedHint(
                         english,
@@ -442,9 +436,7 @@ function TypingAttempt({
                 : hintLength >= english.length,
             maxCorrectPrefixLength: maxCorrectPrefixRef.current,
             recallLatencyMs:
-                firstKeyAtRef.current === null
-                    ? null
-                    : firstKeyAtRef.current,
+                firstKeyAtRef.current === null ? null : firstKeyAtRef.current,
             elapsedMs: getActiveElapsedMs(),
         });
     }, [
@@ -631,7 +623,7 @@ function TypingAttempt({
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
                 <div
-                    className="font-bold text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
                     data-cursor="text"
                 >
                     {japanese}
@@ -825,7 +817,8 @@ function TypingAttempt({
                                     }
                                 }
                                 if (firstKeyAtRef.current === null) {
-                                    firstKeyAtRef.current = getActiveElapsedMs();
+                                    firstKeyAtRef.current =
+                                        getActiveElapsedMs();
                                 }
                                 if (isKanaAnswer) {
                                     const edit = editKanaCell(
