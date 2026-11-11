@@ -180,7 +180,7 @@ export default function GameView({
             <div
                 key={soloMode ? itemPresentationKey : undefined}
                 ref={activeGameRef}
-                className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full"
+                className="flex h-full items-center justify-center flex-col gap-2 w-full"
                 onAnimationEnd={(event) => {
                     if (
                         event.target === event.currentTarget &&
@@ -188,6 +188,7 @@ export default function GameView({
                     ) event.currentTarget.classList.remove("wrong-answer");
                 }}
             >
+                <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
                 {soloMode ? null : currentTurnUser?.id === userId ? (
                     <div
                         className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -214,7 +215,6 @@ export default function GameView({
                         if (!correct) triggerFailAnimation();
                         onSelectionAnswer?.(correct);
                     }}
-                    failureCount={failureCount}
                     remoteHintLength={remoteHintLength}
                     onHintChange={onHintChange}
                     hasDuplicatePrompt={hasDuplicatePrompt}
@@ -241,6 +241,7 @@ export default function GameView({
                     onRecallComplete={onRecallComplete}
                     isPaused={isPaused}
                 />
+                </div>
             </div>
         );
 
