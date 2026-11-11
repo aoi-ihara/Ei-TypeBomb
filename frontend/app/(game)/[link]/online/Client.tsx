@@ -14,9 +14,6 @@ import {
 import { useBombExplosion } from "@/components/game/BombExplosion";
 import GameView from "@/components/game/GameView";
 import GameSettings from "@/components/settings/GameSettings";
-import Input from "@/components/ui/Input";
-import Button from "@/components/ui/Button";
-import Shell from "@/components/layout/Shell";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import { Item, LegacyWord, Room, User } from "@/type";
 import { getAuthToken, getClientSessionToken } from "@/lib/room/auth";
@@ -73,16 +70,14 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName, setDisplayName] = useState("");
-    // Hydrate the saved suggestion after mount; the textbox appears every visit.
-    useEffect(() => {
+    const [displayName] = useState(() => {
+        if (typeof window === "undefined") return "";
         try {
-            setDisplayName((localStorage.getItem("display-name") ?? "").slice(0, 50));
+            return localStorage.getItem("display-name") ?? "";
         } catch {
-            // Browser storage may be unavailable.
+            return "";
         }
-    }, []);
-    const [displayNameConfirmed, setDisplayNameConfirmed] = useState(false);
+    });
     const [bombStatus, setBombStatus] = useState<number | null>(0);
 
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
@@ -265,7 +260,6 @@ export default function Clinet({
     }, [flushOnlineMemory]);
 
     useEffect(() => {
-        if (!displayNameConfirmed) return;
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
@@ -980,7 +974,7 @@ export default function Clinet({
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();
         };
-    }, [explode, displayNameConfirmed, displayName, clusterServers]);
+    }, [explode, displayName, clusterServers]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -1125,51 +1119,6 @@ export default function Clinet({
             : (room?.items?.[focusedBomb.wordIndex] ?? null)
         : currentItem;
 
-    if (!displayNameConfirmed) {
-        const normalizedName = displayName.trim();
-        return (
-            <main className="w-full pt-12">
-                <Shell title="表示名" size="small">
-                    <form
-                        className="w-full flex flex-col gap-4"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            if (
-                                !normalizedName ||
-                                normalizedName.length > 50 ||
-                                /[\p{Cc}\p{Cf}]/u.test(normalizedName)
-                            ) return;
-                            setDisplayName(normalizedName);
-                            try {
-                                localStorage.setItem("display-name", normalizedName);
-                            } catch {
-                                // A blocked localStorage must not prevent joining.
-                            }
-                            setDisplayNameConfirmed(true);
-                        }}
-                    >
-                        <Input
-                            value={displayName}
-                            onChange={(event) =>
-                                setDisplayName(event.target.value.slice(0, 50))
-                            }
-                            label="表示名"
-                            autoComplete="nickname"
-                        />
-                        <Button
-                            variant="primary"
-                            className="w-full"
-                            type="submit"
-                            disabled={!normalizedName || /[\p{Cc}\p{Cf}]/u.test(normalizedName)}
-                        >
-                            続ける
-                        </Button>
-                    </form>
-                </Shell>
-            </main>
-        );
-    }
-
     return (
         <>
             <GameView
@@ -1184,6 +1133,7 @@ export default function Clinet({
                     focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
                 }
                 currentInput={currentInput}
+                hintDelaysMs={[700, 1_000, 1_400, 1_800]}
                 remoteHintLength={
                     hintLengths[focusedBomb?.id ?? ""] ??
                     focusedBomb?.hintLength ??
