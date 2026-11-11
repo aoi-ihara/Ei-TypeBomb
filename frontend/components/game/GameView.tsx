@@ -13,7 +13,6 @@ import type {
 } from "@/lib/playground/memory";
 import { getRoomItems } from "@/lib/item";
 import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
-import ReconnectStatus from "@/components/game/ReconnectStatus";
 
 type Props = {
     room: Room | null;
