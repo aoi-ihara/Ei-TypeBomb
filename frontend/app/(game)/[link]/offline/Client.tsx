@@ -814,30 +814,34 @@ export default function Client({
         [isPaused, updateLocalMemory],
     );
 
-    const handleInputChange = useCallback((input: string, failed?: boolean) => {
-        if (failed && !isPaused && currentItemRef.current) {
-            updateAnswerModeMemory(currentItemRef.current, "input", false);
-        }
-        const now = Date.now();
-        const previousLength = previousInputLengthRef.current;
-        const previousInputAt = previousInputAtRef.current;
-        const addedCharacters = input.length - previousLength;
-
-        if (addedCharacters > 0 && previousInputAt !== null) {
-            const sampleDelay = (now - previousInputAt) / addedCharacters;
-
-            if (sampleDelay > 0 && sampleDelay < 2000) {
-                const clampedSample = clampTypingDelay(sampleDelay);
-                userTypingDelayRef.current =
-                    userTypingDelayRef.current * (1 - TYPING_SPEED_SMOOTHING) +
-                    clampedSample * TYPING_SPEED_SMOOTHING;
+    const handleInputChange = useCallback(
+        (input: string, failed?: boolean) => {
+            if (failed && !isPaused && currentItemRef.current) {
+                updateAnswerModeMemory(currentItemRef.current, "input", false);
             }
-        }
+            const now = Date.now();
+            const previousLength = previousInputLengthRef.current;
+            const previousInputAt = previousInputAtRef.current;
+            const addedCharacters = input.length - previousLength;
 
-        previousInputLengthRef.current = input.length;
-        previousInputAtRef.current = input.length === 0 ? null : now;
-        setCurrentInput(input);
-    }, [isPaused, updateAnswerModeMemory]);
+            if (addedCharacters > 0 && previousInputAt !== null) {
+                const sampleDelay = (now - previousInputAt) / addedCharacters;
+
+                if (sampleDelay > 0 && sampleDelay < 2000) {
+                    const clampedSample = clampTypingDelay(sampleDelay);
+                    userTypingDelayRef.current =
+                        userTypingDelayRef.current *
+                            (1 - TYPING_SPEED_SMOOTHING) +
+                        clampedSample * TYPING_SPEED_SMOOTHING;
+                }
+            }
+
+            previousInputLengthRef.current = input.length;
+            previousInputAtRef.current = input.length === 0 ? null : now;
+            setCurrentInput(input);
+        },
+        [isPaused, updateAnswerModeMemory],
+    );
 
     const handleSelectionAnswer = useCallback(
         (correct: boolean) => {
@@ -850,7 +854,8 @@ export default function Client({
                     if (!memoryPersistenceDisabledRef.current) {
                         saveSchedulerState(
                             "playground",
-                            authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                            authenticatedUserIdRef.current ??
+                                GUEST_MEMORY_USER_ID,
                             room.id,
                             scheduler,
                         );
@@ -1046,39 +1051,26 @@ export default function Client({
                             aria-labelledby="offline-instructions-title"
                         >
                             <div className="flex flex-col gap-4">
-                                {answerMode === "selection" ? (
-                                    <div className="flex gap-2">
-                                        <span className="shrink-0">
-                                            <Icon name="list-check" />
-                                        </span>
-                                        <span data-cursor="text">
-                                            表示された選択肢から、正しい回答を選んでください。
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="flex gap-2">
-                                            <span className="shrink-0">
-                                                <Icon name="keyboard" />
-                                            </span>
-                                            <span data-cursor="text">
-                                                入力問題では、英語・日本語ともに
-                                                <strong>半角</strong>
-                                                で入力してください。
-                                            </span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <span className="shrink-0">
-                                                <Icon name="lightbulb" />
-                                            </span>
-                                            <span data-cursor="text">
-                                                オフラインプレイの場合は、
-                                                <strong>スペースキーを2回押す</strong>
-                                                と解答を見ることができます。
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
+                                <div className="flex gap-2">
+                                    <span className="shrink-0">
+                                        <Icon name="keyboard" />
+                                    </span>
+                                    <span data-cursor="text">
+                                        入力問題では、英語・日本語ともに
+                                        <strong>半角</strong>
+                                        で入力してください。
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <span className="shrink-0">
+                                        <Icon name="lightbulb" />
+                                    </span>
+                                    <span data-cursor="text">
+                                        オフラインプレイの場合は、
+                                        <strong>スペースキーを2回押す</strong>
+                                        と解答を見ることができます。
+                                    </span>
+                                </div>
                                 {!isSignedIn && (
                                     <div className="flex gap-2">
                                         <span className="shrink-0">
