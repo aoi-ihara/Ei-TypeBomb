@@ -298,8 +298,9 @@ export default function Client({
                 visible: true,
                 iconName: "info",
                 title: "学習データを取得できませんでした",
-                description:
-                    "プレイは続けられます。学習データの同期は復旧後に再試行されます。",
+                description: userId
+                    ? "プレイは続けられます。学習データの同期は復旧後に再試行されます。"
+                    : "プレイは続けられますが、今回は学習データを保存できません。",
             });
         };
 
