@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Item } from "@/type";
 import { createChoiceOptions } from "@/lib/answer-mode";
 
@@ -21,10 +21,9 @@ export default function SelectionQuestionView({
     onSuccess,
     isPaused = false,
 }: Readonly<Props>) {
-    const options = useMemo(
-        () => createChoiceOptions(item, items),
-        [item.id, item.answer, items],
-    );
+    // The component is keyed by the presented turn, so distractors stay
+    // stable even when online room snapshots rerender the surrounding game.
+    const [options] = useState(() => createChoiceOptions(item, items));
     const [wrongOption, setWrongOption] = useState<string | null>(null);
     const [completed, setCompleted] = useState(false);
     const disabled = currentInput !== null || isPaused || completed;
