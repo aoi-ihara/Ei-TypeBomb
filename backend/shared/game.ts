@@ -159,17 +159,29 @@ export function applyGameEvent(
     const random = () =>
         Math.max(0, Math.min(1 - Number.EPSILON, context.random()));
     const index = (length: number) => Math.floor(random() * length);
-    const itemForHolder = (holder: number) => {
+    const itemForHolder = (holder: number, previousIndex?: number) => {
         const playerId = room.users[holder]?.id;
         const preferred = playerId
             ? context.chooseItemIndex?.(playerId, room)
             : undefined;
-        return typeof preferred === "number" &&
+        if (
+            typeof preferred === "number" &&
             Number.isInteger(preferred) &&
             preferred >= 0 &&
             preferred < room.items.length
-            ? preferred
-            : index(room.items.length);
+        ) return preferred;
+
+        // A missing/stale client recommendation should not immediately
+        // repeat the same word when the bomb passes to another player.
+        const count = room.items.length;
+        if (
+            count <= 1 ||
+            previousIndex === undefined ||
+            previousIndex < 0 ||
+            previousIndex >= count
+        ) return index(count);
+        const choice = index(count - 1);
+        return choice >= previousIndex ? choice + 1 : choice;
     };
     const bombAt = () => {
         const duration = room.gameDuration;
@@ -293,7 +305,7 @@ export function applyGameEvent(
             )
                 return ignored();
             bomb.holder = nextLivingHolder(bomb.holder);
-            bomb.wordIndex = itemForHolder(bomb.holder);
+            bomb.wordIndex = itemForHolder(bomb.holder, bomb.wordIndex);
             bomb.hintLength = 0;
             bomb.turn++;
             syncLegacy();
@@ -406,7 +418,7 @@ export function applyGameEvent(
                         if (other.holder === bomb.holder) {
                             other.holder = nextLivingHolder(other.holder);
                             other.turn++;
-                            other.wordIndex = itemForHolder(other.holder);
+                            other.wordIndex = itemForHolder(other.holder, other.wordIndex);
                             other.hintLength = 0;
                         }
                     }
