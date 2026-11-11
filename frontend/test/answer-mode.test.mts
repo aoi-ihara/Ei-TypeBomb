@@ -86,6 +86,39 @@ test("automatic mode promotes three consecutive recognitions to typed input", ()
     );
 });
 
+test("typing failures preserve the previous exposure timestamp", () => {
+    const previousExposure = "2026-11-10T08:00:00.000Z";
+    const attemptedAt = new Date("2026-11-11T12:00:00.000Z");
+    const memory = {
+        ...createInitialMemory("user", "room", item.id),
+        lastPresentedAt: previousExposure,
+    };
+
+    const failed = recordAnswerModeResult({
+        memory,
+        userId: "user",
+        roomId: "room",
+        itemId: item.id,
+        mode: "input",
+        success: false,
+        now: attemptedAt,
+    });
+
+    assert.equal(failed.lastPresentedAt, previousExposure);
+    assert.equal(failed.updatedAt, attemptedAt.toISOString());
+
+    const selectionAttempt = recordAnswerModeResult({
+        memory,
+        userId: "user",
+        roomId: "room",
+        itemId: item.id,
+        mode: "selection",
+        success: false,
+        now: attemptedAt,
+    });
+    assert.equal(selectionAttempt.lastPresentedAt, attemptedAt.toISOString());
+});
+
 test("automatic mode keeps typed input after independent recall and rejects hinted recall", () => {
     const now = new Date("2026-11-11T12:00:00.000Z");
     const initial = createInitialMemory("user", "room", item.id);
