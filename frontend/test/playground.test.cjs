@@ -1022,6 +1022,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     const flush = getCallback("flushPendingMemory", {
         cachePendingMemory: () => {},
         authenticatedUserIdRef: { current: "u" },
+        memoryPersistenceDisabledRef: { current: false },
         pendingMemoryRef: pending,
         syncInFlightRef: inFlight,
         setSaveError: (value) => {
@@ -1054,6 +1055,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     const failing = getCallback("flushPendingMemory", {
         cachePendingMemory: () => {},
         authenticatedUserIdRef: { current: "u" },
+        memoryPersistenceDisabledRef: { current: false },
         pendingMemoryRef: pending,
         syncInFlightRef: inFlight,
         setSaveError: (value) => {
@@ -1153,6 +1155,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             expectedTypingAtStartRef: ref(0),
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),
+            memoryPersistenceDisabledRef: ref(false),
             pendingMemoryRef: ref(new Map()),
             userReviewCountRef: ref(0),
             previousInputAtRef: ref(null),
@@ -1214,7 +1217,50 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             Object.keys(globals.schedulerRef.current.retries).length,
             0,
         );
+
+        globals.pendingMemoryRef.current.clear();
+        globals.memoryPersistenceDisabledRef.current = true;
+        actual.updateLocalMemory(items[0], observation());
+        assert.equal(
+            globals.pendingMemoryRef.current.size,
+            0,
+            "fallback recall observations must stay out of the authenticated sync queue",
+        );
     }
+});
+
+test("fallback answer-mode observations never enter authenticated sync queue", async () => {
+    const m = load("lib/playground/memory.ts");
+    const ref = (current) => ({ current });
+    const item = { id: "a", type: "typed_recall", answer: "abcdefgh" };
+    const pending = ref(new Map());
+    const memory = ref({});
+    let syncCalls = 0;
+    const globals = {
+        ...m,
+        room: { id: "r" },
+        items: [item],
+        authenticatedUserIdRef: ref("u"),
+        memoryPersistenceDisabledRef: ref(true),
+        memoryByItemRef: memory,
+        pendingMemoryRef: pending,
+        setMemoryByItem: () => {},
+        syncPlaygroundMemory: async () => {
+            syncCalls++;
+            return null;
+        },
+    };
+    const actual = clientCallbacks(
+        ["updateAnswerModeMemory", "flushPendingMemory"],
+        globals,
+    );
+
+    actual.updateAnswerModeMemory(item, "input", true);
+    await actual.flushPendingMemory();
+
+    assert(memory.current.a, "the current session still updates its memory");
+    assert.equal(pending.current.size, 0);
+    assert.equal(syncCalls, 0);
 });
 
 test("actual input callbacks retain a wrong character through Backspace correction", () => {
