@@ -272,8 +272,9 @@ export default function Client({
 
         const initializeFallback = (userId: string | null) => {
             authenticatedUserIdRef.current = userId;
-            // Never write guest data when authentication could not be verified.
-            memoryPersistenceDisabledRef.current = !userId;
+            // A failed read means the existing history is unknown. Keep this
+            // session's observations local until a later read can reconcile it.
+            memoryPersistenceDisabledRef.current = true;
 
             const fallbackMemory: Record<string, ItemMemoryState> = {};
             if (userId) {
@@ -580,7 +581,10 @@ export default function Client({
                 [item.id]: nextMemory,
             };
 
-            if (authenticatedUserIdRef.current) {
+            if (
+                authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
                 // Persist the observation immediately, before a rapid reload.
                 // The existing debounced sync still sends it to the server.
@@ -592,7 +596,10 @@ export default function Client({
                 } catch {
                     // Local storage may be unavailable; the current game continues.
                 }
-            } else if (!memoryPersistenceDisabledRef.current) {
+            } else if (
+                !authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
@@ -681,7 +688,10 @@ export default function Client({
                 ...freshestMemory,
                 [item.id]: updated,
             };
-            if (authenticatedUserIdRef.current) {
+            if (
+                authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 pendingMemoryRef.current.set(item.id, updated);
                 try {
                     localStorage.setItem(
@@ -691,7 +701,10 @@ export default function Client({
                 } catch {
                     // The current session can continue if storage is unavailable.
                 }
-            } else if (!memoryPersistenceDisabledRef.current) {
+            } else if (
+                !authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
@@ -713,7 +726,11 @@ export default function Client({
     }, [room.id]);
 
     const flushPendingMemory = useCallback(async () => {
-        if (!authenticatedUserIdRef.current) return;
+        if (
+            !authenticatedUserIdRef.current ||
+            memoryPersistenceDisabledRef.current
+        )
+            return;
         cachePendingMemory();
         if (syncInFlightRef.current) return syncInFlightRef.current;
         const sync = async () => {
