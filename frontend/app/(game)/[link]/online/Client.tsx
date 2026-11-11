@@ -1219,7 +1219,7 @@ export default function Clinet({
                         users[focusedBomb.holder]?.id === userId
                     ) {
                         const session = onlineMemoryRef.current;
-                        if (session?.roomId === room?.id) {
+                        if (session && session.roomId === room?.id) {
                             const updated = recordOnlineAnswerModeResult(
                                 session,
                                 focusedItem.id,
