@@ -23,6 +23,7 @@ type Props = {
     hintDelaysMs?: number[] | null;
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
+    isPaused?: boolean;
 };
 
 export default function TypedRecallView({
@@ -42,6 +43,7 @@ export default function TypedRecallView({
     hintDelaysMs,
     onRecallProgress,
     onRecallComplete,
+    isPaused = false,
 }: Readonly<Props>) {
     return (
         <TypingView
@@ -62,6 +64,7 @@ export default function TypedRecallView({
             hintDelaysMs={hintDelaysMs}
             onRecallProgress={onRecallProgress}
             onRecallComplete={onRecallComplete}
+            isPaused={isPaused}
         />
     );
 }

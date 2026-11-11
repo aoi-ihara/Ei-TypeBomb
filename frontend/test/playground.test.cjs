@@ -842,16 +842,15 @@ function getCallback(name, globals) {
     return evaluate("export const callback = " + printed, globals).callback;
 }
 
-test("answer speech plays only after a successful local answer", () => {
+test("solo answer speech plays after success, including after a full hint", () => {
     for (const scenario of [
-        { mode: "answer", local: true, revealed: false, expected: ["apple"] },
-        // Using the full-answer hint does not suppress speech after correct input.
-        { mode: "answer", local: true, revealed: true, expected: ["apple"] },
-        { mode: "answer", local: false, revealed: false, expected: [] },
-        { mode: "question", local: true, revealed: false, expected: [] },
-        { mode: "none", local: true, revealed: false, expected: [] },
+        { mode: "answer", revealed: false, expected: ["apple"] },
+        { mode: "answer", revealed: true, expected: ["apple"] },
+        { mode: "question", revealed: false, expected: [] },
+        { mode: "none", revealed: false, expected: [] },
     ]) {
         const spoken = [];
+        const nextItems = [];
         const synthesis = {
             cancel: () => {},
             speak: (utterance) => spoken.push([utterance.text, utterance.lang]),
@@ -861,40 +860,54 @@ test("answer speech plays only after a successful local answer", () => {
                 this.text = text;
             }
         }
-        const turn = scenario.local ? 0 : 1;
         const callback = getCallback("handleSuccess", {
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
-            LOCAL_USER_ID: "local",
+            isPaused: false,
             offlineVoiceReading: scenario.mode,
             soundEffects: false,
             successAudioRef: { current: null },
-            usersRef: { current: [{ id: "local" }, { id: "bot" }] },
-            currentTurnRef: { current: turn },
             currentItemRef: { current: { id: "a", answer: "apple" } },
             recallProgressRef: {
                 current: { answerWasFullyRevealed: scenario.revealed },
             },
-            saveBotExposure: () => {},
             setCurrentInput: () => {},
             previousInputAtRef: { current: null },
             previousInputLengthRef: { current: 0 },
-            resolveTurnWithItem: () => ({ turnIndex: 0, item: null }),
-            setTrackedTurn: () => {},
-            setTrackedItem: () => {},
+            resolveTurnWithItem: () => ({ id: "b" }),
+            setTrackedItem: (item) => nextItems.push(item.id),
             posthog: { capture: () => {} },
             room: { id: "r" },
         });
         callback();
-        assert.deepEqual(
-            spoken.map(([text]) => text),
-            scenario.expected,
-            JSON.stringify(scenario),
-        );
-        if (scenario.expected.length) {
-            assert.equal(spoken[0][1], "en-US");
-        }
+        assert.deepEqual(spoken.map(([text]) => text), scenario.expected);
+        assert.deepEqual(nextItems, ["b"], "the next prompt belongs to the same player");
+        if (scenario.expected.length) assert.equal(spoken[0][1], "en-US");
     }
+});
+
+test("paused solo practice does not advance a question", () => {
+    let advanced = false;
+    const callback = getCallback("handleSuccess", {
+        isPaused: true,
+        currentItemRef: { current: { id: "a", answer: "apple" } },
+        setTrackedItem: () => { advanced = true; },
+    });
+    callback();
+    assert.equal(advanced, false);
+});
+
+test("active recall clock excludes paused intervals before and after resume", () => {
+    const { getActiveElapsedMs } = load("lib/playground/active-clock.ts");
+
+    // A pause starts at 2s. While paused, elapsed time stays frozen at 1s.
+    assert.equal(getActiveElapsedMs(62_000, 1_000, 0, 2_000), 1_000);
+
+    // After a 60s pause, one more active second brings elapsed time to 2s.
+    assert.equal(getActiveElapsedMs(63_000, 1_000, 60_000, null), 2_000);
+
+    // A later pause also stays excluded while it is still in progress.
+    assert.equal(getActiveElapsedMs(100_000, 1_000, 60_000, 80_000), 19_000);
 });
 
 test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
@@ -995,7 +1008,7 @@ function clientCallbacks(names, globals) {
         globals,
     );
 }
-test("actual Client callbacks cover 20/100 words and preserve scheduler telemetry with BOT turns", () => {
+test("actual solo Client callbacks cover 20/100 words without BOT turns", () => {
     for (const size of [20, 100]) {
         let time = now.getTime();
         class Clock extends Date {
@@ -1025,17 +1038,10 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
             Date: Clock,
             items,
             room: { id: "r" },
-            LOCAL_USER_ID: "local",
-            initialSounDeffects: false,
-            offlineVoiceReading: false,
-            schedulerRef: ref(
-                sch.createScheduler(
-                    items.map((x) => x.id),
-                    rng(17),
-                ),
-            ),
-            usersRef: ref([{ id: "local" }, { id: "bot" }]),
-            currentTurnRef: ref(0),
+            isPaused: false,
+            offlineVoiceReading: "none",
+            soundEffects: false,
+            schedulerRef: ref(sch.createScheduler(items.map((x) => x.id), rng(17))),
             currentItemRef: ref(null),
             recallProgressRef: ref(null),
             sessionTurnNumberRef: ref(0),
@@ -1056,46 +1062,36 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
         };
         for (const setter of [
             "setCurrentItem",
-            "setRecallPressurePaused",
             "setItemPresentationKey",
-            "setCurrentTurn",
             "setMemoryByItem",
             "setCurrentInput",
-        ])
-            globals[setter] = noop;
+            "setNextReviewAt",
+            "setIsStarted",
+        ]) globals[setter] = noop;
         const actual = clientCallbacks(
             [
-                "saveBotExposure",
                 "setTrackedItem",
                 "chooseItemForTurn",
                 "resolveTurnWithItem",
-                "setTrackedTurn",
                 "updateLocalMemory",
                 "handleRecallComplete",
                 "handleSuccess",
             ],
             globals,
         );
-        const first = actual.resolveTurnWithItem(0);
-        actual.setTrackedTurn(first.turnIndex);
-        actual.setTrackedItem(first.item);
+        actual.setTrackedItem(actual.resolveTurnWithItem());
         const seen = new Set();
         for (let turn = 0; turn < size; turn++) {
-            assert.equal(globals.currentTurnRef.current, 0);
-            const id = globals.currentItemRef.current.id;
-            assert(!seen.has(id));
-            seen.add(id);
+            const item = globals.currentItemRef.current;
+            assert(item, "the solo learner receives a question immediately");
+            assert(!seen.has(item.id));
+            seen.add(item.id);
             time += 1200;
             actual.handleRecallComplete(observation());
             actual.handleSuccess();
-            if (globals.currentTurnRef.current === 1) {
-                const before = globals.userReviewCountRef.current;
-                time += 1000;
-                actual.handleSuccess();
-                assert.equal(globals.userReviewCountRef.current, before);
-            }
         }
         assert.equal(seen.size, size);
+        assert.equal(globals.userReviewCountRef.current, size);
         const recallEvents = events.filter(
             (x) => x.event === "playground_item_recalled",
         );
@@ -1111,14 +1107,14 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
         assert(
             recallEvents.every(
                 (x) => x.model_version === m.MEMORY_MODEL_VERSION,
-            ),
-        );
+        ));
         assert.equal(
             Object.keys(globals.schedulerRef.current.retries).length,
             0,
         );
     }
 });
+
 test("actual input callbacks retain a wrong character through Backspace correction", () => {
     const source = fs.readFileSync(
         path.join(root, "components/recall/TypingView.tsx"),
@@ -1184,6 +1180,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
         inputFrameRef: ref(null),
         correctPrefixLength: input.correctPrefixLength,
         performance: { now: () => 1200 },
+        getActiveElapsedMs: () => 0,
         onRecallComplete: (o) => observations.push(o),
         onSuccess: noop,
         onChangeInput: noop,
@@ -1294,7 +1291,7 @@ function getInputFunction(name, globals) {
     return evaluate(
         "export const callback = " +
             ts.createPrinter().printNode(ts.EmitHint.Expression, found, ast),
-        globals,
+        { getActiveElapsedMs: () => 0, ...globals },
     ).callback;
 }
 
@@ -1376,21 +1373,13 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].source, "manual");
 });
 
-test("actual playground progress callback pauses pressure on first hint", () => {
+test("actual solo progress callback keeps hint state without bomb pressure", () => {
     const saved = { current: null };
-    let paused = false;
     const callback = getCallback("handleRecallProgress", {
-        usersRef: { current: [{ id: "local" }] },
-        currentTurnRef: { current: 0 },
-        LOCAL_USER_ID: "local",
         recallProgressRef: saved,
-        currentItemRef: { current: { type: "typed_recall", answer: "apple" } },
-        setRecallPressurePaused: (value) => {
-            paused = value;
-        },
     });
     callback({ hintCount: 1, revealedHintChars: 1 });
-    assert.equal(paused, true);
+    assert.equal(saved.current.hintCount, 1);
     assert.equal(saved.current.revealedHintChars, 1);
 });
 
