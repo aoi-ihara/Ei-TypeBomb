@@ -6,6 +6,7 @@ import {
     type AnswerModeResult,
     type ItemMemoryState,
     type RecallObservation,
+    type RecallProgress,
 } from "../playground/memory";
 import {
     chooseNextUserItem,
@@ -16,6 +17,83 @@ import {
     recordRecognitionAnswer,
     type SchedulerState,
 } from "../playground/scheduler";
+
+export type OnlineLearningDiagnostic = {
+    kind:
+        | "recommendation"
+        | "recall"
+        | "selection"
+        | "recall_started"
+        | "unfinished";
+    diagnosticVersion: "online-learning-v2";
+    itemId: string;
+    schedulerTurn: number;
+    schedulerCycle: number;
+    schedulerReason: string | null;
+    cycleQueueRemaining: number;
+    pendingRetryCount: number;
+    suspendedWordCount: number;
+    lastUserItemId: string | null;
+    reconciled?: boolean;
+    previousRecommendedItemId?: string | null;
+    retryNeed?: "none" | "confirm" | "short";
+    memoryEvidence?: string;
+    independentRecall?: boolean;
+    retryCountBefore?: number;
+    hintCount?: number;
+    revealedHintChars?: number;
+    answerLength?: number;
+    finalCueRatio?: number;
+    answerWasFullyRevealed?: boolean;
+    elapsedMs?: number;
+    elapsedSincePresentationMs?: number | null;
+    answerCorrect?: boolean;
+    attemptKey?: string;
+    endReason?: string;
+    hintEvidenceVersion?: string;
+    displayedHintCount?: number;
+    preHintCorrectChars?: number;
+    assistedHintChars?: number;
+    displayedFullAnswer?: boolean;
+    attemptCount?: number;
+    incorrectInputCount?: number;
+};
+
+export const onlineSchedulerDiagnostic = (
+    session: OnlineMemorySession,
+    kind: OnlineLearningDiagnostic["kind"],
+    itemId: string,
+): OnlineLearningDiagnostic => ({
+    diagnosticVersion: "online-learning-v2",
+    kind,
+    itemId,
+    schedulerTurn: session.scheduler.turn,
+    schedulerCycle: session.scheduler.cycle,
+    schedulerReason: session.scheduler.current?.reason ?? null,
+    cycleQueueRemaining: session.scheduler.cycleQueue.length,
+    pendingRetryCount: Object.keys(session.scheduler.retries).length,
+    suspendedWordCount: Object.values(session.scheduler.struggles).filter(
+        (entry) => entry.suspendedUntil !== null,
+    ).length,
+    lastUserItemId: session.scheduler.lastUserItem,
+});
+
+export const onlineRecallDiagnosticFields = (
+    progress: RecallProgress,
+    answerLength: number,
+) => ({
+    hintEvidenceVersion: progress.hintDiagnostics?.version,
+    displayedHintCount: progress.hintDiagnostics?.displayedHintCount,
+    preHintCorrectChars: progress.hintDiagnostics?.preHintCorrectChars,
+    assistedHintChars: progress.hintDiagnostics?.assistedHintChars,
+    displayedFullAnswer:
+        answerLength > 0 && progress.revealedHintChars >= answerLength,
+    hintCount: progress.hintCount,
+    revealedHintChars: progress.revealedHintChars,
+    attemptCount: progress.attemptCount,
+    incorrectInputCount: progress.incorrectInputCount,
+    elapsedMs: progress.elapsedMs,
+});
 
 export type OnlineMemorySession = {
     roomId: string;
@@ -214,8 +292,11 @@ export const recordOnlineAnswerModeResult = (
     itemId: string,
     mode: AnswerModeResult,
     success: boolean,
+    onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
+    const selectedBefore = session.scheduler.current?.itemId ?? null;
+    const retryCountBefore = Object.keys(session.scheduler.retries).length;
     const updated = recordAnswerModeResult({
         memory: session.memory[itemId],
         userId: session.userId ?? guestUserId,
@@ -237,6 +318,13 @@ export const recordOnlineAnswerModeResult = (
         session.roomId,
         session.scheduler,
     );
+    onDiagnostic?.({
+        ...onlineSchedulerDiagnostic(session, "selection", itemId),
+        reconciled: success && selectedBefore !== itemId,
+        previousRecommendedItemId: selectedBefore,
+        retryCountBefore,
+        answerCorrect: success,
+    });
     return updated;
 };
 
@@ -244,10 +332,15 @@ export const recordOnlineRecall = (
     session: OnlineMemorySession,
     itemId: string,
     observation: RecallObservation,
+    onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const scheduler = session.scheduler;
+    const selectedBefore = scheduler.current?.itemId ?? null;
+    const reconciled = selectedBefore !== itemId;
+    const retryCountBefore = Object.keys(scheduler.retries).length;
     reconcileOnlineSchedulerItem(scheduler, itemId);
+    const schedulerReason = scheduler.current?.reason ?? null;
 
     const previous = session.memory[itemId];
     const exposureAt = previous?.lastPresentedAt;
@@ -273,7 +366,27 @@ export const recordOnlineRecall = (
         expectedTypingMs: observation.answerLength * 220,
         schedulerReason: scheduler.current?.reason ?? "cycle",
     };
-    recordUserAnswer(scheduler, evaluateRecall(evidence));
+    const evaluation = evaluateRecall(evidence);
+    recordUserAnswer(scheduler, evaluation);
+    onDiagnostic?.({
+        ...onlineSchedulerDiagnostic(session, "recall", itemId),
+        schedulerReason,
+        reconciled,
+        previousRecommendedItemId: selectedBefore,
+        retryCountBefore,
+        retryNeed: evaluation.retryNeed,
+        memoryEvidence: evaluation.memoryEvidence,
+        independentRecall: evaluation.independent,
+        ...onlineRecallDiagnosticFields(evidence, evidence.answerLength),
+        hintCount: evidence.hintCount,
+        revealedHintChars: evidence.revealedHintChars,
+        answerLength: evidence.answerLength,
+        finalCueRatio: evidence.finalCueRatio,
+        answerWasFullyRevealed: evidence.answerWasFullyRevealed,
+        elapsedMs: evidence.elapsedMs,
+        elapsedSincePresentationMs: evidence.elapsedSincePresentationMs,
+        answerCorrect: evidence.success,
+    });
     const updated = applyRecallObservation({
         memory: previous,
         observation: evidence,

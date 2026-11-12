@@ -266,13 +266,12 @@ export const recordLatencySample = (latencyMs: number) => {
     scheduleRender();
 };
 
-export const logEvent = (
+const recordLocalEvent = (
     context: Exclude<EventContext, "ERROR">,
     message: string,
     metadata?: LogMetadata,
 ) => {
     logToFile(context, message, metadata);
-    capturePostHogLog("INFO", context, message, metadata);
 
     if (
         (context === "SERVER" &&
@@ -288,6 +287,25 @@ export const logEvent = (
 
     if (isInteractive) scheduleRender();
     else console.log(`> [${context}] ${message}`);
+};
+
+// Writes to backend/server/logs/server.log and the local server console only.
+// Unlike logEvent, this intentionally does not send anything to PostHog.
+export const logLocalEvent = (
+    context: Exclude<EventContext, "ERROR">,
+    message: string,
+    metadata?: LogMetadata,
+) => {
+    recordLocalEvent(context, message, metadata);
+};
+
+export const logEvent = (
+    context: Exclude<EventContext, "ERROR">,
+    message: string,
+    metadata?: LogMetadata,
+) => {
+    recordLocalEvent(context, message, metadata);
+    capturePostHogLog("INFO", context, message, metadata);
 };
 
 export const logError = (

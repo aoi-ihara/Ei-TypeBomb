@@ -3,6 +3,7 @@ import {
     nextGameDeadline,
     type GameEvent,
     type GameResult,
+    type ItemSelection,
     DEFAULT_GAME_RULES as NODE_GAME_RULES,
 } from "../../../shared/game";
 import type { GameState } from "../../../shared/types";
@@ -28,7 +29,13 @@ export class NodeGameAdapter {
         private readonly chooseItemIndex?: (
             playerId: string,
             room: GameState["room"],
+            previousIndex?: number,
         ) => number | undefined,
+        private readonly onItemSelected?: (
+            selection: ItemSelection,
+            room: GameState["room"],
+            event: GameEvent,
+        ) => void,
     ) {
         this.schedule();
     }
@@ -42,6 +49,8 @@ export class NodeGameAdapter {
                 random: this.random,
                 rules: NODE_GAME_RULES,
                 chooseItemIndex: this.chooseItemIndex,
+                onItemSelected: (selection, room) =>
+                    this.onItemSelected?.(selection, room, event),
             });
         } catch (error) {
             if (event.type === "deadline") {

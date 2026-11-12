@@ -10,7 +10,7 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "postinstall": "node scripts/fix-word-drag.mjs",
-        "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs test/retry-gap.test.cjs && tsx --test test/answer-mode.test.mts",
+        "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs test/retry-gap.test.cjs test/automatic-hint-evidence.test.cjs && tsx --test test/answer-mode.test.mts",
         "test:kana": "node --test test/romaji-input.test.mjs",
         "test:import": "node --test test/import-words.test.mjs",
         "test:bot-typing": "node --test test/bot-typing.test.mjs",
