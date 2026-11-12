@@ -238,7 +238,10 @@ function CustomCursor() {
         };
 
         const onPointerMove = (e: PointerEvent) => {
-            if (e.pointerType !== "mouse") return;
+            if (e.pointerType !== "mouse") {
+                setPointerActive(false);
+                return;
+            }
             setPointerActive(true);
             handleMouseMove(e.clientX, e.clientY);
         };
