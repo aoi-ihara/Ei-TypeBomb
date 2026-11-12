@@ -47,17 +47,6 @@ export default function PlayRoom({
     const [displayName, setDisplayName] = useState("");
     const [answerMode, setAnswerMode] = useState<AnswerMode>("auto");
 
-    useEffect(() => {
-        try {
-            setDisplayName(
-                (localStorage.getItem("display-name") ?? "").slice(0, 50),
-            );
-            const saved = localStorage.getItem("answer-mode");
-            if (isAnswerMode(saved)) setAnswerMode(saved);
-        } catch {
-            // The dialog remains usable when browser storage is unavailable.
-        }
-    }, []);
     const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
     const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
     const answerModeSelection = Math.max(
@@ -116,7 +105,9 @@ export default function PlayRoom({
         });
         startNavigationProgress();
         router.push(
-            "/" + link + "/" + mode + "?answerMode=" + selectedAnswerMode,
+            mode === "offline"
+                ? "/" + link + "/offline?answerMode=" + selectedAnswerMode
+                : "/" + link + "/online",
         );
     };
 
@@ -173,10 +164,12 @@ export default function PlayRoom({
 
         setError("");
         const selectedAnswerMode = effectiveAnswerMode;
-        try {
-            localStorage.setItem("answer-mode", selectedAnswerMode);
-        } catch {
-            // The selected mode still applies to this session.
+        if (mode === "offline") {
+            try {
+                localStorage.setItem("answer-mode", selectedAnswerMode);
+            } catch {
+                // The selected mode still applies to this session.
+            }
         }
         if (mode === "online") {
             if (!validDisplayName(displayName)) {
@@ -198,7 +191,7 @@ export default function PlayRoom({
 
     const renderModeDialog = (mode: PlayMode) => {
         const isOnline = mode === "online";
-        const title = isOnline ? "表示名と出題形式" : "出題形式";
+        const title = isOnline ? "表示名" : "出題形式";
         const isActive = activeDialog === mode;
 
         return (
@@ -208,6 +201,18 @@ export default function PlayRoom({
                     <Button
                         onClick={() => {
                             setError("");
+                            try {
+                                setDisplayName(
+                                    (localStorage.getItem("display-name") ?? "").slice(
+                                        0,
+                                        50,
+                                    ),
+                                );
+                                const saved = localStorage.getItem("answer-mode");
+                                if (isAnswerMode(saved)) setAnswerMode(saved);
+                            } catch {
+                                // The dialog remains usable when browser storage is unavailable.
+                            }
                             setActiveDialog(mode);
                         }}
                         className="w-full"
@@ -225,7 +230,7 @@ export default function PlayRoom({
                             ? "表示名・出題形式・パスワードを入力してください。"
                             : "出題形式とパスワードを入力してください。"
                         : isOnline
-                          ? "表示名と出題形式を選択してください。"
+                          ? "表示名を入力してください。"
                           : "出題形式を選択してください。"
                 }
                 alignment="vertical"
@@ -244,17 +249,19 @@ export default function PlayRoom({
                         disabled={joining !== null}
                     />
                 )}
-                <div className="w-full flex flex-col gap-2">
-                    <Selection
-                        items={availableAnswerModes.map(
-                            (option) => option.label,
-                        )}
-                        selection={answerModeSelection}
-                        onSelected={(index) =>
-                            setAnswerMode(availableAnswerModes[index].value)
-                        }
-                    />
-                </div>
+                {!isOnline && (
+                    <div className="w-full flex flex-col gap-2">
+                        <Selection
+                            items={availableAnswerModes.map(
+                                (option) => option.label,
+                            )}
+                            selection={answerModeSelection}
+                            onSelected={(index) =>
+                                setAnswerMode(availableAnswerModes[index].value)
+                            }
+                        />
+                    </div>
+                )}
                 {showPasswordField && !alreadyAuthorized && (
                     <Input
                         value={roomPassword}
