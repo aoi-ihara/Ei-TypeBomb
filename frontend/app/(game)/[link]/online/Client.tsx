@@ -1132,11 +1132,6 @@ export default function Clinet({
                 }
                 currentInput={currentInput}
                 answerMode="input"
-                answerModeMemory={
-                    focusedItem
-                        ? onlineMemoryRef.current?.memory[focusedItem.id]
-                        : undefined
-                }
                 onSelectionAnswer={(correct) => {
                     if (
                         !focusedItem ||
