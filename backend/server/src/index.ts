@@ -339,7 +339,8 @@ httpServer.on("upgrade", (request, socket, head) => {
     });
 });
 const io = new Server<
-    EventHandlers<ClientPayloads>,
+    // Diagnostic payloads are validated by the dedicated logging handler below.
+    EventHandlers<ClientPayloads & { "learning:diagnostic": unknown }>,
     EventHandlers<ServerPayloads>
 >(httpServer, {
     maxHttpBufferSize: 8192,

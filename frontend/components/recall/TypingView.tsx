@@ -4,6 +4,12 @@ import {
 } from "@/lib/playground/recall-input";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
+import {
+    createAutomaticHintEvidence,
+    recordAutomaticHintInput,
+    revealAutomaticHint,
+    summarizeAutomaticHintEvidence,
+} from "@/lib/playground/automatic-hint-evidence";
 import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import {
     advanceKanaInput,
@@ -93,6 +99,9 @@ function TypingAttempt({
     const isKanaAnswer = Boolean(english && hasHiragana(english));
     const inputStateRef = useRef(input);
     const revealedHintLengthRef = useRef(initialCueLength);
+    const automaticHintEvidenceRef = useRef(
+        createAutomaticHintEvidence(english ?? "", initialCueLength),
+    );
     const onChangeInputRef = useRef(onChangeInput);
     const onHintChangeRef = useRef(onHintChange);
     const [currentSelection, setCurrentSelection] = useState(0);
@@ -210,7 +219,7 @@ function TypingAttempt({
             const waitMs = Math.max(25, anchorAt + getHintDelay() - now);
 
             timer = setTimeout(() => {
-                if (cancelled) return;
+                if (cancelled || completedRef.current) return;
 
                 if (isPaused) return;
                 const firedAt = getActiveElapsedMs();
@@ -250,6 +259,12 @@ function TypingAttempt({
 
                 if (nextLength <= currentLength) return;
 
+                revealAutomaticHint(
+                    automaticHintEvidenceRef.current,
+                    english,
+                    inputStateRef.current,
+                    nextLength,
+                );
                 revealedHintLengthRef.current = nextLength;
                 setRevealedHintLength(nextLength);
                 onHintChangeRef.current?.(nextLength);
@@ -412,6 +427,12 @@ function TypingAttempt({
             recallLatencyMs:
                 firstKeyAtRef.current === null ? null : firstKeyAtRef.current,
             elapsedMs: getActiveElapsedMs(),
+            ...(!manualHints
+                ? summarizeAutomaticHintEvidence(
+                      automaticHintEvidenceRef.current,
+                      english,
+                  )
+                : {}),
         });
     }, [
         english,
@@ -430,6 +451,14 @@ function TypingAttempt({
 
     const moveToNext = (next: string[], advance = 1, pendingRoman = "") => {
         if (completedRef.current) return;
+        if (!manualHints)
+            recordAutomaticHintInput(
+                automaticHintEvidenceRef.current,
+                english,
+                next,
+                currentSelection,
+                advance,
+            );
         // Kana combinations such as ちゃ may confirm two cells at once.
         for (let offset = 0; offset < advance; offset++) {
             if (
@@ -480,11 +509,20 @@ function TypingAttempt({
             const result = next.join("");
             if (result === english) {
                 completedRef.current = true;
-                const finalCueRatio = hintLength / Math.max(1, english.length);
+                const automaticEvidence = manualHints
+                    ? null
+                    : summarizeAutomaticHintEvidence(
+                          automaticHintEvidenceRef.current,
+                          english,
+                      );
+                const finalCueRatio =
+                    automaticEvidence?.finalCueRatio ??
+                    hintLength / Math.max(1, english.length);
                 const outcome =
                     learningMode === "encoding"
                         ? "encoding"
-                        : finalCueRatio >= 1
+                        : (automaticEvidence?.answerWasFullyRevealed ??
+                          finalCueRatio >= 1)
                           ? "relearned"
                           : finalCueRatio === 0
                             ? "free_recall"
@@ -508,7 +546,7 @@ function TypingAttempt({
                     firstAttemptCorrect:
                         attemptCountRef.current === 1 &&
                         incorrectInputCountRef.current === 0 &&
-                        hintLength === 0,
+                        finalCueRatio === 0,
                     attemptCount: attemptCountRef.current,
                     incorrectInputCount: incorrectInputCountRef.current,
                     hintCount,
@@ -519,6 +557,7 @@ function TypingAttempt({
                             ? null
                             : firstKeyAtRef.current,
                     elapsedMs: getActiveElapsedMs(),
+                    ...automaticEvidence,
                 };
                 onRecallComplete?.(observation);
                 onSuccess();
