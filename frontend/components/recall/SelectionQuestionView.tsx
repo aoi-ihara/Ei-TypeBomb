@@ -86,7 +86,7 @@ export default function SelectionQuestionView({
     }, [choose, disabled, options.length, wrongOptions]);
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 items-center">
             <div className="flex flex-col items-center">
                 <div
                     className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
@@ -95,7 +95,7 @@ export default function SelectionQuestionView({
                     {item.prompt}
                 </div>
             </div>
-            <div className="w-64 flex flex-col gap-4">
+            <div className="max-w-lg w-full flex flex-col gap-4">
                 {options.map((option, index) => (
                     <Button
                         key={option + ":" + index}
@@ -107,7 +107,9 @@ export default function SelectionQuestionView({
                         disabled={disabled || wrongOptions.has(index)}
                         onClick={() => choose(index)}
                     >
-                        {index + 1}. {option}
+                        <span className="font-bold font-mono">
+                            {index + 1}. {option}
+                        </span>
                     </Button>
                 ))}
             </div>
