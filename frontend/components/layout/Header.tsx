@@ -20,9 +20,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                             width={36}
                             height={36}
                         />
-                        <span className="font-extrabold hidden sm:flex">
-                            Ei-TypeBomb
-                        </span>
+                        <span className="font-extrabold flex">Ei-TypeBomb</span>
                     </Link>
                 </div>
             </div>
