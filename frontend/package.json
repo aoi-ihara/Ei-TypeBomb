@@ -17,6 +17,7 @@
         "test:mcp-oauth": "node --test test/account-auth.test.cjs test/mcp-etb-auth.test.cjs test/mcp-oauth-discovery.test.mjs && tsx --test test/mcp-oauth-diagnostics.test.mts",
         "test:account": "node --test test/account-auth.test.cjs",
         "test:room-list": "tsx --test test/room-list.test.mts",
+        "test:editor": "tsx --test test/editor-rebase.test.mts",
         "check:mcp-oauth": "node scripts/check-mcp-oauth.mjs",
         "test:mcp-server": "tsx --test test/mcp-authorization-server.test.mts test/mcp-database-tls.test.mts",
         "generate:mcp-keys": "node scripts/generate-mcp-keys.mjs",
