@@ -221,6 +221,22 @@ export class DistributedRoom {
                 const index = room.items.findIndex(
                     (entry) => entry.id === item,
                 );
+                console.log(
+                    "[GAME] item recommendation consumed",
+                    JSON.stringify({
+                        roomId: room.id,
+                        playerId: id,
+                        requestedItemId: item ?? null,
+                        assignedItemId: index < 0 ? null : room.items[index].id,
+                        itemIndex: index < 0 ? null : index,
+                        source: index < 0 ? "random" : "client",
+                        reason: !item
+                            ? "missing"
+                            : index < 0
+                              ? "item_not_found"
+                              : null,
+                    }),
+                );
                 return index < 0 ? undefined : index;
             },
         });
