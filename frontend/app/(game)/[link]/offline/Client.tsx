@@ -336,7 +336,12 @@ export default function Client({
             }
 
             setIsSignedIn(Boolean(loaded.userId));
-            memoryPersistenceDisabledRef.current = false;
+            // A legacy schema can be read, but must not be overwritten until
+            // answer_mode_stats has been migrated into the database.
+            const legacySchema =
+                "persistenceDisabled" in loaded &&
+                loaded.persistenceDisabled === true;
+            memoryPersistenceDisabledRef.current = legacySchema;
 
             if (!loaded.userId) {
                 authenticatedUserIdRef.current = null;
@@ -356,6 +361,15 @@ export default function Client({
             }
 
             authenticatedUserIdRef.current = loaded.userId;
+            if (legacySchema) {
+                setNotice({
+                    visible: true,
+                    iconName: "info",
+                    title: "データベースの更新が必要です",
+                    description:
+                        "既存の学習履歴を読み込んでプレイできますが、更新が完了するまで今回の進捗は保存されません。",
+                });
+            }
             restorePendingMemory(loaded.userId, loaded.memoryByItem);
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
