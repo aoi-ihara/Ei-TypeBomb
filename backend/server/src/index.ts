@@ -11,6 +11,7 @@ import { createHealthRttProbeRateLimit } from "./lib/healthRttProbeRateLimit";
 import {
     logError,
     logEvent,
+    logLocalEvent,
     recordLatencySample,
     setServerState,
     startConsole,
@@ -472,6 +473,8 @@ const createRoomIfNeeded = async (
                         emit(effect.packet.event, effect.packet.data);
                     }
                 io.to(roomId).emit("room:broadcast", game.snapshot());
+            }, Date.now, Math.random, (message, metadata) => {
+                logLocalEvent("GAME", message, metadata);
             });
             const openStartedAt = performance.now();
             try {
@@ -537,7 +540,7 @@ const createRoomIfNeeded = async (
                             else emit(packet.event, packet.data);
                         } else {
                             const activity = effect.activity;
-                            logEvent("GAME", `${activity.event} ${roomId}`, {
+                            const activityMetadata = {
                                 roomId,
                                 gameId:
                                     result.state.room.gameId ??
@@ -552,7 +555,19 @@ const createRoomIfNeeded = async (
                                     result.state.room.users[
                                         result.state.room.bombHolder
                                     ],
-                            });
+                            };
+                            if (activity.event === "word_passed")
+                                logLocalEvent(
+                                    "GAME",
+                                    `${activity.event} ${roomId}`,
+                                    activityMetadata,
+                                );
+                            else
+                                logEvent(
+                                    "GAME",
+                                    `${activity.event} ${roomId}`,
+                                    activityMetadata,
+                                );
                             if (activity.event !== "word_passed")
                                 capturePostHogEvent(activity.event, {
                                     player_count: activity.playerCount,
@@ -570,16 +585,20 @@ const createRoomIfNeeded = async (
                         roomId,
                         ...metadata,
                     }),
-                (playerId, currentRoom) => {
+                (playerId, currentRoom, previousIndex) => {
                     // Recommendations describe one upcoming turn only. If the
                     // client has not supplied a fresh one, use the fallback
                     // instead of replaying the previous word indefinitely.
                     const itemId = recommendedItems.get(playerId);
                     recommendedItems.delete(playerId);
                     if (!itemId) {
-                        logEvent("GAME", "item recommendation fallback", {
+                        logLocalEvent("GAME", "item recommendation fallback", {
                             roomId: currentRoom.id,
                             playerId,
+                            previousItemId:
+                                previousIndex === undefined
+                                    ? null
+                                    : currentRoom.items[previousIndex]?.id ?? null,
                             source: "random",
                             reason: "missing",
                         });
@@ -589,24 +608,48 @@ const createRoomIfNeeded = async (
                         (item) => item.id === itemId,
                     );
                     if (index < 0) {
-                        logEvent("GAME", "item recommendation fallback", {
+                        logLocalEvent("GAME", "item recommendation fallback", {
                             roomId: currentRoom.id,
                             playerId,
                             requestedItemId: itemId,
+                            previousItemId:
+                                previousIndex === undefined
+                                    ? null
+                                    : currentRoom.items[previousIndex]?.id ?? null,
                             source: "random",
                             reason: "item_not_found",
                         });
                         return undefined;
                     }
-                    logEvent("GAME", "item recommendation consumed", {
+                    logLocalEvent("GAME", "item recommendation consumed", {
                         roomId: currentRoom.id,
                         playerId,
                         requestedItemId: itemId,
+                        previousItemId:
+                            previousIndex === undefined
+                                ? null
+                                : currentRoom.items[previousIndex]?.id ?? null,
                         assignedItemId: currentRoom.items[index].id,
                         itemIndex: index,
                         source: "client",
                     });
                     return index;
+                },
+                (selection, currentRoom, event) => {
+                    logLocalEvent("GAME", "item selected", {
+                        roomId: currentRoom.id,
+                        gameId: currentRoom.gameId ?? null,
+                        playerId: selection.playerId,
+                        previousItemId:
+                            selection.previousIndex === undefined
+                                ? null
+                                : currentRoom.items[selection.previousIndex]?.id ?? null,
+                        assignedItemId:
+                            currentRoom.items[selection.itemIndex]?.id ?? null,
+                        itemIndex: selection.itemIndex,
+                        source: selection.source,
+                        trigger: event.type,
+                    });
                 },
             ),
         );
@@ -898,7 +941,7 @@ io.on("connection", (socket) => {
             )
         )
             return;
-        logEvent("GAME", "item recommendation received", {
+        logLocalEvent("GAME", "item recommendation received", {
             roomId,
             playerId: user.id,
             itemId: parsed.data.itemId,

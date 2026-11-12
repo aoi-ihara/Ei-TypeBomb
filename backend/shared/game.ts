@@ -32,6 +32,13 @@ export const DEFAULT_GAME_RULES: GameRules = {
     allowCountdownPass: true,
     clearInputOnStop: false,
 };
+export type ItemSelection = {
+    playerId: string;
+    itemIndex: number;
+    previousIndex?: number;
+    source: "recommendation" | "random";
+};
+
 export type GameContext = {
     now: number;
     random: () => number;
@@ -41,7 +48,12 @@ export type GameContext = {
     chooseItemIndex?: (
         playerId: string,
         room: GameState["room"],
+        previousIndex?: number,
     ) => number | undefined;
+    onItemSelected?: (
+        selection: ItemSelection,
+        room: GameState["room"],
+    ) => void;
 };
 export type Activity = {
     event:
@@ -162,14 +174,26 @@ export function applyGameEvent(
     const itemForHolder = (holder: number, previousIndex?: number) => {
         const playerId = room.users[holder]?.id;
         const preferred = playerId
-            ? context.chooseItemIndex?.(playerId, room)
+            ? context.chooseItemIndex?.(playerId, room, previousIndex)
             : undefined;
+        const reportSelection = (
+            itemIndex: number,
+            source: ItemSelection["source"],
+        ) => {
+            if (playerId)
+                context.onItemSelected?.(
+                    { playerId, itemIndex, previousIndex, source },
+                    room,
+                );
+            return itemIndex;
+        };
+
         if (
             typeof preferred === "number" &&
             Number.isInteger(preferred) &&
             preferred >= 0 &&
             preferred < room.items.length
-        ) return preferred;
+        ) return reportSelection(preferred, "recommendation");
 
         // A missing/stale client recommendation should not immediately
         // repeat the same word when the bomb passes to another player.
@@ -179,9 +203,12 @@ export function applyGameEvent(
             previousIndex === undefined ||
             previousIndex < 0 ||
             previousIndex >= count
-        ) return index(count);
+        ) return reportSelection(index(count), "random");
         const choice = index(count - 1);
-        return choice >= previousIndex ? choice + 1 : choice;
+        return reportSelection(
+            choice >= previousIndex ? choice + 1 : choice,
+            "random",
+        );
     };
     const bombAt = () => {
         const duration = room.gameDuration;
