@@ -212,7 +212,7 @@ export class DistributedRoom {
         );
     }
     private reduce(value: DurableRoom, event: GameEvent) {
-        return applyGameEvent(value.game, event, {
+        const result = applyGameEvent(value.game, event, {
             now: this.now(),
             random: this.random,
             rules: GAME_RULES,
@@ -262,6 +262,25 @@ export class DistributedRoom {
                 });
             },
         });
+        if (
+            event.type === "word:success" &&
+            result.effects.some(
+                (effect) =>
+                    effect.type === "activity" &&
+                    effect.activity.event === "word_passed",
+            )
+        ) {
+            this.trace("word_passed", {
+                roomId: result.state.room.id,
+                gameId:
+                    result.state.room.gameId ??
+                    value.game.room.gameId ??
+                    null,
+                playerId: event.playerId,
+                playerCount: result.state.room.users.length,
+            });
+        }
+        return result;
     }
     apply(event: GameEvent): Promise<void> {
         if (event.type === "currentInput" || event.type === "hint:update") {
