@@ -319,7 +319,21 @@ export class RoomDO extends DurableObject<Env> {
             .getWebSockets()
             .find((socket) => this.session(socket)?.id === playerId);
         const session = ws ? this.session(ws) : null;
-        if (!session?.recommendedItemId) return undefined;
+        if (!session?.recommendedItemId) {
+            console.log(
+                "[GAME] item recommendation consumed",
+                JSON.stringify({
+                    roomId: room.id,
+                    playerId,
+                    requestedItemId: null,
+                    assignedItemId: null,
+                    itemIndex: null,
+                    source: "random",
+                    reason: "missing",
+                }),
+            );
+            return undefined;
+        }
         // WebSocket attachments survive DO hibernation. Clear the consumed
         // suggestion there as well so stale words cannot repeat forever.
         const itemId = session.recommendedItemId;
