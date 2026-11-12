@@ -203,10 +203,7 @@ export default function PlayRoom({
                             setError("");
                             try {
                                 setDisplayName(
-                                    (localStorage.getItem("display-name") ?? "").slice(
-                                        0,
-                                        50,
-                                    ),
+                                    (localStorage.getItem("display-name") ?? "").slice(0, 50),
                                 );
                                 const saved = localStorage.getItem("answer-mode");
                                 if (isAnswerMode(saved)) setAnswerMode(saved);
@@ -227,7 +224,7 @@ export default function PlayRoom({
                 description={
                     showPasswordField && !alreadyAuthorized
                         ? isOnline
-                            ? "表示名・出題形式・パスワードを入力してください。"
+                            ? "表示名とパスワードを入力してください。"
                             : "出題形式とパスワードを入力してください。"
                         : isOnline
                           ? "表示名を入力してください。"
