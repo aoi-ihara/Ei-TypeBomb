@@ -73,6 +73,8 @@ function CustomCursor() {
     });
 
     const [isMouseDown, setIsMouseDown] = useState(false);
+    const [isPointerActive, setIsPointerActive] = useState(false);
+    const isPointerActiveRef = useRef(false);
     const isMouseDownRef = useRef(false);
 
     const springConfig = {
@@ -227,30 +229,47 @@ function CustomCursor() {
     );
 
     useEffect(() => {
-        const onMouseMove = (e: MouseEvent) => {
+        const setPointerActive = (active: boolean) => {
+            if (isPointerActiveRef.current === active) return;
+            isPointerActiveRef.current = active;
+            setIsPointerActive(active);
+            document.documentElement.classList.toggle("custom-cursor-active", active);
+            if (!active) cursorOpacity.set(0);
+        };
+
+        const onPointerMove = (e: PointerEvent) => {
+            if (e.pointerType !== "mouse") return;
+            setPointerActive(true);
             handleMouseMove(e.clientX, e.clientY);
+        };
+
+        const onPointerDown = (e: PointerEvent) => {
+            if (e.pointerType === "mouse") {
+                setPointerActive(true);
+                isMouseDownRef.current = true;
+                setIsMouseDown(true);
+                handleMouseMove(e.clientX, e.clientY);
+            } else {
+                setPointerActive(false);
+                isMouseDownRef.current = false;
+                setIsMouseDown(false);
+            }
         };
 
         const refresh = () => handleMouseMove(mouse.current.x, mouse.current.y);
 
-        const onMouseDown = () => {
-            setIsMouseDown(true);
-            isMouseDownRef.current = true;
-
-            refresh();
-        };
-
-        const onMouseUp = () => {
+        const onMouseUp = (e: PointerEvent) => {
+            if (e.pointerType !== "mouse") return;
             setIsMouseDown(false);
             isMouseDownRef.current = false;
 
             refresh();
         };
 
-        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerdown", onPointerDown);
 
-        window.addEventListener("mousedown", onMouseDown);
-        window.addEventListener("mouseup", onMouseUp);
+        window.addEventListener("pointerup", onMouseUp);
 
         window.addEventListener("morphcursorchange", refresh);
         window.addEventListener("resize", refresh);
@@ -259,10 +278,11 @@ function CustomCursor() {
         window.addEventListener("transitionend", refresh, true);
 
         return () => {
-            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerdown", onPointerDown);
 
-            window.removeEventListener("mousedown", onMouseDown);
-            window.removeEventListener("mouseup", onMouseUp);
+            window.removeEventListener("pointerup", onMouseUp);
+            document.documentElement.classList.remove("custom-cursor-active");
 
             window.removeEventListener("morphcursorchange", refresh);
             window.removeEventListener("resize", refresh);
@@ -270,7 +290,7 @@ function CustomCursor() {
             window.removeEventListener("animationend", refresh, true);
             window.removeEventListener("transitionend", refresh, true);
         };
-    }, [handleMouseMove]);
+    }, [handleMouseMove, cursorOpacity]);
 
     useEffect(() => {
         let timeoutId: number;
@@ -309,21 +329,13 @@ function CustomCursor() {
         };
     }, [handleMouseMove]);
 
-    useEffect(() => {
-        document.documentElement.classList.add("custom-cursor-active");
-
-        return () => {
-            document.documentElement.classList.remove("custom-cursor-active");
-        };
-    }, []);
-
     return (
         <motion.div
             ref={rootRef}
             // Keep the cursor's stacking context above picker menus (z-index: 50).
             className="z-[100] pointer-events-none fixed"
             style={{
-                opacity: cursorOpacity,
+                opacity: isPointerActive ? cursorOpacity : 0,
             }}
         >
             <motion.div
