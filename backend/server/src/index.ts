@@ -576,11 +576,37 @@ const createRoomIfNeeded = async (
                     // instead of replaying the previous word indefinitely.
                     const itemId = recommendedItems.get(playerId);
                     recommendedItems.delete(playerId);
-                    if (!itemId) return undefined;
+                    if (!itemId) {
+                        logEvent("GAME", "item recommendation fallback", {
+                            roomId: currentRoom.id,
+                            playerId,
+                            source: "random",
+                            reason: "missing",
+                        });
+                        return undefined;
+                    }
                     const index = currentRoom.items.findIndex(
                         (item) => item.id === itemId,
                     );
-                    return index >= 0 ? index : undefined;
+                    if (index < 0) {
+                        logEvent("GAME", "item recommendation fallback", {
+                            roomId: currentRoom.id,
+                            playerId,
+                            requestedItemId: itemId,
+                            source: "random",
+                            reason: "item_not_found",
+                        });
+                        return undefined;
+                    }
+                    logEvent("GAME", "item recommendation consumed", {
+                        roomId: currentRoom.id,
+                        playerId,
+                        requestedItemId: itemId,
+                        assignedItemId: currentRoom.items[index].id,
+                        itemIndex: index,
+                        source: "client",
+                    });
+                    return index;
                 },
             ),
         );
@@ -872,6 +898,14 @@ io.on("connection", (socket) => {
             )
         )
             return;
+        logEvent("GAME", "item recommendation received", {
+            roomId,
+            playerId: user.id,
+            itemId: parsed.data.itemId,
+            serverMode: game instanceof DistributedRoom
+                ? "distributed"
+                : "standalone",
+        });
         if (game instanceof DistributedRoom)
             game.recommend(user.id, parsed.data.itemId);
         else recommendedItems.set(user.id, parsed.data.itemId);
