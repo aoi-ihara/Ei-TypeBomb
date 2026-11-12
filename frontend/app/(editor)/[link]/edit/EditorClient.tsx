@@ -17,7 +17,13 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, useRef } from "react";
-import { getRoomFromLink } from "@/lib/room/get";
+import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
+import {
+    rebaseEditorSnapshot,
+    sameEditorSnapshot,
+    snapshotFromRoom,
+    type EditorSnapshot,
+} from "@/lib/room/editor-rebase";
 import { updateRoomFromId } from "@/lib/room/update";
 import {
     parseImportedWords,
@@ -148,7 +154,14 @@ export default function EditorClient({
         useState(false);
     const [showPlayWarning, setShowPlayWarning] = useState(false);
 
-    const isLoadedRef = useRef(true);
+    // Do not auto-save restored Next.js/bfcache state until it is checked against the DB.
+    const isLoadedRef = useRef(false);
+    const editVersionRef = useRef(initialRoom.editVersion ?? -1);
+    const syncedSnapshotRef = useRef(snapshotFromRoom(initialRoom));
+    const pendingLatestRoomRef = useRef<Room | null>(null);
+    const refreshSequenceRef = useRef(0);
+    const saveGenerationRef = useRef(0);
+    const [editorSyncError, setEditorSyncError] = useState("");
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -217,6 +230,92 @@ export default function EditorClient({
         roomId,
         roomLink,
     ]);
+
+    const applyEditorSnapshot = (snapshot: EditorSnapshot) => {
+        roomDataRef.current = snapshot;
+        setRoomTitle(snapshot.roomTitle);
+        setRoomExplanation(snapshot.roomExplanation);
+        setMaxPlayers(snapshot.maxPlayers);
+        setGameDuration(snapshot.gameDuration);
+        setBombCount(snapshot.bombCount);
+        setItems(snapshot.items);
+        setRoomLink(snapshot.roomLink);
+    };
+
+    const applyLatestRoom = (room: Room) => {
+        const latest = snapshotFromRoom(room);
+        syncedSnapshotRef.current = latest;
+        editVersionRef.current = room.editVersion ?? -1;
+        pendingLatestRoomRef.current = null;
+        setEditorSyncError("");
+        setRoomVisibility(room.visibility ?? "unlisted");
+        applyEditorSnapshot(latest);
+        isLoadedRef.current = true;
+    };
+
+    const refreshRoomData = async (): Promise<boolean> => {
+        const refreshSequence = ++refreshSequenceRef.current;
+        ++saveGenerationRef.current;
+        isLoadedRef.current = false;
+
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        if (maxSaveTimerRef.current) clearTimeout(maxSaveTimerRef.current);
+        saveTimerRef.current = null;
+        maxSaveTimerRef.current = null;
+
+        try {
+            // A server action makes a new DB request even after browser back/forward.
+            const latest = await getRoomFromId(roomId);
+            if (refreshSequence !== refreshSequenceRef.current) return false;
+            if (!latest || latest.editVersion === undefined) {
+                throw new Error("Could not read the latest room revision");
+            }
+
+            const latestSnapshot = snapshotFromRoom(latest);
+            const merged = rebaseEditorSnapshot(
+                syncedSnapshotRef.current,
+                roomDataRef.current,
+                latestSnapshot,
+            );
+
+            if (!merged) {
+                // Do not discard locally edited data or overwrite a newer remote edit.
+                pendingLatestRoomRef.current = latest;
+                setEditorSyncError(
+                    "別の場所で同じ項目が変更されました。保存を中断しています。",
+                );
+                return false;
+            }
+
+            syncedSnapshotRef.current = latestSnapshot;
+            editVersionRef.current = latest.editVersion;
+            pendingLatestRoomRef.current = null;
+            setEditorSyncError("");
+            setRoomVisibility(latest.visibility ?? "unlisted");
+            applyEditorSnapshot(merged);
+            isLoadedRef.current = true;
+            return true;
+        } catch (error) {
+            if (refreshSequence !== refreshSequenceRef.current) return false;
+            console.error("Failed to refresh room editor:", error);
+            setEditorSyncError(
+                "ルームの最新情報を取得できませんでした。再読み込みしてください。",
+            );
+            return false;
+        }
+    };
+
+    useEffect(() => {
+        void refreshRoomData();
+        const onPageShow = (event: PageTransitionEvent) => {
+            if (event.persisted) void refreshRoomData();
+        };
+        window.addEventListener("pageshow", onPageShow);
+        return () => {
+            ++refreshSequenceRef.current;
+            window.removeEventListener("pageshow", onPageShow);
+        };
+    }, [roomId]);
 
     const itemListRef = useRef<HTMLDivElement | null>(null);
 
@@ -342,9 +441,7 @@ export default function EditorClient({
         const shouldSetPassword = isPrivate && Boolean(newPassword.trim());
 
         if (isPrivate && roomVisibility !== "private" && !shouldSetPassword) {
-            setVisibilityError(
-                "非公開にするにはパスワードを入力してください。",
-            );
+            setVisibilityError("非公開にするにはパスワードを入力してください。");
             return;
         }
 
@@ -364,38 +461,58 @@ export default function EditorClient({
         };
 
         setIsUpdatingVisibilitySettings(true);
-        let updateError: string | null = null;
-
         try {
-            updateError = await updateRoomFromId(request);
+            // Share the queue/version with auto-save to avoid conflicts with ourselves.
+            const attempt = saveQueueRef.current.then(() =>
+                isLoadedRef.current
+                    ? updateRoomFromId(request, editVersionRef.current)
+                    : Promise.resolve({
+                          status: "error" as const,
+                          message: "最新情報の確認が必要です。",
+                      }),
+            );
+            saveQueueRef.current = attempt.then(
+                () => {},
+                () => {},
+            );
+            const result = await attempt;
+
+            if (result.status === "conflict") {
+                await refreshRoomData();
+                setVisibilityError(
+                    "ほかの場所で更新されました。内容を確認してもう一度保存してください。",
+                );
+                return;
+            }
+
+            if (result.status === "error") {
+                setVisibilityError(result.message);
+                return;
+            }
+
+            editVersionRef.current = result.editVersion;
+            posthog.capture("room_visibility_changed", {
+                room_id: roomId,
+                is_private: isPrivate,
+                is_public: visibilitySelection === "public",
+                visibility: visibilitySelection,
+            });
+
+            setRoomVisibility(visibilitySelection);
+            setShowVisibilitySettings(false);
         } catch (error) {
             console.error("Failed to update room visibility:", error);
             setVisibilityError(
                 "公開設定を保存できませんでした。もう一度お試しください。",
             );
-            return;
         } finally {
             setIsUpdatingVisibilitySettings(false);
         }
-
-        if (updateError) {
-            setVisibilityError(updateError);
-            return;
-        }
-
-        posthog.capture("room_visibility_changed", {
-            room_id: roomId,
-            is_private: isPrivate,
-            is_public: visibilitySelection === "public",
-            visibility: visibilitySelection,
-        });
-
-        setRoomVisibility(visibilitySelection);
-        setShowVisibilitySettings(false);
     };
 
     const saveRoomData = (): Promise<boolean> => {
         const snapshot = { ...roomDataRef.current };
+        const generation = saveGenerationRef.current;
         const attempt = saveQueueRef.current.then(async () => {
             const {
                 roomId,
@@ -407,16 +524,23 @@ export default function EditorClient({
                 items,
                 roomLink,
             } = snapshot;
-            if (!roomId || !items) return false;
-
-            const linkError = validateLink(roomLink);
-            if (linkError) {
+            if (
+                !roomId ||
+                !items ||
+                !isLoadedRef.current ||
+                generation !== saveGenerationRef.current ||
+                sameEditorSnapshot(snapshot, syncedSnapshotRef.current)
+            ) {
                 return false;
             }
 
+            const linkError = validateLink(roomLink);
+            if (linkError) return false;
+
             try {
                 const existingRoomId = await getRoomFromLink(roomLink);
-                if (existingRoomId && existingRoomId !== roomId) {
+                if (existingRoomId && existingRoomId !== roomId) return false;
+                if (!isLoadedRef.current || generation !== saveGenerationRef.current) {
                     return false;
                 }
 
@@ -430,10 +554,27 @@ export default function EditorClient({
                     items,
                     link: roomLink,
                 };
-                const error = await updateRoomFromId(updatedRoom);
-                if (error) {
+                const result = await updateRoomFromId(
+                    updatedRoom,
+                    editVersionRef.current,
+                );
+                if (result.status === "conflict") {
+                    await refreshRoomData();
                     return false;
                 }
+                if (result.status === "error") {
+                    console.error("Failed to save room:", result.message);
+                    return false;
+                }
+
+                if (generation !== saveGenerationRef.current) {
+                    // A navigation/refresh happened while the write was in flight.
+                    void refreshRoomData();
+                    return false;
+                }
+
+                editVersionRef.current = result.editVersion;
+                syncedSnapshotRef.current = snapshot;
                 if (roomLink !== savedRouteLinkRef.current) {
                     savedRouteLinkRef.current = roomLink;
                     router.replace("/" + roomLink + "/edit");
@@ -457,7 +598,12 @@ export default function EditorClient({
     };
 
     useEffect(() => {
-        if (!isLoadedRef.current || !roomId || items === null) return;
+        if (
+            !isLoadedRef.current ||
+            !roomId ||
+            items === null ||
+            sameEditorSnapshot(roomDataRef.current, syncedSnapshotRef.current)
+        ) return;
 
         if (saveTimerRef.current) {
             clearTimeout(saveTimerRef.current);
@@ -514,6 +660,25 @@ export default function EditorClient({
                     className="flex flex-col px-4 gap-4"
                     size="large"
                 >
+                    {editorSyncError && (
+                        <div className="flex items-center gap-3 text-sm text-red-500" role="alert">
+                            <span data-cursor="text">{editorSyncError}</span>
+                            <Button
+                                padding="small"
+                                onClick={() => {
+                                    const pending = pendingLatestRoomRef.current;
+                                    if (pending) {
+                                        ++saveGenerationRef.current;
+                                        applyLatestRoom(pending);
+                                    } else {
+                                        void refreshRoomData();
+                                    }
+                                }}
+                            >
+                                最新を読み込む
+                            </Button>
+                        </div>
+                    )}
                     <div className="flex mb-8 items-center w-full">
                         <Button
                             variant="text"
