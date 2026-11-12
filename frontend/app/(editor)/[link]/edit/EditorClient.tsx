@@ -261,7 +261,7 @@ export default function EditorClient({
 
             if (result) throw result;
             startNavigationProgress();
-            router.push("/?owner=me");
+            router.push("/mine");
         } catch (error) {
             setIsDeletingRoom(false);
             throw error;
@@ -1231,7 +1231,10 @@ export default function EditorClient({
                                                                 item.answer,
                                                             ) &&
                                                                 item.answer.trim() && (
-                                                                    <div className="text-cyan-600" data-cursor="text">
+                                                                    <div
+                                                                        className="text-cyan-600"
+                                                                        data-cursor="text"
+                                                                    >
                                                                         この回答は入力形式に対応していないため、選択問題として出題されます。
                                                                     </div>
                                                                 )}
