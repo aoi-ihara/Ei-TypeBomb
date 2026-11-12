@@ -4,24 +4,20 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
-import type { Item, Position, Room, User } from "@/type";
-import { useBombExplosion } from "@/components/game/BombExplosion";
+import type { Item, Room, User } from "@/type";
 import GameView from "@/components/game/GameView";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
 import type { OfflineVoiceReading } from "@/lib/settings";
-import { newPositions } from "@/lib/ui/position";
-import { useFeatureFlagPayload } from "@posthog/react";
 import posthog from "posthog-js";
-import { advanceBombClock } from "@/lib/playground/bomb-clock";
 import {
     applyRecallObservation,
+    recordAnswerModeResult,
+    isValidAnswerModeStats,
     createTurnPlan,
-    shouldRecommendStop,
     evaluateRecall,
     getRetrievability,
-    recordAnswerExposure,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -31,22 +27,23 @@ import {
     createScheduler,
     loadSchedulerState,
     saveSchedulerState,
+    nextSuspendedReviewAt,
     chooseNextUserItem,
-    chooseBotItem,
     recordUserAnswer,
-    recordBotPresentation,
+    recordRecognitionAnswer,
     type SchedulerState,
 } from "@/lib/playground/scheduler";
 import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import { getBotTypingFrames } from "@/lib/playground/bot-typing.mjs";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
+import type { AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
+    answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
     initialOfflineVoiceReading: OfflineVoiceReading;
@@ -54,6 +51,7 @@ type Props = {
 
 const LOCAL_USER_ID = "playground-player";
 const GUEST_MEMORY_USER_ID = "playground-guest";
+const SESSION_MEMORY_USER_ID = "playground-session";
 const guestMemoryKey = (roomId: string) => `playground-memory:guest:${roomId}`;
 
 const loadGuestMemory = (
@@ -83,17 +81,17 @@ const loadGuestMemory = (
                     (m.lastPresentedAt == null ||
                         !Number.isNaN(Date.parse(m.lastPresentedAt))) &&
                     (m.updatedAt == null ||
-                        !Number.isNaN(Date.parse(m.updatedAt)))
+                        !Number.isNaN(Date.parse(m.updatedAt))) &&
+                    (m.answerModeStats == null ||
+                        isValidAnswerModeStats(m.answerModeStats))
                 );
             }),
         ) as Record<string, ItemMemoryState>;
     } catch {
-        // Ignore corrupted or blocked storage.
         return {};
     }
 };
 
-// Preserve newer updates from other tabs instead of overwriting the whole room.
 const mergeGuestMemory = (
     current: Record<string, ItemMemoryState>,
     incoming: Record<string, ItemMemoryState>,
@@ -128,13 +126,10 @@ const saveGuestMemory = (
     );
     try {
         localStorage.setItem(guestMemoryKey(roomId), JSON.stringify(merged));
-    } catch {
-        // Storage may be unavailable or full; practice remains playable.
-    }
+    } catch {}
     return merged;
 };
 
-// Read only keys here; loadGuestMemory validates the actual values.
 const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
     try {
         const value: unknown = JSON.parse(
@@ -147,7 +142,7 @@ const readGuestMemoryKeys = (roomId: string): Record<string, unknown> => {
         return {};
     }
 };
-const BOT_USERS: User[] = [{ id: "playground-bot-1", displayName: "練習相手" }];
+const SOLO_USERS: User[] = [{ id: LOCAL_USER_ID, displayName: "あなた" }];
 
 const DEFAULT_TYPING_DELAY_MS = 220;
 const MIN_TYPING_DELAY_MS = 80;
@@ -159,37 +154,23 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
+    answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
     initialOfflineVoiceReading,
 }: Readonly<Props>) {
-    const bombDurationVariant = useFeatureFlagPayload("bomb-duration");
-    const configuredBombDuration =
-        typeof bombDurationVariant === "string"
-            ? Number(bombDurationVariant)
-            : Number.NaN;
-    const bombDurationSeconds =
-        Number.isFinite(configuredBombDuration) && configuredBombDuration > 0
-            ? configuredBombDuration
-            : 30;
     const router = useRouter();
-    const { bombRef, explode, resetExplosion, explosionLayer } =
-        useBombExplosion();
 
-    const [displayName, setDisplayName] = useState("あなた");
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
     const offlineVoiceReading = initialOfflineVoiceReading;
-    const users = useMemo<User[]>(
-        () => [{ id: LOCAL_USER_ID, displayName }, ...BOT_USERS],
-        [displayName],
-    );
+    const users = SOLO_USERS;
     const room = useMemo<Room>(
         () => ({
             ...sourceRoom,
-            maxPlayers: 2,
+            maxPlayers: 1,
         }),
         [sourceRoom],
     );
@@ -206,43 +187,25 @@ export default function Client({
     const expectedTypingAtStartRef = useRef(0);
     const predictedRetrievabilityAtPromptRef = useRef<number | null>(null);
     const authenticatedUserIdRef = useRef<string | null>(null);
+    const memoryPersistenceDisabledRef = useRef(false);
     const [memoryReady, setMemoryReady] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
+    const [nextReviewAt, setNextReviewAt] = useState<number | null>(null);
     const currentItemRef = useRef<Item | null>(null);
-    const [currentTurn, setCurrentTurn] = useState(0);
-    const currentTurnRef = useRef(0);
-    const [bombStatus, setBombStatus] = useState(0);
-    const bombStageProgressRef = useRef(0);
-    const bombPlanRef = useRef<{ duration: number; paused: boolean }>({
-        duration: bombDurationSeconds * 1000,
-        paused: true,
-    });
     const [isStarted, setIsStarted] = useState(false);
     const [showInstructions, setShowInstructions] = useState(true);
-    const [notice, setNotice] = useState<GameNoticeProps>({
-        visible: true,
-        iconName: "keyboard",
-        title: "半角で入力してください",
-        description: "単語は日本語でも英語でも、半角で入力してください。",
-    });
-    const [result, setResult] = useState<boolean | null>(null);
+    const [notice, setNotice] = useState<GameNoticeProps>();
+    const [isPaused, setIsPaused] = useState(false);
     const [currentInput, setCurrentInput] = useState("");
-    const [lostDisplayName, setLostDisplayName] = useState<string | null>(null);
-    const [stopRecommended, setStopRecommended] = useState(false);
-    const [recallPressurePaused, setRecallPressurePaused] = useState(false);
 
     const sessionTurnNumberRef = useRef(0);
     const [itemPresentationKey, setItemPresentationKey] = useState(0);
     const recallProgressRef = useRef<RecallProgress | null>(null);
+    const [isSignedIn, setIsSignedIn] = useState(false);
     const userReviewCountRef = useRef(0);
-    const sessionStartedAtRef = useRef(0);
     const initialGameStartedRef = useRef(false);
-    const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-        null,
-    );
-    const usersRef = useRef(users);
     const userTypingDelayRef = useRef(DEFAULT_TYPING_DELAY_MS);
     const previousInputAtRef = useRef<number | null>(null);
     const previousInputLengthRef = useRef(0);
@@ -250,120 +213,173 @@ export default function Client({
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    const userPositions = useMemo<Position[]>(
-        () =>
-            newPositions(
-                users,
-                Array.from({ length: users.length }, () => ({
-                    x: 0,
-                    y: 0,
-                    w: 24,
-                    h: 24,
-                    opacity: 0,
-                })),
-            ),
-        [users],
-    );
-
     useEffect(() => {
+        if (!notice?.visible) return;
+
         const timer = window.setTimeout(() => {
-            setNotice((current) => ({ ...current, visible: false }));
+            setNotice((current) =>
+                current ? { ...current, visible: false } : undefined,
+            );
         }, 5000);
+
         return () => window.clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
-        console.log(bombDurationSeconds, bombDurationVariant);
-        const timer = setTimeout(
-            () =>
-                setDisplayName(
-                    localStorage.getItem("display-name") || "あなた",
-                ),
-            0,
-        );
-        return () => clearTimeout(timer);
-    }, []);
-
-    useEffect(() => {
-        usersRef.current = users;
-    }, [users]);
+    }, [notice?.visible, notice?.title, notice?.description]);
 
     useEffect(() => {
         let cancelled = false;
+        const itemIds = items.map((item) => item.id);
+        const itemIdSet = new Set(itemIds);
+
+        const restorePendingMemory = (
+            userId: string,
+            memory: Record<string, ItemMemoryState>,
+        ) => {
+            try {
+                const queued: unknown = JSON.parse(
+                    localStorage.getItem(
+                        `playground-pending:${userId}:${room.id}`,
+                    ) ?? "[]",
+                );
+                if (!Array.isArray(queued)) return;
+
+                for (const value of queued) {
+                    if (!value || typeof value !== "object") continue;
+                    const pending = value as ItemMemoryState;
+                    if (
+                        pending.userId !== userId ||
+                        pending.roomId !== room.id ||
+                        !itemIdSet.has(pending.itemId) ||
+                        !Number.isFinite(pending.stability) ||
+                        !Number.isFinite(pending.difficulty) ||
+                        !Number.isFinite(pending.reviewCount)
+                    )
+                        continue;
+
+                    const remote = memory[pending.itemId];
+                    const pendingUpdatedAt =
+                        Date.parse(pending.updatedAt ?? "") || 0;
+                    const remoteUpdatedAt =
+                        Date.parse(remote?.updatedAt ?? "") || 0;
+                    if (!remote || pendingUpdatedAt >= remoteUpdatedAt) {
+                        memory[pending.itemId] = pending;
+                        pendingMemoryRef.current.set(pending.itemId, pending);
+                    }
+                }
+            } catch {
+                // A damaged or unavailable local cache must not prevent practice.
+            }
+        };
+
+        const initializeFallback = (userId: string | null) => {
+            authenticatedUserIdRef.current = userId;
+            // A failed read means the existing history is unknown. Keep this
+            // session's observations local until a later read can reconcile it.
+            memoryPersistenceDisabledRef.current = true;
+
+            const fallbackMemory: Record<string, ItemMemoryState> = {};
+            if (userId) {
+                restorePendingMemory(userId, fallbackMemory);
+                schedulerRef.current =
+                    loadSchedulerState(
+                        "playground",
+                        userId,
+                        room.id,
+                        itemIds,
+                        fallbackMemory,
+                    ) ?? createScheduler(itemIds);
+            } else {
+                schedulerRef.current = createScheduler(itemIds);
+            }
+
+            memoryByItemRef.current = fallbackMemory;
+            setMemoryByItem(fallbackMemory);
+            setMemoryError(null);
+            setMemoryReady(true);
+            setNotice({
+                visible: true,
+                iconName: "info",
+                title: "学習データを取得できませんでした",
+                description: userId
+                    ? "プレイは続けられます。学習履歴を保護するため、このセッションの進捗は保存されません。通信復旧後に再読み込みしてください。"
+                    : "プレイは続けられますが、学習データを保存できません。通信復旧後に再読み込みしてください。",
+            });
+        };
 
         const loadMemory = async () => {
-            const loaded = await loadPlaygroundMemory(room.id);
+            let loaded: Awaited<ReturnType<typeof loadPlaygroundMemory>>;
+            try {
+                loaded = await loadPlaygroundMemory(room.id);
+            } catch (error) {
+                if (cancelled) return;
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                console.error("Failed to load playground memory", message);
+                posthog.capture("playground_memory_load_failed", {
+                    room_id: room.id,
+                    error_message: message,
+                });
+                initializeFallback(null);
+                return;
+            }
             if (cancelled) return;
 
             if (loaded.error) {
-                console.error("Failed to load playground memory", loaded.error);
+                const message = loaded.error.message || "Unknown error";
+                console.error("Failed to load playground memory", message);
                 posthog.capture("playground_memory_load_failed", {
                     room_id: room.id,
+                    error_message: message,
                 });
-                setMemoryError(
-                    "学習データを取得できませんでした。もう一度お試しください。",
-                );
+                if (loaded.userId) setIsSignedIn(true);
+                initializeFallback(loaded.userId);
                 return;
             }
 
+            setIsSignedIn(Boolean(loaded.userId));
+            // A legacy schema can be read, but must not be overwritten until
+            // answer_mode_stats has been migrated into the database.
+            const legacySchema =
+                "persistenceDisabled" in loaded &&
+                loaded.persistenceDisabled === true;
+            memoryPersistenceDisabledRef.current = legacySchema;
+
             if (!loaded.userId) {
-                const saved = loadGuestMemory(
-                    room.id,
-                    new Set(items.map((item) => item.id)),
-                );
+                authenticatedUserIdRef.current = null;
+                const saved = loadGuestMemory(room.id, itemIdSet);
                 memoryByItemRef.current = saved;
                 schedulerRef.current =
                     loadSchedulerState(
                         "playground",
                         GUEST_MEMORY_USER_ID,
                         room.id,
-                        items.map((item) => item.id),
+                        itemIds,
                         saved,
-                    ) ?? createScheduler(items.map((item) => item.id));
+                    ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
                 return;
             }
 
             authenticatedUserIdRef.current = loaded.userId;
-            // Recover unsent observations after reload, scoped to the authenticated user.
-            try {
-                const queued: ItemMemoryState[] = JSON.parse(
-                    localStorage.getItem(
-                        `playground-pending:${loaded.userId}:${room.id}`,
-                    ) ?? "[]",
-                );
-                for (const pending of queued) {
-                    if (
-                        pending.userId !== loaded.userId ||
-                        pending.roomId !== room.id ||
-                        !items.some((item) => item.id === pending.itemId) ||
-                        !Number.isFinite(pending.stability) ||
-                        !Number.isFinite(pending.difficulty)
-                    )
-                        continue;
-                    const remote = loaded.memoryByItem[pending.itemId];
-                    if (
-                        !remote ||
-                        Date.parse(pending.updatedAt ?? "") >=
-                            Date.parse(remote.updatedAt ?? "")
-                    ) {
-                        loaded.memoryByItem[pending.itemId] = pending;
-                        pendingMemoryRef.current.set(pending.itemId, pending);
-                    }
-                }
-            } catch {
-                // A damaged/unavailable local cache must not prevent practice.
+            if (legacySchema) {
+                setNotice({
+                    visible: true,
+                    iconName: "info",
+                    title: "データベースの更新が必要です",
+                    description:
+                        "既存の学習履歴を読み込んでプレイできますが、更新が完了するまで今回の進捗は保存されません。",
+                });
             }
+            restorePendingMemory(loaded.userId, loaded.memoryByItem);
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
                 loadSchedulerState(
                     "playground",
                     loaded.userId,
                     room.id,
-                    items.map((item) => item.id),
+                    itemIds,
                     loaded.memoryByItem,
-                ) ?? createScheduler(items.map((item) => item.id));
+                ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
         };
@@ -375,184 +391,76 @@ export default function Client({
         };
     }, [room.id, items]);
 
-    const saveBotExposure = useCallback(
-        (item: Item) => {
-            const memory = memoryByItemRef.current[item.id];
-            if (!memory) return;
-            const exposed = recordAnswerExposure(memory);
-            memoryByItemRef.current = {
-                ...memoryByItemRef.current,
-                [item.id]: exposed,
-            };
-            if (authenticatedUserIdRef.current) {
-                pendingMemoryRef.current.set(item.id, exposed);
-            } else {
-                memoryByItemRef.current = saveGuestMemory(
-                    room.id,
-                    memoryByItemRef.current,
-                );
-            }
-            setMemoryByItem(memoryByItemRef.current);
-        },
-        [room.id],
-    );
+    const setTrackedItem = useCallback((item: Item | null) => {
+        currentItemRef.current = item;
+        setCurrentItem(item);
+        recallProgressRef.current = null;
+        if (!item) return;
 
-    const setTrackedItem = useCallback(
-        (item: Item | null) => {
-            currentItemRef.current = item;
-            setCurrentItem(item);
-            recallProgressRef.current = null;
-            setRecallPressurePaused(false);
-            if (!item) return;
-            sessionTurnNumberRef.current += 1;
-            setItemPresentationKey(sessionTurnNumberRef.current);
-            const local =
-                usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
-            if (local) {
-                const memory = memoryByItemRef.current[item.id];
-                predictedRetrievabilityAtPromptRef.current =
-                    memory && memory.reviewCount > 0 && memory.lastReviewedAt
-                        ? getRetrievability(memory)
-                        : null;
-                const exposure =
-                    memory?.lastPresentedAt ?? memory?.lastReviewedAt;
-                // Measure before answering: a long typing delay does not undo a BOT preview.
-                exposureGapAtStartRef.current = exposure
-                    ? Math.max(0, Date.now() - Date.parse(exposure))
-                    : null;
-                expectedTypingAtStartRef.current =
-                    item.answer.length * userTypingDelayRef.current;
-            } else {
-                predictedRetrievabilityAtPromptRef.current = null;
-                if (schedulerRef.current) {
-                    recordBotPresentation(schedulerRef.current, item.id);
-                    saveSchedulerState(
-                        "playground",
-                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
-                        room.id,
-                        schedulerRef.current,
-                    );
-                }
-                saveBotExposure(item);
-            }
-        },
-        [room.id, saveBotExposure],
-    );
+        sessionTurnNumberRef.current += 1;
+        setItemPresentationKey(sessionTurnNumberRef.current);
+        const memory = memoryByItemRef.current[item.id];
+        predictedRetrievabilityAtPromptRef.current =
+            memory && memory.reviewCount > 0 && memory.lastReviewedAt
+                ? getRetrievability(memory)
+                : null;
+        const exposure = memory?.lastPresentedAt ?? memory?.lastReviewedAt;
+        exposureGapAtStartRef.current = exposure
+            ? Math.max(0, Date.now() - Date.parse(exposure))
+            : null;
+        expectedTypingAtStartRef.current =
+            item.answer.length * userTypingDelayRef.current;
+    }, []);
 
-    const chooseItemForTurn = useCallback(
-        (turnIndex: number) => {
-            const scheduler =
-                schedulerRef.current ??
-                (schedulerRef.current = createScheduler(
-                    items.map((item) => item.id),
-                ));
-            const id =
-                usersRef.current[turnIndex]?.id === LOCAL_USER_ID
-                    ? chooseNextUserItem(scheduler, memoryByItemRef.current)
-                          ?.itemId
-                    : chooseBotItem(scheduler);
+    const chooseItemForTurn = useCallback(() => {
+        const scheduler =
+            schedulerRef.current ??
+            (schedulerRef.current = createScheduler(
+                items.map((item) => item.id),
+            ));
+        const id = chooseNextUserItem(
+            scheduler,
+            memoryByItemRef.current,
+        )?.itemId;
+        if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
                 "playground",
                 authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
                 room.id,
                 scheduler,
             );
-            return items.find((item) => item.id === id) ?? null;
-        },
-        [items, room.id],
-    );
+        }
+        return items.find((item) => item.id === id) ?? null;
+    }, [items, room.id]);
 
-    const resolveTurnWithItem = useCallback(
-        (requestedTurnIndex: number) => {
-            const requestedItem = chooseItemForTurn(requestedTurnIndex);
-            if (requestedItem) {
-                return {
-                    turnIndex: requestedTurnIndex,
-                    item: requestedItem,
-                };
-            }
-
-            const localTurnIndex = usersRef.current.findIndex(
-                (user) => user.id === LOCAL_USER_ID,
+    const resolveTurnWithItem = useCallback(() => {
+        const item = chooseItemForTurn();
+        if (!item) {
+            setNextReviewAt(
+                schedulerRef.current
+                    ? nextSuspendedReviewAt(schedulerRef.current)
+                    : null,
             );
-            if (localTurnIndex < 0) {
-                return {
-                    turnIndex: requestedTurnIndex,
-                    item: null,
-                };
-            }
+            setIsStarted(false);
+        }
+        return item;
+    }, [chooseItemForTurn]);
 
-            return {
-                turnIndex: localTurnIndex,
-                item: chooseItemForTurn(localTurnIndex),
-            };
-        },
-        [chooseItemForTurn],
-    );
+    const startGame = useCallback(() => {
+        if (!memoryReady || items.length === 0) return;
 
-    const setTrackedTurn = useCallback((turnIndex: number) => {
-        currentTurnRef.current = turnIndex;
-        setCurrentTurn(turnIndex);
-    }, []);
-
-    const startGame = useCallback(
-        (countdownDurationMs = 3000) => {
-            if (!memoryReady || items.length === 0) return;
-
-            if (countdownTimerRef.current) {
-                clearTimeout(countdownTimerRef.current);
-            }
-
-            if (sessionStartedAtRef.current === 0)
-                sessionStartedAtRef.current = Date.now();
-            resetExplosion();
-            setIsStarted(true);
-            setBombStatus(0);
-            bombStageProgressRef.current = 0;
-            setCurrentInput("");
-            setResult(null);
-            setLostDisplayName(null);
-            setStopRecommended(false);
-            setTrackedItem(null);
-
-            const requestedFirstTurn = Math.floor(
-                Math.random() * usersRef.current.length,
-            );
-
-            const revealFirstItem = () => {
-                const resolved = resolveTurnWithItem(requestedFirstTurn);
-                setTrackedTurn(resolved.turnIndex);
-                setTrackedItem(resolved.item);
-                countdownTimerRef.current = null;
-            };
-
-            if (countdownDurationMs <= 0) {
-                revealFirstItem();
-                return;
-            }
-
-            countdownTimerRef.current = setTimeout(
-                revealFirstItem,
-                countdownDurationMs,
-            );
-        },
-        [
-            items.length,
-            resolveTurnWithItem,
-            memoryReady,
-            resetExplosion,
-            setTrackedItem,
-            setTrackedTurn,
-        ],
-    );
+        setIsStarted(true);
+        setIsPaused(false);
+        setNextReviewAt(null);
+        setCurrentInput("");
+        previousInputAtRef.current = null;
+        previousInputLengthRef.current = 0;
+        setTrackedItem(resolveTurnWithItem());
+    }, [items.length, memoryReady, resolveTurnWithItem, setTrackedItem]);
 
     useEffect(() => {
         successAudioRef.current = new Audio("/Blip_select_8.wav");
-
         return () => {
-            if (countdownTimerRef.current) {
-                clearTimeout(countdownTimerRef.current);
-            }
             successAudioRef.current?.pause();
         };
     }, []);
@@ -573,9 +481,8 @@ export default function Client({
             player_count: users.length,
         });
 
-        // The instruction screen replaces the initial three-second start screen.
-        startGame(0);
-    }, [items.length, memoryReady, room.id, startGame, users.length]);
+        startGame();
+    }, [items.length, memoryReady, room.id, startGame]);
 
     useEffect(() => {
         if (
@@ -617,7 +524,10 @@ export default function Client({
     const updateLocalMemory = useCallback(
         (item: Item, observation: RecallObservation) => {
             const userId =
-                authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID;
+                authenticatedUserIdRef.current ??
+                (memoryPersistenceDisabledRef.current
+                    ? SESSION_MEMORY_USER_ID
+                    : GUEST_MEMORY_USER_ID);
 
             const scheduler = schedulerRef.current;
             const selected = scheduler?.current;
@@ -644,16 +554,34 @@ export default function Client({
                 predictedRetrievabilityAtPromptRef.current;
             predictedRetrievabilityAtPromptRef.current = null;
             const evaluation = evaluateRecall(evidence);
+            const previousHoldUntil =
+                scheduler?.struggles[item.id]?.suspendedUntil ?? null;
             if (scheduler) recordUserAnswer(scheduler, evaluation);
-            const freshestMemory = authenticatedUserIdRef.current
-                ? memoryByItemRef.current
-                : mergeGuestMemory(
-                      memoryByItemRef.current,
-                      loadGuestMemory(
-                          room.id,
-                          new Set(items.map((entry) => entry.id)),
-                      ),
-                  );
+            const currentStruggle = scheduler?.struggles[item.id];
+            if (
+                currentStruggle?.suspendedUntil != null &&
+                currentStruggle.suspendedUntil !== previousHoldUntil
+            ) {
+                posthog.capture("playground_item_suspended", {
+                    room_id: room.id,
+                    item_id: item.id,
+                    suspension_level: currentStruggle.suspensionLevel,
+                    suspended_until: new Date(
+                        currentStruggle.suspendedUntil,
+                    ).toISOString(),
+                });
+            }
+            const freshestMemory =
+                authenticatedUserIdRef.current ||
+                memoryPersistenceDisabledRef.current
+                    ? memoryByItemRef.current
+                    : mergeGuestMemory(
+                          memoryByItemRef.current,
+                          loadGuestMemory(
+                              room.id,
+                              new Set(items.map((entry) => entry.id)),
+                          ),
+                      );
             const nextMemory = applyRecallObservation({
                 memory: freshestMemory[item.id],
                 observation: evidence,
@@ -667,7 +595,10 @@ export default function Client({
                 [item.id]: nextMemory,
             };
 
-            if (authenticatedUserIdRef.current) {
+            if (
+                authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 pendingMemoryRef.current.set(item.id, nextMemory);
                 // Persist the observation immediately, before a rapid reload.
                 // The existing debounced sync still sends it to the server.
@@ -679,12 +610,15 @@ export default function Client({
                 } catch {
                     // Local storage may be unavailable; the current game continues.
                 }
-            } else {
+            } else if (
+                !authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
-            if (scheduler)
+            if (scheduler && !memoryPersistenceDisabledRef.current)
                 saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
 
@@ -710,6 +644,8 @@ export default function Client({
                 retry_latest_turn: selected?.retry?.latestTurn,
                 memory_evidence: evaluation.memoryEvidence,
                 retry_need: evaluation.retryNeed,
+                struggle_failures: currentStruggle?.consecutiveFailures ?? 0,
+                suspension_level: currentStruggle?.suspensionLevel ?? 0,
                 independent_recall: evaluation.independent,
                 first_attempt_correct: evidence.firstAttemptCorrect,
                 incorrect_input_count: evidence.incorrectInputCount,
@@ -736,6 +672,62 @@ export default function Client({
         [room.id, items],
     );
 
+    const updateAnswerModeMemory = useCallback(
+        (item: Item, mode: "selection" | "input", success: boolean) => {
+            const userId =
+                authenticatedUserIdRef.current ??
+                (memoryPersistenceDisabledRef.current
+                    ? SESSION_MEMORY_USER_ID
+                    : GUEST_MEMORY_USER_ID);
+            const freshestMemory =
+                authenticatedUserIdRef.current ||
+                memoryPersistenceDisabledRef.current
+                    ? memoryByItemRef.current
+                    : mergeGuestMemory(
+                          memoryByItemRef.current,
+                          loadGuestMemory(
+                              room.id,
+                              new Set(items.map((entry) => entry.id)),
+                          ),
+                      );
+            const updated = recordAnswerModeResult({
+                memory: freshestMemory[item.id],
+                userId,
+                roomId: room.id,
+                itemId: item.id,
+                mode,
+                success,
+            });
+            let nextMemoryByItem = {
+                ...freshestMemory,
+                [item.id]: updated,
+            };
+            if (
+                authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
+                pendingMemoryRef.current.set(item.id, updated);
+                try {
+                    localStorage.setItem(
+                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
+                        JSON.stringify([...pendingMemoryRef.current.values()]),
+                    );
+                } catch {
+                    // The current session can continue if storage is unavailable.
+                }
+            } else if (
+                !authenticatedUserIdRef.current &&
+                !memoryPersistenceDisabledRef.current
+            ) {
+                nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
+            }
+            memoryByItemRef.current = nextMemoryByItem;
+            setMemoryByItem(nextMemoryByItem);
+            return updated;
+        },
+        [room.id, items],
+    );
+
     const cachePendingMemory = useCallback(() => {
         const userId = authenticatedUserIdRef.current;
         if (!userId) return;
@@ -744,13 +736,15 @@ export default function Client({
                 `playground-pending:${userId}:${room.id}`,
                 JSON.stringify([...pendingMemoryRef.current.values()]),
             );
-        } catch {
-            // Network sync still works when local storage is unavailable.
-        }
+        } catch {}
     }, [room.id]);
 
     const flushPendingMemory = useCallback(async () => {
-        if (!authenticatedUserIdRef.current) return;
+        if (
+            !authenticatedUserIdRef.current ||
+            memoryPersistenceDisabledRef.current
+        )
+            return;
         cachePendingMemory();
         if (syncInFlightRef.current) return syncInFlightRef.current;
         const sync = async () => {
@@ -821,63 +815,77 @@ export default function Client({
     }, [memoryReady, cachePendingMemory, flushPendingMemory]);
 
     const handleRecallProgress = useCallback((progress: RecallProgress) => {
-        if (usersRef.current[currentTurnRef.current]?.id !== LOCAL_USER_ID) {
-            return;
-        }
-
         recallProgressRef.current = progress;
-        const item = currentItemRef.current;
-        if (
-            item?.type === "typed_recall" &&
-            (progress.hintCount > 0 ||
-                progress.answerWasFullyRevealed ||
-                progress.revealedHintChars >= item.answer.length)
-        ) {
-            setRecallPressurePaused(true);
-        }
     }, []);
 
     const handleRecallComplete = useCallback(
         (observation: RecallObservation) => {
             const item = currentItemRef.current;
-            if (
-                usersRef.current[currentTurnRef.current]?.id !==
-                    LOCAL_USER_ID ||
-                !item
-            ) {
-                return;
-            }
+            if (!item || isPaused) return;
 
             updateLocalMemory(item, observation);
         },
-        [updateLocalMemory],
+        [isPaused, updateLocalMemory],
     );
 
-    const handleInputChange = useCallback((input: string) => {
-        const now = Date.now();
-        const previousLength = previousInputLengthRef.current;
-        const previousInputAt = previousInputAtRef.current;
-        const addedCharacters = input.length - previousLength;
-
-        if (addedCharacters > 0 && previousInputAt !== null) {
-            const sampleDelay = (now - previousInputAt) / addedCharacters;
-
-            if (sampleDelay > 0 && sampleDelay < 2000) {
-                const clampedSample = clampTypingDelay(sampleDelay);
-                userTypingDelayRef.current =
-                    userTypingDelayRef.current * (1 - TYPING_SPEED_SMOOTHING) +
-                    clampedSample * TYPING_SPEED_SMOOTHING;
+    const handleInputChange = useCallback(
+        (input: string, failed?: boolean) => {
+            if (failed && !isPaused && currentItemRef.current) {
+                updateAnswerModeMemory(currentItemRef.current, "input", false);
             }
-        }
+            const now = Date.now();
+            const previousLength = previousInputLengthRef.current;
+            const previousInputAt = previousInputAtRef.current;
+            const addedCharacters = input.length - previousLength;
 
-        previousInputLengthRef.current = input.length;
-        previousInputAtRef.current = input.length === 0 ? null : now;
-        setCurrentInput(input);
-    }, []);
+            if (addedCharacters > 0 && previousInputAt !== null) {
+                const sampleDelay = (now - previousInputAt) / addedCharacters;
+
+                if (sampleDelay > 0 && sampleDelay < 2000) {
+                    const clampedSample = clampTypingDelay(sampleDelay);
+                    userTypingDelayRef.current =
+                        userTypingDelayRef.current *
+                            (1 - TYPING_SPEED_SMOOTHING) +
+                        clampedSample * TYPING_SPEED_SMOOTHING;
+                }
+            }
+
+            previousInputLengthRef.current = input.length;
+            previousInputAtRef.current = input.length === 0 ? null : now;
+            setCurrentInput(input);
+        },
+        [isPaused, updateAnswerModeMemory],
+    );
+
+    const handleSelectionAnswer = useCallback(
+        (correct: boolean) => {
+            const item = currentItemRef.current;
+            if (!item || isPaused) return;
+            if (correct) {
+                const scheduler = schedulerRef.current;
+                if (scheduler) {
+                    recordRecognitionAnswer(scheduler, item.id);
+                    if (!memoryPersistenceDisabledRef.current) {
+                        saveSchedulerState(
+                            "playground",
+                            authenticatedUserIdRef.current ??
+                                GUEST_MEMORY_USER_ID,
+                            room.id,
+                            scheduler,
+                        );
+                    }
+                }
+                recallProgressRef.current = null;
+            }
+            updateAnswerModeMemory(item, "selection", correct);
+        },
+        [isPaused, room.id, updateAnswerModeMemory],
+    );
 
     const handleSuccess = useCallback(() => {
+        if (isPaused || !currentItemRef.current) return;
+
         const wasAnswerRevealed =
-            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID &&
             recallProgressRef.current?.answerWasFullyRevealed === true;
         if (!wasAnswerRevealed && successAudioRef.current && soundEffects) {
             successAudioRef.current.currentTime = 0;
@@ -886,62 +894,46 @@ export default function Client({
         }
 
         const presentedItem = currentItemRef.current;
-        const isLocalAnswer =
-            usersRef.current[currentTurnRef.current]?.id === LOCAL_USER_ID;
-        // Speak after completed input even when a full hint was used.
-        // Hint use affects memory evidence, not whether correct input is read aloud.
+        // Speech also plays when the answer was entered after a full hint.
         if (
-            isLocalAnswer &&
             offlineVoiceReading === "answer" &&
-            presentedItem?.answer.trim() &&
+            presentedItem.answer.trim() &&
             typeof window !== "undefined" &&
             "speechSynthesis" in window &&
             typeof SpeechSynthesisUtterance !== "undefined"
         ) {
             const synthesis = window.speechSynthesis;
             synthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(presentedItem.answer);
+            const utterance = new SpeechSynthesisUtterance(
+                presentedItem.answer,
+            );
             utterance.lang = "en-US";
             synthesis.speak(utterance);
         }
-        if (presentedItem && !isLocalAnswer) {
-            saveBotExposure(presentedItem);
-        }
+
         setCurrentInput("");
         previousInputAtRef.current = null;
         previousInputLengthRef.current = 0;
-
-        const requestedNextTurn =
-            (currentTurnRef.current + 1) % usersRef.current.length;
-        const resolved = resolveTurnWithItem(requestedNextTurn);
-        setTrackedTurn(resolved.turnIndex);
-        setTrackedItem(resolved.item);
+        setTrackedItem(resolveTurnWithItem());
 
         posthog.capture(
             wasAnswerRevealed ? "word_reviewed" : "word_succeeded",
-            {
-                mode: "playground",
-                room_id: room.id,
-            },
+            { mode: "playground", room_id: room.id },
         );
     }, [
+        isPaused,
         soundEffects,
         offlineVoiceReading,
-        saveBotExposure,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
-        setTrackedTurn,
     ]);
-
-    const currentTurnUser = users[currentTurn];
 
     useEffect(() => {
         if (
             !isStarted ||
-            result !== null ||
+            isPaused ||
             !currentItem ||
-            currentTurnUser?.id !== LOCAL_USER_ID ||
             offlineVoiceReading !== "question"
         ) {
             return;
@@ -968,168 +960,17 @@ export default function Client({
         return () => synthesis.cancel();
     }, [
         currentItem,
-        currentTurnUser?.id,
         isStarted,
         itemPresentationKey,
         offlineVoiceReading,
-        result,
+        isPaused,
     ]);
 
-    const currentTurnPlan = useMemo(() => {
-        if (currentTurnUser?.id !== LOCAL_USER_ID || !currentItem) {
-            return null;
-        }
-
-        return createTurnPlan(memoryByItem[currentItem.id]);
-    }, [currentItem, currentTurnUser?.id, memoryByItem]);
-
-    useEffect(() => {
-        bombPlanRef.current = {
-            duration:
-                bombDurationSeconds *
-                1000 *
-                (currentTurnPlan?.bombPressure === "low" ? 1.35 : 1),
-            paused:
-                !currentItem ||
-                currentTurnPlan?.bombPressure === "paused" ||
-                recallPressurePaused,
-        };
-    }, [
-        bombDurationSeconds,
-        currentItem,
-        currentTurnPlan,
-        recallPressurePaused,
-    ]);
-
-    useEffect(() => {
-        if (!memoryReady || !isStarted || result !== null) return;
-        let previousTick = performance.now();
-        const resetTick = () => {
-            previousTick = performance.now();
-        };
-        document.addEventListener("visibilitychange", resetTick);
-        const jitter = 0.94 + Math.random() * 0.12;
-        const timer = setInterval(() => {
-            const now = performance.now();
-            const elapsed = now - previousTick;
-            previousTick = now;
-            const duration = bombPlanRef.current.duration * jitter;
-            bombStageProgressRef.current = advanceBombClock(
-                bombStageProgressRef.current,
-                elapsed,
-                duration,
-                bombPlanRef.current.paused ||
-                    document.visibilityState === "hidden",
-            );
-            if (bombStageProgressRef.current < 1) return;
-            bombStageProgressRef.current = 0;
-            if (bombStatus === 4) {
-                const lostUser = usersRef.current[currentTurnRef.current];
-                const didLose = lostUser?.id === LOCAL_USER_ID;
-                const item = currentItemRef.current;
-
-                if (didLose && item?.type === "typed_recall") {
-                    const progress = recallProgressRef.current ?? {
-                        attemptCount: 1,
-                        hintCount: 0,
-                        revealedHintChars: 0,
-                        maxCorrectPrefixLength: 0,
-                        recallLatencyMs: null,
-                        elapsedMs: duration,
-                    };
-
-                    updateLocalMemory(item, {
-                        ...progress,
-                        success: false,
-                        answerLength: item.answer.length,
-                        firstAttemptCorrect: false,
-                    });
-                }
-
-                const recommendStop = shouldRecommendStop({
-                    sessionStartedAt: sessionStartedAtRef.current,
-                });
-
-                setStopRecommended(recommendStop);
-                explode();
-                setResult(didLose);
-                setLostDisplayName(lostUser?.displayName ?? "練習相手");
-                setBombStatus(0);
-
-                posthog.capture(didLose ? "game_lost" : "game_won", {
-                    mode: "playground",
-                    room_id: room.id,
-                    stop_recommended: recommendStop,
-                });
-
-                void flushPendingMemory();
-                return;
-            }
-
-            setBombStatus((previous) => previous + 1);
-        }, 200);
-
-        return () => {
-            clearInterval(timer);
-            document.removeEventListener("visibilitychange", resetTick);
-        };
-    }, [
-        bombStatus,
-        explode,
-        flushPendingMemory,
-        isStarted,
-        items,
-        memoryReady,
-        result,
-        room.id,
-        updateLocalMemory,
-    ]);
-
-    useEffect(() => {
-        if (
-            !isStarted ||
-            result !== null ||
-            !currentItem ||
-            currentTurnUser?.id === LOCAL_USER_ID ||
-            currentItem.type !== "typed_recall"
-        ) {
-            return;
-        }
-
-        const charDelay = clampTypingDelay(userTypingDelayRef.current);
-        const initialDelay = Math.min(1000, Math.max(250, charDelay * 2.5));
-
-        const typingFrames = getBotTypingFrames(currentItem.answer);
-        let charIndex = 0;
-        let cancelled = false;
-        let timer: ReturnType<typeof setTimeout>;
-
-        const typeNextCharacter = () => {
-            if (cancelled) return;
-
-            if (charIndex < typingFrames.length) {
-                setCurrentInput(typingFrames[charIndex]);
-                charIndex += 1;
-                const jitter = 0.9 + Math.random() * 0.2;
-                timer = setTimeout(
-                    typeNextCharacter,
-                    Math.round(charDelay * jitter),
-                );
-                return;
-            }
-
-            timer = setTimeout(() => {
-                if (!cancelled) handleSuccess();
-            }, 200);
-        };
-
-        timer = setTimeout(typeNextCharacter, initialDelay);
-
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-        };
-    }, [currentItem, currentTurnUser, handleSuccess, isStarted, result]);
+    const currentTurnPlan = useMemo(
+        () =>
+            currentItem ? createTurnPlan(memoryByItem[currentItem.id]) : null,
+        [currentItem, memoryByItem],
+    );
 
     useEffect(() => {
         audioRef.current = new Audio("/MT-RD_17_for_Loop.wav");
@@ -1165,24 +1006,59 @@ export default function Client({
         };
     }, [backgroundMusic]);
 
-    const activeLearningPlan =
-        currentTurnUser?.id === LOCAL_USER_ID ? currentTurnPlan : null;
+    const activeLearningPlan = currentTurnPlan;
 
     return (
         <>
             <GameView
                 room={memoryReady ? room : null}
                 users={users}
-                positions={userPositions}
+                positions={[]}
                 userId={LOCAL_USER_ID}
-                currentTurn={currentTurn}
-                bombStatus={bombStatus}
+                currentTurn={0}
+                bombStatus={0}
                 currentItem={currentItem}
                 itemPresentationKey={itemPresentationKey}
                 currentInput={currentInput}
                 isStarted={isStarted}
                 preGameContent={
-                    memoryReady && showInstructions ? (
+                    memoryReady && nextReviewAt !== null ? (
+                        <div className="flex flex-col gap-4 px-2" role="status">
+                            <p className="font-bold">
+                                すべての単語が復習待ちです
+                            </p>
+                            <p>
+                                難しい単語はいったん保留しました。 次の復習は
+                                {new Date(nextReviewAt).toLocaleString(
+                                    "ja-JP",
+                                    {
+                                        month: "numeric",
+                                        day: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    },
+                                )}
+                                以降にできます。
+                            </p>
+                            <Button
+                                className="w-full"
+                                variant="primary"
+                                iconName="rotateCcw"
+                                onClick={startGame}
+                            >
+                                復習を確認
+                            </Button>
+                            <Button
+                                className="w-full"
+                                iconName="arrowLeft"
+                                onClick={() =>
+                                    router.push("/" + (room.link ?? room.id))
+                                }
+                            >
+                                ルームへ戻る
+                            </Button>
+                        </div>
+                    ) : memoryReady && showInstructions ? (
                         <div
                             className="flex flex-col gap-4 px-2"
                             role="region"
@@ -1194,7 +1070,7 @@ export default function Client({
                                         <Icon name="keyboard" />
                                     </span>
                                     <span data-cursor="text">
-                                        単語は英語でも日本語でも、
+                                        入力問題では、英語・日本語ともに
                                         <strong>半角</strong>
                                         で入力してください。
                                     </span>
@@ -1209,6 +1085,16 @@ export default function Client({
                                         と解答を見ることができます。
                                     </span>
                                 </div>
+                                {!isSignedIn && (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="user" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            サインインすることで、ブラウザを超えて単語の学習データが同期されます。
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-col gap-4">
@@ -1231,10 +1117,15 @@ export default function Client({
                 }
                 serverError={memoryError}
                 notice={notice}
-                result={result}
-                lostDisplayName={lostDisplayName}
-                bombRef={bombRef}
-                explosionLayer={explosionLayer}
+                result={null}
+                soloMode
+                isPaused={isPaused}
+                answerMode={answerMode}
+                answerModeMemory={
+                    currentItem ? memoryByItem[currentItem.id] : undefined
+                }
+                onSelectionAnswer={handleSelectionAnswer}
+                onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}
                 onRecallProgress={handleRecallProgress}
@@ -1249,7 +1140,6 @@ export default function Client({
                     router.push(getSignInUrl());
                 }}
                 enableRemoteTypingSync={false}
-                stopRecommended={stopRecommended}
                 onStop={() => {
                     void flushPendingMemory().finally(() => {
                         startNavigationProgress();
@@ -1272,6 +1162,18 @@ export default function Client({
                 }
             />
             <header className="w-full flex absolute justify-end p-4 gap-4">
+                <Button
+                    iconName="pause"
+                    padding="small"
+                    aria-label="一時停止"
+                    className="w-10 shrink-0"
+                    disabled={!isStarted || !currentItem || isPaused}
+                    onClick={() => {
+                        previousInputAtRef.current = null;
+                        setIsPaused(true);
+                        void flushPendingMemory();
+                    }}
+                />
                 <div>
                     <OfflineVoicePicker
                         initialValue={initialOfflineVoiceReading}

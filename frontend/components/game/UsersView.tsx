@@ -43,7 +43,11 @@ export default function UsersView({
                             key={index}
                             className="absolute flex transition-all duration-500 ease-etb rounded-full"
                             style={{
-                                opacity: position.opacity * (loserIds.includes(users[index]?.id ?? "") ? 0.5 : 1),
+                                opacity:
+                                    position.opacity *
+                                    (loserIds.includes(users[index]?.id ?? "")
+                                        ? 0.5
+                                        : 1),
                                 width: `${position.w}px`,
                                 height: `${position.h}px`,
                                 filter: `blur(${(1 - position.opacity) * 12}px)`,
@@ -53,7 +57,7 @@ export default function UsersView({
                         >
                             <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb">
                                 <div
-                                    className="absolute flex-col pointer-events-none rounded-full transition-all duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
+                                    className="absolute flex-col pointer-events-none rounded-full transition-all font-bold duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
                                         left: `calc(${position.w / 2}px - 64px)`,
                                         bottom: `calc(${position.h}px + 4px)`,
@@ -78,13 +82,25 @@ export default function UsersView({
                     );
                 })}
 
-                {(bombs ?? (currentTurn === null ? [] : [{
-                    id: "legacy", holder: currentTurn, status: bombStatus,
-                    at: 0, turn: 0,
-                }])).map((bomb, index) => {
+                {(
+                    bombs ??
+                    (currentTurn === null
+                        ? []
+                        : [
+                              {
+                                  id: "legacy",
+                                  holder: currentTurn,
+                                  status: bombStatus,
+                                  at: 0,
+                                  turn: 0,
+                              },
+                          ])
+                ).map((bomb, index) => {
                     const place = positions[bomb.holder];
                     if (!place) return null;
-                    const stackIndex = (bombs ?? []).slice(0, index).filter(item => item.holder === bomb.holder).length;
+                    const stackIndex = (bombs ?? [])
+                        .slice(0, index)
+                        .filter((item) => item.holder === bomb.holder).length;
                     return (
                         <div
                             key={bomb.id}

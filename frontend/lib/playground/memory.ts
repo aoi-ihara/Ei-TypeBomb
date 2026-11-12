@@ -14,7 +14,7 @@ export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
-export type SchedulerReason = "cycle" | "retry" | "long_term_due";
+export type SchedulerReason = "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
 export type RecallProgress = {
     attemptCount: number;
     incorrectInputCount?: number;
@@ -63,6 +63,18 @@ export type PersistedLearningState = {
     relearningSinceLastFreeRecall: boolean;
     cueSuccessStreak: number;
 };
+export type AnswerModeTrack = {
+    attempts: number;
+    correct: number;
+    correctStreak: number;
+    lastAttemptAt: string | null;
+};
+export type AnswerModeStats = {
+    recognition: AnswerModeTrack;
+    recall: AnswerModeTrack;
+};
+export type AnswerModeResult = "selection" | "input";
+
 export type ItemMemoryState = {
     userId: string;
     roomId: string;
@@ -75,6 +87,7 @@ export type ItemMemoryState = {
     updatedAt?: string | null;
     learningState?: PersistedLearningState | null;
     lastPresentedAt?: string | null;
+    answerModeStats?: AnswerModeStats;
 };
 export type LearningMode =
     "encoding" | "supported_recall" | "free_recall" | "relearning";
@@ -160,6 +173,42 @@ export const evaluateRecall = (
     };
 };
 
+export const parseAnswerModeStats = (
+    value: unknown,
+): AnswerModeStats | undefined => {
+    if (!value || typeof value !== "object") return undefined;
+    const source = value as Partial<AnswerModeStats>;
+    const parseTrack = (track: unknown): AnswerModeTrack | undefined => {
+        if (!track || typeof track !== "object") return undefined;
+        const candidate = track as Partial<AnswerModeTrack>;
+        if (
+            !Number.isSafeInteger(candidate.attempts) ||
+            (candidate.attempts ?? -1) < 0 ||
+            !Number.isSafeInteger(candidate.correct) ||
+            (candidate.correct ?? -1) < 0 ||
+            (candidate.correct ?? 0) > (candidate.attempts ?? 0) ||
+            !Number.isSafeInteger(candidate.correctStreak) ||
+            (candidate.correctStreak ?? -1) < 0 ||
+            (candidate.correctStreak ?? 0) > (candidate.correct ?? 0) ||
+            (candidate.lastAttemptAt !== null &&
+                (typeof candidate.lastAttemptAt !== "string" ||
+                    !Number.isFinite(Date.parse(candidate.lastAttemptAt))))
+        ) return undefined;
+        return {
+            attempts: candidate.attempts as number,
+            correct: candidate.correct as number,
+            correctStreak: candidate.correctStreak as number,
+            lastAttemptAt: candidate.lastAttemptAt ?? null,
+        };
+    };
+    const recognition = parseTrack(source.recognition);
+    const recall = parseTrack(source.recall);
+    return recognition && recall ? { recognition, recall } : undefined;
+};
+
+export const isValidAnswerModeStats = (value: unknown): value is AnswerModeStats =>
+    parseAnswerModeStats(value) !== undefined;
+
 export const toMemoryState = (row: {
     user_id: string;
     room_id: string;
@@ -172,6 +221,7 @@ export const toMemoryState = (row: {
     updated_at?: string | null;
     learning_state?: PersistedLearningState | null;
     last_presented_at?: string | null;
+    answer_mode_stats?: unknown;
 }): ItemMemoryState => ({
     userId: row.user_id,
     roomId: row.room_id,
@@ -184,6 +234,7 @@ export const toMemoryState = (row: {
     updatedAt: row.updated_at ?? null,
     learningState: row.learning_state ?? null,
     lastPresentedAt: row.last_presented_at ?? null,
+    answerModeStats: parseAnswerModeStats(row.answer_mode_stats),
 });
 
 export const createInitialMemory = (
@@ -199,6 +250,85 @@ export const createInitialMemory = (
     reviewCount: 0,
     lastReviewedAt: null,
 });
+
+const updateAnswerModeStats = (
+    current: AnswerModeStats | undefined,
+    mode: AnswerModeResult,
+    success: boolean,
+    now: Date,
+): AnswerModeStats => {
+    const emptyTrack = (): AnswerModeTrack => ({
+        attempts: 0,
+        correct: 0,
+        correctStreak: 0,
+        lastAttemptAt: null,
+    });
+    const stats = current ?? {
+        recognition: emptyTrack(),
+        recall: emptyTrack(),
+    };
+    const key = mode === "selection" ? "recognition" : "recall";
+    const previous = stats[key];
+    const nextTrack: AnswerModeTrack = {
+        attempts: previous.attempts + 1,
+        correct: previous.correct + Number(success),
+        correctStreak: success ? previous.correctStreak + 1 : 0,
+        lastAttemptAt: now.toISOString(),
+    };
+    return {
+        ...stats,
+        [key]: nextTrack,
+        ...(mode === "input" && !success
+            ? {
+                  recognition: {
+                      ...stats.recognition,
+                      correctStreak: 0,
+                  },
+              }
+            : {}),
+    };
+};
+
+export const recordAnswerModeResult = ({
+    memory,
+    userId,
+    roomId,
+    itemId,
+    mode,
+    success,
+    now = new Date(),
+}: {
+    memory: ItemMemoryState | undefined;
+    userId: string;
+    roomId: string;
+    itemId: string;
+    mode: AnswerModeResult;
+    success: boolean;
+    now?: Date;
+}): ItemMemoryState => {
+    const current = memory ?? createInitialMemory(userId, roomId, itemId);
+    const iso = now.toISOString();
+    return {
+        ...current,
+        userId,
+        roomId,
+        itemId,
+        answerModeStats: updateAnswerModeStats(
+            current.answerModeStats,
+            mode,
+            success,
+            now,
+        ),
+        // A typing failure is an intermediate attempt within the current
+        // presentation, not a new exposure. Preserve the previous timestamp
+        // so the eventual successful recall uses the original exposure gap.
+        lastPresentedAt:
+            mode === "input" && !success
+                ? (current.lastPresentedAt ?? null)
+                : iso,
+        updatedAt: iso,
+    };
+};
 
 export const getRetrievability = (
     memory: ItemMemoryState | undefined,
@@ -232,6 +362,14 @@ export const applyRecallObservation = ({
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const evaluation = evaluateRecall(observation);
+    const independentInputSuccess =
+        observation.success &&
+        evaluation.independent &&
+        !observation.answerWasFullyRevealed &&
+        (observation.initialCueRatio ?? 0) === 0 &&
+        (observation.finalCueRatio ?? 0) === 0 &&
+        (observation.hintCount ?? 0) === 0 &&
+        (observation.additionalHintCount ?? 0) === 0;
     let stability = current.stability;
     let difficulty = current.difficulty;
     let lastReviewedAt = current.lastReviewedAt;
@@ -276,6 +414,12 @@ export const applyRecallObservation = ({
         lastPresentedAt: iso,
         updatedAt: iso,
         learningState: null,
+        answerModeStats: updateAnswerModeStats(
+            current.answerModeStats,
+            "input",
+            independentInputSuccess,
+            now,
+        ),
     };
 };
 

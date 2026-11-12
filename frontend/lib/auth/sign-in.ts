@@ -30,5 +30,5 @@ export const signIn = async (
         return "ログインできませんでした。メールアドレス、パスワード、認証を確認して再度お試しください。";
     }
 
-    redirect("/");
+    redirect("/mine");
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/recall/ItemView";
 import UsersView from "@/components/game/UsersView";
@@ -10,12 +11,11 @@ import type {
     LearningMode,
     RecallObservation,
     RecallProgress,
+    ItemMemoryState,
 } from "@/lib/playground/memory";
+import type { AnswerMode } from "@/lib/answer-mode";
 import { getRoomItems } from "@/lib/item";
-import GameNotice, {
-    type GameNoticeProps,
-} from "@/components/game/GameNotice";
-import ReconnectStatus from "@/components/game/ReconnectStatus";
+import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
 
 type Props = {
     room: Room | null;
@@ -37,7 +37,6 @@ type Props = {
     isSpectator?: boolean;
     serverError?: string | null;
     connection?: "reconnecting" | "failed" | null;
-    onReload?: () => void;
     notice?: GameNoticeProps;
     result: boolean | null;
     lostDisplayName?: string | null;
@@ -61,6 +60,12 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     stopRecommended?: boolean;
+    soloMode?: boolean;
+    isPaused?: boolean;
+    answerMode: AnswerMode;
+    answerModeMemory?: ItemMemoryState;
+    onSelectionAnswer?: (correct: boolean) => void;
+    onResume?: () => void;
     onStop?: () => void;
 };
 
@@ -84,7 +89,6 @@ export default function GameView({
     isSpectator = false,
     serverError = null,
     connection = null,
-    onReload,
     notice,
     result,
     lostDisplayName,
@@ -108,10 +112,15 @@ export default function GameView({
     onRecallProgress,
     onRecallComplete,
     stopRecommended = false,
+    soloMode = false,
+    isPaused = false,
+    answerMode,
+    answerModeMemory,
+    onSelectionAnswer,
+    onResume,
     onStop,
 }: Readonly<Props>) {
     const currentTurnUser = users[currentTurn] as User | undefined;
-    // Keep the last snapshot on screen, read-only, until the server answers.
     const isReconnecting = room !== null && connection !== null;
     const isParticipant = users.some((user) => user.id === userId);
     const hasDuplicatePrompt =
@@ -126,6 +135,44 @@ export default function GameView({
         room.maxPlayers > 0 &&
         users.length < room.maxPlayers;
 
+    const activeGameRef = useRef<HTMLDivElement>(null);
+    const triggerFailAnimation = useCallback(() => {
+        const element = activeGameRef.current;
+        if (!element) return;
+
+        // Rewind an in-flight shake so consecutive errors each give feedback.
+        const animations = element.getAnimations();
+        if (animations.length > 0 && element.classList.contains("wrong-answer")) {
+            animations.forEach((animation) => {
+                animation.currentTime = 0;
+            });
+        } else {
+            element.classList.remove("wrong-answer");
+            // Restart the animation when a previous run has already finished.
+            void element.offsetWidth;
+            element.classList.add("wrong-answer");
+        }
+    }, []);
+
+    const failureKey = `${currentItem?.id ?? ""}:${currentTurn}:${itemPresentationKey}`;
+    const previousFailureRef = useRef({ count: failureCount ?? 0, key: failureKey });
+    useEffect(() => {
+        const previous = previousFailureRef.current;
+        // Remote wrong-answer notifications should shake the whole question
+        // as well, but never shake a newly presented word.
+        if (
+            previous.key === failureKey &&
+            (failureCount ?? 0) > previous.count &&
+            currentTurnUser?.id !== userId
+        ) triggerFailAnimation();
+        previousFailureRef.current = { count: failureCount ?? 0, key: failureKey };
+    }, [failureCount, failureKey, currentTurnUser?.id, userId, triggerFailAnimation]);
+
+    // A newly presented word should not inherit the previous word's shake.
+    useEffect(() => {
+        activeGameRef.current?.classList.remove("wrong-answer");
+    }, [failureKey]);
+
     const activeGame =
         currentItem === null ? (
             <div
@@ -135,70 +182,113 @@ export default function GameView({
                 ゲーム開始
             </div>
         ) : (
-            <div className="flex h-full items-center justify-center flex-col gap-2 w-full">
-                {currentTurnUser?.id === userId ? (
-                    <div
-                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                        data-cursor="text"
-                    >
-                        あなたの番です
-                    </div>
-                ) : currentTurnUser ? (
-                    <div
-                        className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                        data-cursor="text"
-                    >
-                        {currentTurnUser.displayName + "の番です"}
-                    </div>
-                ) : null}
-                <ItemView
-                    key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
-                    item={currentItem}
-                    failureCount={failureCount}
-                    remoteHintLength={remoteHintLength}
-                    onHintChange={onHintChange}
-                    hasDuplicatePrompt={hasDuplicatePrompt}
-                    bombStatus={bombStatus}
-                    onSuccess={onSuccess}
-                    onChangeInput={(input, failed) => {
-                        if (userId === currentTurnUser?.id)
+            <div
+                key={soloMode ? itemPresentationKey : undefined}
+                ref={activeGameRef}
+                className="flex h-full items-center justify-center flex-col gap-2 w-full"
+                onAnimationEnd={(event) => {
+                    if (
+                        event.target === event.currentTarget &&
+                        event.animationName === "wrongAnswer"
+                    ) event.currentTarget.classList.remove("wrong-answer");
+                }}
+            >
+                <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
+                    {soloMode ? null : currentTurnUser?.id === userId ? (
+                        <div
+                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                            data-cursor="text"
+                        >
+                            あなたの番です
+                        </div>
+                    ) : currentTurnUser ? (
+                        <div
+                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                            data-cursor="text"
+                        >
+                            {currentTurnUser.displayName + "の番です"}
+                        </div>
+                    ) : null}
+                    <ItemView
+                        key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
+                        item={currentItem}
+                        items={getRoomItems(room)}
+                        answerMode={answerMode}
+                        answerModeMemory={answerModeMemory}
+                        onSelectionAnswer={(correct) => {
+                            if (userId !== currentTurnUser?.id) return;
+                            if (!correct) triggerFailAnimation();
+                            onSelectionAnswer?.(correct);
+                        }}
+                        remoteHintLength={remoteHintLength}
+                        onHintChange={onHintChange}
+                        hasDuplicatePrompt={hasDuplicatePrompt}
+                        bombStatus={bombStatus}
+                        onSuccess={onSuccess}
+                        onChangeInput={(input, failed) => {
+                            if (userId !== currentTurnUser?.id) return;
+                            if (failed) triggerFailAnimation();
                             onChangeInput(input, failed);
-                    }}
-                    currentInput={
-                        result !== null
-                            ? ""
-                            : userId === currentTurnUser?.id && !isReconnecting
-                              ? null
-                              : currentInput
-                    }
-                    enableRemoteTypingSync={enableRemoteTypingSync}
-                    learningMode={learningMode}
-                    initialCueRatio={initialCueRatio}
-                    cueSteps={cueSteps}
-                    hintDelaysMs={hintDelaysMs}
-                    onRecallProgress={onRecallProgress}
-                    onRecallComplete={onRecallComplete}
-                />
+                        }}
+                        currentInput={
+                            result !== null
+                                ? ""
+                                : userId === currentTurnUser?.id && !isReconnecting
+                                  ? null
+                                  : currentInput
+                        }
+                        enableRemoteTypingSync={enableRemoteTypingSync}
+                        learningMode={learningMode}
+                        initialCueRatio={initialCueRatio}
+                        cueSteps={cueSteps}
+                        hintDelaysMs={hintDelaysMs}
+                        onRecallProgress={onRecallProgress}
+                        onRecallComplete={onRecallComplete}
+                        isPaused={isPaused}
+                    />
+                </div>
             </div>
         );
 
     return (
-        <div className="flex flex-col md:flex-row w-full h-full">
+        <div
+            className={`flex flex-col ${soloMode ? "" : "md:flex-row"} w-full h-full`}
+        >
             {explosionLayer}
             {notice && <GameNotice {...notice} />}
 
-            {result !== null && (
+            {(isPaused || result !== null) && (
                 <div className="bomb-result-enter fixed flex items-center flex-col gap-4 justify-center bg-(--color-background)/75 z-1 top-0 left-0 w-screen h-screen">
                     <div className="w-full max-w-sm px-4 flex flex-col gap-4 items-center animate-appear">
                         <div
                             data-cursor="text"
                             className="font-bold text-4xl text-center wrap-break-words"
                         >
-                            {loserNames?.length
-                                ? `${loserNames.join(", ")}の負け`
-                                : `${lostDisplayName ?? "相手"}の負け`}
+                            {isPaused
+                                ? "一時停止"
+                                : loserNames?.length
+                                  ? `${loserNames.join(", ")}の負け`
+                                  : `${lostDisplayName ?? "相手"}の負け`}
                         </div>
-                        {stopRecommended && onStop ? (
+                        {isPaused ? (
+                            <>
+                                <Button
+                                    iconName="play"
+                                    className="w-full"
+                                    variant="primary"
+                                    onClick={onResume}
+                                >
+                                    再開
+                                </Button>
+                                <Button
+                                    iconName="rotateCcw"
+                                    className="w-full"
+                                    onClick={onPlayAgain}
+                                >
+                                    もう一度プレイ
+                                </Button>
+                            </>
+                        ) : stopRecommended && onStop ? (
                             <>
                                 <Button
                                     iconName="check"
@@ -236,21 +326,16 @@ export default function GameView({
                 </div>
             )}
 
-            <div className="max-w-3xl md:order-2 w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col">
-                {onReload && (!room || connection) && (
-                    <ReconnectStatus
-                        reconnecting={isReconnecting}
-                        failed={connection === "failed"}
-                        onReload={onReload}
-                    />
-                )}
+            <div
+                className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
+            >
                 <div
-                    inert={isReconnecting}
-                    className={`flex flex-col bg-(--color-background-secondary) transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${!room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} rounded-2xl p-2 w-full`}
+                    inert={isReconnecting || isPaused}
+                    className={`flex flex-col ${!soloMode && "bg-(--color-background-secondary)"} transition-all duration-(--duration-etb) ease-etb-game min-h-0 ${isReconnecting ? "opacity-50" : ""} ${soloMode ? "h-full items-center" : !room || serverError ? "h-14" : isSpectator && !isStarted ? "opacity-0 scale-95" : isParticipant ? (isStarted ? (currentTurnUser?.id === userId ? "h-full" : "h-68") : preGameContent ? "h-full" : "h-48") : isStarted ? "h-64" : "h-14"} ${!soloMode && "rounded-2xl p-2 w-full"}`}
                 >
                     {room && !serverError ? (
                         isParticipant ? (
-                            <div className="flex flex-col h-full animate-appear">
+                            <div className="flex flex-col animate-appear h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (
@@ -361,9 +446,17 @@ export default function GameView({
                             </div>
                         )
                     ) : (
-                        <div className="w-full h-full flex animate-appear items-center">
+                        <div
+                            className={`w-full h-full flex animate-appear items-center ${
+                                soloMode
+                                    ? "fixed inset-0 justify-center pointer-events-none"
+                                    : ""
+                            }`}
+                        >
                             <div
-                                className="w-fit pl-4 font-bold gradient-text"
+                                className={`w-fit font-bold gradient-text ${
+                                    soloMode ? "text-center" : "pl-4"
+                                }`}
                                 data-cursor="text"
                             >
                                 読み込み中…
@@ -373,25 +466,34 @@ export default function GameView({
                 </div>
             </div>
 
-            <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+            {soloMode ? (
                 <div
-                    className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
+                    className="absolute top-0 left-0 pl-4 pt-3 w-1/2 truncate line-clamp-1 font-bold font-mono text-lg"
                     data-cursor="text"
                 >
                     {room?.title}
                 </div>
-                <UsersView
-                    bombRef={bombRef}
-                    exploded={result !== null}
-                    users={users}
-                    positions={positions}
-                    userId={userId}
-                    currentTurn={isStarted ? currentTurn : null}
-                    bombStatus={bombStatus}
-                    bombs={bombs}
-                    loserIds={loserIds}
-                />
-            </div>
+            ) : (
+                <div className="w-full relative md:order-1 flex justify-center items-center h-full">
+                    <div
+                        className="absolute top-0 left-0 pl-4 md:top-3 w-full flex truncate line-clamp-1 font-bold font-mono text-lg"
+                        data-cursor="text"
+                    >
+                        {room?.title}
+                    </div>
+                    <UsersView
+                        bombRef={bombRef}
+                        exploded={result !== null}
+                        users={users}
+                        positions={positions}
+                        userId={userId}
+                        currentTurn={isStarted ? currentTurn : null}
+                        bombStatus={bombStatus}
+                        bombs={bombs}
+                        loserIds={loserIds}
+                    />
+                </div>
+            )}
         </div>
     );
 }

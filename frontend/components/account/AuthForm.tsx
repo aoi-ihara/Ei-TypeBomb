@@ -7,13 +7,7 @@ import { submitAccountForm } from "@/lib/auth/account";
 import { safeReturnPath } from "@/lib/auth/return-path";
 
 type Mode = "sign-in" | "sign-up" | "recovery" | "email" | "password";
-export default function AuthForm({
-    mode,
-    next,
-}: {
-    mode: Mode;
-    next?: string;
-}) {
+export default function AuthForm({ mode, next }: { mode: Mode; next?: string }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmation, setConfirmation] = useState("");
@@ -53,9 +47,7 @@ export default function AuthForm({
                     );
                     if (result) setError(result);
                     else if (mode === "sign-in")
-                        window.location.assign(
-                            next ? safeReturnPath(next) : "/account",
-                        );
+                        window.location.assign(next ? safeReturnPath(next) : "/mine");
                     else {
                         setPassword("");
                         setConfirmation("");

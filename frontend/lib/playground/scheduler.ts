@@ -14,6 +14,30 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
+// Optional reviews never displace due retries or held words returning from a hold.
+// Both the probability and spacing threshold are uncalibrated product hypotheses.
+export const SPACED_REVIEW_CHANCE = 0.15;
+export const SPACED_REVIEW_MIN_TURNS = 5;
+export const SPACED_REVIEW_MIN_EXPOSURE_MS = 2 * 60_000;
+
+// Product hypotheses to calibrate with retention outcomes.
+export const INITIAL_SUSPENSION_FAILURES = 4;
+export const INITIAL_SUSPENSION_WINDOW_MS = 2 * 60_000;
+export const REPEAT_SUSPENSION_FAILURES = 2;
+export const SUSPENSION_DELAYS_MS = [
+    10 * 60_000,
+    30 * 60_000,
+    3 * 60 * 60_000,
+    12 * 60 * 60_000,
+    24 * 60 * 60_000,
+] as const;
+export type StruggleEntry = {
+    consecutiveFailures: number;
+    firstFailureAt: number | null;
+    // Hold count decreases gradually after independent recall.
+    suspensionLevel: number;
+    suspendedUntil: number | null;
+};
 export type RetryEntry = {
     itemId: string;
     earliestTurn: number;
@@ -36,6 +60,7 @@ export type SchedulerState = {
     completedCycles: number;
     turn: number;
     retries: Record<string, RetryEntry>;
+    struggles: Record<string, StruggleEntry>;
     userAnswered: Record<string, number>;
     botShown: Record<string, number>;
     lastBotItem: string | null;
@@ -91,6 +116,7 @@ export const createScheduler = (
         completedCycles: 0,
         turn: 0,
         retries: {},
+        struggles: {},
         userAnswered: {},
         botShown: {},
         lastBotItem: null,
@@ -125,14 +151,137 @@ const enqueueRetry = (
         successCount,
     };
 };
+const isOnHold = (state: SchedulerState, itemId: string) =>
+    state.struggles[itemId]?.suspendedUntil != null;
+
+// Revisit previously answered words without waiting for the whole room cycle.
+// Only completed cycle entries are eligible, so an upcoming regular question
+// never gets duplicated or removed from the queue by an optional review.
+const pickSpacedReview = (
+    state: SchedulerState,
+    memories: Record<string, ItemMemoryState>,
+    random: () => number,
+    now: number,
+): string | null => {
+    if (state.turn < SPACED_REVIEW_MIN_TURNS) return null;
+
+    const queued = new Set(state.cycleQueue);
+    const candidates = state.itemIds.filter((id) => {
+        const memory = memories[id];
+        if (
+            !hasRecallHistory(memory) ||
+            (state.userAnswered[id] ?? 0) === 0 ||
+            queued.has(id) ||
+            state.retries[id] ||
+            isOnHold(state, id) ||
+            id === state.lastUserItem
+        ) return false;
+
+        // lastPresentedAt includes BOT exposure, which is not independent recall.
+        const lastExposure = Date.parse(
+            memory.lastPresentedAt ?? memory.lastReviewedAt ?? "",
+        );
+        return (
+            Number.isFinite(lastExposure) &&
+            now - lastExposure >= SPACED_REVIEW_MIN_EXPOSURE_MS
+        );
+    });
+    if (candidates.length === 0 || random() >= SPACED_REVIEW_CHANCE)
+        return null;
+
+    // Choose the least retrievable word; break equal priorities randomly.
+    let best = [candidates[0]];
+    for (const id of candidates.slice(1)) {
+        const comparison = compareMemoryPriority(id, best[0], memories, now);
+        if (comparison < 0) best = [id];
+        else if (comparison === 0) best.push(id);
+    }
+    return best[Math.floor(random() * best.length)];
+};
+
+/** Return a deadline only when every room word is on hold. */
+export const nextSuspendedReviewAt = (state: SchedulerState): number | null => {
+    if (state.itemIds.length === 0 || state.itemIds.some((id) => !isOnHold(state, id)))
+        return null;
+    return Math.min(
+        ...state.itemIds.map((id) => state.struggles[id].suspendedUntil as number),
+    );
+};
+
+// Count assisted/failed recalls, not typing mistakes or BOT-assisted attempts.
+const trackStruggle = (
+    state: SchedulerState,
+    itemId: string,
+    evaluation: AttemptEvaluation,
+    now: number,
+): boolean => {
+    const previous = state.struggles[itemId] ?? {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 0,
+        suspendedUntil: null,
+    };
+    if (evaluation.retryNeed === "none" && evaluation.independent) {
+        // One unaided recall unblocks the word, but repeated failures still
+        // matter. Several successes are needed to fully erase its hold level.
+        const level = Math.max(0, previous.suspensionLevel - 1);
+        if (level === 0) delete state.struggles[itemId];
+        else
+            state.struggles[itemId] = {
+                consecutiveFailures: 0,
+                firstFailureAt: null,
+                suspensionLevel: level,
+                suspendedUntil: null,
+            };
+        return false;
+    }
+    if (!evaluation.independent || evaluation.retryNeed === "none") return false;
+
+    const firstFailureAt = previous.firstFailureAt ?? now;
+    const consecutiveFailures = previous.consecutiveFailures + 1;
+    const required = previous.suspensionLevel
+        ? REPEAT_SUSPENSION_FAILURES
+        : INITIAL_SUSPENSION_FAILURES;
+    const timeReady =
+        previous.suspensionLevel > 0 ||
+        now - firstFailureAt >= INITIAL_SUSPENSION_WINDOW_MS;
+    if (consecutiveFailures < required || !timeReady) {
+        state.struggles[itemId] = {
+            ...previous,
+            firstFailureAt,
+            consecutiveFailures,
+        };
+        return false;
+    }
+
+    const level = Math.min(
+        previous.suspensionLevel + 1,
+        SUSPENSION_DELAYS_MS.length,
+    );
+    state.struggles[itemId] = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: level,
+        suspendedUntil: now + SUSPENSION_DELAYS_MS[level - 1],
+    };
+    // A held word must free its active relearning slot.
+    delete state.retries[itemId];
+    return true;
+};
+
 export const recordUserAnswer = (
     state: SchedulerState,
     evaluation: AttemptEvaluation,
+    now = Date.now(),
 ) => {
     const selected = state.current;
     if (!selected) return;
     state.userAnswered[selected.itemId] =
         (state.userAnswered[selected.itemId] ?? 0) + 1;
+    if (trackStruggle(state, selected.itemId, evaluation, now)) {
+        state.current = null;
+        return;
+    }
     if (evaluation.retryNeed === "short") {
         enqueueRetry(
             state,
@@ -167,6 +316,33 @@ export const recordUserAnswer = (
     state.current = null;
 };
 
+// A correct choice proves recognition, not free recall. Advance the current
+// question without changing FSRS stability or clearing a struggle hold.
+export const recordRecognitionAnswer = (
+    state: SchedulerState,
+    itemId: string,
+): boolean => {
+    const selected = state.current;
+    if (!selected || selected.itemId !== itemId) return false;
+
+    state.userAnswered[itemId] = (state.userAnswered[itemId] ?? 0) + 1;
+    if (selected.retry) {
+        delete state.retries[itemId];
+        const successes = selected.retry.successCount + 1;
+        if (successes < REQUIRED_RETRY_SUCCESSES) {
+            enqueueRetry(
+                state,
+                itemId,
+                "uncertain_recall",
+                successes,
+                CONFIRM_RETRY_GAP,
+            );
+        }
+    }
+    state.current = null;
+    return true;
+};
+
 export const chooseNextUserItem = (
     state: SchedulerState,
     memories: Record<string, ItemMemoryState> = {},
@@ -184,7 +360,10 @@ export const chooseNextUserItem = (
     }
 
     const turn = state.turn + 1;
-    const pending = Object.values(state.retries);
+    const activeIds = state.itemIds.filter((id) => !isOnHold(state, id));
+    const pending = Object.values(state.retries).filter(
+        (entry) => !isOnHold(state, entry.itemId),
+    );
     const eligible = pending
         .filter((entry) => entry.earliestTurn <= turn)
         .sort((a, b) => a.latestTurn - b.latestTurn);
@@ -192,6 +371,21 @@ export const chooseNextUserItem = (
     // A due relearning item always beats an unseen item. The old alternating
     // cycle/retry schedule introduced new words even when learners struggled.
     let itemId: string | undefined = eligible[0]?.itemId;
+    const dueHolds = Object.entries(state.struggles)
+        .filter(([id, entry]) =>
+            state.itemIds.includes(id) &&
+            entry.suspendedUntil != null &&
+            entry.suspendedUntil <= now,
+        )
+        .sort((a, b) =>
+            (a[1].suspendedUntil as number) - (b[1].suspendedUntil as number),
+        );
+    // Returning words get priority over brand-new words once a retry slot is free.
+    const resumedFromHold = !itemId &&
+        pending.length < MAX_ACTIVE_RELEARNING &&
+        dueHolds.length > 0;
+    if (resumedFromHold) itemId = dueHolds[0][0];
+    let spacedReview = false;
 
     const pickFromCycle = () => {
         if (state.cycleQueue.length === 0) {
@@ -200,18 +394,26 @@ export const chooseNextUserItem = (
                 compareMemoryPriority(a, b, memories, now),
             );
         }
-        return state.cycleQueue.find((id) => !state.retries[id]);
+        return state.cycleQueue.find(
+            (id) => !state.retries[id] && !isOnHold(state, id),
+        );
     };
 
-    if (!itemId && pending.length < Math.min(MAX_ACTIVE_RELEARNING, state.itemIds.length)) {
-        itemId = pickFromCycle();
+    if (!itemId && pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)) {
+        const reviewId = pickSpacedReview(state, memories, random, now);
+        if (reviewId) {
+            itemId = reviewId;
+            spacedReview = true;
+        } else {
+            itemId = pickFromCycle();
+        }
         // If the new cycle contains only pending words, choose a previously
         // answered filler instead of breaking the earliest-retry boundary.
     }
 
     // When the active pool is full, any unanswered filler can fail and add
     // a fifth pending retry. Stay inside the pool until a slot clears.
-    if (!itemId && pending.length >= Math.min(MAX_ACTIVE_RELEARNING, state.itemIds.length)) {
+    if (!itemId && pending.length >= Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)) {
         itemId = [...pending].sort((a, b) =>
             a.earliestTurn - b.earliestTurn
         )[0]?.itemId;
@@ -219,7 +421,7 @@ export const chooseNextUserItem = (
 
     if (!itemId) {
         const fillers = state.itemIds.filter(
-            (id) => (state.userAnswered[id] ?? 0) > 0 && !state.retries[id],
+            (id) => (state.userAnswered[id] ?? 0) > 0 && !state.retries[id] && !isOnHold(state, id),
         );
         const varied = fillers.filter((id) => id !== state.lastUserItem);
         const pool = varied.length ? varied : fillers;
@@ -238,8 +440,10 @@ export const chooseNextUserItem = (
         )[0]?.itemId;
     }
     if (!itemId) itemId = pickFromCycle();
-    if (!itemId) throw new Error("Scheduler has no feasible question");
+    // Every word may legitimately be paused until a later session.
+    if (!itemId) return null;
 
+    if (resumedFromHold) state.struggles[itemId].suspendedUntil = null;
     const entry = state.retries[itemId];
     const advancesCycle = state.cycleQueue.includes(itemId);
     if (advancesCycle) {
@@ -255,9 +459,13 @@ export const chooseNextUserItem = (
         cycle: state.cycle,
         advancesCycle,
         retry: entry,
-        reason: entry
-            ? "retry"
-            : hasRecallHistory(memories[itemId]) &&
+        reason: resumedFromHold
+            ? "suspension_due"
+            : entry
+              ? "retry"
+              : spacedReview
+                ? "spaced_review"
+              : hasRecallHistory(memories[itemId]) &&
                 getRetrievability(memories[itemId], now) < 0.8
               ? "long_term_due"
               : "cycle",
@@ -268,13 +476,18 @@ export const chooseBotItem = (
     state: SchedulerState,
     random = Math.random,
 ): string | null => {
-    const protectedIds = new Set(state.cycleQueue.slice(0, BOT_LOOKAHEAD));
+    // Skip held and pending-retry entries: neither can be the next cycle
+    // question, so they must not consume one of the protected lookahead slots.
+    const upcomingCycleItems = state.cycleQueue.filter(
+        (id) => !isOnHold(state, id) && !state.retries[id],
+    );
+    const protectedIds = new Set(upcomingCycleItems.slice(0, BOT_LOOKAHEAD));
     for (const id of Object.keys(state.retries)) protectedIds.add(id);
 
     // Prefer words the user has already answered, while still avoiding upcoming
     // cycle/retry targets. This keeps BOT exposure from helping the next recall.
     const candidates = state.itemIds.filter(
-        (id) => (state.userAnswered[id] ?? 0) > 0 && !protectedIds.has(id),
+        (id) => (state.userAnswered[id] ?? 0) > 0 && !protectedIds.has(id) && !isOnHold(state, id),
     );
     const varied = candidates.filter((id) => id !== state.lastBotItem);
     const pool = varied.length ? varied : candidates;
@@ -296,7 +509,7 @@ export const chooseBotItem = (
     // Tiny rooms can have every word protected. In that case reuse a random
     // word the user has already answered, so no new answer is revealed.
     const answeredFallback = state.itemIds.filter(
-        (id) => (state.userAnswered[id] ?? 0) > 0,
+        (id) => (state.userAnswered[id] ?? 0) > 0 && !isOnHold(state, id),
     );
     const answeredVaried = answeredFallback.filter(
         (id) => id !== state.lastBotItem,
@@ -329,6 +542,23 @@ const schedulerKey = (mode: SchedulerMode, userId: string, roomId: string) =>
 
 const isNonNegativeInteger = (value: unknown): value is number =>
     Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
+
+const validStruggle = (value: unknown): StruggleEntry | null => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const entry = value as Partial<StruggleEntry>;
+    const validTimestamp = (stamp: unknown) =>
+        stamp === null ||
+        (typeof stamp === "number" && Number.isSafeInteger(stamp) && stamp >= 0);
+    if (
+        !isNonNegativeInteger(entry.consecutiveFailures) ||
+        !validTimestamp(entry.firstFailureAt) ||
+        !isNonNegativeInteger(entry.suspensionLevel) ||
+        entry.suspensionLevel > SUSPENSION_DELAYS_MS.length ||
+        !validTimestamp(entry.suspendedUntil) ||
+        (entry.suspensionLevel === 0 && entry.suspendedUntil !== null)
+    ) return null;
+    return entry as StruggleEntry;
+};
 
 const validRetry = (value: unknown, id: string): RetryEntry | null => {
     if (!value || typeof value !== "object") return null;
@@ -443,6 +673,19 @@ export const loadSchedulerState = (
             if (valid) retries[id] = valid;
         }
 
+        // Version 1 snapshots predate word suspensions; they remain readable.
+        const struggles: Record<string, StruggleEntry> = {};
+        if (saved.struggles && typeof saved.struggles === "object" &&
+            !Array.isArray(saved.struggles)) {
+            for (const [id, entry] of Object.entries(saved.struggles)) {
+                if (!allowed.has(id)) continue;
+                const valid = validStruggle(entry);
+                if (!valid) continue;
+                struggles[id] = valid;
+                if (valid.suspendedUntil !== null) delete retries[id];
+            }
+        }
+
         const readCounters = (source: unknown) => {
             const result: Record<string, number> = {};
             if (!source || typeof source !== "object" || Array.isArray(source))
@@ -466,7 +709,8 @@ export const loadSchedulerState = (
             isNonNegativeInteger(selected.cycle) &&
             selected.cycle >= 1 &&
             typeof selected.advancesCycle === "boolean" &&
-            ["cycle", "retry", "long_term_due"].includes(selected.reason)
+            ["cycle", "retry", "long_term_due", "suspension_due", "spaced_review"].includes(selected.reason) &&
+            struggles[selected.itemId]?.suspendedUntil == null
         ) {
             const retry = selected.retry
                 ? validRetry(selected.retry, selected.itemId)
@@ -510,6 +754,7 @@ export const loadSchedulerState = (
             completedCycles: saved.completedCycles,
             turn: saved.turn,
             retries,
+            struggles,
             userAnswered: readCounters(saved.userAnswered),
             botShown: readCounters(saved.botShown),
             lastBotItem:

@@ -36,8 +36,9 @@ import {
     cacheOnlinePendingMemory,
     loadOnlinePendingMemory,
     loadOnlineGuestMemory,
-    nextOnlineRecommendation,
+    nextUnsentOnlineRecommendation,
     recordOnlineRecall,
+    recordOnlineAnswerModeResult,
     type OnlineMemorySession,
 } from "@/lib/online/memory-session";
 
@@ -52,7 +53,9 @@ const CONNECTING_MESSAGE = "接続中…";
 const UNAVAILABLE_MESSAGE =
     "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
-const MAX_CURRENT_INPUT_LENGTH = 32;
+const MAX_CURRENT_INPUT_LENGTH = 4096;
+// Faster cues in competitive play; Playground keeps its existing pacing.
+const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
 
 export default function Clinet({
     clusterServers,
@@ -70,14 +73,24 @@ export default function Clinet({
     const [users, setUsers] = useState<User[]>([]);
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
     const [currentTurn, setCurrentTurn] = useState<number>(0);
-    const [displayName] = useState<string>(() => {
+    const [displayName] = useState(() => {
         if (typeof window === "undefined") return "";
-        return localStorage.getItem("display-name") ?? "";
+        try {
+            return localStorage.getItem("display-name") ?? "";
+        } catch {
+            return "";
+        }
     });
     const [bombStatus, setBombStatus] = useState<number | null>(0);
 
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const onlineMemoryRef = useRef<OnlineMemorySession | null>(null);
+    const lastRecommendationRef = useRef<{
+        socket: ReturnType<typeof io>;
+        turn: number;
+        itemId: string;
+    } | null>(null);
+    const [authSessionGeneration, setAuthSessionGeneration] = useState(0);
     const memoryFlushRef = useRef<Promise<void> | null>(null);
     const [onlineMemoryReady, setOnlineMemoryReady] = useState(0);
 
@@ -92,12 +105,7 @@ export default function Clinet({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const [notice, setNotice] = useState<GameNoticeProps>({
-        visible: false,
-        iconName: "globeOff",
-        title: "接続が切れました",
-        description: "プレイヤーがルームから退出しました。",
-    });
+    const [notice, setNotice] = useState<GameNoticeProps>();
     const [result, setResult] = useState<boolean | null>(null);
     const [currentInput, setCurrentInput] = useState("");
     const [hintLengths, setHintLengths] = useState<Record<string, number>>({});
@@ -201,23 +209,43 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-        // The item catalog is fixed within a room. Broadcast revisions must not
-        // reset scheduler progress or restart the asynchronous memory load.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [memoryRoomId]);
 
-    useEffect(() => {
+    const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
-        if (
-            !session ||
-            session.roomId !== room?.id ||
-            !userId ||
-            !users.some((player) => player.id === userId)
-        )
+        const socket = socketRef.current;
+        if (!session || !socket) return;
+        const last = lastRecommendationRef.current;
+        const recommendation = nextUnsentOnlineRecommendation(
+            session,
+            last?.socket === socket ? last : null,
+        );
+        if (!recommendation) return;
+        socket.emit("item:recommend", { itemId: recommendation.itemId });
+        lastRecommendationRef.current = { socket, ...recommendation };
+    }, []);
+
+    const isOnlineParticipant = Boolean(
+        userId && users.some((player) => player.id === userId),
+    );
+    useEffect(() => {
+        if (!isOnlineParticipant) {
+            // The server discards a player's pending recommendation on leave.
+            // Reset the client-side deduplication state so rejoining can send
+            // a fresh recommendation even when the socket and turn are reused.
+            lastRecommendationRef.current = null;
             return;
-        const itemId = nextOnlineRecommendation(session);
-        if (itemId) socketRef.current?.emit("item:recommend", { itemId });
-    }, [room, userId, users, onlineMemoryReady]);
+        }
+        if (!room?.id) return;
+        if (onlineMemoryRef.current?.roomId !== room.id) return;
+        publishOnlineRecommendation();
+    }, [
+        room?.id,
+        isOnlineParticipant,
+        onlineMemoryReady,
+        authSessionGeneration,
+        publishOnlineRecommendation,
+    ]);
 
     useEffect(() => {
         const retry = () => {
@@ -245,10 +273,8 @@ export default function Clinet({
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
         powerupAudioRef.current = new Audio("/Powerup_1.wav");
 
-        // SOCKET
         const configuredServers = getEffectiveClusterServers(clusterServers);
         const primaryUrl = configuredServers[0] ?? resolveServerUrl();
-        // One signed player identity per mounted page, shared across reconnects.
         const sessionTokenPromise = getClientSessionToken().catch(() => null);
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
         let disposed = false;
@@ -284,19 +310,12 @@ export default function Clinet({
             });
 
             noticeTimer = setTimeout(() => {
-                setNotice((current) => ({
-                    ...current,
-                    visible: false,
-                }));
+                setNotice((current) =>
+                    current ? { ...current, visible: false } : undefined,
+                );
                 noticeTimer = null;
             }, 5000);
         };
-
-        showNotice({
-            iconName: "keyboard",
-            title: "半角で入力してください",
-            description: "単語は日本語でも英語でも、半角で入力してください。",
-        });
 
         type ServerTier = "primary" | "secondary" | "fallback";
         type Candidate = {
@@ -820,6 +839,10 @@ export default function Clinet({
                 setServerError(null);
                 setUserId(id);
                 userIdRef.current = id;
+                // A reconnect may use the same socket/user ID. Resend once on
+                // successful reauthentication, never on every room snapshot.
+                lastRecommendationRef.current = null;
+                setAuthSessionGeneration((previous) => previous + 1);
             });
 
             socket.on("auth:request", () => {
@@ -955,7 +978,7 @@ export default function Clinet({
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();
         };
-    }, [explode]);
+    }, [explode, displayName, clusterServers]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -1066,9 +1089,12 @@ export default function Clinet({
         setHintLengths({});
         setSharedFocusPlayerId(null);
         setIsSpectator(false);
+        lastRecommendationRef.current = null;
     };
 
     const handleLeave = () => {
+        // Clear immediately; the participant snapshot may arrive later.
+        lastRecommendationRef.current = null;
         socketRef.current?.emit("room:leave");
     };
 
@@ -1078,14 +1104,6 @@ export default function Clinet({
             : serverError === UNAVAILABLE_MESSAGE
               ? "failed"
               : "reconnecting";
-
-    const handleReload = () => {
-        posthog.capture("game_reload_clicked", {
-            has_room: room !== null,
-            connection_failed: connection === "failed",
-        });
-        window.location.reload();
-    };
 
     const focusedBomb =
         room?.bombs?.find((bomb) => users[bomb.holder]?.id === userId) ??
@@ -1113,6 +1131,29 @@ export default function Clinet({
                     focusedBomb ? focusedBomb.id + ":" + focusedBomb.turn : 0
                 }
                 currentInput={currentInput}
+                answerMode="input"
+                onSelectionAnswer={(correct) => {
+                    if (
+                        !focusedItem ||
+                        !focusedBomb ||
+                        !userId ||
+                        users[focusedBomb.holder]?.id !== userId
+                    ) return;
+                    const session = onlineMemoryRef.current;
+                    if (!session || session.roomId !== room?.id) return;
+                    const updated = recordOnlineAnswerModeResult(
+                        session,
+                        focusedItem.id,
+                        "selection",
+                        correct,
+                    );
+                    if (!updated) return;
+                    cacheOnlinePendingMemory(session);
+                    setOnlineMemoryReady((revision) => revision + 1);
+                    if (correct) publishOnlineRecommendation();
+                    void flushOnlineMemory();
+                }}
+                hintDelaysMs={ONLINE_HINT_DELAYS_MS}
                 remoteHintLength={
                     hintLengths[focusedBomb?.id ?? ""] ??
                     focusedBomb?.hintLength ??
@@ -1125,7 +1166,6 @@ export default function Clinet({
                 isStarted={isStarted}
                 isSpectator={isSpectator}
                 connection={connection}
-                onReload={handleReload}
                 notice={notice}
                 result={result}
                 lostDisplayName={lostDisplayName}
@@ -1153,11 +1193,8 @@ export default function Clinet({
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
-                    const nextItemId = nextOnlineRecommendation(session);
-                    if (nextItemId)
-                        socketRef.current?.emit("item:recommend", {
-                            itemId: nextItemId,
-                        });
+                    setOnlineMemoryReady((revision) => revision + 1);
+                    publishOnlineRecommendation();
                     void flushOnlineMemory();
                 }}
                 onSuccess={() => {
@@ -1166,6 +1203,28 @@ export default function Clinet({
                     socketRef.current?.emit("word:success");
                 }}
                 onChangeInput={(input, failed) => {
+                    if (
+                        failed &&
+                        focusedItem &&
+                        focusedBomb &&
+                        userId &&
+                        users[focusedBomb.holder]?.id === userId
+                    ) {
+                        const session = onlineMemoryRef.current;
+                        if (session && session.roomId === room?.id) {
+                            const updated = recordOnlineAnswerModeResult(
+                                session,
+                                focusedItem.id,
+                                "input",
+                                false,
+                            );
+                            if (updated) {
+                                cacheOnlinePendingMemory(session);
+                                setOnlineMemoryReady((revision) => revision + 1);
+                                void flushOnlineMemory();
+                            }
+                        }
+                    }
                     const value = input.slice(0, MAX_CURRENT_INPUT_LENGTH);
                     socketRef.current?.emit(
                         "currentInput",

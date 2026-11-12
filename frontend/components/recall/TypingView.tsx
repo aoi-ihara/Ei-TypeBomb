@@ -2,7 +2,8 @@ import {
     correctPrefixLength,
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
 import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import {
     advanceKanaInput,
@@ -43,7 +44,6 @@ function TypingAttempt({
     english,
     onSuccess,
     onChangeInput,
-    failureCount = 0,
     currentInput,
     bombStatus,
     hasDuplicateMeaning = false,
@@ -54,6 +54,7 @@ function TypingAttempt({
     hintDelaysMs = DEFAULT_HINT_DELAYS_MS,
     onRecallProgress,
     onRecallComplete,
+    isPaused = false,
     remoteHintLength,
     onHintChange,
 }: {
@@ -62,7 +63,6 @@ function TypingAttempt({
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     currentInput: string | null;
-    failureCount?: number;
     bombStatus?: number | null;
     hasDuplicateMeaning?: boolean;
     enableRemoteTypingSync?: boolean;
@@ -72,6 +72,7 @@ function TypingAttempt({
     hintDelaysMs?: number[] | null;
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
+    isPaused?: boolean;
     remoteHintLength?: number;
     onHintChange?: (length: number) => void;
 }) {
@@ -81,6 +82,7 @@ function TypingAttempt({
         ? getInitialCueLength(english.length, initialCueRatio, baseHintCount)
         : baseHintCount;
     const [timedHintCount, setTimedHintCount] = useState(0);
+    const timedHintIndexRef = useRef(0);
     const [revealedHintLength, setRevealedHintLength] =
         useState(initialCueLength);
     const [input, setInput] = useState<string[]>(
@@ -95,12 +97,12 @@ function TypingAttempt({
     const onHintChangeRef = useRef(onHintChange);
     const [currentSelection, setCurrentSelection] = useState(0);
     const inputRef = useRef<HTMLInputElement | null>(null);
-    const inputFrameRef = useRef<HTMLDivElement | null>(null);
     const [charInput, setCharInput] = useState("");
-    const [isFailAnimating, setIsFailAnimating] = useState(false);
     const [syncedInput, setSyncedInput] = useState("");
     const wordKey = JSON.stringify([japanese, english]);
     const recallStartedAtRef = useRef(0);
+    const pausedAtRef = useRef<number | null>(null);
+    const totalPausedMsRef = useRef(0);
     const firstKeyAtRef = useRef<number | null>(null);
     const attemptCountRef = useRef(1);
     const incorrectInputCountRef = useRef(0);
@@ -109,11 +111,19 @@ function TypingAttempt({
     const lastHintAtRef = useRef(0);
     const cueStepsKey = cueSteps.join(",");
     const hintDelaysKey = hintDelaysMs?.join(",") ?? "disabled";
+    const getActiveElapsedMs = useCallback(
+        () =>
+            calculateActiveElapsedMs(
+                performance.now(),
+                recallStartedAtRef.current,
+                totalPausedMsRef.current,
+                pausedAtRef.current,
+            ),
+        [],
+    );
 
     const isReadonly = currentInput !== null;
     const manualHints = Boolean(learningMode) && !isReadonly;
-    // Duplicate prompts may start with a visible cue before any timed hint.
-    // Publish that initial cue too, so read-only spectators see the same letters.
     useEffect(() => {
         if (!isReadonly && english && initialCueLength > 0)
             onHintChangeRef.current?.(initialCueLength);
@@ -134,17 +144,39 @@ function TypingAttempt({
         if (isReadonly || !english) return;
 
         recallStartedAtRef.current = performance.now();
+        pausedAtRef.current = null;
+        totalPausedMsRef.current = 0;
         firstKeyAtRef.current = null;
         attemptCountRef.current = 1;
         incorrectInputCountRef.current = 0;
         maxCorrectPrefixRef.current = 0;
+        timedHintIndexRef.current = 0;
+        lastCorrectProgressAtRef.current = 0;
+        lastHintAtRef.current = 0;
     }, [english, isReadonly, wordKey]);
+
+    useEffect(() => {
+        if (isPaused) {
+            if (pausedAtRef.current === null)
+                pausedAtRef.current = performance.now();
+            return;
+        }
+
+        if (pausedAtRef.current !== null) {
+            totalPausedMsRef.current += performance.now() - pausedAtRef.current;
+            pausedAtRef.current = null;
+        }
+    }, [isPaused]);
 
     useEffect(() => {
         if (isReadonly || !english) return;
         revealedHintLengthRef.current = initialCueLength;
-        lastCorrectProgressAtRef.current = performance.now();
+        lastCorrectProgressAtRef.current = getActiveElapsedMs();
         lastHintAtRef.current = 0;
+    }, [english, initialCueLength, isReadonly, wordKey, getActiveElapsedMs]);
+
+    useEffect(() => {
+        if (isReadonly || !english || isPaused) return;
 
         const activeHintDelays = hintDelaysMs;
         if (
@@ -157,7 +189,7 @@ function TypingAttempt({
 
         let cancelled = false;
         let timer: ReturnType<typeof setTimeout> | null = null;
-        let hintIndex = 0;
+        let hintIndex = timedHintIndexRef.current;
 
         const getHintDelay = () =>
             Math.max(
@@ -170,7 +202,7 @@ function TypingAttempt({
         const schedule = () => {
             if (cancelled) return;
 
-            const now = performance.now();
+            const now = getActiveElapsedMs();
             const anchorAt = Math.max(
                 lastCorrectProgressAtRef.current,
                 lastHintAtRef.current,
@@ -180,7 +212,8 @@ function TypingAttempt({
             timer = setTimeout(() => {
                 if (cancelled) return;
 
-                const firedAt = performance.now();
+                if (isPaused) return;
+                const firedAt = getActiveElapsedMs();
                 const latestAnchorAt = Math.max(
                     lastCorrectProgressAtRef.current,
                     lastHintAtRef.current,
@@ -222,11 +255,8 @@ function TypingAttempt({
                 onHintChangeRef.current?.(nextLength);
                 setTimedHintCount((count) => count + 1);
                 lastHintAtRef.current = firedAt;
-                hintIndex += 1;
+                timedHintIndexRef.current = ++hintIndex;
 
-                // Kana text remains editable even when a timed hint expands
-                // across a nonmatching cell. Previously this branch cleared
-                // the entire answer before a user had finished correcting it.
                 if (
                     shouldClearForTimedHint(
                         english,
@@ -241,7 +271,6 @@ function TypingAttempt({
                     kanaCommitSpansRef.current = [];
                     setCurrentSelection(0);
                     setCharInput("");
-                    setIsFailAnimating(true);
                     onChangeInputRef.current("");
                 }
 
@@ -262,6 +291,8 @@ function TypingAttempt({
         english,
         hintDelaysKey,
         hintDelaysMs,
+        isPaused,
+        getActiveElapsedMs,
         initialCueLength,
         initialCueRatio,
         isReadonly,
@@ -269,7 +300,7 @@ function TypingAttempt({
     ]);
     useEffect(() => {
         if (!isReadonly) {
-            inputRef.current?.focus();
+            if (!isPaused) inputRef.current?.focus();
             return;
         }
 
@@ -307,27 +338,7 @@ function TypingAttempt({
             socket?.disconnect();
             socket = null;
         };
-    }, [enableRemoteTypingSync, isReadonly]);
-
-    // Explicit failures avoid confusing Backspace corrections with wrong answers.
-    const previousFailureCountRef = useRef(failureCount);
-    useEffect(() => {
-        if (!isReadonly || previousFailureCountRef.current === failureCount)
-            return;
-        previousFailureCountRef.current = failureCount;
-        inputFrameRef.current?.getAnimations().forEach((animation) => {
-            animation.currentTime = 0;
-        });
-        setIsFailAnimating(true);
-    }, [failureCount, isReadonly]);
-
-    const triggerFailAnimation = () => {
-        // Restart an in-flight shake without an older timer stopping it early.
-        inputFrameRef.current?.getAnimations().forEach((animation) => {
-            animation.currentTime = 0;
-        });
-        setIsFailAnimating(true);
-    };
+    }, [enableRemoteTypingSync, isReadonly, isPaused]);
 
     const resetInput = () => {
         if (!english) return;
@@ -339,7 +350,6 @@ function TypingAttempt({
         kanaCommitSpansRef.current = [];
         setCurrentSelection(0);
         setCharInput("");
-        triggerFailAnimation();
         onChangeInput("", true);
     };
 
@@ -363,7 +373,7 @@ function TypingAttempt({
         hintEventsRef.current.push({
             kind: "answer",
             source: "manual",
-            atMs: Math.max(0, performance.now() - recallStartedAtRef.current),
+            atMs: getActiveElapsedMs(),
             position: null,
             correctBefore: input.filter(
                 (char, i) => char === english[i] && english[i] !== " ",
@@ -386,7 +396,7 @@ function TypingAttempt({
     };
 
     useEffect(() => {
-        if (isReadonly || !english) return;
+        if (isReadonly || !english || isPaused) return;
 
         onRecallProgress?.({
             attemptCount: attemptCountRef.current,
@@ -400,16 +410,8 @@ function TypingAttempt({
                 : hintLength >= english.length,
             maxCorrectPrefixLength: maxCorrectPrefixRef.current,
             recallLatencyMs:
-                firstKeyAtRef.current === null
-                    ? null
-                    : Math.max(
-                          0,
-                          firstKeyAtRef.current - recallStartedAtRef.current,
-                      ),
-            elapsedMs: Math.max(
-                0,
-                performance.now() - recallStartedAtRef.current,
-            ),
+                firstKeyAtRef.current === null ? null : firstKeyAtRef.current,
+            elapsedMs: getActiveElapsedMs(),
         });
     }, [
         english,
@@ -417,6 +419,8 @@ function TypingAttempt({
         hintLength,
         input,
         isReadonly,
+        isPaused,
+        getActiveElapsedMs,
         onRecallProgress,
         manualHints,
         answerRevealed,
@@ -438,7 +442,7 @@ function TypingAttempt({
         const nextCorrectPrefixLength = correctPrefixLength(next, english);
         if (nextCorrectPrefixLength > maxCorrectPrefixRef.current) {
             maxCorrectPrefixRef.current = nextCorrectPrefixLength;
-            lastCorrectProgressAtRef.current = performance.now();
+            lastCorrectProgressAtRef.current = getActiveElapsedMs();
         }
         const typedInsideHint = Array.from(
             { length: advance },
@@ -513,15 +517,8 @@ function TypingAttempt({
                     recallLatencyMs:
                         firstKeyAtRef.current === null
                             ? null
-                            : Math.max(
-                                  0,
-                                  firstKeyAtRef.current -
-                                      recallStartedAtRef.current,
-                              ),
-                    elapsedMs: Math.max(
-                        0,
-                        performance.now() - recallStartedAtRef.current,
-                    ),
+                            : firstKeyAtRef.current,
+                    elapsedMs: getActiveElapsedMs(),
                 };
                 onRecallComplete?.(observation);
                 onSuccess();
@@ -561,7 +558,6 @@ function TypingAttempt({
                     onChangeInput(next.join(""));
                     setInput([]);
                     setCurrentSelection(0);
-                    triggerFailAnimation();
                     onChangeInput("", true);
                 } else resetInput();
             }
@@ -600,7 +596,7 @@ function TypingAttempt({
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
                 <div
-                    className="font-bold text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
                     data-cursor="text"
                 >
                     {japanese}
@@ -608,12 +604,7 @@ function TypingAttempt({
             </div>
             <div className="w-full flex justify-center">
                 <div
-                    ref={inputFrameRef}
-                    className={`w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start ${isFailAnimating ? "wrong-answer" : ""}`}
-                    onAnimationEnd={(event) => {
-                        if (event.target === event.currentTarget)
-                            setIsFailAnimating(false);
-                    }}
+                    className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start"
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}
@@ -794,7 +785,8 @@ function TypingAttempt({
                                     }
                                 }
                                 if (firstKeyAtRef.current === null) {
-                                    firstKeyAtRef.current = performance.now();
+                                    firstKeyAtRef.current =
+                                        getActiveElapsedMs();
                                 }
                                 if (isKanaAnswer) {
                                     const edit = editKanaCell(

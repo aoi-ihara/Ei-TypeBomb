@@ -261,7 +261,7 @@ export default function EditorClient({
 
             if (result) throw result;
             startNavigationProgress();
-            router.push("/?owner=me");
+            router.push("/mine");
         } catch (error) {
             setIsDeletingRoom(false);
             throw error;
@@ -1230,22 +1230,15 @@ export default function EditorClient({
                                                             {!isAllowedTypingAnswer(
                                                                 item.answer,
                                                             ) &&
-                                                                item.answer && (
-                                                                    <div className="text-red-500">
-                                                                        英数字・ひらがな・スペース・ハイフン・句読点（,.!?、。！？）のみ使用できます。
+                                                                item.answer.trim() && (
+                                                                    <div
+                                                                        className="text-cyan-600"
+                                                                        data-cursor="text"
+                                                                    >
+                                                                        この回答は入力形式に対応していないため、選択問題として出題されます。
                                                                     </div>
                                                                 )}
-                                                            {item.answer
-                                                                .length >
-                                                                32 && (
-                                                                <div
-                                                                    className="text-red-500"
-                                                                    data-cursor="text"
-                                                                >
-                                                                    32文字以内で入力してください。
-                                                                </div>
-                                                            )}
-                                                            {!item.answer && (
+                                                            {!item.answer.trim() && (
                                                                 <div
                                                                     className="text-red-500"
                                                                     data-cursor="text"

@@ -15,7 +15,10 @@ export default async function OnlinePlayPage({
 
     const canonicalLink = room.link ?? room.id;
     if (link !== canonicalLink) {
-        if (link === room.id) redirect("/" + canonicalLink + "/online");
+        if (link === room.id)
+            redirect(
+                "/" + canonicalLink + "/online",
+            );
         redirect("/" + link);
     }
 

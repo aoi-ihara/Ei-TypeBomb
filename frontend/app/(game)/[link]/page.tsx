@@ -7,6 +7,7 @@ import RoomPasswordGate from "./RoomPasswordGate";
 import RoomShareActions from "./RoomShareActions";
 import Header from "@/components/layout/Header";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
+import { isAllowedTypingAnswer } from "@/lib/room/importWords";
 
 export default async function RoomPage({
     params,
@@ -20,9 +21,12 @@ export default async function RoomPage({
 
     if (result.requiresPassword && !result.authorized) {
         return (
-            <Shell title="パスワードを入力" size="medium" animateAppear>
-                <RoomPasswordGate roomId={result.id} />
-            </Shell>
+            <>
+                <Header />
+                <Shell title="パスワードを入力" size="medium" animateAppear>
+                    <RoomPasswordGate roomId={result.id} />
+                </Shell>
+            </>
         );
     }
 
@@ -31,6 +35,9 @@ export default async function RoomPage({
     const { room, itemCount, isOwner, authorized } = result;
     const title = room.title || "ルーム";
     const items = room.items ?? [];
+    const hasTypingAnswers = items.some((item) =>
+        isAllowedTypingAnswer(item.answer),
+    );
 
     return (
         <>
@@ -120,6 +127,7 @@ export default async function RoomPage({
                         link={result.link}
                         alreadyAuthorized={result.authorized}
                         itemCount={itemCount}
+                        hasTypingAnswers={hasTypingAnswers}
                         isOwner={isOwner}
                     />
 

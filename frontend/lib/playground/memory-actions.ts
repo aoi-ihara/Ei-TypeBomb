@@ -3,10 +3,16 @@
 import { createClient } from "@/lib/db/server";
 import { getMemoryAuthStatus } from "@/lib/auth/session";
 import type { ItemMemoryState } from "@/lib/playground/memory";
-import { toMemoryState } from "@/lib/playground/memory";
+import {
+    isValidAnswerModeStats,
+    toMemoryState,
+} from "@/lib/playground/memory";
+
+const LEGACY_MEMORY_COLUMNS =
+    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
 
 const MEMORY_COLUMNS =
-    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
+    "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at, answer_mode_stats";
 
 export const loadPlaygroundMemory = async (roomId: string) => {
     const { userId, error: authError } = await getMemoryAuthStatus();
@@ -40,18 +46,35 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         .eq("room_id", roomId)
         .eq("user_id", userId);
 
-    if (error) {
+    // Older databases may not have the answer-mode column yet. Read existing
+    // memory without it, but prevent writes until the migration is applied.
+    const missingAnswerModeStats =
+        Boolean(error) &&
+        /answer_mode_stats/i.test(error!.message) &&
+        (/does not exist/i.test(error!.message) ||
+            /schema cache/i.test(error!.message));
+    const legacyResult = missingAnswerModeStats
+        ? await supabase
+              .from("ei_typebomb_item_memory")
+              .select(LEGACY_MEMORY_COLUMNS)
+              .eq("room_id", roomId)
+              .eq("user_id", userId)
+        : null;
+    const readError = legacyResult?.error ?? (missingAnswerModeStats ? null : error);
+    if (readError) {
         return {
             userId,
             memoryByItem: {} as Record<string, ItemMemoryState>,
-            error: { message: error.message },
+            error: { message: readError.message },
+            persistenceDisabled: true,
         };
     }
 
     return {
         userId,
+        persistenceDisabled: missingAnswerModeStats,
         memoryByItem: Object.fromEntries(
-            (data ?? []).map((row) => {
+            ((legacyResult?.data ?? data) ?? []).map((row) => {
                 const memory = toMemoryState(row);
                 return [memory.itemId, memory];
             }),
@@ -80,7 +103,9 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
                 item.difficulty < 1 ||
                 item.difficulty > 10 ||
                 !Number.isSafeInteger(item.reviewCount) ||
-                item.reviewCount < 0,
+                item.reviewCount < 0 ||
+                (item.answerModeStats !== undefined &&
+                    !isValidAnswerModeStats(item.answerModeStats)),
         )
     ) {
         return { message: "Invalid memory update" };
@@ -98,6 +123,7 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
         updated_at: item.updatedAt ?? new Date().toISOString(),
         learning_state: item.learningState ?? null,
         last_presented_at: item.lastPresentedAt ?? null,
+        answer_mode_stats: item.answerModeStats ?? null,
     }));
 
     const { error } = await supabase

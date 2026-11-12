@@ -242,6 +242,108 @@ test("the first cycle reviews due words before untouched words", () => {
     assert.equal(state.initialPriorityApplied, true);
 });
 
+test("interleaved review targets the weakest previously answered word without consuming the cycle", () => {
+    const timestamp = now.getTime();
+    const oldReview = new Date(timestamp - 2 * 60 * 60_000).toISOString();
+    const state = scheduler.createScheduler(["old", "older", "new", "next"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new", "next"];
+    state.userAnswered = { old: 1, older: 1 };
+    state.lastUserItem = "next";
+    const memories = {
+        old: { ...initial("old"), stability: 3, lastReviewedAt: oldReview },
+        older: { ...initial("older"), stability: 0.4, lastReviewedAt: oldReview },
+    };
+    const queueBefore = [...state.cycleQueue];
+    const chosen = scheduler.chooseNextUserItem(state, memories, () => 0, timestamp);
+    assert.equal(chosen.itemId, "older");
+    assert.equal(chosen.reason, "spaced_review");
+    assert.equal(chosen.advancesCycle, false);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+
+    scheduler.saveSchedulerState("playground", "review-user", "review-room", state, timestamp);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "review-user", "review-room",
+        state.itemIds, memories, timestamp + 1000,
+    );
+    assert.equal(restored.current.itemId, "older");
+    assert.equal(restored.current.reason, "spaced_review");
+
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+});
+
+test("interleaved review is optional and respects exposure cooldowns", () => {
+    const timestamp = now.getTime();
+    const oldReview = new Date(timestamp - 10 * 60_000).toISOString();
+    const state = scheduler.createScheduler(["old", "new", "next"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new", "next"];
+    state.userAnswered = { old: 1 };
+    const memories = { old: { ...initial("old"), lastReviewedAt: oldReview } };
+
+    const noProbe = scheduler.chooseNextUserItem(
+        state, memories, () => 0.9, timestamp,
+    );
+    assert.equal(noProbe.itemId, "new");
+    assert.equal(noProbe.reason, "cycle");
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+
+    const recent = scheduler.createScheduler(["old", "new"], () => 0.5);
+    recent.initialPriorityApplied = true;
+    recent.turn = 6;
+    recent.userAnswered = { old: 1 };
+    recent.cycleQueue = ["new"];
+    const recentlyShown = {
+        old: { ...memories.old, lastPresentedAt: new Date(timestamp - 30_000).toISOString() },
+    };
+    assert.equal(
+        scheduler.chooseNextUserItem(recent, recentlyShown, () => 0, timestamp).itemId,
+        "new",
+    );
+});
+
+test("due relearning takes priority over an optional spaced review", () => {
+    const timestamp = now.getTime();
+    const state = scheduler.createScheduler(["old", "retry", "new"], () => 0.5);
+    state.initialPriorityApplied = true;
+    state.turn = 6;
+    state.cycleQueue = ["new"];
+    state.userAnswered = { old: 1, retry: 1 };
+    state.retries.retry = {
+        itemId: "retry", earliestTurn: 7, latestTurn: 10,
+        reason: "failed_recall", successCount: 0,
+    };
+    const memories = {
+        old: {
+            ...initial("old"),
+            lastReviewedAt: new Date(timestamp - 2 * 60 * 60_000).toISOString(),
+        },
+    };
+    const selected = scheduler.chooseNextUserItem(state, memories, () => 0, timestamp);
+    assert.equal(selected.itemId, "retry");
+    assert.equal(selected.reason, "retry");
+});
+
+test("recognition answers advance the scheduler without becoming free recall", () => {
+    const state = scheduler.createScheduler(["a", "b", "c"], () => 0.5);
+    const selected = scheduler.chooseNextUserItem(state, {}, () => 0.5);
+    assert.ok(selected);
+    assert.equal(
+        scheduler.recordRecognitionAnswer(state, selected.itemId),
+        true,
+    );
+    assert.equal(state.current, null);
+    assert.equal(state.userAnswered[selected.itemId], 1);
+    assert.equal(state.retries[selected.itemId], undefined);
+
+    const next = scheduler.chooseNextUserItem(state, {}, () => 0.5);
+    assert.ok(next);
+    assert.notEqual(next.itemId, selected.itemId);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
@@ -316,6 +418,186 @@ test("reload preserves unfinished questions and scheduled failed recalls", () =>
     assert.equal(
         scheduler.chooseNextUserItem(resumed, {}, rng(13), timestamp + 2000).itemId,
         first.itemId,
+    );
+});
+
+// Drive the real answer recorder with explicit wall-clock times.
+function gradeStruggle(state, itemId, evaluation, at) {
+    // In live play a retry is removed when its prompt is selected.
+    const retry = state.retries[itemId];
+    delete state.retries[itemId];
+    state.turn += 1;
+    state.current = {
+        itemId,
+        turn: state.turn,
+        cycle: state.cycle,
+        reason: retry ? "retry" : "cycle",
+        advancesCycle: false,
+        ...(retry ? { retry } : {}),
+    };
+    scheduler.recordUserAnswer(state, evaluation, at);
+}
+const failedRecall = memory.evaluateRecall(
+    observation({ success: false, firstAttemptCorrect: false }),
+);
+const cleanRecall = memory.evaluateRecall(observation());
+
+test("repeated difficulty suspends only after four failures over two minutes", () => {
+    const start = now.getTime();
+    const state = scheduler.createScheduler(["hard", "easy"], rng(7));
+    for (const elapsed of [0, 20_000, 60_000]) {
+        gradeStruggle(state, "hard", failedRecall, start + elapsed);
+        assert.equal(state.struggles.hard.suspendedUntil, null);
+    }
+    gradeStruggle(state, "hard", failedRecall, start + 120_000);
+    const firstDeadline = start + 120_000 + scheduler.SUSPENSION_DELAYS_MS[0];
+    assert.equal(state.struggles.hard.suspensionLevel, 1);
+    assert.equal(state.struggles.hard.suspendedUntil, firstDeadline);
+    assert.equal(state.retries.hard, undefined);
+
+    // The held word does not occupy the relearning pool or block new words.
+    const next = scheduler.chooseNextUserItem(state, {}, rng(1), start + 121_000);
+    assert.equal(next.itemId, "easy");
+    scheduler.recordUserAnswer(state, cleanRecall, start + 121_000);
+
+    // The next review resumes the old word before introducing new ones.
+    const resumed = scheduler.chooseNextUserItem(state, {}, rng(2), firstDeadline);
+    assert.equal(resumed.itemId, "hard");
+    assert.equal(resumed.reason, "suspension_due");
+    scheduler.recordUserAnswer(state, failedRecall, firstDeadline);
+    assert.equal(state.struggles.hard.suspendedUntil, null);
+    gradeStruggle(state, "hard", failedRecall, firstDeadline + 1_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 2);
+    assert.equal(
+        state.struggles.hard.suspendedUntil,
+        firstDeadline + 1_000 + scheduler.SUSPENSION_DELAYS_MS[1],
+    );
+});
+
+test("persistent failures escalate through 3h, 12h and 24h with a 24h cap", () => {
+    const state = scheduler.createScheduler(["hard"], rng(8));
+    let time = now.getTime();
+    for (const elapsed of [0, 30_000, 60_000, 120_000])
+        gradeStruggle(state, "hard", failedRecall, time + elapsed);
+    let deadline = state.struggles.hard.suspendedUntil;
+    const expected = [
+        30 * 60_000,
+        3 * 60 * 60_000,
+        12 * 60 * 60_000,
+        24 * 60 * 60_000,
+        24 * 60 * 60_000,
+    ];
+    for (let index = 0; index < expected.length; index++) {
+        // One-word room: there are no safe fillers before this deadline.
+        assert.equal(scheduler.chooseNextUserItem(state, {}, rng(1), deadline - 1), null);
+        const due = scheduler.chooseNextUserItem(state, {}, rng(1), deadline);
+        assert.equal(due?.reason, "suspension_due");
+        scheduler.recordUserAnswer(state, failedRecall, deadline);
+        gradeStruggle(state, "hard", failedRecall, deadline + 1_000);
+        assert.equal(
+            state.struggles.hard.suspendedUntil,
+            deadline + 1_000 + expected[index],
+        );
+        deadline = state.struggles.hard.suspendedUntil;
+    }
+});
+
+test("a successful independent recall reduces hold severity without treating typos as failures", () => {
+    const state = scheduler.createScheduler(["hard"], rng(2));
+    state.struggles.hard = {
+        consecutiveFailures: 1,
+        firstFailureAt: now.getTime(),
+        suspensionLevel: 3,
+        suspendedUntil: null,
+    };
+    // A corrected typing mistake still counts as unaided recall.
+    const typo = memory.evaluateRecall(observation({
+        incorrectInputCount: 1,
+        firstAttemptCorrect: false,
+    }));
+    assert.equal(typo.retryNeed, "none");
+    gradeStruggle(state, "hard", typo, now.getTime() + 1_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 2);
+    assert.equal(state.struggles.hard.consecutiveFailures, 0);
+    gradeStruggle(state, "hard", failedRecall, now.getTime() + 2_000);
+    assert.equal(state.struggles.hard.consecutiveFailures, 1);
+    gradeStruggle(state, "hard", cleanRecall, now.getTime() + 3_000);
+    assert.equal(state.struggles.hard.suspensionLevel, 1);
+    gradeStruggle(state, "hard", cleanRecall, now.getTime() + 4_000);
+    assert.equal(state.struggles.hard, undefined);
+});
+
+test("recent BOT exposure never escalates difficulty, but assisted independent recalls do", () => {
+    const state = scheduler.createScheduler(["hard"], rng(2));
+    const exposed = memory.evaluateRecall(observation({
+        success: false,
+        elapsedSincePresentationMs: 100,
+    }));
+    assert.equal(exposed.independent, false);
+    gradeStruggle(state, "hard", exposed, now.getTime());
+    assert.equal(state.struggles.hard, undefined);
+    const hint = memory.evaluateRecall(observation({
+        finalCueRatio: 0.1,
+        additionalHintCount: 1,
+    }));
+    assert.equal(hint.retryNeed, "confirm");
+    gradeStruggle(state, "hard", hint, now.getTime());
+    assert.equal(state.struggles.hard.consecutiveFailures, 1);
+});
+
+test("all held words remain absent from user/BOT selection until due", () => {
+    const state = scheduler.createScheduler(["a", "b"], rng(1));
+    const until = now.getTime() + 3 * 60 * 60_000;
+    for (const id of state.itemIds) {
+        state.struggles[id] = {
+            consecutiveFailures: 0,
+            firstFailureAt: null,
+            suspensionLevel: 3,
+            suspendedUntil: until,
+        };
+        state.userAnswered[id] = 1;
+    }
+    assert.equal(scheduler.chooseNextUserItem(state, {}, rng(4), now.getTime()), null);
+    assert.equal(scheduler.chooseBotItem(state, rng(4)), null);
+    assert.equal(scheduler.nextSuspendedReviewAt(state), until);
+    const restoredId = scheduler.chooseNextUserItem(state, {}, rng(4), until)?.itemId;
+    assert.ok(["a", "b"].includes(restoredId));
+    assert.equal(state.struggles[restoredId].suspendedUntil, null);
+});
+
+test("word hold deadlines survive reload and removed room words are discarded", () => {
+    const state = scheduler.createScheduler(["hard", "deleted", "new"], rng(2));
+    const time = now.getTime();
+    state.struggles.hard = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 4,
+        suspendedUntil: time + 12 * 60 * 60_000,
+    };
+    state.struggles.deleted = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 1,
+        suspendedUntil: time + 600_000,
+    };
+    scheduler.saveSchedulerState("playground", "hold-user", "room", state, time);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "hold-user", "room", ["hard", "new"], {}, time + 10_000,
+    );
+    assert.equal(restored.struggles.hard.suspendedUntil, time + 12 * 60 * 60_000);
+    assert.equal(restored.struggles.deleted, undefined);
+    assert.equal(
+        scheduler.chooseNextUserItem(restored, {}, rng(4), time + 10_000).itemId,
+        "new",
+    );
+    const old = scheduler.createScheduler(["old"], rng(3));
+    delete old.struggles;
+    scheduler.saveSchedulerState("playground", "old-cache", "room", old, time);
+    assert.deepEqual(
+        Object.keys(scheduler.loadSchedulerState(
+            "playground", "old-cache", "room", ["old"], {}, time + 1_000,
+        ).struggles),
+        [],
     );
 });
 
@@ -585,6 +867,40 @@ test("BOT fallback keeps the handoff alive after a user answer when every word i
     }
 });
 
+test("BOT lookahead skips held and retry words before protecting upcoming recalls", () => {
+    const ids = [
+        "held-a", "held-b", "held-c", "retry",
+        "next-a", "next-b", "next-c", "safe",
+    ];
+    const state = scheduler.createScheduler(ids, () => 0);
+    state.cycleQueue = [...ids];
+    for (const id of ["held-a", "held-b", "held-c"]) {
+        state.struggles[id] = {
+            consecutiveFailures: 0,
+            firstFailureAt: null,
+            suspensionLevel: 1,
+            suspendedUntil: now.getTime() + 10 * 60_000,
+        };
+    }
+    state.retries.retry = {
+        itemId: "retry",
+        earliestTurn: 999,
+        latestTurn: 1002,
+        reason: "failed_recall",
+        successCount: 0,
+    };
+    // A previously seen upcoming recall is otherwise an eligible BOT word.
+    state.userAnswered["next-a"] = 1;
+    state.userAnswered.safe = 1;
+
+    // BOT can use the safe word without spoiling the next user question.
+    assert.equal(scheduler.chooseBotItem(state, () => 0), "safe");
+    assert.equal(
+        scheduler.chooseNextUserItem(state, {}, () => 0, now.getTime()).itemId,
+        "next-a",
+    );
+});
+
 test("BOT never introduces an unseen word when only a protected answered word exists", () => {
     const state = scheduler.createScheduler(["a", "b", "c", "d", "e"], () => 0);
     state.userAnswered.a = 1;
@@ -628,16 +944,15 @@ function getCallback(name, globals) {
     return evaluate("export const callback = " + printed, globals).callback;
 }
 
-test("answer speech plays only after a successful local answer", () => {
+test("solo answer speech plays after success, including after a full hint", () => {
     for (const scenario of [
-        { mode: "answer", local: true, revealed: false, expected: ["apple"] },
-        // Using the full-answer hint does not suppress speech after correct input.
-        { mode: "answer", local: true, revealed: true, expected: ["apple"] },
-        { mode: "answer", local: false, revealed: false, expected: [] },
-        { mode: "question", local: true, revealed: false, expected: [] },
-        { mode: "none", local: true, revealed: false, expected: [] },
+        { mode: "answer", revealed: false, expected: ["apple"] },
+        { mode: "answer", revealed: true, expected: ["apple"] },
+        { mode: "question", revealed: false, expected: [] },
+        { mode: "none", revealed: false, expected: [] },
     ]) {
         const spoken = [];
+        const nextItems = [];
         const synthesis = {
             cancel: () => {},
             speak: (utterance) => spoken.push([utterance.text, utterance.lang]),
@@ -647,40 +962,54 @@ test("answer speech plays only after a successful local answer", () => {
                 this.text = text;
             }
         }
-        const turn = scenario.local ? 0 : 1;
         const callback = getCallback("handleSuccess", {
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
-            LOCAL_USER_ID: "local",
+            isPaused: false,
             offlineVoiceReading: scenario.mode,
             soundEffects: false,
             successAudioRef: { current: null },
-            usersRef: { current: [{ id: "local" }, { id: "bot" }] },
-            currentTurnRef: { current: turn },
             currentItemRef: { current: { id: "a", answer: "apple" } },
             recallProgressRef: {
                 current: { answerWasFullyRevealed: scenario.revealed },
             },
-            saveBotExposure: () => {},
             setCurrentInput: () => {},
             previousInputAtRef: { current: null },
             previousInputLengthRef: { current: 0 },
-            resolveTurnWithItem: () => ({ turnIndex: 0, item: null }),
-            setTrackedTurn: () => {},
-            setTrackedItem: () => {},
+            resolveTurnWithItem: () => ({ id: "b" }),
+            setTrackedItem: (item) => nextItems.push(item.id),
             posthog: { capture: () => {} },
             room: { id: "r" },
         });
         callback();
-        assert.deepEqual(
-            spoken.map(([text]) => text),
-            scenario.expected,
-            JSON.stringify(scenario),
-        );
-        if (scenario.expected.length) {
-            assert.equal(spoken[0][1], "en-US");
-        }
+        assert.deepEqual(spoken.map(([text]) => text), scenario.expected);
+        assert.deepEqual(nextItems, ["b"], "the next prompt belongs to the same player");
+        if (scenario.expected.length) assert.equal(spoken[0][1], "en-US");
     }
+});
+
+test("paused solo practice does not advance a question", () => {
+    let advanced = false;
+    const callback = getCallback("handleSuccess", {
+        isPaused: true,
+        currentItemRef: { current: { id: "a", answer: "apple" } },
+        setTrackedItem: () => { advanced = true; },
+    });
+    callback();
+    assert.equal(advanced, false);
+});
+
+test("active recall clock excludes paused intervals before and after resume", () => {
+    const { getActiveElapsedMs } = load("lib/playground/active-clock.ts");
+
+    // A pause starts at 2s. While paused, elapsed time stays frozen at 1s.
+    assert.equal(getActiveElapsedMs(62_000, 1_000, 0, 2_000), 1_000);
+
+    // After a 60s pause, one more active second brings elapsed time to 2s.
+    assert.equal(getActiveElapsedMs(63_000, 1_000, 60_000, null), 2_000);
+
+    // A later pause also stays excluded while it is still in progress.
+    assert.equal(getActiveElapsedMs(100_000, 1_000, 60_000, 80_000), 19_000);
 });
 
 test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
@@ -693,6 +1022,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     const flush = getCallback("flushPendingMemory", {
         cachePendingMemory: () => {},
         authenticatedUserIdRef: { current: "u" },
+        memoryPersistenceDisabledRef: { current: false },
         pendingMemoryRef: pending,
         syncInFlightRef: inFlight,
         setSaveError: (value) => {
@@ -725,6 +1055,7 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     const failing = getCallback("flushPendingMemory", {
         cachePendingMemory: () => {},
         authenticatedUserIdRef: { current: "u" },
+        memoryPersistenceDisabledRef: { current: false },
         pendingMemoryRef: pending,
         syncInFlightRef: inFlight,
         setSaveError: (value) => {
@@ -781,7 +1112,7 @@ function clientCallbacks(names, globals) {
         globals,
     );
 }
-test("actual Client callbacks cover 20/100 words and preserve scheduler telemetry with BOT turns", () => {
+test("actual solo Client callbacks cover 20/100 words without BOT turns", () => {
     for (const size of [20, 100]) {
         let time = now.getTime();
         class Clock extends Date {
@@ -811,17 +1142,10 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
             Date: Clock,
             items,
             room: { id: "r" },
-            LOCAL_USER_ID: "local",
-            initialSounDeffects: false,
-            offlineVoiceReading: false,
-            schedulerRef: ref(
-                sch.createScheduler(
-                    items.map((x) => x.id),
-                    rng(17),
-                ),
-            ),
-            usersRef: ref([{ id: "local" }, { id: "bot" }]),
-            currentTurnRef: ref(0),
+            isPaused: false,
+            offlineVoiceReading: "none",
+            soundEffects: false,
+            schedulerRef: ref(sch.createScheduler(items.map((x) => x.id), rng(17))),
             currentItemRef: ref(null),
             recallProgressRef: ref(null),
             sessionTurnNumberRef: ref(0),
@@ -831,6 +1155,7 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
             expectedTypingAtStartRef: ref(0),
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),
+            memoryPersistenceDisabledRef: ref(false),
             pendingMemoryRef: ref(new Map()),
             userReviewCountRef: ref(0),
             previousInputAtRef: ref(null),
@@ -842,46 +1167,36 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
         };
         for (const setter of [
             "setCurrentItem",
-            "setRecallPressurePaused",
             "setItemPresentationKey",
-            "setCurrentTurn",
             "setMemoryByItem",
             "setCurrentInput",
-        ])
-            globals[setter] = noop;
+            "setNextReviewAt",
+            "setIsStarted",
+        ]) globals[setter] = noop;
         const actual = clientCallbacks(
             [
-                "saveBotExposure",
                 "setTrackedItem",
                 "chooseItemForTurn",
                 "resolveTurnWithItem",
-                "setTrackedTurn",
                 "updateLocalMemory",
                 "handleRecallComplete",
                 "handleSuccess",
             ],
             globals,
         );
-        const first = actual.resolveTurnWithItem(0);
-        actual.setTrackedTurn(first.turnIndex);
-        actual.setTrackedItem(first.item);
+        actual.setTrackedItem(actual.resolveTurnWithItem());
         const seen = new Set();
         for (let turn = 0; turn < size; turn++) {
-            assert.equal(globals.currentTurnRef.current, 0);
-            const id = globals.currentItemRef.current.id;
-            assert(!seen.has(id));
-            seen.add(id);
+            const item = globals.currentItemRef.current;
+            assert(item, "the solo learner receives a question immediately");
+            assert(!seen.has(item.id));
+            seen.add(item.id);
             time += 1200;
             actual.handleRecallComplete(observation());
             actual.handleSuccess();
-            if (globals.currentTurnRef.current === 1) {
-                const before = globals.userReviewCountRef.current;
-                time += 1000;
-                actual.handleSuccess();
-                assert.equal(globals.userReviewCountRef.current, before);
-            }
         }
         assert.equal(seen.size, size);
+        assert.equal(globals.userReviewCountRef.current, size);
         const recallEvents = events.filter(
             (x) => x.event === "playground_item_recalled",
         );
@@ -897,14 +1212,57 @@ test("actual Client callbacks cover 20/100 words and preserve scheduler telemetr
         assert(
             recallEvents.every(
                 (x) => x.model_version === m.MEMORY_MODEL_VERSION,
-            ),
-        );
+        ));
         assert.equal(
             Object.keys(globals.schedulerRef.current.retries).length,
             0,
         );
+
+        globals.pendingMemoryRef.current.clear();
+        globals.memoryPersistenceDisabledRef.current = true;
+        actual.updateLocalMemory(items[0], observation());
+        assert.equal(
+            globals.pendingMemoryRef.current.size,
+            0,
+            "fallback recall observations must stay out of the authenticated sync queue",
+        );
     }
 });
+
+test("fallback answer-mode observations never enter authenticated sync queue", async () => {
+    const m = load("lib/playground/memory.ts");
+    const ref = (current) => ({ current });
+    const item = { id: "a", type: "typed_recall", answer: "abcdefgh" };
+    const pending = ref(new Map());
+    const memory = ref({});
+    let syncCalls = 0;
+    const globals = {
+        ...m,
+        room: { id: "r" },
+        items: [item],
+        authenticatedUserIdRef: ref("u"),
+        memoryPersistenceDisabledRef: ref(true),
+        memoryByItemRef: memory,
+        pendingMemoryRef: pending,
+        setMemoryByItem: () => {},
+        syncPlaygroundMemory: async () => {
+            syncCalls++;
+            return null;
+        },
+    };
+    const actual = clientCallbacks(
+        ["updateAnswerModeMemory", "flushPendingMemory"],
+        globals,
+    );
+
+    actual.updateAnswerModeMemory(item, "input", true);
+    await actual.flushPendingMemory();
+
+    assert(memory.current.a, "the current session still updates its memory");
+    assert.equal(pending.current.size, 0);
+    assert.equal(syncCalls, 0);
+});
+
 test("actual input callbacks retain a wrong character through Backspace correction", () => {
     const source = fs.readFileSync(
         path.join(root, "components/recall/TypingView.tsx"),
@@ -917,7 +1275,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
             true,
             ts.ScriptKind.TSX,
         ),
-        names = ["triggerFailAnimation", "resetInput", "moveToNext"],
+        names = ["resetInput", "moveToNext"],
         found = {};
     function visit(node) {
         if (
@@ -970,6 +1328,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
         inputFrameRef: ref(null),
         correctPrefixLength: input.correctPrefixLength,
         performance: { now: () => 1200 },
+        getActiveElapsedMs: () => 0,
         onRecallComplete: (o) => observations.push(o),
         onSuccess: noop,
         onChangeInput: noop,
@@ -1080,7 +1439,7 @@ function getInputFunction(name, globals) {
     return evaluate(
         "export const callback = " +
             ts.createPrinter().printNode(ts.EmitHint.Expression, found, ast),
-        globals,
+        { getActiveElapsedMs: () => 0, ...globals },
     ).callback;
 }
 
@@ -1162,21 +1521,13 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].source, "manual");
 });
 
-test("actual playground progress callback pauses pressure on first hint", () => {
+test("actual solo progress callback keeps hint state without bomb pressure", () => {
     const saved = { current: null };
-    let paused = false;
     const callback = getCallback("handleRecallProgress", {
-        usersRef: { current: [{ id: "local" }] },
-        currentTurnRef: { current: 0 },
-        LOCAL_USER_ID: "local",
         recallProgressRef: saved,
-        currentItemRef: { current: { type: "typed_recall", answer: "apple" } },
-        setRecallPressurePaused: (value) => {
-            paused = value;
-        },
     });
     callback({ hintCount: 1, revealedHintChars: 1 });
-    assert.equal(paused, true);
+    assert.equal(saved.current.hintCount, 1);
     assert.equal(saved.current.revealedHintChars, 1);
 });
 

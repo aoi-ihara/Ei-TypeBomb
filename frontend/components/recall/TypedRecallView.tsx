@@ -9,7 +9,6 @@ import type {
 type Props = {
     item: TypedRecallItem;
     currentInput: string | null;
-    failureCount?: number;
     bombStatus: number;
     hasDuplicatePrompt?: boolean;
     onSuccess: () => void;
@@ -23,12 +22,12 @@ type Props = {
     hintDelaysMs?: number[] | null;
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
+    isPaused?: boolean;
 };
 
 export default function TypedRecallView({
     item,
     currentInput,
-    failureCount,
     bombStatus,
     hasDuplicatePrompt = false,
     onSuccess,
@@ -42,6 +41,7 @@ export default function TypedRecallView({
     hintDelaysMs,
     onRecallProgress,
     onRecallComplete,
+    isPaused = false,
 }: Readonly<Props>) {
     return (
         <TypingView
@@ -52,7 +52,6 @@ export default function TypedRecallView({
             onSuccess={onSuccess}
             onChangeInput={onChangeInput}
             currentInput={currentInput}
-            failureCount={failureCount}
             enableRemoteTypingSync={enableRemoteTypingSync}
             remoteHintLength={remoteHintLength}
             onHintChange={onHintChange}
@@ -62,6 +61,7 @@ export default function TypedRecallView({
             hintDelaysMs={hintDelaysMs}
             onRecallProgress={onRecallProgress}
             onRecallComplete={onRecallComplete}
+            isPaused={isPaused}
         />
     );
 }

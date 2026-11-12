@@ -61,6 +61,47 @@ test("online recommends through the same Playground scheduler", () => {
     assert.notEqual(second, first);
     assert.equal(session.scheduler.turn, 2);
 });
+test("room snapshots do not resend consumed recommendations", () => {
+    const session = online.createOnlineMemorySession("dedupe-room", ids, null, {});
+    const first = online.nextUnsentOnlineRecommendation(session, null);
+    assert.ok(first);
+    assert.equal(
+        online.nextUnsentOnlineRecommendation(session, first),
+        null,
+    );
+    const again = online.nextUnsentOnlineRecommendation(session, null);
+    assert.equal(again.itemId, first.itemId);
+    assert.equal(again.turn, first.turn);
+
+    online.recordOnlineRecall(session, first.itemId, recall);
+    const second = online.nextUnsentOnlineRecommendation(session, first);
+    assert.ok(second);
+    assert.notEqual(second.turn, first.turn);
+    assert.equal(online.nextUnsentOnlineRecommendation(session, second), null);
+});
+
+test("online selection answers persist recognition without recording free recall", () => {
+    const session = online.createOnlineMemorySession("choice-room", ids, null, {});
+    const itemId = online.nextOnlineRecommendation(session);
+    const updated = online.recordOnlineAnswerModeResult(
+        session,
+        itemId,
+        "selection",
+        true,
+    );
+    assert.equal(updated.answerModeStats.recognition.attempts, 1);
+    assert.equal(updated.answerModeStats.recognition.correct, 1);
+    assert.equal(updated.answerModeStats.recognition.correctStreak, 1);
+    assert.equal(updated.reviewCount, 0);
+    assert.equal(session.scheduler.current, null);
+    assert.equal(session.scheduler.userAnswered[itemId], 1);
+    assert.equal(
+        online.loadOnlineGuestMemory("choice-room", ids)[itemId]
+            .answerModeStats.recognition.correctStreak,
+        1,
+    );
+});
+
 test("guest online memory is visible to Playground and survives reload", () => {
     const session = online.createOnlineMemorySession("room", ids, null, {});
     const itemId = online.nextOnlineRecommendation(session);
