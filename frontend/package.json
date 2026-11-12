@@ -4,7 +4,7 @@
     "private": true,
     "scripts": {
         "dev": "next dev",
-        "build": "npm run test:import && npm run test:kana && npm run test:bot-typing && next build",
+        "build": "npm run test:import && npm run test:kana && npm run test:bot-typing && npm run test:editor && next build",
         "start": "next start",
         "lint": "eslint",
         "format": "prettier --write .",
