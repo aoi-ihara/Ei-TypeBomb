@@ -310,10 +310,16 @@ export default function EditorClient({
         const onPageShow = (event: PageTransitionEvent) => {
             if (event.persisted) void refreshRoomData();
         };
+        const onPopState = () => {
+            // Also cover client-side history navigation where pageshow is not fired.
+            if (window.location.pathname.endsWith("/edit")) void refreshRoomData();
+        };
         window.addEventListener("pageshow", onPageShow);
+        window.addEventListener("popstate", onPopState);
         return () => {
             ++refreshSequenceRef.current;
             window.removeEventListener("pageshow", onPageShow);
+            window.removeEventListener("popstate", onPopState);
         };
     }, [roomId]);
 
