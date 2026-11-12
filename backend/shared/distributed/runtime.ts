@@ -51,8 +51,7 @@ export class DistributedRoom {
         private readonly trace: (
             message: string,
             metadata: Record<string, unknown>,
-        ) => void = (message, metadata) =>
-            console.log(`[GAME] ${message}`, JSON.stringify(metadata)),
+        ) => void = () => {},
     ) {}
     get state(): GameState {
         return this.checkpoint.value!.game;
@@ -216,7 +215,7 @@ export class DistributedRoom {
             now: this.now(),
             random: this.random,
             rules: GAME_RULES,
-            chooseItemIndex: (id, room, previousIndex) => {
+            chooseItemIndex: (id, room) => {
                 // Consume the recommendation with the authoritative turn.
                 // An interrupted client must not pin every future turn to
                 // the same word until another recommendation arrives.
@@ -226,24 +225,6 @@ export class DistributedRoom {
                 const index = room.items.findIndex(
                     (entry) => entry.id === item,
                 );
-                this.trace("item recommendation consumed", {
-                    roomId: room.id,
-                    playerId: id,
-                    requestedItemId: item ?? null,
-                    previousItemId:
-                        previousIndex === undefined
-                            ? null
-                            : room.items[previousIndex]?.id ?? null,
-                    assignedItemId: index < 0 ? null : room.items[index].id,
-                    itemIndex: index < 0 ? null : index,
-                    source: index < 0 ? "random" : "client",
-                    reason: !item
-                        ? "missing"
-                        : index < 0
-                          ? "item_not_found"
-                          : null,
-                    trigger: event.type,
-                });
                 return index < 0 ? undefined : index;
             },
             onItemSelected: (selection, room) => {
@@ -254,7 +235,7 @@ export class DistributedRoom {
                     previousItemId:
                         selection.previousIndex === undefined
                             ? null
-                            : room.items[selection.previousIndex]?.id ?? null,
+                            : (room.items[selection.previousIndex]?.id ?? null),
                     assignedItemId: room.items[selection.itemIndex]?.id ?? null,
                     itemIndex: selection.itemIndex,
                     source: selection.source,
@@ -262,24 +243,6 @@ export class DistributedRoom {
                 });
             },
         });
-        if (
-            event.type === "word:success" &&
-            result.effects.some(
-                (effect) =>
-                    effect.type === "activity" &&
-                    effect.activity.event === "word_passed",
-            )
-        ) {
-            this.trace("word_passed", {
-                roomId: result.state.room.id,
-                gameId:
-                    result.state.room.gameId ??
-                    value.game.room.gameId ??
-                    null,
-                playerId: event.playerId,
-                playerCount: result.state.room.users.length,
-            });
-        }
         return result;
     }
     apply(event: GameEvent): Promise<void> {

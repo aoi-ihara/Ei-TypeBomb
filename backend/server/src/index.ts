@@ -26,6 +26,7 @@ import {
 } from "../../shared/validation";
 import { canStart, type GameEvent } from "../../shared/game";
 import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
+import { processLearningDiagnostic } from "../../shared/learningDiagnostic";
 import {
     roomSnapshot,
     type ClientPayloads,
@@ -475,7 +476,8 @@ const createRoomIfNeeded = async (
                     }
                 io.to(roomId).emit("room:broadcast", game.snapshot());
             }, Date.now, Math.random, (message, metadata) => {
-                logLocalEvent("GAME", message, metadata);
+                if (process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1")
+                    logLocalEvent("GAME", message, metadata);
             });
             const openStartedAt = performance.now();
             try {
@@ -557,13 +559,17 @@ const createRoomIfNeeded = async (
                                         result.state.room.bombHolder
                                     ],
                             };
-                            if (activity.event === "word_passed")
-                                logLocalEvent(
-                                    "GAME",
-                                    `${activity.event} ${roomId}`,
-                                    activityMetadata,
-                                );
-                            else
+                            if (activity.event === "word_passed") {
+                                if (
+                                    process.env
+                                        .ETB_ONLINE_LEARNING_DIAGNOSTICS === "1"
+                                )
+                                    logLocalEvent(
+                                        "GAME",
+                                        `${activity.event} ${roomId}`,
+                                        activityMetadata,
+                                    );
+                            } else
                                 logEvent(
                                     "GAME",
                                     `${activity.event} ${roomId}`,
@@ -586,57 +592,17 @@ const createRoomIfNeeded = async (
                         roomId,
                         ...metadata,
                     }),
-                (playerId, currentRoom, previousIndex) => {
-                    // Recommendations describe one upcoming turn only. If the
-                    // client has not supplied a fresh one, use the fallback
-                    // instead of replaying the previous word indefinitely.
+                (playerId, currentRoom) => {
                     const itemId = recommendedItems.get(playerId);
                     recommendedItems.delete(playerId);
-                    if (!itemId) {
-                        logLocalEvent("GAME", "item recommendation fallback", {
-                            roomId: currentRoom.id,
-                            playerId,
-                            previousItemId:
-                                previousIndex === undefined
-                                    ? null
-                                    : currentRoom.items[previousIndex]?.id ?? null,
-                            source: "random",
-                            reason: "missing",
-                        });
-                        return undefined;
-                    }
                     const index = currentRoom.items.findIndex(
                         (item) => item.id === itemId,
                     );
-                    if (index < 0) {
-                        logLocalEvent("GAME", "item recommendation fallback", {
-                            roomId: currentRoom.id,
-                            playerId,
-                            requestedItemId: itemId,
-                            previousItemId:
-                                previousIndex === undefined
-                                    ? null
-                                    : currentRoom.items[previousIndex]?.id ?? null,
-                            source: "random",
-                            reason: "item_not_found",
-                        });
-                        return undefined;
-                    }
-                    logLocalEvent("GAME", "item recommendation consumed", {
-                        roomId: currentRoom.id,
-                        playerId,
-                        requestedItemId: itemId,
-                        previousItemId:
-                            previousIndex === undefined
-                                ? null
-                                : currentRoom.items[previousIndex]?.id ?? null,
-                        assignedItemId: currentRoom.items[index].id,
-                        itemIndex: index,
-                        source: "client",
-                    });
-                    return index;
+                    return index < 0 ? undefined : index;
                 },
                 (selection, currentRoom, event) => {
+                    if (process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS !== "1")
+                        return;
                     logLocalEvent("GAME", "item selected", {
                         roomId: currentRoom.id,
                         gameId: currentRoom.gameId ?? null,
@@ -644,7 +610,8 @@ const createRoomIfNeeded = async (
                         previousItemId:
                             selection.previousIndex === undefined
                                 ? null
-                                : currentRoom.items[selection.previousIndex]?.id ?? null,
+                                : (currentRoom.items[selection.previousIndex]
+                                      ?.id ?? null),
                         assignedItemId:
                             currentRoom.items[selection.itemIndex]?.id ?? null,
                         itemIndex: selection.itemIndex,
@@ -942,80 +909,29 @@ io.on("connection", (socket) => {
             )
         )
             return;
-        logLocalEvent("GAME", "item recommendation received", {
-            roomId,
-            playerId: user.id,
-            itemId: parsed.data.itemId,
-            serverMode: game instanceof DistributedRoom
-                ? "distributed"
-                : "standalone",
-        });
         if (game instanceof DistributedRoom)
             game.recommend(user.id, parsed.data.itemId);
         else recommendedItems.set(user.id, parsed.data.itemId);
     });
+    let diagnosticAttempt: Parameters<typeof processLearningDiagnostic>[3] =
+        null;
     socket.on("learning:diagnostic", (payload: unknown) => {
         const game = getGame();
         if (!game || !roomId || !isCurrentSession()) return;
-        if (!game.state.room.users.some((player) => player.id === user.id))
-            return;
-        if (!payload || typeof payload !== "object" || Array.isArray(payload))
-            return;
-
-        // Only accept bounded, explicitly permitted diagnostic fields. Never
-        // write arbitrary client-controlled objects or personal answer text.
-        const source = payload as Record<string, unknown>;
-        if (
-            !["recommendation", "recall", "selection"].includes(
-                String(source.kind),
-            ) ||
-            typeof source.itemId !== "string" ||
-            !game.state.room.items.some((item) => item.id === source.itemId)
-        )
-            return;
-        const allowed = new Set([
-            "kind",
-            "itemId",
-            "schedulerTurn",
-            "schedulerCycle",
-            "schedulerReason",
-            "cycleQueueRemaining",
-            "pendingRetryCount",
-            "suspendedWordCount",
-            "lastUserItemId",
-            "reconciled",
-            "previousRecommendedItemId",
-            "retryNeed",
-            "memoryEvidence",
-            "independentRecall",
-            "retryCountBefore",
-            "hintCount",
-            "revealedHintChars",
-            "answerLength",
-            "finalCueRatio",
-            "answerWasFullyRevealed",
-            "elapsedMs",
-            "elapsedSincePresentationMs",
-            "answerCorrect",
-        ]);
-        const fields: Record<string, string | number | boolean | null> = {};
-        for (const [key, value] of Object.entries(source)) {
-            if (!allowed.has(key)) continue;
-            if (
-                value === null ||
-                typeof value === "boolean" ||
-                (typeof value === "string" && value.length <= 100) ||
-                (typeof value === "number" &&
-                    Number.isFinite(value) &&
-                    Math.abs(value) <= 1_000_000_000)
-            )
-                fields[key] = value;
-        }
-        logLocalEvent("GAME", "online learning diagnostic", {
-            roomId,
-            playerId: user.id,
-            ...fields,
-        });
+        const result = processLearningDiagnostic(
+            payload,
+            game.state.room,
+            user.id,
+            diagnosticAttempt,
+            process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1",
+        );
+        diagnosticAttempt = result.registered;
+        if (result.fields)
+            logLocalEvent("GAME", "online learning diagnostic", {
+                roomId,
+                playerId: user.id,
+                ...result.fields,
+            });
     });
     socket.on("word:success", () => {
         const game = getGame();

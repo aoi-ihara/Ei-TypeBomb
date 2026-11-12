@@ -8,6 +8,7 @@ import {
     DEFAULT_GAME_RULES as RULES,
 } from "../../shared/game";
 import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
+import { processLearningDiagnostic } from "../../shared/learningDiagnostic";
 import { roomSnapshot } from "../../shared/protocol";
 import { eventRateLimit } from "../../shared/rateLimits";
 import { createKeyedRateLimit } from "../../shared/keyedRateLimit";
@@ -319,41 +320,13 @@ export class RoomDO extends DurableObject<Env> {
             .getWebSockets()
             .find((socket) => this.session(socket)?.id === playerId);
         const session = ws ? this.session(ws) : null;
-        if (!session?.recommendedItemId) {
-            console.log(
-                "[GAME] item recommendation consumed",
-                JSON.stringify({
-                    roomId: room.id,
-                    playerId,
-                    requestedItemId: null,
-                    assignedItemId: null,
-                    itemIndex: null,
-                    source: "random",
-                    reason: "missing",
-                }),
-            );
-            return undefined;
-        }
+        if (!session?.recommendedItemId) return undefined;
         // WebSocket attachments survive DO hibernation. Clear the consumed
         // suggestion there as well so stale words cannot repeat forever.
         const itemId = session.recommendedItemId;
         delete session.recommendedItemId;
         ws?.serializeAttachment(session);
-        const index = room.items.findIndex(
-            (item) => item.id === itemId,
-        );
-        console.log(
-            "[GAME] item recommendation consumed",
-            JSON.stringify({
-                roomId: room.id,
-                playerId,
-                requestedItemId: itemId,
-                assignedItemId: index < 0 ? null : room.items[index].id,
-                itemIndex: index < 0 ? null : index,
-                source: index < 0 ? "random" : "client",
-                reason: index < 0 ? "item_not_found" : null,
-            }),
-        );
+        const index = room.items.findIndex((item) => item.id === itemId);
         return index < 0 ? undefined : index;
     }
 
@@ -384,16 +357,26 @@ export class RoomDO extends DurableObject<Env> {
             !initial
         )
             throw new ClientError("ルーム情報を取得できませんでした。");
-        const game = new DistributedRoom(roomId, this.control, (result) => {
-            this.game = result.state;
-            for (const effect of result.effects)
-                if (
-                    effect.type === "broadcast" &&
-                    effect.packet.event !== "room:broadcast"
-                )
-                    this.broadcast(effect.packet.event, effect.packet.data);
-            this.broadcast("room:broadcast", game.snapshot());
-        });
+        const game = new DistributedRoom(
+            roomId,
+            this.control,
+            (result) => {
+                this.game = result.state;
+                for (const effect of result.effects)
+                    if (
+                        effect.type === "broadcast" &&
+                        effect.packet.event !== "room:broadcast"
+                    )
+                        this.broadcast(effect.packet.event, effect.packet.data);
+                this.broadcast("room:broadcast", game.snapshot());
+            },
+            Date.now,
+            Math.random,
+            (message, metadata) => {
+                if (this.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1")
+                    console.log(`[GAME] ${message}`, JSON.stringify(metadata));
+            },
+        );
         await game.open(initial ?? undefined);
         // Persist the room identity before the first alarm fires so that
         // a fresh isolate can rehydrate without any connected clients.
@@ -537,6 +520,29 @@ export class RoomDO extends DurableObject<Env> {
             return;
         }
         if (!session.roomId || !this.game) return;
+        if (event === "learning:diagnostic") {
+            const result = processLearningDiagnostic(
+                data,
+                this.game.room,
+                session.id,
+                session.diagnosticAttempt ?? null,
+                this.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1",
+            );
+            if (result.registered !== (session.diagnosticAttempt ?? null)) {
+                session.diagnosticAttempt = result.registered;
+                ws.serializeAttachment(session);
+            }
+            if (result.fields)
+                console.log(
+                    "[GAME] online learning diagnostic",
+                    JSON.stringify({
+                        roomId: session.roomId,
+                        playerId: session.id,
+                        ...result.fields,
+                    }),
+                );
+            return;
+        }
         if (event === "cluster:ping" && this.distributed) {
             if (
                 !this.distributed.halted &&
@@ -626,15 +632,6 @@ export class RoomDO extends DurableObject<Env> {
                 )
             )
                 return;
-            console.log(
-                "[GAME] item recommendation received",
-                JSON.stringify({
-                    roomId: this.game.room.id,
-                    playerId: session.id,
-                    itemId: parsed.data.itemId,
-                    serverMode: this.distributed ? "distributed" : "standalone",
-                }),
-            );
             this.distributed?.recommend(session.id, parsed.data.itemId);
             session.recommendedItemId = parsed.data.itemId;
             ws.serializeAttachment(session);

@@ -32,6 +32,9 @@ const scheduler = load("lib/playground/scheduler.ts", {
 const online = load("lib/online/memory-session.ts", {
     require: (id) => (id.includes("scheduler") ? scheduler : memory),
 });
+const diagnostics = load("lib/online/recall-diagnostics.ts", {
+    require: () => online,
+});
 
 // Execute the real input, timer and progress callbacks, as in playground.test.cjs.
 const ast = ts.createSourceFile(
@@ -251,6 +254,10 @@ test("automatic display alone is not reliance; only subsequent correct hinted co
     assert.equal(o.assistedPositions.join(), "2,3");
     assert.equal(o.finalCueRatio, 0.2);
     assert.equal(o.additionalHintCount, 1);
+    assert.equal(o.hintDiagnostics.version, "auto-hint-input-v1");
+    assert.equal(o.hintDiagnostics.displayedHintCount, 1);
+    assert.equal(o.hintDiagnostics.preHintCorrectChars, 2);
+    assert.equal(o.hintDiagnostics.assistedHintChars, 2);
     assert.equal(memory.evaluateRecall(o).retryNeed, "confirm");
 });
 
@@ -261,6 +268,8 @@ test("a full overlay after an independently typed prefix is partial reliance", (
     const o = a.observations[0];
     assert.equal(o.revealedHintChars, 10);
     assert.equal(o.finalCueRatio, 0.1);
+    assert.equal(o.hintDiagnostics.preHintCorrectChars, 9);
+    assert.equal(o.hintDiagnostics.assistedHintChars, 1);
     assert.equal(o.answerWasFullyRevealed, false);
     assert.equal(o.outcome, "cued_recall");
     assert.equal(memory.evaluateRecall(o).retryNeed, "confirm");
@@ -304,6 +313,8 @@ test("timed clearing preserves credit for correct cells and assistance across re
     assert.equal(o.assistedPositions.join(), "2,3");
     assert.equal(o.hintCount, 1);
     assert.equal(o.firstAttemptCorrect, false);
+    assert.equal(o.hintDiagnostics.preHintCorrectChars, 2);
+    assert.equal(o.hintDiagnostics.assistedHintChars, 2);
     assert.equal(memory.evaluateRecall(o).retryNeed, "confirm");
 });
 
@@ -375,6 +386,11 @@ test("online recording uses the shared evaluation and logs normalized reliance",
     assert.equal(logs[0].finalCueRatio, 0.1);
     assert.equal(logs[0].retryNeed, "confirm");
     assert.equal(logs[0].answerWasFullyRevealed, false);
+    assert.equal(logs[0].diagnosticVersion, "online-learning-v2");
+    assert.equal(logs[0].hintEvidenceVersion, "auto-hint-input-v1");
+    assert.equal(logs[0].displayedFullAnswer, true);
+    assert.equal(logs[0].preHintCorrectChars, 9);
+    assert.equal(logs[0].assistedHintChars, 1);
     assert.equal(session.scheduler.retries[id].reason, "uncertain_recall");
 });
 
@@ -394,4 +410,122 @@ test("offline manual full reveal remains a full hint even after a correct prefix
     assert.equal(o.firstAttemptCorrect, false);
     assert.equal(o.outcome, "relearned");
     assert.equal(memory.evaluateRecall(o).retryNeed, "short");
+});
+
+test("unfinished turns retain the latest hint summary once without changing learning state", () => {
+    const a = attempt("abcdefghij", { prefix: "abcdefghi" });
+    const p = a.hint();
+    const session = online.createOnlineMemorySession(
+        "unfinished",
+        ["word"],
+        "user",
+        {},
+    );
+    const before = JSON.stringify({
+        memory: session.memory,
+        scheduler: session.scheduler,
+    });
+    const tracker = diagnostics.createRecallDiagnosticTracker();
+    const bomb = { id: "bomb", turn: 1, holder: 0 };
+    const key = diagnostics.recallAttemptKey("game", bomb);
+    const current = { key, itemId: "word", answerLength: 10, progress: p };
+    assert.equal(
+        diagnostics.trackRecallDiagnostic(tracker, current, session).kind,
+        "recall_started",
+    );
+    assert.equal(
+        diagnostics.trackRecallDiagnostic(tracker, current, session),
+        null,
+    );
+    const room = {
+        gameId: "game",
+        isStart: true,
+        users: [{ id: "user" }],
+        bombs: [bomb],
+    };
+    // Migration/repeated snapshots are not terminal events.
+    assert.equal(
+        diagnostics.finishRecallDiagnosticForSnapshot(
+            tracker,
+            session,
+            { ...room, migrating: true },
+            "user",
+        ),
+        null,
+    );
+    assert.equal(
+        diagnostics.recallStartedDiagnostic(tracker, session).attemptKey,
+        key,
+    );
+    const log = diagnostics.finishRecallDiagnosticForSnapshot(
+        tracker,
+        session,
+        { ...room, bombs: [], losers: [{ id: "user" }] },
+        "user",
+    );
+    assert.equal(log.kind, "unfinished");
+    assert.equal(log.endReason, "exploded");
+    assert.equal(log.displayedFullAnswer, true);
+    assert.equal(log.preHintCorrectChars, 9);
+    assert.equal(log.assistedHintChars, 0);
+    assert.equal(log.hintCount, 0);
+    assert.equal(log.displayedHintCount, 1);
+    assert.equal(log.attemptKey, key);
+    assert.equal(
+        diagnostics.finishRecallDiagnostic(tracker, session, "game_ended"),
+        null,
+    );
+    assert.equal(
+        diagnostics.trackRecallDiagnostic(tracker, current, session),
+        null,
+    );
+    assert.equal(
+        JSON.stringify({
+            memory: session.memory,
+            scheduler: session.scheduler,
+        }),
+        before,
+    );
+});
+
+test("success, repeated progress and the next game do not create duplicate unfinished summaries", () => {
+    const session = online.createOnlineMemorySession(
+        "finished",
+        ["word"],
+        "user",
+        {},
+    );
+    const tracker = diagnostics.createRecallDiagnosticTracker();
+    const progress = attempt("abcdefghij").report();
+    const attemptInfo = {
+        key: "game:bomb:1",
+        itemId: "word",
+        answerLength: 10,
+        progress,
+    };
+    diagnostics.trackRecallDiagnostic(tracker, attemptInfo, session);
+    assert.equal(
+        diagnostics.completeRecallDiagnostic(tracker),
+        attemptInfo.key,
+    );
+    assert.equal(
+        diagnostics.finishRecallDiagnostic(tracker, session, "game_ended"),
+        null,
+    );
+    assert.equal(
+        diagnostics.trackRecallDiagnostic(tracker, attemptInfo, session),
+        null,
+    );
+    assert.ok(
+        diagnostics.trackRecallDiagnostic(
+            tracker,
+            { ...attemptInfo, key: "next-game:bomb:1" },
+            session,
+        ),
+    );
+    assert.equal(
+        diagnostics.finishRecallDiagnostic(tracker, session, "room_left")
+            .endReason,
+        "room_left",
+    );
 });

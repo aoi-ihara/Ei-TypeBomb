@@ -6,6 +6,7 @@ import {
     type AnswerModeResult,
     type ItemMemoryState,
     type RecallObservation,
+    type RecallProgress,
 } from "../playground/memory";
 import {
     chooseNextUserItem,
@@ -18,7 +19,13 @@ import {
 } from "../playground/scheduler";
 
 export type OnlineLearningDiagnostic = {
-    kind: "recommendation" | "recall" | "selection";
+    kind:
+        | "recommendation"
+        | "recall"
+        | "selection"
+        | "recall_started"
+        | "unfinished";
+    diagnosticVersion: "online-learning-v2";
     itemId: string;
     schedulerTurn: number;
     schedulerCycle: number;
@@ -41,6 +48,15 @@ export type OnlineLearningDiagnostic = {
     elapsedMs?: number;
     elapsedSincePresentationMs?: number | null;
     answerCorrect?: boolean;
+    attemptKey?: string;
+    endReason?: string;
+    hintEvidenceVersion?: string;
+    displayedHintCount?: number;
+    preHintCorrectChars?: number;
+    assistedHintChars?: number;
+    displayedFullAnswer?: boolean;
+    attemptCount?: number;
+    incorrectInputCount?: number;
 };
 
 export const onlineSchedulerDiagnostic = (
@@ -48,6 +64,7 @@ export const onlineSchedulerDiagnostic = (
     kind: OnlineLearningDiagnostic["kind"],
     itemId: string,
 ): OnlineLearningDiagnostic => ({
+    diagnosticVersion: "online-learning-v2",
     kind,
     itemId,
     schedulerTurn: session.scheduler.turn,
@@ -59,6 +76,23 @@ export const onlineSchedulerDiagnostic = (
         (entry) => entry.suspendedUntil !== null,
     ).length,
     lastUserItemId: session.scheduler.lastUserItem,
+});
+
+export const onlineRecallDiagnosticFields = (
+    progress: RecallProgress,
+    answerLength: number,
+) => ({
+    hintEvidenceVersion: progress.hintDiagnostics?.version,
+    displayedHintCount: progress.hintDiagnostics?.displayedHintCount,
+    preHintCorrectChars: progress.hintDiagnostics?.preHintCorrectChars,
+    assistedHintChars: progress.hintDiagnostics?.assistedHintChars,
+    displayedFullAnswer:
+        answerLength > 0 && progress.revealedHintChars >= answerLength,
+    hintCount: progress.hintCount,
+    revealedHintChars: progress.revealedHintChars,
+    attemptCount: progress.attemptCount,
+    incorrectInputCount: progress.incorrectInputCount,
+    elapsedMs: progress.elapsedMs,
 });
 
 export type OnlineMemorySession = {
@@ -343,6 +377,7 @@ export const recordOnlineRecall = (
         retryNeed: evaluation.retryNeed,
         memoryEvidence: evaluation.memoryEvidence,
         independentRecall: evaluation.independent,
+        ...onlineRecallDiagnosticFields(evidence, evidence.answerLength),
         hintCount: evidence.hintCount,
         revealedHintChars: evidence.revealedHintChars,
         answerLength: evidence.answerLength,

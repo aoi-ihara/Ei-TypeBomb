@@ -9,6 +9,7 @@ export const createAutomaticHintEvidence = (
 ) => {
     const evidence = {
         revealedLength: 0,
+        preHintCorrectChars: 0,
         exposures: [] as HintExposure[],
         unresolved: new Map<number, HintExposure>(),
         assisted: new Set<number>(),
@@ -35,8 +36,9 @@ export const revealAutomaticHint = (
         i < Math.min(length, answer.length);
         i++
     ) {
-        if (answer[i] !== " " && input[i] !== answer[i])
-            evidence.unresolved.set(i, exposure);
+        if (answer[i] === " ") continue;
+        if (input[i] === answer[i]) evidence.preHintCorrectChars++;
+        else evidence.unresolved.set(i, exposure);
     }
     evidence.revealedLength = length;
     evidence.exposures.push(exposure);
@@ -74,6 +76,12 @@ export const summarizeAutomaticHintEvidence = (
         (char) => char !== " ",
     ).length;
     return {
+        hintDiagnostics: {
+            version: "auto-hint-input-v1",
+            displayedHintCount: evidence.exposures.length,
+            preHintCorrectChars: evidence.preHintCorrectChars,
+            assistedHintChars: assistedPositions.length,
+        },
         assistedPositions,
         hintCount: used.length,
         additionalHintCount: used.filter((exposure) => !exposure.initial)
