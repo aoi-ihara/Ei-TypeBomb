@@ -328,6 +328,18 @@ export class RoomDO extends DurableObject<Env> {
         const index = room.items.findIndex(
             (item) => item.id === itemId,
         );
+        console.log(
+            "[GAME] item recommendation consumed",
+            JSON.stringify({
+                roomId: room.id,
+                playerId,
+                requestedItemId: itemId,
+                assignedItemId: index < 0 ? null : room.items[index].id,
+                itemIndex: index < 0 ? null : index,
+                source: index < 0 ? "random" : "client",
+                reason: index < 0 ? "item_not_found" : null,
+            }),
+        );
         return index < 0 ? undefined : index;
     }
 
@@ -600,6 +612,15 @@ export class RoomDO extends DurableObject<Env> {
                 )
             )
                 return;
+            console.log(
+                "[GAME] item recommendation received",
+                JSON.stringify({
+                    roomId: this.game.room.id,
+                    playerId: session.id,
+                    itemId: parsed.data.itemId,
+                    serverMode: this.distributed ? "distributed" : "standalone",
+                }),
+            );
             this.distributed?.recommend(session.id, parsed.data.itemId);
             session.recommendedItemId = parsed.data.itemId;
             ws.serializeAttachment(session);
