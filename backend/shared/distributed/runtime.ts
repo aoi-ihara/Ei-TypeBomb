@@ -48,6 +48,10 @@ export class DistributedRoom {
         ) => void,
         private readonly now = Date.now,
         private readonly random = Math.random,
+        private readonly trace: (
+            message: string,
+            metadata: Record<string, unknown>,
+        ) => void = () => {},
     ) {}
     get state(): GameState {
         return this.checkpoint.value!.game;
@@ -207,7 +211,7 @@ export class DistributedRoom {
         );
     }
     private reduce(value: DurableRoom, event: GameEvent) {
-        return applyGameEvent(value.game, event, {
+        const result = applyGameEvent(value.game, event, {
             now: this.now(),
             random: this.random,
             rules: GAME_RULES,
@@ -223,7 +227,23 @@ export class DistributedRoom {
                 );
                 return index < 0 ? undefined : index;
             },
+            onItemSelected: (selection, room) => {
+                this.trace("item selected", {
+                    roomId: room.id,
+                    gameId: room.gameId ?? null,
+                    playerId: selection.playerId,
+                    previousItemId:
+                        selection.previousIndex === undefined
+                            ? null
+                            : (room.items[selection.previousIndex]?.id ?? null),
+                    assignedItemId: room.items[selection.itemIndex]?.id ?? null,
+                    itemIndex: selection.itemIndex,
+                    source: selection.source,
+                    trigger: event.type,
+                });
+            },
         });
+        return result;
     }
     apply(event: GameEvent): Promise<void> {
         if (event.type === "currentInput" || event.type === "hint:update") {

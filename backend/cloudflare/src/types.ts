@@ -6,6 +6,7 @@ export interface Env {
     CLUSTER_DRAINING?: string;
     ROOMS: DurableObjectNamespace<RoomDO>;
     ETB_CLUSTER_CONFIG?: string;
+    ETB_ONLINE_LEARNING_DIAGNOSTICS?: string;
     JWT_KEY_ID: string;
     JWT_PUBLIC_KEY: string;
     NEXT_PUBLIC_SUPABASE_URL: string;
@@ -22,4 +23,5 @@ export type Session = {
     targetRoomId: string;
     displayName?: string;
     recommendedItemId?: string;
+    diagnosticAttempt?: { key: string; itemId: string } | null;
 };

@@ -11,6 +11,7 @@ import { createHealthRttProbeRateLimit } from "./lib/healthRttProbeRateLimit";
 import {
     logError,
     logEvent,
+    logLocalEvent,
     recordLatencySample,
     setServerState,
     startConsole,
@@ -25,6 +26,7 @@ import {
 } from "../../shared/validation";
 import { canStart, type GameEvent } from "../../shared/game";
 import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
+import { processLearningDiagnostic } from "../../shared/learningDiagnostic";
 import {
     roomSnapshot,
     type ClientPayloads,
@@ -338,7 +340,8 @@ httpServer.on("upgrade", (request, socket, head) => {
     });
 });
 const io = new Server<
-    EventHandlers<ClientPayloads>,
+    // Diagnostic payloads are validated by the dedicated logging handler below.
+    EventHandlers<ClientPayloads & { "learning:diagnostic": unknown }>,
     EventHandlers<ServerPayloads>
 >(httpServer, {
     maxHttpBufferSize: 8192,
@@ -472,6 +475,9 @@ const createRoomIfNeeded = async (
                         emit(effect.packet.event, effect.packet.data);
                     }
                 io.to(roomId).emit("room:broadcast", game.snapshot());
+            }, Date.now, Math.random, (message, metadata) => {
+                if (process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1")
+                    logLocalEvent("GAME", message, metadata);
             });
             const openStartedAt = performance.now();
             try {
@@ -537,7 +543,7 @@ const createRoomIfNeeded = async (
                             else emit(packet.event, packet.data);
                         } else {
                             const activity = effect.activity;
-                            logEvent("GAME", `${activity.event} ${roomId}`, {
+                            const activityMetadata = {
                                 roomId,
                                 gameId:
                                     result.state.room.gameId ??
@@ -552,7 +558,23 @@ const createRoomIfNeeded = async (
                                     result.state.room.users[
                                         result.state.room.bombHolder
                                     ],
-                            });
+                            };
+                            if (activity.event === "word_passed") {
+                                if (
+                                    process.env
+                                        .ETB_ONLINE_LEARNING_DIAGNOSTICS === "1"
+                                )
+                                    logLocalEvent(
+                                        "GAME",
+                                        `${activity.event} ${roomId}`,
+                                        activityMetadata,
+                                    );
+                            } else
+                                logEvent(
+                                    "GAME",
+                                    `${activity.event} ${roomId}`,
+                                    activityMetadata,
+                                );
                             if (activity.event !== "word_passed")
                                 capturePostHogEvent(activity.event, {
                                     player_count: activity.playerCount,
@@ -571,16 +593,31 @@ const createRoomIfNeeded = async (
                         ...metadata,
                     }),
                 (playerId, currentRoom) => {
-                    // Recommendations describe one upcoming turn only. If the
-                    // client has not supplied a fresh one, use the fallback
-                    // instead of replaying the previous word indefinitely.
                     const itemId = recommendedItems.get(playerId);
                     recommendedItems.delete(playerId);
-                    if (!itemId) return undefined;
                     const index = currentRoom.items.findIndex(
                         (item) => item.id === itemId,
                     );
-                    return index >= 0 ? index : undefined;
+                    return index < 0 ? undefined : index;
+                },
+                (selection, currentRoom, event) => {
+                    if (process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS !== "1")
+                        return;
+                    logLocalEvent("GAME", "item selected", {
+                        roomId: currentRoom.id,
+                        gameId: currentRoom.gameId ?? null,
+                        playerId: selection.playerId,
+                        previousItemId:
+                            selection.previousIndex === undefined
+                                ? null
+                                : (currentRoom.items[selection.previousIndex]
+                                      ?.id ?? null),
+                        assignedItemId:
+                            currentRoom.items[selection.itemIndex]?.id ?? null,
+                        itemIndex: selection.itemIndex,
+                        source: selection.source,
+                        trigger: event.type,
+                    });
                 },
             ),
         );
@@ -875,6 +912,26 @@ io.on("connection", (socket) => {
         if (game instanceof DistributedRoom)
             game.recommend(user.id, parsed.data.itemId);
         else recommendedItems.set(user.id, parsed.data.itemId);
+    });
+    let diagnosticAttempt: Parameters<typeof processLearningDiagnostic>[3] =
+        null;
+    socket.on("learning:diagnostic", (payload: unknown) => {
+        const game = getGame();
+        if (!game || !roomId || !isCurrentSession()) return;
+        const result = processLearningDiagnostic(
+            payload,
+            game.state.room,
+            user.id,
+            diagnosticAttempt,
+            process.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1",
+        );
+        diagnosticAttempt = result.registered;
+        if (result.fields)
+            logLocalEvent("GAME", "online learning diagnostic", {
+                roomId,
+                playerId: user.id,
+                ...result.fields,
+            });
     });
     socket.on("word:success", () => {
         const game = getGame();

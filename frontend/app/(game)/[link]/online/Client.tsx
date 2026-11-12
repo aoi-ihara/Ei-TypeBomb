@@ -30,13 +30,26 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import type { RecallObservation } from "@/lib/playground/memory";
+import type {
+    RecallObservation,
+    RecallProgress,
+} from "@/lib/playground/memory";
+import {
+    createRecallDiagnosticTracker,
+    trackRecallDiagnostic,
+    recallAttemptKey,
+    recallStartedDiagnostic,
+    completeRecallDiagnostic,
+    finishRecallDiagnostic,
+    finishRecallDiagnosticForSnapshot,
+} from "@/lib/online/recall-diagnostics";
 import {
     createOnlineMemorySession,
     cacheOnlinePendingMemory,
     loadOnlinePendingMemory,
     loadOnlineGuestMemory,
     nextUnsentOnlineRecommendation,
+    onlineSchedulerDiagnostic,
     recordOnlineRecall,
     recordOnlineAnswerModeResult,
     type OnlineMemorySession,
@@ -47,6 +60,7 @@ type Props = {
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
+type OnlineRoom = Room & { gameId?: string; isStart: boolean; users: User[] };
 
 // Connection internals belong in DevTools, never in student-facing UI.
 const CONNECTING_MESSAGE = "接続中…";
@@ -54,8 +68,8 @@ const UNAVAILABLE_MESSAGE =
     "現在はプレイできません。時間をおいて再度お試しください。";
 const SERVER_FAILOVER_TIMEOUT_MS = 5_000;
 const MAX_CURRENT_INPUT_LENGTH = 4096;
-// Faster cues in competitive play; Playground keeps its existing pacing.
-const ONLINE_HINT_DELAYS_MS = [700, 1_000, 1_400, 1_800];
+// Match the standard timed-hint intervals for this online experiment.
+const ONLINE_HINT_DELAYS_MS = [1_000, 1_500, 2_000, 2_500];
 
 export default function Clinet({
     clusterServers,
@@ -68,7 +82,7 @@ export default function Clinet({
     const userIdRef = useRef<string | null>(null);
     const gameNumberRef = useRef(0);
 
-    const [room, setRoom] = useState<Room | null>(null);
+    const [room, setRoom] = useState<OnlineRoom | null>(null);
     const [serverError, setServerError] = useState<string | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [currentItem, setCurrentItem] = useState<Item | null>(null);
@@ -85,6 +99,15 @@ export default function Clinet({
 
     const socketRef = useRef<ReturnType<typeof io> | null>(null);
     const onlineMemoryRef = useRef<OnlineMemorySession | null>(null);
+    const recallDiagnosticsRef = useRef(createRecallDiagnosticTracker());
+    const finishUnansweredRecall = useCallback((reason: string) => {
+        const summary = finishRecallDiagnostic(
+            recallDiagnosticsRef.current,
+            onlineMemoryRef.current,
+            reason,
+        );
+        if (summary) socketRef.current?.emit("learning:diagnostic", summary);
+    }, []);
     const lastRecommendationRef = useRef<{
         socket: ReturnType<typeof io>;
         turn: number;
@@ -221,6 +244,15 @@ export default function Clinet({
             last?.socket === socket ? last : null,
         );
         if (!recommendation) return;
+        // Diagnostic data stays in server logs, not PostHog.
+        socket.emit(
+            "learning:diagnostic",
+            onlineSchedulerDiagnostic(
+                session,
+                "recommendation",
+                recommendation.itemId,
+            ),
+        );
         socket.emit("item:recommend", { itemId: recommendation.itemId });
         lastRecommendationRef.current = { socket, ...recommendation };
     }, []);
@@ -630,6 +662,7 @@ export default function Clinet({
                 "room:broadcast",
                 (
                     newRoom: Room & {
+                        gameId?: string;
                         words?: LegacyWord[];
                         migrating?: boolean;
                         users: User[];
@@ -656,10 +689,17 @@ export default function Clinet({
                     );
                     const normalizedItems =
                         newRoom.items ?? legacyWireWordsToItems(newRoom.words);
-                    const normalizedRoom: Room = {
+                    const normalizedRoom: OnlineRoom = {
                         ...newRoom,
                         items: normalizedItems,
                     };
+                    const summary = finishRecallDiagnosticForSnapshot(
+                        recallDiagnosticsRef.current,
+                        onlineMemoryRef.current,
+                        normalizedRoom,
+                        userIdRef.current,
+                    );
+                    if (summary) socket.emit("learning:diagnostic", summary);
                     setRoom(normalizedRoom);
                     setHintLengths(
                         Object.fromEntries(
@@ -737,6 +777,7 @@ export default function Clinet({
 
             socket.on("game:quited", () => {
                 if (!selected || socketRef.current !== socket) return;
+                finishUnansweredRecall("game_cancelled");
                 showNotice({
                     iconName: "globeOff",
                     title: "接続が切れました",
@@ -843,6 +884,15 @@ export default function Clinet({
                 // successful reauthentication, never on every room snapshot.
                 lastRecommendationRef.current = null;
                 setAuthSessionGeneration((previous) => previous + 1);
+                const memorySession = onlineMemoryRef.current;
+                if (memorySession) {
+                    const registration = recallStartedDiagnostic(
+                        recallDiagnosticsRef.current,
+                        memorySession,
+                    );
+                    if (registration)
+                        socket.emit("learning:diagnostic", registration);
+                }
             });
 
             socket.on("auth:request", () => {
@@ -880,6 +930,7 @@ export default function Clinet({
                     const didLose = losers
                         ? losers.some((loser) => loser.id === userIdRef.current)
                         : userIdRef.current === holderUserId;
+                    finishUnansweredRecall(didLose ? "exploded" : "game_ended");
                     setResult(didLose);
                     setLostDisplayName(holderDisplayName ?? null);
                     setLoserNames(
@@ -964,6 +1015,7 @@ export default function Clinet({
             );
 
         return () => {
+            finishUnansweredRecall("page_left");
             disposed = true;
             if (reconnectTimer) clearTimeout(reconnectTimer);
             clearPrimaryTimer();
@@ -978,7 +1030,7 @@ export default function Clinet({
             secondaryCandidate?.socket.disconnect();
             fallbackCandidate?.socket.disconnect();
         };
-    }, [explode, displayName, clusterServers]);
+    }, [explode, displayName, clusterServers, finishUnansweredRecall]);
 
     const isFirstRoomRender = useRef(true);
     useEffect(() => {
@@ -1093,6 +1145,7 @@ export default function Clinet({
     };
 
     const handleLeave = () => {
+        finishUnansweredRecall("room_left");
         // Clear immediately; the participant snapshot may arrive later.
         lastRecommendationRef.current = null;
         socketRef.current?.emit("room:leave");
@@ -1138,7 +1191,8 @@ export default function Clinet({
                         !focusedBomb ||
                         !userId ||
                         users[focusedBomb.holder]?.id !== userId
-                    ) return;
+                    )
+                        return;
                     const session = onlineMemoryRef.current;
                     if (!session || session.roomId !== room?.id) return;
                     const updated = recordOnlineAnswerModeResult(
@@ -1146,6 +1200,11 @@ export default function Clinet({
                         focusedItem.id,
                         "selection",
                         correct,
+                        (diagnostic) =>
+                            socketRef.current?.emit(
+                                "learning:diagnostic",
+                                diagnostic,
+                            ),
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
@@ -1175,6 +1234,33 @@ export default function Clinet({
                 enableRemoteTypingSync={false}
                 bombRef={bombRef}
                 explosionLayer={explosionLayer}
+                onRecallProgress={(progress: RecallProgress) => {
+                    const session = onlineMemoryRef.current;
+                    if (
+                        !session ||
+                        session.roomId !== room?.id ||
+                        !room?.gameId ||
+                        !focusedBomb ||
+                        !focusedItem ||
+                        users[focusedBomb.holder]?.id !== userId
+                    )
+                        return;
+                    const registration = trackRecallDiagnostic(
+                        recallDiagnosticsRef.current,
+                        {
+                            key: recallAttemptKey(room.gameId, focusedBomb),
+                            itemId: focusedItem.id,
+                            answerLength: focusedItem.answer.length,
+                            progress,
+                        },
+                        session,
+                    );
+                    if (registration)
+                        socketRef.current?.emit(
+                            "learning:diagnostic",
+                            registration,
+                        );
+                }}
                 onRecallComplete={(observation: RecallObservation) => {
                     if (
                         !focusedItem ||
@@ -1186,10 +1272,18 @@ export default function Clinet({
                         return;
                     const session = onlineMemoryRef.current;
                     if (!session || session.roomId !== room?.id) return;
+                    const attemptKey = completeRecallDiagnostic(
+                        recallDiagnosticsRef.current,
+                    );
                     const updated = recordOnlineRecall(
                         session,
                         focusedItem.id,
                         observation,
+                        (diagnostic) =>
+                            socketRef.current?.emit("learning:diagnostic", {
+                                ...diagnostic,
+                                attemptKey,
+                            }),
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
@@ -1220,7 +1314,9 @@ export default function Clinet({
                             );
                             if (updated) {
                                 cacheOnlinePendingMemory(session);
-                                setOnlineMemoryReady((revision) => revision + 1);
+                                setOnlineMemoryReady(
+                                    (revision) => revision + 1,
+                                );
                                 void flushOnlineMemory();
                             }
                         }

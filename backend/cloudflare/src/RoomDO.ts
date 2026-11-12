@@ -8,6 +8,7 @@ import {
     DEFAULT_GAME_RULES as RULES,
 } from "../../shared/game";
 import { canDeleteRoom, disconnectDeadline } from "../../shared/session";
+import { processLearningDiagnostic } from "../../shared/learningDiagnostic";
 import { roomSnapshot } from "../../shared/protocol";
 import { eventRateLimit } from "../../shared/rateLimits";
 import { createKeyedRateLimit } from "../../shared/keyedRateLimit";
@@ -325,9 +326,7 @@ export class RoomDO extends DurableObject<Env> {
         const itemId = session.recommendedItemId;
         delete session.recommendedItemId;
         ws?.serializeAttachment(session);
-        const index = room.items.findIndex(
-            (item) => item.id === itemId,
-        );
+        const index = room.items.findIndex((item) => item.id === itemId);
         return index < 0 ? undefined : index;
     }
 
@@ -358,16 +357,26 @@ export class RoomDO extends DurableObject<Env> {
             !initial
         )
             throw new ClientError("ルーム情報を取得できませんでした。");
-        const game = new DistributedRoom(roomId, this.control, (result) => {
-            this.game = result.state;
-            for (const effect of result.effects)
-                if (
-                    effect.type === "broadcast" &&
-                    effect.packet.event !== "room:broadcast"
-                )
-                    this.broadcast(effect.packet.event, effect.packet.data);
-            this.broadcast("room:broadcast", game.snapshot());
-        });
+        const game = new DistributedRoom(
+            roomId,
+            this.control,
+            (result) => {
+                this.game = result.state;
+                for (const effect of result.effects)
+                    if (
+                        effect.type === "broadcast" &&
+                        effect.packet.event !== "room:broadcast"
+                    )
+                        this.broadcast(effect.packet.event, effect.packet.data);
+                this.broadcast("room:broadcast", game.snapshot());
+            },
+            Date.now,
+            Math.random,
+            (message, metadata) => {
+                if (this.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1")
+                    console.log(`[GAME] ${message}`, JSON.stringify(metadata));
+            },
+        );
         await game.open(initial ?? undefined);
         // Persist the room identity before the first alarm fires so that
         // a fresh isolate can rehydrate without any connected clients.
@@ -511,6 +520,29 @@ export class RoomDO extends DurableObject<Env> {
             return;
         }
         if (!session.roomId || !this.game) return;
+        if (event === "learning:diagnostic") {
+            const result = processLearningDiagnostic(
+                data,
+                this.game.room,
+                session.id,
+                session.diagnosticAttempt ?? null,
+                this.env.ETB_ONLINE_LEARNING_DIAGNOSTICS === "1",
+            );
+            if (result.registered !== (session.diagnosticAttempt ?? null)) {
+                session.diagnosticAttempt = result.registered;
+                ws.serializeAttachment(session);
+            }
+            if (result.fields)
+                console.log(
+                    "[GAME] online learning diagnostic",
+                    JSON.stringify({
+                        roomId: session.roomId,
+                        playerId: session.id,
+                        ...result.fields,
+                    }),
+                );
+            return;
+        }
         if (event === "cluster:ping" && this.distributed) {
             if (
                 !this.distributed.halted &&

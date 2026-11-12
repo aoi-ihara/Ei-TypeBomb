@@ -21,6 +21,12 @@ export type RecallProgress = {
     hintCount: number;
     revealedHintChars: number;
     assistedPositions?: number[];
+    hintDiagnostics?: {
+        version: string;
+        displayedHintCount: number;
+        preHintCorrectChars: number;
+        assistedHintChars: number;
+    };
     hintEvents?: {
         kind: "letter" | "answer";
         source: "manual";

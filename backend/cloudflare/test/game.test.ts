@@ -5,6 +5,7 @@ import {
     canStart,
     nextGameDeadline,
     type GameRules,
+    type ItemSelection,
 } from "../../shared/game";
 import type { GameState } from "../../shared/types";
 
@@ -58,6 +59,62 @@ test("shared gameplay is used unmodified by Workers", () => {
     state = apply(result.state, { type: "deadline" }, 4000).state;
     assert.equal(state.wordAt, undefined);
     assert.equal(state.room.bombs?.[0].wordIndex, 0);
+});
+
+
+test("item selection diagnostics report the previous and assigned item", () => {
+    let state = blank();
+    state.room.items.push({
+        id: "q2",
+        type: "typed_recall",
+        prompt: "dog",
+        answer: "いぬ",
+    });
+    state = apply(state, {
+        type: "room:join",
+        player: { id: "alice", displayName: "Alice" },
+    }).state;
+    state = apply(state, {
+        type: "room:join",
+        player: { id: "bob", displayName: "Bob" },
+    }).state;
+
+    const selections: ItemSelection[] = [];
+    const context = {
+        now: 1000,
+        random: () => 0,
+        rules,
+        onItemSelected: (selection: ItemSelection) => selections.push(selection),
+    };
+    state = applyGameEvent(
+        state,
+        {
+            type: "game:start",
+            playerId: "alice",
+            gameId: "selection-test",
+            gameDuration: 20,
+        },
+        context,
+    ).state;
+    state = applyGameEvent(state, { type: "deadline" }, {
+        ...context,
+        now: 4000,
+    }).state;
+
+    const currentHolder = state.room.users[
+        state.room.bombs?.[0]?.holder ?? 0
+    ].id;
+    state = applyGameEvent(
+        state,
+        { type: "word:success", playerId: currentHolder },
+        { ...context, now: 4001 },
+    ).state;
+
+    const selection = selections.at(-1);
+    assert.ok(selection);
+    assert.equal(selection.previousIndex, 0);
+    assert.equal(selection.itemIndex, 1);
+    assert.equal(selection.source, "random");
 });
 
 test("room snapshots do not expose passwords", () => {
