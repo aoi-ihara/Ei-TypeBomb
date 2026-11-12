@@ -21,7 +21,6 @@ import { getRoomFromLink } from "@/lib/room/get";
 import { updateRoomFromId } from "@/lib/room/update";
 import {
     parseImportedWords,
-    isAllowedTypingAnswer,
     exportAnswerPairs,
 } from "@/lib/room/importWords";
 import type { LegacyWord, Room, RoomVisibility, TypedRecallItem } from "@/type";
@@ -1227,17 +1226,6 @@ export default function EditorClient({
                                                                     );
                                                                 }}
                                                             />
-                                                            {!isAllowedTypingAnswer(
-                                                                item.answer,
-                                                            ) &&
-                                                                item.answer.trim() && (
-                                                                    <div
-                                                                        className="text-cyan-600"
-                                                                        data-cursor="text"
-                                                                    >
-                                                                        この回答は入力形式に対応していないため、選択問題として出題されます。
-                                                                    </div>
-                                                                )}
                                                             {!item.answer.trim() && (
                                                                 <div
                                                                     className="text-red-500"

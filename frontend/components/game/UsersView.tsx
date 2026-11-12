@@ -55,7 +55,7 @@ export default function UsersView({
                                 top: `calc(${posY + 50}% - ${position.h / 2}px)`,
                             }}
                         >
-                            <div className="bg-(--color-foreground) w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb">
+                            <div className={`${users[index]?.id === userId ? "bg-cyan-600" : "bg-(--color-foreground)"} w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb`}>
                                 <div
                                     className="absolute flex-col pointer-events-none rounded-full transition-all font-bold duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
@@ -63,19 +63,9 @@ export default function UsersView({
                                         bottom: `calc(${position.h}px + 4px)`,
                                     }}
                                 >
-                                    {users[index]?.id === userId && (
-                                        <svg
-                                            className="w-fit"
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            height="32px"
-                                            viewBox="0 -960 960 960"
-                                            width="32px"
-                                            fill="currentColor"
-                                        >
-                                            <path d="M480-344 240-584l56-56 184 184 184-184 56 56-240 240Z" />
-                                        </svg>
-                                    )}
-                                    {users[index]?.displayName ?? ""}
+                                    <span className={users[index]?.id === userId ? "text-cyan-600" : undefined}>
+                                        {users[index]?.displayName ?? ""}
+                                    </span>
                                 </div>
                             </div>
                         </div>
