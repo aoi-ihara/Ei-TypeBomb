@@ -17,6 +17,50 @@ import {
     type SchedulerState,
 } from "../playground/scheduler";
 
+export type OnlineLearningDiagnostic = {
+    kind: "recommendation" | "recall" | "selection";
+    itemId: string;
+    schedulerTurn: number;
+    schedulerCycle: number;
+    schedulerReason: string | null;
+    cycleQueueRemaining: number;
+    pendingRetryCount: number;
+    suspendedWordCount: number;
+    lastUserItemId: string | null;
+    reconciled?: boolean;
+    previousRecommendedItemId?: string | null;
+    retryNeed?: "none" | "confirm" | "short";
+    memoryEvidence?: string;
+    independentRecall?: boolean;
+    retryCountBefore?: number;
+    hintCount?: number;
+    revealedHintChars?: number;
+    answerLength?: number;
+    finalCueRatio?: number;
+    answerWasFullyRevealed?: boolean;
+    elapsedMs?: number;
+    elapsedSincePresentationMs?: number | null;
+    answerCorrect?: boolean;
+};
+
+export const onlineSchedulerDiagnostic = (
+    session: OnlineMemorySession,
+    kind: OnlineLearningDiagnostic["kind"],
+    itemId: string,
+): OnlineLearningDiagnostic => ({
+    kind,
+    itemId,
+    schedulerTurn: session.scheduler.turn,
+    schedulerCycle: session.scheduler.cycle,
+    schedulerReason: session.scheduler.current?.reason ?? null,
+    cycleQueueRemaining: session.scheduler.cycleQueue.length,
+    pendingRetryCount: Object.keys(session.scheduler.retries).length,
+    suspendedWordCount: Object.values(session.scheduler.struggles).filter(
+        (entry) => entry.suspendedUntil !== null,
+    ).length,
+    lastUserItemId: session.scheduler.lastUserItem,
+});
+
 export type OnlineMemorySession = {
     roomId: string;
     userId: string | null;
@@ -214,8 +258,11 @@ export const recordOnlineAnswerModeResult = (
     itemId: string,
     mode: AnswerModeResult,
     success: boolean,
+    onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
+    const selectedBefore = session.scheduler.current?.itemId ?? null;
+    const retryCountBefore = Object.keys(session.scheduler.retries).length;
     const updated = recordAnswerModeResult({
         memory: session.memory[itemId],
         userId: session.userId ?? guestUserId,
@@ -237,6 +284,13 @@ export const recordOnlineAnswerModeResult = (
         session.roomId,
         session.scheduler,
     );
+    onDiagnostic?.({
+        ...onlineSchedulerDiagnostic(session, "selection", itemId),
+        reconciled: success && selectedBefore !== itemId,
+        previousRecommendedItemId: selectedBefore,
+        retryCountBefore,
+        answerCorrect: success,
+    });
     return updated;
 };
 
@@ -244,10 +298,15 @@ export const recordOnlineRecall = (
     session: OnlineMemorySession,
     itemId: string,
     observation: RecallObservation,
+    onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const scheduler = session.scheduler;
+    const selectedBefore = scheduler.current?.itemId ?? null;
+    const reconciled = selectedBefore !== itemId;
+    const retryCountBefore = Object.keys(scheduler.retries).length;
     reconcileOnlineSchedulerItem(scheduler, itemId);
+    const schedulerReason = scheduler.current?.reason ?? null;
 
     const previous = session.memory[itemId];
     const exposureAt = previous?.lastPresentedAt;
@@ -273,7 +332,26 @@ export const recordOnlineRecall = (
         expectedTypingMs: observation.answerLength * 220,
         schedulerReason: scheduler.current?.reason ?? "cycle",
     };
-    recordUserAnswer(scheduler, evaluateRecall(evidence));
+    const evaluation = evaluateRecall(evidence);
+    recordUserAnswer(scheduler, evaluation);
+    onDiagnostic?.({
+        ...onlineSchedulerDiagnostic(session, "recall", itemId),
+        schedulerReason,
+        reconciled,
+        previousRecommendedItemId: selectedBefore,
+        retryCountBefore,
+        retryNeed: evaluation.retryNeed,
+        memoryEvidence: evaluation.memoryEvidence,
+        independentRecall: evaluation.independent,
+        hintCount: evidence.hintCount,
+        revealedHintChars: evidence.revealedHintChars,
+        answerLength: evidence.answerLength,
+        finalCueRatio: evidence.finalCueRatio,
+        answerWasFullyRevealed: evidence.answerWasFullyRevealed,
+        elapsedMs: evidence.elapsedMs,
+        elapsedSincePresentationMs: evidence.elapsedSincePresentationMs,
+        answerCorrect: evidence.success,
+    });
     const updated = applyRecallObservation({
         memory: previous,
         observation: evidence,

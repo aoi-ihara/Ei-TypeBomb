@@ -37,6 +37,7 @@ import {
     loadOnlinePendingMemory,
     loadOnlineGuestMemory,
     nextUnsentOnlineRecommendation,
+    onlineSchedulerDiagnostic,
     recordOnlineRecall,
     recordOnlineAnswerModeResult,
     type OnlineMemorySession,
@@ -221,21 +222,15 @@ export default function Clinet({
             last?.socket === socket ? last : null,
         );
         if (!recommendation) return;
-        const scheduler = session.scheduler;
-        posthog.capture("online_item_recommendation_requested", {
-            room_id: session.roomId,
-            player_id: session.userId ?? userIdRef.current,
-            item_id: recommendation.itemId,
-            scheduler_turn: recommendation.turn,
-            scheduler_cycle: scheduler.cycle,
-            scheduler_reason: scheduler.current?.reason ?? null,
-            cycle_queue_remaining: scheduler.cycleQueue.length,
-            pending_retry_count: Object.keys(scheduler.retries).length,
-            suspended_word_count: Object.values(scheduler.struggles).filter(
-                (entry) => entry.suspendedUntil !== null,
-            ).length,
-            last_user_item_id: scheduler.lastUserItem,
-        });
+        // Diagnostic data goes to the Node server's local JSONL log, not PostHog.
+        socket.emit(
+            "learning:diagnostic",
+            onlineSchedulerDiagnostic(
+                session,
+                "recommendation",
+                recommendation.itemId,
+            ),
+        );
         socket.emit("item:recommend", { itemId: recommendation.itemId });
         lastRecommendationRef.current = { socket, ...recommendation };
     }, []);
@@ -1161,6 +1156,11 @@ export default function Clinet({
                         focusedItem.id,
                         "selection",
                         correct,
+                        (diagnostic) =>
+                            socketRef.current?.emit(
+                                "learning:diagnostic",
+                                diagnostic,
+                            ),
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
@@ -1205,6 +1205,11 @@ export default function Clinet({
                         session,
                         focusedItem.id,
                         observation,
+                        (diagnostic) =>
+                            socketRef.current?.emit(
+                                "learning:diagnostic",
+                                diagnostic,
+                            ),
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);

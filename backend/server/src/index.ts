@@ -953,6 +953,69 @@ io.on("connection", (socket) => {
             game.recommend(user.id, parsed.data.itemId);
         else recommendedItems.set(user.id, parsed.data.itemId);
     });
+    socket.on("learning:diagnostic", (payload: unknown) => {
+        const game = getGame();
+        if (!game || !roomId || !isCurrentSession()) return;
+        if (!game.state.room.users.some((player) => player.id === user.id))
+            return;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload))
+            return;
+
+        // Only accept bounded, explicitly permitted diagnostic fields. Never
+        // write arbitrary client-controlled objects or personal answer text.
+        const source = payload as Record<string, unknown>;
+        if (
+            !["recommendation", "recall", "selection"].includes(
+                String(source.kind),
+            ) ||
+            typeof source.itemId !== "string" ||
+            !game.state.room.items.some((item) => item.id === source.itemId)
+        )
+            return;
+        const allowed = new Set([
+            "kind",
+            "itemId",
+            "schedulerTurn",
+            "schedulerCycle",
+            "schedulerReason",
+            "cycleQueueRemaining",
+            "pendingRetryCount",
+            "suspendedWordCount",
+            "lastUserItemId",
+            "reconciled",
+            "previousRecommendedItemId",
+            "retryNeed",
+            "memoryEvidence",
+            "independentRecall",
+            "retryCountBefore",
+            "hintCount",
+            "revealedHintChars",
+            "answerLength",
+            "finalCueRatio",
+            "answerWasFullyRevealed",
+            "elapsedMs",
+            "elapsedSincePresentationMs",
+            "answerCorrect",
+        ]);
+        const fields: Record<string, string | number | boolean | null> = {};
+        for (const [key, value] of Object.entries(source)) {
+            if (!allowed.has(key)) continue;
+            if (
+                value === null ||
+                typeof value === "boolean" ||
+                (typeof value === "string" && value.length <= 100) ||
+                (typeof value === "number" &&
+                    Number.isFinite(value) &&
+                    Math.abs(value) <= 1_000_000_000)
+            )
+                fields[key] = value;
+        }
+        logLocalEvent("GAME", "online learning diagnostic", {
+            roomId,
+            playerId: user.id,
+            ...fields,
+        });
+    });
     socket.on("word:success", () => {
         const game = getGame();
         if (isCurrentSession() && !(game instanceof DistributedRoom))
