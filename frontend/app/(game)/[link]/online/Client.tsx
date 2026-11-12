@@ -221,6 +221,21 @@ export default function Clinet({
             last?.socket === socket ? last : null,
         );
         if (!recommendation) return;
+        const scheduler = session.scheduler;
+        posthog.capture("online_item_recommendation_requested", {
+            room_id: session.roomId,
+            player_id: session.userId ?? userIdRef.current,
+            item_id: recommendation.itemId,
+            scheduler_turn: recommendation.turn,
+            scheduler_cycle: scheduler.cycle,
+            scheduler_reason: scheduler.current?.reason ?? null,
+            cycle_queue_remaining: scheduler.cycleQueue.length,
+            pending_retry_count: Object.keys(scheduler.retries).length,
+            suspended_word_count: Object.values(scheduler.struggles).filter(
+                (entry) => entry.suspendedUntil !== null,
+            ).length,
+            last_user_item_id: scheduler.lastUserItem,
+        });
         socket.emit("item:recommend", { itemId: recommendation.itemId });
         lastRecommendationRef.current = { socket, ...recommendation };
     }, []);
