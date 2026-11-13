@@ -16,7 +16,6 @@ import {
     verticalListSortingStrategy,
     arrayMove,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, useSpring, useMotionTemplate } from "framer-motion";
 import { CURSOR_SPRING } from "@/lib/cursor-motion";
@@ -82,20 +81,23 @@ function SortableItem({
         activatorEvent.pointerType === "mouse" &&
         document.documentElement.classList.contains("custom-cursor-active");
     const dragY = useSpring(0, CURSOR_SPRING);
-    const dragTransform = useMotionTemplate`translate3d(0, ${dragY}px, 0)`;
+    // Keep transform owned by one MotionValue throughout the sortable lifecycle.
+    // Switching between a MotionValue and a nullable string leaves stale styles
+    // after dnd-kit clears its transform on drop.
+    const dragTransform = useMotionTemplate`translate3d(${transform?.x ?? 0}px, ${dragY}px, 0) scaleX(${transform?.scaleX ?? 1}) scaleY(${transform?.scaleY ?? 1})`;
     const targetY = transform?.y ?? 0;
 
     useLayoutEffect(() => {
         if (smoothDrag) dragY.set(targetY);
-        // Reset immediately on drop/cancel so the next drag starts at its seat.
-        else dragY.jump(0);
+        // Non-dragged rows and drop/cancel must follow dnd-kit immediately.
+        else dragY.jump(targetY);
     }, [smoothDrag, targetY, dragY]);
 
     return (
         <motion.div
             ref={setNodeRef}
             style={{
-                transform: smoothDrag ? dragTransform : CSS.Transform.toString(transform),
+                transform: dragTransform,
                 transition,
             }}
             className="flex gap-4"
