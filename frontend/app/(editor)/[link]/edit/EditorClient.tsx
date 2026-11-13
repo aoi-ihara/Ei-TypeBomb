@@ -2,6 +2,7 @@
 
 import {
     DndContext,
+    useDndContext,
     PointerSensor,
     type Modifier,
     closestCenter,
@@ -16,7 +17,9 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { motion, useSpring, useMotionTemplate } from "framer-motion";
+import { CURSOR_SPRING } from "@/lib/cursor-motion";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import {
     rebaseEditorSnapshot,
@@ -70,14 +73,29 @@ function SortableItem({
     id: string;
     children: React.ReactNode;
 }) {
-    const { attributes, listeners, setNodeRef, transform, transition } =
-        useSortable({ id });
+    const {
+        attributes, listeners, setNodeRef, transform, transition, isDragging,
+    } = useSortable({ id });
+    const { activatorEvent } = useDndContext();
+    const smoothDrag = isDragging &&
+        activatorEvent instanceof PointerEvent &&
+        activatorEvent.pointerType === "mouse" &&
+        document.documentElement.classList.contains("custom-cursor-active");
+    const dragY = useSpring(0, CURSOR_SPRING);
+    const dragTransform = useMotionTemplate`translate3d(0, ${dragY}px, 0)`;
+    const targetY = transform?.y ?? 0;
+
+    useLayoutEffect(() => {
+        if (smoothDrag) dragY.set(targetY);
+        // Reset immediately on drop/cancel so the next drag starts at its seat.
+        else dragY.jump(0);
+    }, [smoothDrag, targetY, dragY]);
 
     return (
-        <div
+        <motion.div
             ref={setNodeRef}
             style={{
-                transform: CSS.Transform.toString(transform),
+                transform: smoothDrag ? dragTransform : CSS.Transform.toString(transform),
                 transition,
             }}
             className="flex gap-4"
@@ -90,7 +108,7 @@ function SortableItem({
                 ☰
             </div>
             {children}
-        </div>
+        </motion.div>
     );
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
+import { CURSOR_SPRING } from "@/lib/cursor-motion";
 import { useFeatureFlagEnabled } from "posthog-js/react";
 
 function getMorphCursorTarget(x: number, y: number) {
@@ -77,23 +78,17 @@ function CustomCursor() {
     const isPointerActiveRef = useRef(false);
     const isMouseDownRef = useRef(false);
 
-    const springConfig = {
-        stiffness: 1000,
-        damping: 50,
-        mass: 1,
-    };
+    const cursorX = useSpring(0, CURSOR_SPRING);
+    const cursorY = useSpring(0, CURSOR_SPRING);
 
-    const cursorX = useSpring(0, springConfig);
-    const cursorY = useSpring(0, springConfig);
+    const cursorW = useSpring(25, CURSOR_SPRING);
+    const cursorH = useSpring(25, CURSOR_SPRING);
 
-    const cursorW = useSpring(25, springConfig);
-    const cursorH = useSpring(25, springConfig);
+    const cursorWeight = useSpring(3, CURSOR_SPRING);
 
-    const cursorWeight = useSpring(3, springConfig);
+    const cursorOpacity = useSpring(0, CURSOR_SPRING);
 
-    const cursorOpacity = useSpring(0, springConfig);
-
-    const cursorBorderRadius = useSpring(12.5, springConfig);
+    const cursorBorderRadius = useSpring(12.5, CURSOR_SPRING);
 
     const boxShadow = useTransform(
         cursorWeight,
