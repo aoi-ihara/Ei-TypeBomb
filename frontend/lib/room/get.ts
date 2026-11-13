@@ -445,7 +445,8 @@ export const getRoomMetadataFromId = async (id: string) => {
     };
 };
 
-export const getRoomForEditFromLink = async (link: string) => {
+// Metadata and editor page share one authenticated room read per request.
+export const getRoomForEditFromLink = cache(async (link: string) => {
     const userId = await getUser();
     if (!userId) redirect(getSignInUrl());
     if (!link) return null;
@@ -498,7 +499,7 @@ export const getRoomForEditFromLink = async (link: string) => {
         link: data.link,
         visibility: data.visibility,
     } as Room;
-};
+});
 
 export const getMyRooms = async () => {
     const userId = await getUser();
