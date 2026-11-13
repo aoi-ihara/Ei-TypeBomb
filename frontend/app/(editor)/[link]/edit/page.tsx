@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getRoomFromId, getRoomRouteFromLink } from "@/lib/room/get";
+import { getRoomForEditFromLink } from "@/lib/room/get";
 import EditorClient from "./EditorClient";
 
 export default async function Page({
@@ -8,15 +8,12 @@ export default async function Page({
     params: Promise<{ link: string }>;
 }) {
     const { link } = await params;
-    const route = await getRoomRouteFromLink(link);
-    if (!route) notFound();
-    if (link !== route.link) redirect("/" + route.link + "/edit");
-
-    const room = await getRoomFromId(route.id);
-
+    const room = await getRoomForEditFromLink(link);
     if (!room) notFound();
+    const canonicalLink = room.link ?? room.id;
+    if (link !== canonicalLink) redirect("/" + canonicalLink + "/edit");
 
     return (
-        <EditorClient key={route.link} link={route.link} initialRoom={room} />
+        <EditorClient key={canonicalLink} link={canonicalLink} initialRoom={room} />
     );
 }

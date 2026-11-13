@@ -1,5 +1,5 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
@@ -33,7 +33,7 @@ export const deleteRoom = async (roomId: string) => {
 
     await invalidatePublicRooms();
     // Also expires old aliases and lists in the calling browser after a commit.
-    revalidatePath("/", "layout");
+    revalidateRoomContent();
 
     const posthog = getPostHogClient();
     posthog.capture({

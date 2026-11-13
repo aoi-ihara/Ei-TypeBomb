@@ -4,7 +4,7 @@ import { cache } from "react";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
-import { getUser } from "../auth/session";
+import { getClaimedViewerId, getUser } from "../auth/session";
 import { isRoomAuthorized } from "./auth";
 import { getOwnedRoomsForUser } from "./list-queries";
 import type { Item, Room } from "@/type";
@@ -82,13 +82,13 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
     if (!link) return null;
 
     const supabase = await createAdminClient();
-    const [{ data: roomData, error }, userId] = await Promise.all([
+    const [{ data: roomData, error }, claimedViewerId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
             .select(ROOM_PAGE_COLUMNS)
             .eq("link", link)
             .maybeSingle(),
-        getUser(),
+        getClaimedViewerId(),
     ]);
 
     if (error) {
@@ -117,6 +117,10 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
 
     if (!data) return null;
 
+    // Public/unlisted content is already readable by anyone. The verified JWT
+    // is used only for the owner UI hint; editing still rechecks getUser().
+    // Private content continues to require a fresh Auth lookup.
+    const userId = data.visibility === "private" ? await getUser() : claimedViewerId;
     const isOwner = data.user_id === userId;
     const requiresPassword = data.visibility === "private";
     const authorized =
@@ -440,6 +444,62 @@ export const getRoomMetadataFromId = async (id: string) => {
         visibility: data.visibility,
     };
 };
+
+// Metadata and editor page share one authenticated room read per request.
+export const getRoomForEditFromLink = cache(async (link: string) => {
+    const userId = await getUser();
+    if (!userId) redirect(getSignInUrl());
+    if (!link) return null;
+
+    const supabase = await createAdminClient();
+    const fields =
+        "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, edit_version, items, link, game_duration, visibility";
+    const byLink = await supabase
+        .from("ei_typebomb_rooms")
+        .select(fields)
+        .eq("link", link)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (byLink.error) {
+        serverError("failed to fetch room", byLink.error, "DB");
+        return null;
+    }
+
+    let data = byLink.data;
+    if (!data && isUUID(link, 4)) {
+        const legacy = await supabase
+            .from("ei_typebomb_rooms")
+            .select(fields)
+            .eq("id", link)
+            .eq("user_id", userId)
+            .maybeSingle();
+        if (legacy.error) {
+            serverError("failed to fetch legacy room for edit", legacy.error, "DB");
+            return null;
+        }
+        data = legacy.data;
+    }
+    if (!data) return null;
+
+    serverLog("DB", "room fetched");
+    return {
+        id: data.id,
+        title: data.title,
+        userId: data.user_id,
+        explanation: data.explanation,
+        maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
+        gameDuration: data.game_duration ?? 20,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        editVersion: data.edit_version,
+        items: data.items,
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        link: data.link,
+        visibility: data.visibility,
+    } as Room;
+});
 
 export const getRoomFromId = async (id: string) => {
     const supabase = await createAdminClient();

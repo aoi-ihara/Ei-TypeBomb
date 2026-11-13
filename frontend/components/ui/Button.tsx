@@ -29,6 +29,7 @@ type ButtonProps = Pick<
     name?: string;
     cursor?: "0" | "1" | "2";
     href?: string;
+    prefetch?: boolean;
 };
 
 const baseStyles =
@@ -67,6 +68,7 @@ export default function Button({
     name,
     cursor = disabled || loading ? "2" : variant === "text" ? "1" : "0",
     href,
+    prefetch,
     ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
@@ -88,6 +90,7 @@ export default function Button({
             >
                 <Link
                     href={href}
+                    prefetch={prefetch}
                     {...ariaProps}
                     type={type}
                     className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
