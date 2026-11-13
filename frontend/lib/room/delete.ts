@@ -1,4 +1,6 @@
 "use server";
+import { revalidatePath } from "next/cache";
+import { invalidatePublicRooms } from "./get";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -28,6 +30,10 @@ export const deleteRoom = async (roomId: string) => {
     if (!data) {
         return "ルームが見つからないか、削除する権限がありません。";
     }
+
+    await invalidatePublicRooms();
+    // Also expires old aliases and lists in the calling browser after a commit.
+    revalidatePath("/", "layout");
 
     const posthog = getPostHogClient();
     posthog.capture({

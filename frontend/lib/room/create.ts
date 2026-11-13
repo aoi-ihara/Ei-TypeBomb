@@ -1,4 +1,6 @@
 "use server";
+import { revalidatePath } from "next/cache";
+import { invalidatePublicRooms } from "./get";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { after } from "next/server";
@@ -32,6 +34,10 @@ export const createNewRoom = async () => {
     }
 
     if (!data.id || !data.link) return null;
+
+    await invalidatePublicRooms();
+    // Also expires old aliases and lists in the calling browser after a commit.
+    revalidatePath("/", "layout");
 
     after(async () => {
         const posthog = getPostHogClient();

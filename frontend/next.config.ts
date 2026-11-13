@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import { resolve } from "node:path";
 
 const nextConfig: NextConfig = {
+    // Bound browser RSC reuse, including fully prefetched dynamic rooms.
+    experimental: { staleTimes: { dynamic: 30, static: 30 } },
     serverExternalPackages: ["oidc-provider", "pg"],
     // Runtime-neutral backend/shared modules are also bundled by the browser.
     turbopack: { root: resolve(__dirname, "..") },

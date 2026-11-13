@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import { Icon } from "@/components/ui/Icon";
@@ -20,7 +19,6 @@ export default function RoomCard({
     isSaved?: boolean;
     onToggleSaved?: () => void;
 }) {
-    const router = useRouter();
     const [copied, setCopied] = useState(false);
     const roomLink = room.link ?? room.id;
 
@@ -47,9 +45,9 @@ export default function RoomCard({
                     className="flex flex-col items-start h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
-                        startNavigationProgress();
-                        router.push("/" + roomLink);
                     }}
+                    onNavigate={() => startNavigationProgress()}
+                    prefetch={room.visibility === "public" ? true : undefined}
                     href={`/${roomLink}`}
                 >
                     <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
