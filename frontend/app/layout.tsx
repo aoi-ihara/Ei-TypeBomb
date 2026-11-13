@@ -9,7 +9,7 @@ import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
 import PopUp from "./PopUp";
-import PostHogEventTracker from "@/components/analytics/PostHogEventTracker";
+import RouteEventTracker from "@/components/analytics/RouteEventTracker";
 
 const lineSeedJp = LINE_Seed_JP({
     subsets: ["latin"],
@@ -70,7 +70,7 @@ export default function RootLayout({
                     <Suspense fallback={null}>
                         <NavigationProgress />
                     </Suspense>
-                    <PostHogEventTracker />
+                    <RouteEventTracker />
                     <main className="flex flex-col h-dvh w-full items-center">
                         {children}
                         <div className="text-xs w-full flex fixed opacity-50 justify-center md:justify-start bottom-3">

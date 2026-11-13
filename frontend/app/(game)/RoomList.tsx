@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
-import RoomCard from "@/components/rooms/RoomCard";
+import RoomGrid from "@/components/rooms/RoomGrid";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
@@ -45,6 +45,8 @@ export default function RoomList({
     const [createError, setCreateError] = useState("");
     const view = initialView;
     const [keyword, setKeyword] = useState("");
+    // Keep typing responsive even when many rooms match the search.
+    const deferredKeyword = useDeferredValue(keyword);
     const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
     const navigationItems: {
         value: View;
@@ -99,7 +101,7 @@ export default function RoomList({
     );
 
     const filteredRooms = useMemo(() => {
-        const query = keyword.trim().toLowerCase();
+        const query = deferredKeyword.trim().toLowerCase();
 
         return roomsInView.filter((room) => {
             if (!query) return true;
@@ -116,7 +118,7 @@ export default function RoomList({
 
             return searchableText.includes(query);
         });
-    }, [roomsInView, keyword]);
+    }, [roomsInView, deferredKeyword]);
 
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;
@@ -262,23 +264,15 @@ export default function RoomList({
                     )}
 
                     {filteredRooms.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-4">
-                            {filteredRooms.map((room, index) => (
-                                <RoomCard
-                                    eagerPrefetch={index < 4}
-                                    key={room.id}
-                                    room={room}
-                                    isOwner={myRoomIds.has(room.id)}
-                                    isSaved={savedRoomIds.includes(room.id)}
-                                    onToggleSaved={
-                                        currentUser
-                                            ? () =>
-                                                  toggleSavedRoomState(room.id)
-                                            : undefined
-                                    }
-                                />
-                            ))}
-                        </div>
+                        <RoomGrid
+                            key={view + ":" + deferredKeyword}
+                            rooms={filteredRooms}
+                            ownedIds={myRoomIds}
+                            savedIds={savedRoomIds}
+                            onToggleSaved={
+                                currentUser ? toggleSavedRoomState : undefined
+                            }
+                        />
                     ) : (
                         <div>ルームが見つかりません。</div>
                     )}

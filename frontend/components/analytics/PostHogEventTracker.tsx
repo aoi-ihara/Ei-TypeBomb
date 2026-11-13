@@ -222,7 +222,9 @@ export default function PostHogEventTracker() {
             }
         };
 
-        const observer = new MutationObserver(() => {
+        let pendingFrame = 0;
+        const analyzeDom = () => {
+            pendingFrame = 0;
             const gameFinishedButton = document.querySelector(
                 'button [data-icon="rotateCcw"]',
             );
@@ -298,6 +300,10 @@ export default function PostHogEventTracker() {
                     });
                 }
             }
+        };
+        const observer = new MutationObserver(() => {
+            if (pendingFrame !== 0) return;
+            pendingFrame = window.requestAnimationFrame(analyzeDom);
         });
 
         document.addEventListener("click", captureClickEvent);
@@ -309,6 +315,7 @@ export default function PostHogEventTracker() {
             document.removeEventListener("click", captureClickEvent);
             document.removeEventListener("pointerdown", handlePointerDown);
             document.removeEventListener("pointerup", handlePointerUp);
+            if (pendingFrame !== 0) window.cancelAnimationFrame(pendingFrame);
             observer.disconnect();
         };
     }, []);

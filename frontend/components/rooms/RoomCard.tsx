@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 import Link from "next/link";
+import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
 export default function RoomCard({
     room,
@@ -23,15 +24,51 @@ export default function RoomCard({
     eagerPrefetch?: boolean;
 }) {
     const router = useRouter();
-    const hoveredPrefetchRef = useRef(false);
+    const lastPrefetchRef = useRef<{ link: string; at: number } | null>(null);
+    const articleRef = useRef<HTMLElement>(null);
     const [copied, setCopied] = useState(false);
     const roomLink = room.link ?? room.id;
 
-    const prefetchOnIntent = () => {
-        if (room.visibility !== "public" || eagerPrefetch || hoveredPrefetchRef.current) return;
-        hoveredPrefetchRef.current = true;
+    const prefetchOnIntent = useCallback(() => {
+        if (room.visibility !== "public" || eagerPrefetch) return;
+        // ETB currently keeps dynamic Router Cache entries for 30 seconds.
+        // Limit duplicate prefetches but allow a new one after expiry.
+        const last = lastPrefetchRef.current;
+        if (last?.link === roomLink && Date.now() - last.at < 25_000) return;
+
+        lastPrefetchRef.current = { link: roomLink, at: Date.now() };
         router.prefetch(`/${roomLink}`);
-    };
+    }, [room.visibility, eagerPrefetch, roomLink, router]);
+
+    // Preload rooms as they approach the viewport, paced across cards.
+    // Unlike eagerly prefetching every Link, this scales to long room lists.
+    useEffect(() => {
+        const article = articleRef.current;
+        if (
+            !article ||
+            room.visibility !== "public" ||
+            eagerPrefetch ||
+            typeof IntersectionObserver === "undefined"
+        ) return;
+
+        let cancelPrefetch: (() => void) | undefined;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (!entry.isIntersecting) return;
+                observer.disconnect();
+                cancelPrefetch = scheduleRoomPrefetch(
+                    `/${roomLink}`,
+                    prefetchOnIntent,
+                );
+            },
+            { rootMargin: "240px" },
+        );
+        observer.observe(article);
+        return () => {
+            observer.disconnect();
+            cancelPrefetch?.();
+        };
+    }, [room.visibility, eagerPrefetch, roomLink, prefetchOnIntent]);
 
     const copyRoomLink = async () => {
         try {
@@ -46,7 +83,7 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
+        <article ref={articleRef} className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
             <div
                 className="rounded-lg h-full"
                 data-cursor="button"
