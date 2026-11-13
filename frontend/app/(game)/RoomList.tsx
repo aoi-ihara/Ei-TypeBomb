@@ -263,8 +263,9 @@ export default function RoomList({
 
                     {filteredRooms.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-4">
-                            {filteredRooms.map((room) => (
+                            {filteredRooms.map((room, index) => (
                                 <RoomCard
+                                    eagerPrefetch={index < 4}
                                     key={room.id}
                                     room={room}
                                     isOwner={myRoomIds.has(room.id)}
