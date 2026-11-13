@@ -4,7 +4,7 @@ import { createKeyedRateLimit } from "../../shared/keyedRateLimit";
 import { createAddressRateLimit } from "../../shared/addressRateLimit";
 import { getAuthenticatedRoomId } from "../../shared/roomJwt";
 import { ROOM_SELECT_COLUMNS } from "../../shared/room";
-import { parseClientEvent } from "../../shared/validation";
+import { MAX_CURRENT_INPUT_LENGTH, parseClientEvent } from "../../shared/validation";
 
 test("shared keyed token buckets refill independently and ignore unknown events", () => {
     let time = 0;
@@ -56,10 +56,10 @@ test("shared event validation accepts recommendations and bounds hint lengths", 
     });
     for (const data of [undefined, null, {}, { itemId: 42 }])
         assert.equal(parseClientEvent("item:recommend", data), null);
-    assert.deepEqual(parseClientEvent("hint:update", { length: 32 }), {
-        event: "hint:update", data: { length: 32 },
+    assert.deepEqual(parseClientEvent("hint:update", { length: MAX_CURRENT_INPUT_LENGTH }), {
+        event: "hint:update", data: { length: MAX_CURRENT_INPUT_LENGTH },
     });
-    for (const length of [-1, 33, 1.5, "2"])
+    for (const length of [-1, MAX_CURRENT_INPUT_LENGTH + 1, 1.5, "2"])
         assert.equal(parseClientEvent("hint:update", { length }), null);
 });
 
