@@ -501,6 +501,51 @@ export const getRoomForEditFromLink = cache(async (link: string) => {
     } as Room;
 });
 
+export const getRoomFromId = async (id: string) => {
+    const supabase = await createAdminClient();
+
+    const [{ data, error }, userId] = await Promise.all([
+        supabase
+            .from("ei_typebomb_rooms")
+            .select(
+                "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, edit_version, items, link, game_duration, visibility",
+            )
+            .eq("id", id)
+            .maybeSingle(),
+        getUser(),
+    ]);
+
+    if (!userId) redirect(getSignInUrl());
+
+    if (error) {
+        serverError("failed to fetch room", error, "DB");
+        return null;
+    }
+
+    if (!data || data.user_id !== userId) {
+        serverError("room access denied", undefined, "AUTH");
+        return null;
+    }
+
+    serverLog("DB", "room fetched");
+    return {
+        id: data.id,
+        title: data.title,
+        userId: data.user_id,
+        explanation: data.explanation,
+        maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
+        gameDuration: data.game_duration ?? 20,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        editVersion: data.edit_version,
+        items: data.items,
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        link: data.link,
+        visibility: data.visibility,
+    } as Room;
+};
+
 export const getMyRooms = async () => {
     const userId = await getUser();
     if (!userId) return null;
