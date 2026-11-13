@@ -49,7 +49,7 @@
                 { "name": "REPLICAS", "class_name": "ReplicaDO" },
                 {
                     "name": "ROOMS",
-                    "class_name": "GameRoom",
+                    "class_name": "RoomDO",
                 },
             ],
         },
