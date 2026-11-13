@@ -28,6 +28,17 @@ export const getSession = async () => {
     return data.session.user.id;
 };
 
+// Only for public/unlisted page presentation. Do not use this lightweight
+// JWT check to authorize private data, service-role queries or mutations.
+const claimedViewerId = cache(async (): Promise<string | null> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getClaims();
+    if (error) return null;
+    return typeof data?.claims?.sub === "string" ? data.claims.sub : null;
+});
+
+export const getClaimedViewerId = async () => claimedViewerId();
+
 export const getUser = async () => (await currentUser())?.id ?? null;
 
 export const getUserDetails = async () => {
