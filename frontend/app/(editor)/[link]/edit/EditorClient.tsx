@@ -24,6 +24,7 @@ import {
     snapshotFromRoom,
     type EditorSnapshot,
 } from "@/lib/room/editor-rebase";
+import { validRoomUpdate } from "@/lib/room/partial-update";
 import { updateRoomFromId } from "@/lib/room/update";
 import {
     parseImportedWords,
@@ -544,17 +545,15 @@ export default function EditorClient({
                 return false;
             }
 
-            const linkError = validateLink(roomLink);
-            if (linkError) return false;
-
             try {
-                const existingRoomId = await getRoomFromLink(roomLink);
-                if (existingRoomId && existingRoomId !== roomId) return false;
+                const existingRoomId = validateLink(roomLink)
+                    ? null
+                    : await getRoomFromLink(roomLink);
                 if (!isLoadedRef.current || generation !== saveGenerationRef.current) {
                     return false;
                 }
 
-                const updatedRoom: Room = {
+                const updatedRoom = validRoomUpdate({
                     id: roomId,
                     title: roomTitle,
                     explanation: roomExplanation,
@@ -562,8 +561,19 @@ export default function EditorClient({
                     gameDuration: Number(gameDuration),
                     bombCount,
                     items,
-                    link: roomLink,
-                };
+                    link: existingRoomId && existingRoomId !== roomId ? undefined : roomLink,
+                });
+                const persistedSnapshot = snapshotFromRoom({
+                    title: syncedSnapshotRef.current.roomTitle,
+                    explanation: syncedSnapshotRef.current.roomExplanation,
+                    maxPlayers: Number(syncedSnapshotRef.current.maxPlayers),
+                    gameDuration: syncedSnapshotRef.current.gameDuration,
+                    bombCount: syncedSnapshotRef.current.bombCount,
+                    items: syncedSnapshotRef.current.items ?? [],
+                    link: syncedSnapshotRef.current.roomLink,
+                    ...updatedRoom,
+                });
+                if (sameEditorSnapshot(persistedSnapshot, syncedSnapshotRef.current)) return true;
                 const result = await updateRoomFromId(
                     updatedRoom,
                     editVersionRef.current,
@@ -584,13 +594,13 @@ export default function EditorClient({
                 }
 
                 editVersionRef.current = result.editVersion;
-                syncedSnapshotRef.current = snapshot;
+                syncedSnapshotRef.current = persistedSnapshot;
                 // Another edit may have happened while this save was in flight.
                 // Recheck the current form against the newly persisted baseline.
                 setSyncRevision((revision) => revision + 1);
-                if (roomLink !== savedRouteLinkRef.current) {
-                    savedRouteLinkRef.current = roomLink;
-                    router.replace("/" + roomLink + "/edit");
+                if (persistedSnapshot.roomLink !== savedRouteLinkRef.current) {
+                    savedRouteLinkRef.current = persistedSnapshot.roomLink;
+                    router.replace("/" + persistedSnapshot.roomLink + "/edit");
                 }
                 return true;
             } catch (error) {
