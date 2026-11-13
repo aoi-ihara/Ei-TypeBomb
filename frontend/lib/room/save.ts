@@ -1,5 +1,5 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { revalidateRoomLists } from "./revalidate";
 
 import { createAdminClient } from "@/lib/db/server";
 import { getSavedRoomIdsForUser } from "./list-queries";
@@ -38,6 +38,6 @@ export const toggleSavedRoom = async (
         };
     }
 
-    revalidatePath("/", "layout");
+    revalidateRoomLists();
     return { saved: data, error: null };
 };
