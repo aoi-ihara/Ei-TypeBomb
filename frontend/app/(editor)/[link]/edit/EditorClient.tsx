@@ -585,6 +585,9 @@ export default function EditorClient({
 
                 editVersionRef.current = result.editVersion;
                 syncedSnapshotRef.current = snapshot;
+                // Another edit may have happened while this save was in flight.
+                // Recheck the current form against the newly persisted baseline.
+                setSyncRevision((revision) => revision + 1);
                 if (roomLink !== savedRouteLinkRef.current) {
                     savedRouteLinkRef.current = roomLink;
                     router.replace("/" + roomLink + "/edit");
