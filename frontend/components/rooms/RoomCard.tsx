@@ -24,27 +24,20 @@ export default function RoomCard({
     eagerPrefetch?: boolean;
 }) {
     const router = useRouter();
-    const prefetchedLinkRef = useRef<string | null>(null);
+    const lastPrefetchRef = useRef<{ link: string; at: number } | null>(null);
     const articleRef = useRef<HTMLElement>(null);
     const [copied, setCopied] = useState(false);
     const roomLink = room.link ?? room.id;
 
     const prefetchOnIntent = useCallback(() => {
-        if (
-            room.visibility !== "public" ||
-            eagerPrefetch ||
-            prefetchedLinkRef.current === roomLink
-        ) return;
+        if (room.visibility !== "public" || eagerPrefetch) return;
+        // ETB currently keeps dynamic Router Cache entries for 30 seconds.
+        // Limit duplicate prefetches but allow a new one after expiry.
+        const last = lastPrefetchRef.current;
+        if (last?.link === roomLink && Date.now() - last.at < 25_000) return;
 
-        prefetchedLinkRef.current = roomLink;
-        router.prefetch(`/${roomLink}`, {
-            kind: "full",
-            onInvalidate: () => {
-                if (prefetchedLinkRef.current === roomLink) {
-                    prefetchedLinkRef.current = null;
-                }
-            },
-        });
+        lastPrefetchRef.current = { link: roomLink, at: Date.now() };
+        router.prefetch(`/${roomLink}`);
     }, [room.visibility, eagerPrefetch, roomLink, router]);
 
     // Preload rooms as they approach the viewport, paced across cards.
