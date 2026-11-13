@@ -13,7 +13,12 @@ import {
     type AnswerMode,
 } from "@/lib/answer-mode";
 import { PopUp } from "@/components/ui/PopUp";
-import { TurnstileChallenge } from "@/components/ui/TurnstileChallenge";
+import dynamic from "next/dynamic";
+
+// Turnstile is only needed when joining a password-protected room.
+const TurnstileChallenge = dynamic(() =>
+    import("@/components/ui/TurnstileChallenge").then((mod) => mod.TurnstileChallenge),
+);
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
 import { recordRoomPlay } from "@/lib/room/analytics";
