@@ -9,7 +9,7 @@ const PostHogEventTracker = dynamic(() => import("./PostHogEventTracker"), {
 
 /** Only load the DOM-observing tracker where its events can occur. */
 export default function RouteEventTracker() {
-    const pathname = usePathname();
+    const pathname = usePathname() ?? "";
     const isEditor = /^\/[^/]+\/edit$/.test(pathname);
     const isGame = /^\/[^/]+\/(offline|online)$/.test(pathname);
     if (!isEditor && !isGame) return null;
