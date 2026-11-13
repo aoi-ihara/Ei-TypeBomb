@@ -77,7 +77,7 @@ export const getRoomRouteFromLink = async (link: string) => {
 const ROOM_PAGE_COLUMNS =
     "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility";
 
-// React cache shares this result between generateMetadata and the page render.
+// Request-local deduplication for metadata/page; browser reuse is Next Router Cache.
 const getCachedRoomPageDataFromLink = cache(async (link: string) => {
     if (!link) return null;
 
@@ -211,6 +211,13 @@ let publicRoomsCache:
     | { rooms: Room[]; expiresAt: number; staleUntil: number }
     | null = null;
 let publicRoomsRequest: Promise<Room[]> | null = null;
+let publicRoomsGeneration = 0;
+
+export const invalidatePublicRooms = async () => {
+    publicRoomsGeneration++;
+    publicRoomsCache = null;
+    publicRoomsRequest = null;
+};
 
 // Return fresh objects so callers cannot mutate the process-wide cache.
 const clonePublicRooms = (rooms: Room[]): Room[] =>
@@ -227,6 +234,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         return clonePublicRooms(await publicRoomsRequest);
     }
 
+    const generation = publicRoomsGeneration;
     const request = (async (): Promise<Room[]> => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase.rpc(
@@ -275,14 +283,16 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         const rankedRooms = rankPublicRooms(rooms, statsByRoomId);
         const fetchedAt = Date.now();
 
-        publicRoomsCache = {
-            rooms: rankedRooms,
-            expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
-            staleUntil:
-                fetchedAt +
-                PUBLIC_ROOMS_CACHE_TTL_MS +
-                PUBLIC_ROOMS_STALE_IF_ERROR_MS,
-        };
+        if (generation === publicRoomsGeneration) {
+            publicRoomsCache = {
+                rooms: rankedRooms,
+                expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
+                staleUntil:
+                    fetchedAt +
+                    PUBLIC_ROOMS_CACHE_TTL_MS +
+                    PUBLIC_ROOMS_STALE_IF_ERROR_MS,
+            };
+        }
 
         return rankedRooms;
     })();
