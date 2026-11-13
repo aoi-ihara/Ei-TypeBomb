@@ -62,3 +62,19 @@ test("unchanged values and divergent room identities are handled explicitly", ()
     assert.equal(sameEditorSnapshot(base, { ...base }), true);
     assert.equal(rebaseEditorSnapshot(base, base, { ...base, roomId: "other" }), null);
 });
+
+test("equivalent snapshots compare equal regardless of insertion order", () => {
+    const base = snapshotFromRoom(initial);
+    const reordered = {
+        roomTitle: base.roomTitle,
+        roomExplanation: base.roomExplanation,
+        maxPlayers: base.maxPlayers,
+        gameDuration: base.gameDuration,
+        bombCount: base.bombCount,
+        items: base.items,
+        roomId: base.roomId,
+        roomLink: base.roomLink,
+    };
+    assert.equal(sameEditorSnapshot(base, reordered), true);
+    assert.equal(sameEditorSnapshot(reordered, base), true);
+});
