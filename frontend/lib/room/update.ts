@@ -1,4 +1,5 @@
 "use server";
+import { validRoomUpdate } from "./partial-update";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -29,6 +30,7 @@ export const updateRoomFromId = async (
     if (!Number.isSafeInteger(expectedEditVersion) || expectedEditVersion < 0) {
         return { status: "error", message: "ルームの更新番号が不正です。" };
     }
+    room = validRoomUpdate(room);
     const validationErrors: string[] = [];
     const updateData: Record<string, unknown> = {};
 
