@@ -16,7 +16,7 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { getRoomFromId, getRoomFromLink } from "@/lib/room/get";
 import {
     rebaseEditorSnapshot,
@@ -26,10 +26,7 @@ import {
 } from "@/lib/room/editor-rebase";
 import { validRoomUpdate } from "@/lib/room/partial-update";
 import { updateRoomFromId } from "@/lib/room/update";
-import {
-    parseImportedWords,
-    exportAnswerPairs,
-} from "@/lib/room/importWords";
+import { parseImportedWords, exportAnswerPairs } from "@/lib/room/importWords";
 import type { LegacyWord, Room, RoomVisibility, TypedRecallItem } from "@/type";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -53,15 +50,6 @@ import Header from "@/components/layout/Header";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
-
-const EXAMPLES = [
-    "高校1年生の定期テストの単語",
-    "大学受験でよく見る英単語",
-    "英語のニュースでよく使われる単語",
-    "日常会話でよく使う英単語",
-    "入国審査で言われそうな単語",
-    "ホテルで使いそうな英単語",
-];
 
 function SortableItem({
     id,
@@ -233,7 +221,7 @@ export default function EditorClient({
         roomLink,
     ]);
 
-    const applyEditorSnapshot = (snapshot: EditorSnapshot) => {
+    const applyEditorSnapshot = useCallback((snapshot: EditorSnapshot) => {
         roomDataRef.current = snapshot;
         setRoomTitle(snapshot.roomTitle);
         setRoomExplanation(snapshot.roomExplanation);
@@ -242,7 +230,7 @@ export default function EditorClient({
         setBombCount(snapshot.bombCount);
         setItems(snapshot.items);
         setRoomLink(snapshot.roomLink);
-    };
+    }, []);
 
     const applyLatestRoom = (room: Room) => {
         const latest = snapshotFromRoom(room);
@@ -255,7 +243,7 @@ export default function EditorClient({
         isLoadedRef.current = true;
     };
 
-    const refreshRoomData = async (): Promise<boolean> => {
+    const refreshRoomData = useCallback(async (): Promise<boolean> => {
         const refreshSequence = ++refreshSequenceRef.current;
         ++saveGenerationRef.current;
         isLoadedRef.current = false;
@@ -308,25 +296,27 @@ export default function EditorClient({
             );
             return false;
         }
-    };
+    }, [roomId, applyEditorSnapshot]);
 
     useEffect(() => {
-        void refreshRoomData();
+        const refreshSequence = refreshSequenceRef;
+        queueMicrotask(() => void refreshRoomData());
         const onPageShow = (event: PageTransitionEvent) => {
             if (event.persisted) void refreshRoomData();
         };
         const onPopState = () => {
             // Also cover client-side history navigation where pageshow is not fired.
-            if (window.location.pathname.endsWith("/edit")) void refreshRoomData();
+            if (window.location.pathname.endsWith("/edit"))
+                void refreshRoomData();
         };
         window.addEventListener("pageshow", onPageShow);
         window.addEventListener("popstate", onPopState);
         return () => {
-            ++refreshSequenceRef.current;
+            ++refreshSequence.current;
             window.removeEventListener("pageshow", onPageShow);
             window.removeEventListener("popstate", onPopState);
         };
-    }, [roomId]);
+    }, [refreshRoomData]);
 
     const itemListRef = useRef<HTMLDivElement | null>(null);
 
@@ -452,7 +442,9 @@ export default function EditorClient({
         const shouldSetPassword = isPrivate && Boolean(newPassword.trim());
 
         if (isPrivate && roomVisibility !== "private" && !shouldSetPassword) {
-            setVisibilityError("非公開にするにはパスワードを入力してください。");
+            setVisibilityError(
+                "非公開にするにはパスワードを入力してください。",
+            );
             return;
         }
 
@@ -521,7 +513,7 @@ export default function EditorClient({
         }
     };
 
-    const saveRoomData = (): Promise<boolean> => {
+    const saveRoomData = useCallback((): Promise<boolean> => {
         const snapshot = { ...roomDataRef.current };
         const generation = saveGenerationRef.current;
         const attempt = saveQueueRef.current.then(async () => {
@@ -549,7 +541,10 @@ export default function EditorClient({
                 const existingRoomId = validateLink(roomLink)
                     ? null
                     : await getRoomFromLink(roomLink);
-                if (!isLoadedRef.current || generation !== saveGenerationRef.current) {
+                if (
+                    !isLoadedRef.current ||
+                    generation !== saveGenerationRef.current
+                ) {
                     return false;
                 }
 
@@ -561,7 +556,10 @@ export default function EditorClient({
                     gameDuration: Number(gameDuration),
                     bombCount,
                     items,
-                    link: existingRoomId && existingRoomId !== roomId ? undefined : roomLink,
+                    link:
+                        existingRoomId && existingRoomId !== roomId
+                            ? undefined
+                            : roomLink,
                 });
                 const persistedSnapshot = snapshotFromRoom({
                     title: syncedSnapshotRef.current.roomTitle,
@@ -573,7 +571,13 @@ export default function EditorClient({
                     link: syncedSnapshotRef.current.roomLink,
                     ...updatedRoom,
                 });
-                if (sameEditorSnapshot(persistedSnapshot, syncedSnapshotRef.current)) return true;
+                if (
+                    sameEditorSnapshot(
+                        persistedSnapshot,
+                        syncedSnapshotRef.current,
+                    )
+                )
+                    return true;
                 const result = await updateRoomFromId(
                     updatedRoom,
                     editVersionRef.current,
@@ -613,7 +617,7 @@ export default function EditorClient({
             () => {},
         );
         return attempt;
-    };
+    }, [refreshRoomData, router]);
 
     const handlePlay = async () => {
         startNavigationProgress();
@@ -626,7 +630,8 @@ export default function EditorClient({
             !roomId ||
             items === null ||
             sameEditorSnapshot(roomDataRef.current, syncedSnapshotRef.current)
-        ) return;
+        )
+            return;
 
         if (saveTimerRef.current) {
             clearTimeout(saveTimerRef.current);
@@ -660,6 +665,7 @@ export default function EditorClient({
         roomId,
         roomLink,
         syncRevision,
+        saveRoomData,
     ]);
 
     useEffect(() => {
@@ -685,12 +691,16 @@ export default function EditorClient({
                     size="large"
                 >
                     {editorSyncError && (
-                        <div className="flex items-center gap-3 text-sm text-red-500" role="alert">
+                        <div
+                            className="flex items-center gap-3 text-sm text-red-500"
+                            role="alert"
+                        >
                             <span data-cursor="text">{editorSyncError}</span>
                             <Button
                                 padding="small"
                                 onClick={() => {
-                                    const pending = pendingLatestRoomRef.current;
+                                    const pending =
+                                        pendingLatestRoomRef.current;
                                     if (pending) {
                                         ++saveGenerationRef.current;
                                         applyLatestRoom(pending);
@@ -1166,28 +1176,6 @@ export default function EditorClient({
                                         padding="large"
                                     />
                                 </div>
-
-                                {!generationPrompt &&
-                                    !generatedWords.length && (
-                                        <div className="grid animate-appear gap-4 grid-cols-[repeat(auto-fit,minmax(256px,1fr))] w-full">
-                                            {EXAMPLES.map((example, index) => (
-                                                <Button
-                                                    iconName="plus"
-                                                    onClick={() =>
-                                                        setGenerationPrompt(
-                                                            example,
-                                                        )
-                                                    }
-                                                    className="w-full flex"
-                                                    padding="small"
-                                                    alignment="left"
-                                                    key={index}
-                                                >
-                                                    {example}
-                                                </Button>
-                                            ))}
-                                        </div>
-                                    )}
 
                                 {generatedWords.length !== 0 && (
                                     <div
