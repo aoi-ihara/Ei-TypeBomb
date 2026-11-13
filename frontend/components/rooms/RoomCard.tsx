@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import { Icon } from "@/components/ui/Icon";
@@ -13,14 +14,24 @@ export default function RoomCard({
     isOwner = false,
     isSaved = false,
     onToggleSaved,
+    eagerPrefetch = false,
 }: {
     room: Room;
     isOwner?: boolean;
     isSaved?: boolean;
     onToggleSaved?: () => void;
+    eagerPrefetch?: boolean;
 }) {
+    const router = useRouter();
+    const hoveredPrefetchRef = useRef(false);
     const [copied, setCopied] = useState(false);
     const roomLink = room.link ?? room.id;
+
+    const prefetchOnIntent = () => {
+        if (room.visibility !== "public" || eagerPrefetch || hoveredPrefetchRef.current) return;
+        hoveredPrefetchRef.current = true;
+        router.prefetch(`/${roomLink}`);
+    };
 
     const copyRoomLink = async () => {
         try {
@@ -47,7 +58,9 @@ export default function RoomCard({
                         posthog.capture("play_clicked", { room_id: room.id });
                     }}
                     onNavigate={() => startNavigationProgress()}
-                    prefetch={room.visibility === "public" ? true : undefined}
+                    prefetch={room.visibility === "public" && eagerPrefetch}
+                    onMouseEnter={prefetchOnIntent}
+                    onFocus={prefetchOnIntent}
                     href={`/${roomLink}`}
                 >
                     <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
@@ -108,12 +121,14 @@ export default function RoomCard({
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     href={`/${roomLink}`}
+                    prefetch={room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"
                     padding="middle"
                 />
                 <Button
                     href={`/${roomLink}/edit`}
+                    prefetch={false}
                     iconName="pen"
                     variant="text"
                     padding="middle"
