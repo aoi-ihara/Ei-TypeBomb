@@ -162,6 +162,7 @@ export default function EditorClient({
     const refreshSequenceRef = useRef(0);
     const saveGenerationRef = useRef(0);
     const [editorSyncError, setEditorSyncError] = useState("");
+    const [syncRevision, setSyncRevision] = useState(0);
     const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const maxSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -294,6 +295,9 @@ export default function EditorClient({
             setRoomVisibility(latest.visibility ?? "unlisted");
             applyEditorSnapshot(merged);
             isLoadedRef.current = true;
+            // Re-evaluate auto-save even if the user edited while the refresh
+            // was pending and the merged field references did not change.
+            setSyncRevision((revision) => revision + 1);
             return true;
         } catch (error) {
             if (refreshSequence !== refreshSequenceRef.current) return false;
@@ -642,6 +646,7 @@ export default function EditorClient({
         items,
         roomId,
         roomLink,
+        syncRevision,
     ]);
 
     useEffect(() => {
