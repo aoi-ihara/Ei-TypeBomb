@@ -78,9 +78,7 @@ export default function RootLayout({
                         </div>
                     </main>
 
-                    <div className="hidden md:block">
-                        <Cursor />
-                    </div>
+                    <Cursor />
 
                     <Analytics />
 

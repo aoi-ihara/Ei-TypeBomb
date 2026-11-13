@@ -1,4 +1,5 @@
 "use server";
+import { validRoomUpdate } from "./partial-update";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -17,7 +18,19 @@ import {
     validateItems,
 } from "../auth/validator";
 
-export const updateRoomFromId = async (room: Room) => {
+export type RoomUpdateResult =
+    | { status: "saved"; editVersion: number }
+    | { status: "conflict" }
+    | { status: "error"; message: string };
+
+export const updateRoomFromId = async (
+    room: Room,
+    expectedEditVersion: number,
+): Promise<RoomUpdateResult> => {
+    if (!Number.isSafeInteger(expectedEditVersion) || expectedEditVersion < 0) {
+        return { status: "error", message: "ルームの更新番号が不正です。" };
+    }
+    room = validRoomUpdate(room);
     const validationErrors: string[] = [];
     const updateData: Record<string, unknown> = {};
 
@@ -108,11 +121,11 @@ export const updateRoomFromId = async (room: Room) => {
     if (shouldUpdatePassword) updateData.password = newHashedPassword;
 
     if (validationErrors.length > 0) {
-        return validationErrors.join("\n");
+        return { status: "error", message: validationErrors.join("\n") };
     }
 
     if (Object.keys(updateData).length === 0) {
-        return null;
+        return { status: "saved", editVersion: expectedEditVersion };
     }
 
     const userId = await getUser();
@@ -126,20 +139,34 @@ export const updateRoomFromId = async (room: Room) => {
         .update(updateData)
         .eq("id", room.id)
         .eq("user_id", userId)
-        .select("id")
+        .eq("edit_version", expectedEditVersion)
+        .select("id, edit_version")
         .maybeSingle();
 
     if (updateError) {
         console.error(updateError);
         if (updateError.code === "23505") {
-            return "このリンクはすでに使用されています。";
+            return { status: "error", message: "このリンクはすでに使用されています。" };
         }
         if (updateError.code === "23514") {
-            return "公開設定とパスワードの組み合わせが正しくありません。";
+            return { status: "error", message: "公開設定とパスワードの組み合わせが正しくありません。" };
         }
-        return "ルームを保存できませんでした。もう一度お試しください。";
+        return { status: "error", message: "ルームを保存できませんでした。もう一度お試しください。" };
     }
-    if (!data) return "ルームが見つからないか、アクセス権限がありません。";
+    if (!data) {
+        const { data: existing, error: lookupError } = await supabase
+            .from("ei_typebomb_rooms")
+            .select("id")
+            .eq("id", room.id)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+        if (!lookupError && existing) return { status: "conflict" };
+        return {
+            status: "error",
+            message: "ルームが見つからないか、アクセス権限がありません。",
+        };
+    }
 
     const posthog = getPostHogClient();
     posthog.capture({
@@ -149,5 +176,5 @@ export const updateRoomFromId = async (room: Room) => {
     });
     await posthog.shutdown();
 
-    return validationErrors.length > 0 ? validationErrors.join("\n") : null;
+    return { status: "saved", editVersion: data.edit_version };
 };

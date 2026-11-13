@@ -39,6 +39,7 @@ export type Room = {
     password?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    editVersion?: number;
     link?: string;
     revision?: number;
     bombs?: GameBomb[];
