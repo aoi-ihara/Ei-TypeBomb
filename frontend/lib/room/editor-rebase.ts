@@ -38,7 +38,12 @@ export function sameEditorSnapshot(
     first: EditorSnapshot,
     second: EditorSnapshot,
 ): boolean {
-    return JSON.stringify(first) === JSON.stringify(second);
+    return (
+        first.roomId === second.roomId &&
+        EDITABLE_FIELDS.every(
+            (key) => JSON.stringify(first[key]) === JSON.stringify(second[key]),
+        )
+    );
 }
 
 /**
