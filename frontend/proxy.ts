@@ -24,7 +24,9 @@ export async function proxy(request: NextRequest) {
             },
         },
     );
-    await client.auth.getUser();
+    // Verify locally when the project uses asymmetric JWTs; refresh tokens via SSR cookies.
+    // Ownership checks and privileged writes still use a fresh getUser() on the server.
+    await client.auth.getClaims();
     return response;
 }
 
