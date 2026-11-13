@@ -156,7 +156,7 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
         // Viewing a room does not imply that the visitor is signed in.
         isSignedIn: userId !== null,
         isOwner,
-        room:
+        room,
         itemCount: canViewDetails ? items.length : 0,
     };
 });
