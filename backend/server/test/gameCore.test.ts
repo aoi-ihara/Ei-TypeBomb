@@ -189,7 +189,7 @@ for (const [runtime, rules] of [
                     type: "broadcast",
                     packet: {
                         event: "typing:input",
-                        data: { input: "x".repeat(32), playerId: "a", focusPlayerId: "a", hintLength: 0 },
+                        data: { input: "x".repeat(40), playerId: "a", focusPlayerId: "a", hintLength: 0 },
                     },
                 },
             ],
