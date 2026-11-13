@@ -38,6 +38,7 @@ export default function RoomCard({
 
         prefetchedLinkRef.current = roomLink;
         router.prefetch(`/${roomLink}`, {
+            kind: "full",
             onInvalidate: () => {
                 if (prefetchedLinkRef.current === roomLink) {
                     prefetchedLinkRef.current = null;
