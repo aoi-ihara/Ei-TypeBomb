@@ -32,7 +32,7 @@ export default async function RoomPage({
 
     if (!result.room) notFound();
 
-    const { room, itemCount, isOwner, authorized } = result;
+    const { room, itemCount, isOwner, authorized, isSignedIn } = result;
     const title = room.title || "ルーム";
     const items = room.items ?? [];
     const hasTypingAnswers = items.some((item) =>
@@ -44,7 +44,7 @@ export default async function RoomPage({
             <Header />
 
             <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
-                <RoomNavigation isSignedIn={authorized} />
+                <RoomNavigation isSignedIn={isSignedIn} />
                 <Shell
                     title={title}
                     className="grid lg:grid-cols-2 gap-4 px-4"

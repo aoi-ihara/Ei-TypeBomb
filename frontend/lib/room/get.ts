@@ -153,6 +153,8 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
         visibility: data.visibility,
         requiresPassword,
         authorized,
+        // Viewing a room does not imply that the visitor is signed in.
+        isSignedIn: userId !== null,
         isOwner,
         room,
         itemCount: canViewDetails ? items.length : 0,
