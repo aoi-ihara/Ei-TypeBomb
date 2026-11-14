@@ -3,7 +3,7 @@ export type LegacyWord = {
     en: string;
 };
 
-export type View = "recommended" | "mine" | "saved";
+export type View = "recommended" | "latest" | "mine" | "saved";
 
 export type TypedRecallItem = {
     id: string;

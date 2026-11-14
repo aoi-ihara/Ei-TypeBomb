@@ -20,6 +20,15 @@ export const selectRoomsForView = ({
     savedRoomIds,
     currentUserId,
 }: RoomListViewInput): Room[] => {
+    if (view === "latest") {
+        return publicRooms
+            .filter((room) => room.visibility === "public")
+            .sort((a, b) =>
+                new Date(b.createdAt ?? 0).getTime() -
+                new Date(a.createdAt ?? 0).getTime(),
+            );
+    }
+
     if (view === "mine") {
         return [...myRooms].sort(
             (a, b) =>

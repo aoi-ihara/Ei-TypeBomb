@@ -24,6 +24,12 @@ export default function RoomNavigation({
                   iconName: "wandSparkles",
               },
               {
+                  value: "latest",
+                  label: "最新",
+                  url: "/?filter=latest",
+                  iconName: "clock",
+              },
+              {
                   value: "mine",
                   label: "自分のルーム",
                   url: "/mine",
@@ -42,6 +48,12 @@ export default function RoomNavigation({
                   label: "おすすめ",
                   url: "/",
                   iconName: "wandSparkles",
+              },
+              {
+                  value: "latest",
+                  label: "最新",
+                  url: "/?filter=latest",
+                  iconName: "clock",
               },
           ];
 
