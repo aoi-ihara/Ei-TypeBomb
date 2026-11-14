@@ -1,4 +1,5 @@
 "use server";
+import { prepareRoomUpdate } from "./prepare-update";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
 import { validRoomUpdate } from "./partial-update";
@@ -136,6 +137,10 @@ export const updateRoomFromId = async (
     updateData.updated_at = new Date();
 
     const supabase = await createAdminClient();
+    const prepared = await prepareRoomUpdate(supabase, room.id, userId, room.items, expectedEditVersion);
+    if (prepared.status === "conflict") return { status: "conflict" };
+    if (prepared.status === "error") return { status: "error", message: "ルームを取得できませんでした。" };
+    updateData.items = prepared.items;
     const { data, error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update(updateData)

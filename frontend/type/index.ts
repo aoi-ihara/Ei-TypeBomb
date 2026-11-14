@@ -10,6 +10,8 @@ export type TypedRecallItem = {
     type: "typed_recall";
     prompt: string;
     answer: string;
+    readings?: string[];
+    reading_version?: number;
 };
 
 export type Item = TypedRecallItem;
