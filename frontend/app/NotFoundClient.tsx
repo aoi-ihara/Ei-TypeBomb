@@ -39,7 +39,10 @@ export default function NotFoundClient() {
             <Button
                 className="w-full"
                 variant="primary"
-                onClick={() => { startNavigationProgress(); router.push("/"); }}
+                onClick={() => {
+                    startNavigationProgress();
+                    router.push("/");
+                }}
             >
                 ホームに戻る
             </Button>

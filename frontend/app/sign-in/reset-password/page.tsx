@@ -1,4 +1,3 @@
-import Header from "@/components/layout/Header";
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import AuthForm from "@/components/account/AuthForm";
@@ -9,23 +8,18 @@ export default async function Page({
     searchParams: Promise<{ update?: string; error?: string }>;
 }) {
     const params = await searchParams;
-    const update =
-        params.update === "true" &&
-        Boolean(await getUser());
+    const update = params.update === "true" && Boolean(await getUser());
     return (
-        <>
-            <Header />
-            <Shell title="パスワードをリセット">
-                {params.error && (
-                    <p role="alert">
-                        リンクが無効か、有効期限が切れています。再設定メールを送り直してください。
-                    </p>
-                )}
-                <AuthForm mode={update ? "password" : "recovery"} />
-                <Button href="/sign-in" variant="text" iconName="logIn">
-                    サインイン
-                </Button>
-            </Shell>
-        </>
+        <Shell title="パスワードをリセット">
+            {params.error && (
+                <p role="alert">
+                    リンクが無効か、有効期限が切れています。再設定メールを送り直してください。
+                </p>
+            )}
+            <AuthForm mode={update ? "password" : "recovery"} />
+            <Button href="/sign-in" variant="text" iconName="logIn">
+                サインイン
+            </Button>
+        </Shell>
     );
 }

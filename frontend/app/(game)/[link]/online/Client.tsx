@@ -1,6 +1,6 @@
 "use client";
-import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";

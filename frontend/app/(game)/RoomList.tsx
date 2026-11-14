@@ -14,7 +14,6 @@ import posthog from "posthog-js";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
-import Header from "@/components/layout/Header";
 import { View } from "@/type";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
 import { selectRoomsForView } from "@/lib/room/list-view";
@@ -196,9 +195,12 @@ export default function RoomList({
         "おすすめ";
 
     return (
-        <>
-            <Header>
-                {currentUser ? (
+        <Shell
+            sidebar={
+                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
+            }
+            header={
+                currentUser ? (
                     <Menu
                         name="ユーザーアクション"
                         button={
@@ -232,52 +234,49 @@ export default function RoomList({
                     >
                         サインイン
                     </Button>
-                )}
-            </Header>
-
-            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
-                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
-                <Shell size="large" title={viewTitle}>
-                    <div className="flex w-full items-center justify-between gap-4">
-                        <Input
-                            value={keyword}
-                            onChange={(event) => setKeyword(event.target.value)}
-                            label="ルームを検索"
-                            autoComplete="off"
-                        />
-                        <Button
-                            onClick={addRoom}
-                            loading={creating}
-                            padding="large"
-                            variant="primary"
-                            iconName="plus"
-                            className="w-fit shrink-0"
-                        >
-                            新規作成
-                        </Button>
-                    </div>
-
-                    {createError && (
-                        <p className="text-red-500" role="alert">
-                            {createError}
-                        </p>
-                    )}
-
-                    {filteredRooms.length > 0 ? (
-                        <RoomGrid
-                            key={view + ":" + deferredKeyword}
-                            rooms={filteredRooms}
-                            ownedIds={myRoomIds}
-                            savedIds={savedRoomIds}
-                            onToggleSaved={
-                                currentUser ? toggleSavedRoomState : undefined
-                            }
-                        />
-                    ) : (
-                        <div>ルームが見つかりません。</div>
-                    )}
-                </Shell>
+                )
+            }
+            size="large"
+            title={viewTitle}
+        >
+            <div className="flex w-full items-center justify-between gap-4">
+                <Input
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                    label="ルームを検索"
+                    autoComplete="off"
+                />
+                <Button
+                    onClick={addRoom}
+                    loading={creating}
+                    padding="large"
+                    variant="primary"
+                    iconName="plus"
+                    className="w-fit shrink-0"
+                >
+                    新規作成
+                </Button>
             </div>
-        </>
+
+            {createError && (
+                <p className="text-red-500" role="alert">
+                    {createError}
+                </p>
+            )}
+
+            {filteredRooms.length > 0 ? (
+                <RoomGrid
+                    key={view + ":" + deferredKeyword}
+                    rooms={filteredRooms}
+                    ownedIds={myRoomIds}
+                    savedIds={savedRoomIds}
+                    onToggleSaved={
+                        currentUser ? toggleSavedRoomState : undefined
+                    }
+                />
+            ) : (
+                <div>ルームが見つかりません。</div>
+            )}
+        </Shell>
     );
 }

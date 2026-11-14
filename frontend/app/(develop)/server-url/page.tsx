@@ -53,8 +53,6 @@ export default function ServerUrl() {
     const setServerConfig = (value: string) => {
         setDraft(value);
         setStorageError("");
-        // Keep the last valid config in use while the user is editing JSON.
-        // Once the draft is valid, immediately apply it to subsequent connections.
         if (value.trim()) {
             try {
                 parseETBClusterConfig(value);
