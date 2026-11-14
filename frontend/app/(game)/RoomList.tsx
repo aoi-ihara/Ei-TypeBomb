@@ -61,6 +61,12 @@ export default function RoomList({
                   iconName: "wandSparkles",
               },
               {
+                  value: "latest",
+                  label: "最新",
+                  url: "/latest",
+                  iconName: "clock",
+              },
+              {
                   value: "mine",
                   label: "自分のルーム",
                   url: "/mine",
@@ -79,6 +85,12 @@ export default function RoomList({
                   label: "おすすめ",
                   url: "/",
                   iconName: "wandSparkles",
+              },
+              {
+                  value: "latest",
+                  label: "最新",
+                  url: "/latest",
+                  iconName: "clock",
               },
           ];
 
