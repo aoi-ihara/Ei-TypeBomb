@@ -6,7 +6,7 @@ import PlayRoom from "./PlayRoom";
 import RoomPasswordGate from "./RoomPasswordGate";
 import RoomShareActions from "./RoomShareActions";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
-import { isAllowedTypingAnswer } from "@/lib/room/importWords";
+import { getTypingAnswer } from "@/lib/answer-mode";
 
 export default async function RoomPage({
     params,
@@ -33,8 +33,8 @@ export default async function RoomPage({
     const { room, itemCount, isOwner, isSignedIn } = result;
     const title = room.title || "ルーム";
     const items = room.items ?? [];
-    const hasTypingAnswers = items.some((item) =>
-        isAllowedTypingAnswer(item.answer),
+    const hasTypingAnswers = items.some(
+        (item) => getTypingAnswer(item) !== null,
     );
 
     return (

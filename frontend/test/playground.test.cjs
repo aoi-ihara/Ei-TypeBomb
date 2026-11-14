@@ -1153,6 +1153,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             exposureGapAtStartRef: ref(null),
             predictedRetrievabilityAtPromptRef: ref(null),
             expectedTypingAtStartRef: ref(0),
+            getTypingAnswer: require("../../backend/shared/typing-answer.cjs").getTypingAnswer,
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),
             memoryPersistenceDisabledRef: ref(false),

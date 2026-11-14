@@ -24,7 +24,8 @@ const load = (file, globals) =>
     evaluate(fs.readFileSync(path.join(root, file), "utf8"), globals);
 const hints = load("lib/playground/automatic-hint-evidence.ts");
 const input = load("lib/playground/recall-input.ts");
-const romaji = load("lib/romaji-input.mjs");
+const typing = require("../../backend/shared/typing-answer.cjs");
+const romaji = load("lib/romaji-input.mjs", { require: () => typing });
 const memory = load("lib/playground/memory.ts");
 const scheduler = load("lib/playground/scheduler.ts", {
     require: () => memory,
@@ -329,6 +330,17 @@ test("successive hints count used exposures once and never count an already reca
     assert.equal(o.finalCueRatio, 0.3);
     assert.equal(o.hintCount, 2);
     assert.equal(o.additionalHintCount, 2);
+});
+
+test("generated readings determine the hint and completion lengths", () => {
+    const answer = typing.getTypingAnswer({ answer: "学校", readings: ["がっこう"] });
+    const a = attempt(answer, { steps: [1] });
+    a.commit("が");
+    a.hint();
+    a.commit("っこう");
+    const observation = a.observations[0];
+    assert.equal(observation.revealedHintChars, 4);
+    assert.equal(observation.answerLength, 4);
 });
 
 test("kana multi-cell commits and out-of-order correct cells retain independent credit", () => {

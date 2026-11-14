@@ -9,7 +9,7 @@ import MorphDialog from "@/components/ui/MorphDialog";
 import Selection from "@/components/ui/Selection";
 import {
     getAnswerModeOptions,
-    isAnswerMode,
+    normalizeAnswerMode,
     type AnswerMode,
 } from "@/lib/answer-mode";
 import { PopUp } from "@/components/ui/PopUp";
@@ -17,7 +17,9 @@ import dynamic from "next/dynamic";
 
 // Turnstile is only needed when joining a password-protected room.
 const TurnstileChallenge = dynamic(() =>
-    import("@/components/ui/TurnstileChallenge").then((mod) => mod.TurnstileChallenge),
+    import("@/components/ui/TurnstileChallenge").then(
+        (mod) => mod.TurnstileChallenge,
+    ),
 );
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
@@ -50,7 +52,7 @@ export default function PlayRoom({
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
-    const [answerMode, setAnswerMode] = useState<AnswerMode>("auto");
+    const [answerMode, setAnswerMode] = useState<AnswerMode>("selection");
 
     const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
     const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
@@ -65,7 +67,7 @@ export default function PlayRoom({
     const [turnstile, setTurnstile] = useState(false);
     const [turnstileMode, setTurnstileMode] = useState<PlayMode | null>(null);
     const [turnstileAnswerMode, setTurnstileAnswerMode] =
-        useState<AnswerMode>("auto");
+        useState<AnswerMode>("selection");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -208,10 +210,19 @@ export default function PlayRoom({
                             setError("");
                             try {
                                 setDisplayName(
-                                    (localStorage.getItem("display-name") ?? "").slice(0, 50),
+                                    (
+                                        localStorage.getItem("display-name") ??
+                                        ""
+                                    ).slice(0, 50),
                                 );
-                                const saved = localStorage.getItem("answer-mode");
-                                if (isAnswerMode(saved)) setAnswerMode(saved);
+                                const saved =
+                                    localStorage.getItem("answer-mode");
+                                setAnswerMode(
+                                    normalizeAnswerMode(
+                                        saved,
+                                        hasTypingAnswers,
+                                    ),
+                                );
                             } catch {
                                 // The dialog remains usable when browser storage is unavailable.
                             }

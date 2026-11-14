@@ -262,9 +262,9 @@ const reconcileOnlineSchedulerItem = (
         if (
             selected.advancesCycle &&
             !scheduler.cycleQueue.includes(selected.itemId)
-        ) scheduler.cycleQueue.unshift(selected.itemId);
-        if (selected.retry)
-            scheduler.retries[selected.itemId] = selected.retry;
+        )
+            scheduler.cycleQueue.unshift(selected.itemId);
+        if (selected.retry) scheduler.retries[selected.itemId] = selected.retry;
     } else {
         scheduler.turn++;
     }

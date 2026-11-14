@@ -94,11 +94,6 @@ export default function RoomList({
               },
           ];
 
-    const myRoomIds = useMemo(
-        () => new Set(myRooms.map((room) => room.id)),
-        [myRooms],
-    );
-
     const roomsInView = useMemo(
         () =>
             selectRoomsForView({
@@ -280,7 +275,6 @@ export default function RoomList({
                 <RoomGrid
                     key={view + ":" + deferredKeyword}
                     rooms={filteredRooms}
-                    ownedIds={myRoomIds}
                     savedIds={savedRoomIds}
                     onToggleSaved={
                         currentUser ? toggleSavedRoomState : undefined

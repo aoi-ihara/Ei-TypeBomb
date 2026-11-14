@@ -9,12 +9,10 @@ const PAGE_SIZE = 24;
 
 export default function RoomGrid({
     rooms,
-    ownedIds,
     savedIds,
     onToggleSaved,
 }: {
     rooms: Room[];
-    ownedIds: Set<string>;
     savedIds: string[];
     onToggleSaved?: (roomId: string) => void;
 }) {
@@ -24,12 +22,19 @@ export default function RoomGrid({
 
     useEffect(() => {
         const sentinel = sentinelRef.current;
-        if (!sentinel || !hasMore || typeof IntersectionObserver === "undefined") return;
+        if (
+            !sentinel ||
+            !hasMore ||
+            typeof IntersectionObserver === "undefined"
+        )
+            return;
 
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting) {
-                    setRenderCount((count) => Math.min(count + PAGE_SIZE, rooms.length));
+                    setRenderCount((count) =>
+                        Math.min(count + PAGE_SIZE, rooms.length),
+                    );
                 }
             },
             { rootMargin: "400px" },
@@ -45,11 +50,12 @@ export default function RoomGrid({
                     <RoomCard
                         key={room.id}
                         room={room}
-                        isOwner={ownedIds.has(room.id)}
                         isSaved={savedIds.includes(room.id)}
                         eagerPrefetch={index < 2}
                         onToggleSaved={
-                            onToggleSaved ? () => onToggleSaved(room.id) : undefined
+                            onToggleSaved
+                                ? () => onToggleSaved(room.id)
+                                : undefined
                         }
                     />
                 ))}
@@ -58,7 +64,11 @@ export default function RoomGrid({
                 <div ref={sentinelRef} className="flex justify-center py-6">
                     <Button
                         variant="text"
-                        onClick={() => setRenderCount((count) => Math.min(count + PAGE_SIZE, rooms.length))}
+                        onClick={() =>
+                            setRenderCount((count) =>
+                                Math.min(count + PAGE_SIZE, rooms.length),
+                            )
+                        }
                     >
                         さらに表示
                     </Button>

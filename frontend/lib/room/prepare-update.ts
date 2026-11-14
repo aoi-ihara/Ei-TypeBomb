@@ -9,10 +9,17 @@ export async function prepareRoomUpdate(
     items?: Item[],
     expectedVersion?: number,
 ) {
-    const { data, error } = await db.from("ei_typebomb_rooms")
-        .select("items, edit_version").eq("id", id).eq("user_id", userId).maybeSingle();
+    const { data, error } = await db
+        .from("ei_typebomb_rooms")
+        .select("items, edit_version")
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle();
     if (error || !data) return { status: "error" } as const;
-    if (expectedVersion !== undefined && data.edit_version !== expectedVersion) {
+    if (
+        expectedVersion !== undefined &&
+        data.edit_version !== expectedVersion
+    ) {
         return { status: "conflict" } as const;
     }
     const stored = data.items ?? [];

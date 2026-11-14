@@ -46,10 +46,7 @@ export const rankPublicRooms = <T extends RecommendableRoom>(
         .map((room) => {
             const stats = statsByRoomId.get(room.id);
             const playCount = Math.max(0, stats?.playCount ?? 0);
-            const recentPlayCount = Math.max(
-                0,
-                stats?.recentPlayCount ?? 0,
-            );
+            const recentPlayCount = Math.max(0, stats?.recentPlayCount ?? 0);
             const saveCount = Math.max(0, stats?.saveCount ?? 0);
 
             const createdAt = room.createdAt
@@ -60,8 +57,7 @@ export const rankPublicRooms = <T extends RecommendableRoom>(
                 : 30;
 
             const popularityScore =
-                Math.log1p(playCount) * 2.5 +
-                Math.log1p(saveCount) * 5;
+                Math.log1p(playCount) * 2.5 + Math.log1p(saveCount) * 5;
             const activityScore = Math.log1p(recentPlayCount) * 4;
             const freshnessScore = 8 * Math.exp(-ageDays / 14);
             const itemCount = Math.max(0, room.itemCount ?? 0);

@@ -30,6 +30,15 @@ const finishBomb = (state: GameState, id: string) => {
     return current;
 };
 
+test("hint limit uses the first typing reading", () => {
+    const state = started(2);
+    state.room.items[0] = { ...state.room.items[0], answer: "学校", readings: ["がっこう"] };
+    const playerId = state.room.users[state.room.bombs![0].holder].id;
+    const hint = apply(state, { type: "hint:update", playerId, length: 4 });
+    assert.equal(hint.state.room.bombs?.[0].hintLength, 4);
+    assert.equal(apply(state, { type: "hint:update", playerId, length: 5 }).state, state);
+});
+
 test("hint visibility is scoped to active bomb holders", () => {
     let state = started(5);
     const [one, two] = state.room.bombs!;

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
 import type { Item, LegacyWord } from "@/type";
+import { getTypingAnswer } from "@/lib/answer-mode";
 import { legacyWireWordsToItems } from "@/lib/item";
 import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import { decodeKanaProgress, hasHiragana } from "@/lib/romaji-input.mjs";
@@ -80,25 +81,26 @@ export default function TypingSyncOverlay({
         return items[room.wordIndex] ?? null;
     }, [room]);
 
+    const typingAnswer = currentItem && getTypingAnswer(currentItem);
     const shouldShow = Boolean(
         room?.isStart &&
         currentItem?.type === "typed_recall" &&
-        currentItem.answer &&
+        typingAnswer &&
         currentUser?.id &&
         currentUser.id !== userId &&
         currentInput,
     );
 
-    if (!shouldShow || currentItem?.type !== "typed_recall") return null;
-    const kanaProgress = decodeKanaProgress(currentItem.answer, currentInput);
+    if (!shouldShow || !typingAnswer) return null;
+    const kanaProgress = decodeKanaProgress(typingAnswer, currentInput);
 
     return (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4 md:left-1/2 md:w-1/2 md:translate-x-0">
             <div className="w-fit max-w-full rounded-lg border border-(--color-border) bg-(--color-background-secondary) p-1 shadow-sm">
                 <div className="flex flex-wrap gap-y-3">
-                    {hasHiragana(currentItem.answer) ? (
+                    {hasHiragana(typingAnswer) ? (
                         <KanaTypingBoxes
-                            answer={currentItem.answer}
+                            answer={typingAnswer}
                             confirmed={kanaProgress.committed}
                             composing={kanaProgress.composing}
                             hintLength={hintLength}
@@ -106,7 +108,7 @@ export default function TypingSyncOverlay({
                             readonly
                         />
                     ) : (
-                        [...currentItem.answer].map((char, index) => (
+                        [...typingAnswer].map((char, index) => (
                             <div
                                 key={`${char}-${index}`}
                                 className={`${char === " " ? "w-4" : "w-8"} h-16 p-1 font-mono text-3xl font-bold`}

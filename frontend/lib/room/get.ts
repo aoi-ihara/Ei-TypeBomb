@@ -91,88 +91,91 @@ type RoomPageData = {
     itemCount: number;
 };
 
-const getCachedRoomPageDataFromLink = cache(async (link: string): Promise<RoomPageData | null> => {
-    if (!link) return null;
+const getCachedRoomPageDataFromLink = cache(
+    async (link: string): Promise<RoomPageData | null> => {
+        if (!link) return null;
 
-    const supabase = await createAdminClient();
-    const [{ data: roomData, error }, claimedViewerId] = await Promise.all([
-        supabase
-            .from("ei_typebomb_rooms")
-            .select(ROOM_PAGE_COLUMNS)
-            .eq("link", link)
-            .maybeSingle(),
-        getClaimedViewerId(),
-    ]);
+        const supabase = await createAdminClient();
+        const [{ data: roomData, error }, claimedViewerId] = await Promise.all([
+            supabase
+                .from("ei_typebomb_rooms")
+                .select(ROOM_PAGE_COLUMNS)
+                .eq("link", link)
+                .maybeSingle(),
+            getClaimedViewerId(),
+        ]);
 
-    if (error) {
-        serverError("failed to fetch room page data", error, "DB");
-        return null;
-    }
-
-    let data = roomData;
-    if (!data && isUUID(link, 4)) {
-        const { data: legacyRoom, error: legacyError } = await supabase
-            .from("ei_typebomb_rooms")
-            .select(ROOM_PAGE_COLUMNS)
-            .eq("id", link)
-            .maybeSingle();
-
-        if (legacyError) {
-            serverError(
-                "failed to fetch legacy room page data",
-                legacyError,
-                "DB",
-            );
+        if (error) {
+            serverError("failed to fetch room page data", error, "DB");
             return null;
         }
-        data = legacyRoom;
-    }
 
-    if (!data) return null;
+        let data = roomData;
+        if (!data && isUUID(link, 4)) {
+            const { data: legacyRoom, error: legacyError } = await supabase
+                .from("ei_typebomb_rooms")
+                .select(ROOM_PAGE_COLUMNS)
+                .eq("id", link)
+                .maybeSingle();
 
-    // Public/unlisted content is already readable by anyone. The verified JWT
-    // is used only for the owner UI hint; editing still rechecks getUser().
-    // Private content continues to require a fresh Auth lookup.
-    const userId = data.visibility === "private" ? await getUser() : claimedViewerId;
-    const isOwner = data.user_id === userId;
-    const requiresPassword = data.visibility === "private";
-    const authorized =
-        isOwner || !requiresPassword || (await isRoomAuthorized(data.id));
-    const canViewDetails = !requiresPassword || authorized;
-    const items = Array.isArray(data.items) ? (data.items as Item[]) : [];
+            if (legacyError) {
+                serverError(
+                    "failed to fetch legacy room page data",
+                    legacyError,
+                    "DB",
+                );
+                return null;
+            }
+            data = legacyRoom;
+        }
 
-    const room: Room | null = canViewDetails
-        ? {
-              id: data.id,
-              title: data.title,
-              userId: data.user_id,
-              explanation: data.explanation,
-              maxPlayers: data.max_players,
-              bombCount: data.bomb_count ?? null,
-              gameDuration: data.game_duration ?? 20,
-              createdAt: data.created_at,
-              updatedAt: data.updated_at,
-              items,
-              itemCount: items.length,
-              link: data.link ?? undefined,
-              visibility: data.visibility,
-          }
-        : null;
+        if (!data) return null;
 
-    return {
-        id: data.id,
-        link: data.link ?? data.id,
-        title: canViewDetails ? data.title : undefined,
-        visibility: data.visibility,
-        requiresPassword,
-        authorized,
-        // Viewing a room does not imply that the visitor is signed in.
-        isSignedIn: userId !== null,
-        isOwner,
-        room,
-        itemCount: canViewDetails ? items.length : 0,
-    };
-});
+        // Public/unlisted content is already readable by anyone. The verified JWT
+        // is used only for the owner UI hint; editing still rechecks getUser().
+        // Private content continues to require a fresh Auth lookup.
+        const userId =
+            data.visibility === "private" ? await getUser() : claimedViewerId;
+        const isOwner = data.user_id === userId;
+        const requiresPassword = data.visibility === "private";
+        const authorized =
+            isOwner || !requiresPassword || (await isRoomAuthorized(data.id));
+        const canViewDetails = !requiresPassword || authorized;
+        const items = Array.isArray(data.items) ? (data.items as Item[]) : [];
+
+        const room: Room | null = canViewDetails
+            ? {
+                  id: data.id,
+                  title: data.title,
+                  userId: data.user_id,
+                  explanation: data.explanation,
+                  maxPlayers: data.max_players,
+                  bombCount: data.bomb_count ?? null,
+                  gameDuration: data.game_duration ?? 20,
+                  createdAt: data.created_at,
+                  updatedAt: data.updated_at,
+                  items,
+                  itemCount: items.length,
+                  link: data.link ?? undefined,
+                  visibility: data.visibility,
+              }
+            : null;
+
+        return {
+            id: data.id,
+            link: data.link ?? data.id,
+            title: canViewDetails ? data.title : undefined,
+            visibility: data.visibility,
+            requiresPassword,
+            authorized,
+            // Viewing a room does not imply that the visitor is signed in.
+            isSignedIn: userId !== null,
+            isOwner,
+            room,
+            itemCount: canViewDetails ? items.length : 0,
+        };
+    },
+);
 
 export const getRoomPageDataFromLink = async (link: string) =>
     getCachedRoomPageDataFromLink(link);
@@ -226,9 +229,11 @@ export const getRoomStatusFromId = async (id: string) => {
 const PUBLIC_ROOMS_CACHE_TTL_MS = 2 * 60 * 1000;
 const PUBLIC_ROOMS_STALE_IF_ERROR_MS = 10 * 60 * 1000;
 
-let publicRoomsCache:
-    | { rooms: Room[]; expiresAt: number; staleUntil: number }
-    | null = null;
+let publicRoomsCache: {
+    rooms: Room[];
+    expiresAt: number;
+    staleUntil: number;
+} | null = null;
 let publicRoomsRequest: Promise<Room[]> | null = null;
 let publicRoomsGeneration = 0;
 
@@ -490,7 +495,11 @@ export const getRoomForEditFromLink = cache(async (link: string) => {
             .eq("user_id", userId)
             .maybeSingle();
         if (legacy.error) {
-            serverError("failed to fetch legacy room for edit", legacy.error, "DB");
+            serverError(
+                "failed to fetch legacy room for edit",
+                legacy.error,
+                "DB",
+            );
             return null;
         }
         data = legacy.data;

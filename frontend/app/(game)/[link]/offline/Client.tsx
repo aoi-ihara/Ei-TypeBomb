@@ -39,7 +39,7 @@ import {
 } from "@/lib/playground/memory-client";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
-import type { AnswerMode } from "@/lib/answer-mode";
+import { getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
@@ -409,7 +409,8 @@ export default function Client({
             ? Math.max(0, Date.now() - Date.parse(exposure))
             : null;
         expectedTypingAtStartRef.current =
-            item.answer.length * userTypingDelayRef.current;
+            (getTypingAnswer(item)?.length ?? item.answer.length) *
+            userTypingDelayRef.current;
     }, []);
 
     const chooseItemForTurn = useCallback(() => {
@@ -1121,9 +1122,6 @@ export default function Client({
                 soloMode
                 isPaused={isPaused}
                 answerMode={answerMode}
-                answerModeMemory={
-                    currentItem ? memoryByItem[currentItem.id] : undefined
-                }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}

@@ -504,13 +504,26 @@ async function callTool(
             patch.password = await hashPassword(patch.password);
         }
         const version = args.expected_edit_version;
-        if (version !== undefined && (typeof version !== "number" || !Number.isSafeInteger(version) || version < 0)) {
+        if (
+            version !== undefined &&
+            (typeof version !== "number" ||
+                !Number.isSafeInteger(version) ||
+                version < 0)
+        ) {
             return toolError("編集バージョンが不正です。");
         }
-        const prepared = await prepareRoomUpdate(supabase, roomId, userId, patch.items as Item[] | undefined, version);
-        const conflict = "ルームが更新されました。get_roomで再取得してください。";
+        const prepared = await prepareRoomUpdate(
+            supabase,
+            roomId,
+            userId,
+            patch.items as Item[] | undefined,
+            version,
+        );
+        const conflict =
+            "ルームが更新されました。get_roomで再取得してください。";
         if (prepared.status === "conflict") return toolError(conflict);
-        if (prepared.status === "error") return toolError("ルームを取得できませんでした。");
+        if (prepared.status === "error")
+            return toolError("ルームを取得できませんでした。");
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
 

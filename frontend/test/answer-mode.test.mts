@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {
     createChoiceOptions,
     getAnswerModeOptions,
-    resolveQuestionPresentation,
+    getTypingAnswer,
+    normalizeAnswerMode,
 } from "../lib/answer-mode";
 import {
-    applyRecallObservation,
     createInitialMemory,
     recordAnswerModeResult,
 } from "../lib/playground/memory";
@@ -35,55 +35,23 @@ test("the answer-mode selector only offers selection when no answer is typable",
     );
     assert.deepEqual(
         getAnswerModeOptions(true).map((option) => option.value),
-        ["selection", "auto", "input"],
+        ["selection", "input"],
     );
 });
 
-test("fixed modes and unsupported answers resolve to the expected question format", () => {
-    assert.equal(resolveQuestionPresentation("selection", item), "selection");
-    assert.equal(resolveQuestionPresentation("input", item), "input");
-    assert.equal(
-        resolveQuestionPresentation("input", {
-            ...item,
-            answer: "東京都🍎",
-        }),
-        "selection",
-    );
-    assert.equal(resolveQuestionPresentation("auto", item), "selection");
-});
-
-test("automatic mode promotes three consecutive recognitions to typed input", () => {
-    let memory = createInitialMemory("user", "room", item.id);
-    const now = new Date("2026-11-11T12:00:00.000Z");
-    for (let index = 0; index < 3; index++) {
-        memory = recordAnswerModeResult({
-            memory,
-            userId: "user",
-            roomId: "room",
-            itemId: item.id,
-            mode: "selection",
-            success: true,
-            now: new Date(now.getTime() + index * 1000),
-        });
+test("typing uses only the first valid kana candidate, then the original answer", () => {
+    for (const [answer, readings, expected] of [
+        ["猫", ["ねこ"], "ねこ"], ["生物", ["せいぶつ", "なまもの"], "せいぶつ"],
+        ["オレンジ", ["おれんじ"], "おれんじ"], ["学校", [], null],
+        ["学校", undefined, null], ["Apple", undefined, "Apple"], ["ねこ", undefined, "ねこ"],
+        ["学校", ["", "がっこう"], null], ["Apple", [42], "Apple"],
+        ["学校", "がっこう", null], ["学校", ["abc"], null],
+    ] as const) {
+        assert.equal(getTypingAnswer({ answer, readings }), expected);
     }
-    assert.equal(
-        resolveQuestionPresentation("auto", item, memory, now.getTime() + 3000),
-        "input",
-    );
-
-    memory = recordAnswerModeResult({
-        memory,
-        userId: "user",
-        roomId: "room",
-        itemId: item.id,
-        mode: "input",
-        success: false,
-        now: new Date(now.getTime() + 4000),
-    });
-    assert.equal(
-        resolveQuestionPresentation("auto", item, memory, now.getTime() + 5000),
-        "selection",
-    );
+    assert.equal(normalizeAnswerMode("input", true), "input");
+    assert.equal(normalizeAnswerMode("auto", true), "selection");
+    assert.equal(normalizeAnswerMode("input", false), "selection");
 });
 
 test("typing failures preserve the previous exposure timestamp", () => {
@@ -117,59 +85,6 @@ test("typing failures preserve the previous exposure timestamp", () => {
         now: attemptedAt,
     });
     assert.equal(selectionAttempt.lastPresentedAt, attemptedAt.toISOString());
-});
-
-test("automatic mode keeps typed input after independent recall and rejects hinted recall", () => {
-    const now = new Date("2026-11-11T12:00:00.000Z");
-    const initial = createInitialMemory("user", "room", item.id);
-    const observation = {
-        success: true,
-        answerLength: item.answer.length,
-        outcome: "free_recall" as const,
-        firstAttemptCorrect: true,
-        attemptCount: 1,
-        incorrectInputCount: 0,
-        hintCount: 0,
-        revealedHintChars: 0,
-        maxCorrectPrefixLength: item.answer.length,
-        recallLatencyMs: 100,
-        elapsedMs: 700,
-        finalCueRatio: 0,
-        initialCueRatio: 0,
-        additionalHintCount: 0,
-        answerWasFullyRevealed: false,
-        elapsedSincePresentationMs: 60_000,
-    };
-    const recalled = applyRecallObservation({
-        memory: initial,
-        observation,
-        userId: "user",
-        roomId: "room",
-        itemId: item.id,
-        now,
-    });
-    assert.equal(
-        resolveQuestionPresentation("auto", item, recalled, now.getTime() + 1000),
-        "input",
-    );
-
-    const hinted = applyRecallObservation({
-        memory: initial,
-        observation: {
-            ...observation,
-            hintCount: 1,
-            additionalHintCount: 1,
-            finalCueRatio: 0.2,
-        },
-        userId: "user",
-        roomId: "room",
-        itemId: item.id,
-        now,
-    });
-    assert.equal(
-        resolveQuestionPresentation("auto", item, hinted, now.getTime() + 1000),
-        "selection",
-    );
 });
 
 test("choice options are unique, include the answer, and use at most four room answers", () => {

@@ -4,6 +4,7 @@
         "lib": ["ES2022", "DOM"],
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
+        "allowJs": true,
         "strict": true,
         "noEmit": true,
         "types": [],

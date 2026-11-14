@@ -8,6 +8,7 @@ import type {
 
 type Props = {
     item: TypedRecallItem;
+    typingAnswer: string;
     currentInput: string | null;
     bombStatus: number;
     hasDuplicatePrompt?: boolean;
@@ -27,6 +28,7 @@ type Props = {
 
 export default function TypedRecallView({
     item,
+    typingAnswer,
     currentInput,
     bombStatus,
     hasDuplicatePrompt = false,
@@ -47,7 +49,7 @@ export default function TypedRecallView({
         <TypingView
             hasDuplicateMeaning={hasDuplicatePrompt}
             japanese={item.prompt}
-            english={item.answer}
+            english={typingAnswer}
             bombStatus={bombStatus}
             onSuccess={onSuccess}
             onChangeInput={onChangeInput}
