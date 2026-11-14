@@ -14,5 +14,5 @@ export default async function Page({
 
     const roomListData = await getRoomListData();
 
-    return <RoomList {...roomListData} initialView="recommended" />;
+    return <RoomList {...roomListData} initialView={filter === "latest" ? "latest" : "recommended"} />;
 }
