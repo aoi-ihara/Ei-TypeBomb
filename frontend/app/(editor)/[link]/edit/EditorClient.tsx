@@ -108,7 +108,7 @@ export default function EditorClient({
     const roomId = initialRoom.id;
     const savedRouteLinkRef = useRef(link);
     const [items, setItems] = useState<TypedRecallItem[] | null>(
-        initialRoom.items ?? [],
+        () => snapshotFromRoom(initialRoom).items,
     );
     const [roomLink, setRoomLink] = useState(
         initialRoom.link ?? initialRoom.id,

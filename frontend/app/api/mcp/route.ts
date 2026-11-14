@@ -15,7 +15,11 @@ import {
     validatePassword,
     validateTitle,
 } from "@/lib/auth/validator";
-import type { Room, View } from "@/type";
+import { prepareItemReadings } from "@/lib/room/readings";
+import { prepareRoomUpdate } from "@/lib/room/prepare-update";
+import { invalidatePublicRooms } from "@/lib/room/get";
+import { revalidateRoomContent } from "@/lib/room/revalidate";
+import type { Item, Room, View } from "@/type";
 import { getRoomCollectionsForUser } from "@/lib/room/list-data";
 import { selectRoomsForView } from "@/lib/room/list-view";
 
@@ -31,7 +35,7 @@ const SUPPORTED_PROTOCOL_VERSIONS = new Set([
 ]);
 const MAX_BODY_BYTES = 32 * 1024;
 const ROOM_FIELDS =
-    "id, link, title, explanation, max_players, bomb_count, game_duration, visibility, items, password, created_at, updated_at";
+    "id, link, title, explanation, max_players, bomb_count, game_duration, visibility, items, password, created_at, updated_at, edit_version";
 
 type JsonRpcId = string | number;
 type JsonRecord = Record<string, unknown>;
@@ -194,6 +198,7 @@ const tools = [
             type: "object",
             properties: {
                 room_id: { type: "string", description: "変更するルームのID" },
+                expected_edit_version: { type: "integer", minimum: 0 },
                 ...roomProperties,
             },
             required: ["room_id"],
@@ -411,6 +416,7 @@ async function callTool(
             insert.password = await hashPassword(insert.password);
         }
 
+        insert.items = await prepareItemReadings(insert.items as Item[]);
         const { data, error: insertError } = await supabase
             .from("ei_typebomb_rooms")
             .insert(insert)
@@ -423,6 +429,8 @@ async function callTool(
                 "ルームを作成できませんでした。入力内容と設定を確認してください。",
             );
         }
+        await invalidatePublicRooms();
+        revalidateRoomContent();
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
             url: getEtbUrl(`/${data.link}`),
@@ -495,20 +503,33 @@ async function callTool(
         if (typeof patch.password === "string") {
             patch.password = await hashPassword(patch.password);
         }
+        const version = args.expected_edit_version;
+        if (version !== undefined && (typeof version !== "number" || !Number.isSafeInteger(version) || version < 0)) {
+            return toolError("編集バージョンが不正です。");
+        }
+        const prepared = await prepareRoomUpdate(supabase, roomId, userId, patch.items as Item[] | undefined, version);
+        const conflict = "ルームが更新されました。get_roomで再取得してください。";
+        if (prepared.status === "conflict") return toolError(conflict);
+        if (prepared.status === "error") return toolError("ルームを取得できませんでした。");
+        patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
 
         const { data, error: updateError } = await supabase
             .from("ei_typebomb_rooms")
             .update(patch)
+            .eq("edit_version", prepared.editVersion)
             .eq("id", roomId)
             .eq("user_id", userId)
             .select(ROOM_FIELDS)
             .maybeSingle();
 
+        if (!updateError && !data) return toolError(conflict);
         if (updateError || !data) {
             console.error("MCP room update failed", updateError?.code);
             return toolError("ルームが見つからないか、更新できませんでした。");
         }
+        await invalidatePublicRooms();
+        revalidateRoomContent();
         return toolResult({ room: presentRoom(data as unknown as JsonRecord) });
     }
 
