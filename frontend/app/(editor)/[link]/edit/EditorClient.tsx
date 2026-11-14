@@ -1,6 +1,9 @@
 "use client";
 
-import { promptLengthError, answerLengthError } from "@/lib/room/item-limits.mjs";
+import {
+    promptLengthError,
+    answerLengthError,
+} from "@/lib/room/item-limits.mjs";
 
 import {
     DndContext,
@@ -714,7 +717,7 @@ export default function EditorClient({
                     variant="text"
                     iconName="arrowLeft"
                     padding="small"
-                    href={`/${roomLink}`}
+                    onClick={() => router.back()}
                 />
                 <Button
                     variant="text"
@@ -1299,12 +1302,16 @@ export default function EditorClient({
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {promptLengthError(item.prompt) && (
+                                                    {promptLengthError(
+                                                        item.prompt,
+                                                    ) && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            {promptLengthError(item.prompt)}
+                                                            {promptLengthError(
+                                                                item.prompt,
+                                                            )}
                                                         </div>
                                                     )}
                                                     {!item.prompt && (
@@ -1341,12 +1348,16 @@ export default function EditorClient({
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {answerLengthError(item.answer) && (
+                                                    {answerLengthError(
+                                                        item.answer,
+                                                    ) && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            {answerLengthError(item.answer)}
+                                                            {answerLengthError(
+                                                                item.answer,
+                                                            )}
                                                         </div>
                                                     )}
                                                     {!item.answer.trim() && (
