@@ -158,10 +158,7 @@ export default function RoomList({
 
     useEffect(() => {
         if (!currentUser) return;
-        posthog.identify(currentUser.id, {
-            email: currentUser.email,
-            display_name: currentUser.displayName,
-        });
+        posthog.identify(currentUser.id);
     }, [currentUser]);
 
     const addRoom = async () => {
@@ -177,10 +174,10 @@ export default function RoomList({
         try {
             const roomLink = await createNewRoom();
             if (!roomLink) throw new Error("Room creation returned no link");
-            posthog.capture("room_created");
             startNavigationProgress();
             router.push("/" + roomLink + "/edit");
         } catch (error) {
+            posthog.capture("room_creation_failed");
             console.error("Failed to create room:", error);
             setCreateError(
                 "ルームを作成できませんでした。もう一度お試しください。",
