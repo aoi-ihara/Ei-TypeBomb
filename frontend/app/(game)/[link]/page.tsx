@@ -116,7 +116,7 @@ export default async function RoomPage({
                 isOwner={isOwner}
             />
 
-            <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) px-4 py-3">
+            <section className="flex w-full flex-col gap-4 rounded-lg bg-(--color-background-secondary) px-4 py-4">
                 {items.length > 0 ? (
                     items.map((item, index) => (
                         <div
