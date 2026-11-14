@@ -1,23 +1,8 @@
-import { ROMAJI } from "../romaji-input.mjs";
+import { allowedAnswerChar, isAllowedTypingAnswer } from "../../../backend/shared/typing-answer.cjs";
+import { promptLengthError, answerLengthError } from "./item-limits.mjs";
+export { isAllowedTypingAnswer };
 
-// The importer treats the two columns as *values*. It does not assume
-// that Japanese is always the question or that English is the answer.
-const ANSWER_CHAR = /^[a-zA-Z0-9 ,.?!\-、。！？ー]$/u;
-// Keep authoring validation aligned with the game romanization dictionary.
-const SUPPORTED_KANA = new Set(
-    Object.values(ROMAJI).flatMap((value) => Array.from(value)),
-);
-const allowedAnswerChar = (char) =>
-    ANSWER_CHAR.test(char) || SUPPORTED_KANA.has(char);
 const COUNTED_CHAR = /^[a-zA-Z0-9ぁ-ゖ]$/u;
-
-export function isAllowedTypingAnswer(value) {
-    return (
-        typeof value === "string" &&
-        value.length > 0 &&
-        Array.from(value).every(allowedAnswerChar)
-    );
-}
 
 export function filterTypingAnswer(value) {
     return Array.from(value).filter(allowedAnswerChar).join("");
@@ -54,7 +39,8 @@ function validatePair(left, right, rowNumber, rolesExplicit = false) {
         : orientImportPair(left.trim(), right.trim());
     // Import is intentionally permissive: an answer may be unplayable until
     // its author edits it. The room editor shows a per-item validation error.
-    // Reject only malformed pairs, never an answer's character set here.
+    const lengthError = promptLengthError(item.jp) ?? answerLengthError(item.en);
+    if (lengthError) throw new Error(`行${rowNumber}: ${lengthError}`);
     return item;
 }
 

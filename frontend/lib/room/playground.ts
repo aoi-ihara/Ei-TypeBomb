@@ -37,9 +37,10 @@ const getPlaygroundRoomId = async (): Promise<string | null> => {
  * Resolve the current playground route without downloading its word list.
  * Online play loads the canonical room snapshot from its game server.
  */
-export const getPlaygroundRoomRoute = async (): Promise<
-    Pick<Room, "id" | "link"> | null
-> => {
+export const getPlaygroundRoomRoute = async (): Promise<Pick<
+    Room,
+    "id" | "link"
+> | null> => {
     const roomId = await getPlaygroundRoomId();
     if (!roomId) return null;
 

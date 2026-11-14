@@ -12,13 +12,11 @@ import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
 export default function RoomCard({
     room,
-    isOwner = false,
     isSaved = false,
     onToggleSaved,
     eagerPrefetch = false,
 }: {
     room: Room;
-    isOwner?: boolean;
     isSaved?: boolean;
     onToggleSaved?: () => void;
     eagerPrefetch?: boolean;
@@ -49,7 +47,8 @@ export default function RoomCard({
             room.visibility !== "public" ||
             eagerPrefetch ||
             typeof IntersectionObserver === "undefined"
-        ) return;
+        )
+            return;
 
         let cancelPrefetch: (() => void) | undefined;
         const observer = new IntersectionObserver(
@@ -83,7 +82,10 @@ export default function RoomCard({
     };
 
     return (
-        <article ref={articleRef} className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
+        <article
+            ref={articleRef}
+            className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]"
+        >
             <div
                 className="rounded-lg h-full"
                 data-cursor="button"

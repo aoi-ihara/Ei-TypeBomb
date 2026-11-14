@@ -14,6 +14,10 @@ export default async function Page({
     if (link !== canonicalLink) redirect("/" + canonicalLink + "/edit");
 
     return (
-        <EditorClient key={canonicalLink} link={canonicalLink} initialRoom={room} />
+        <EditorClient
+            key={canonicalLink}
+            link={canonicalLink}
+            initialRoom={room}
+        />
     );
 }

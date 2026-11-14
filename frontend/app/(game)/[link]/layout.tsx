@@ -24,12 +24,13 @@ export async function generateMetadata({
     return {
         title,
         description,
-        robots: room.visibility === "public"
-            ? undefined
-            : {
-                  index: false,
-                  follow: false,
-              },
+        robots:
+            room.visibility === "public"
+                ? undefined
+                : {
+                      index: false,
+                      follow: false,
+                  },
         openGraph: {
             title,
             description,

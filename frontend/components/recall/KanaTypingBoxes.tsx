@@ -44,8 +44,10 @@ export default function KanaTypingBoxes({
         <>
             {Array.from(answer).map((char, index) => {
                 const isActive = !readonly && index === activeIndex;
-                const composingHere = isHiragana(char) &&
-                    index === compositionStart && composing.length > 0;
+                const composingHere =
+                    isHiragana(char) &&
+                    index === compositionStart &&
+                    composing.length > 0;
                 // Once "ty"/"ch" identifies ちゃ, the small ゃ is already
                 // represented by the same roman-key group and must disappear.
                 const occupiedByPrevious =
@@ -56,7 +58,11 @@ export default function KanaTypingBoxes({
                     ? 0
                     : composingHere
                       ? layout.slots * 32
-                      : char === " " ? 16 : isHiragana(char) ? 40 : 32;
+                      : char === " "
+                        ? 16
+                        : isHiragana(char)
+                          ? 40
+                          : 32;
 
                 return (
                     <div
@@ -67,27 +73,33 @@ export default function KanaTypingBoxes({
                     >
                         {composingHere ? (
                             <div className="flex h-16 w-max">
-                                {Array.from({ length: layout.slots }, (_, slot) => (
-                                    <button
-                                        key={slot}
-                                        type="button"
-                                        data-cursor="button"
-                                        data-cursor-shape={readonly ? "2" : "1"}
-                                        onClick={() => onSelect?.(index)}
-                                        tabIndex={-1}
-                                        className={`relative h-16 w-8 shrink-0 cursor-text rounded-sm p-1 font-mono text-3xl font-bold transition-colors duration-150 ease-etb ${isActive && slot === composing.length ? "bg-(--color-border)" : ""}`}
-                                        aria-label={`ローマ字 ${slot + 1}`}
-                                    >
-                                        {layout.hintRoman[slot] && !composing[slot] && (
-                                            <div className="pointer-events-none absolute inset-1 flex items-center justify-center border-b border-(--color-border) opacity-25">
-                                                {layout.hintRoman[slot]}
+                                {Array.from(
+                                    { length: layout.slots },
+                                    (_, slot) => (
+                                        <button
+                                            key={slot}
+                                            type="button"
+                                            data-cursor="button"
+                                            data-cursor-shape={
+                                                readonly ? "2" : "1"
+                                            }
+                                            onClick={() => onSelect?.(index)}
+                                            tabIndex={-1}
+                                            className={`relative h-16 w-8 shrink-0 cursor-text rounded-sm p-1 font-mono text-3xl font-bold transition-colors duration-150 ease-etb ${isActive && slot === composing.length ? "bg-(--color-border)" : ""}`}
+                                            aria-label={`ローマ字 ${slot + 1}`}
+                                        >
+                                            {layout.hintRoman[slot] &&
+                                                !composing[slot] && (
+                                                    <div className="pointer-events-none absolute inset-1 flex items-center justify-center border-b border-(--color-border) opacity-25">
+                                                        {layout.hintRoman[slot]}
+                                                    </div>
+                                                )}
+                                            <div className="relative flex h-full w-full items-center justify-center border-b border-(--color-border)">
+                                                {composing[slot] ?? ""}
                                             </div>
-                                        )}
-                                        <div className="relative flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                            {composing[slot] ?? ""}
-                                        </div>
-                                    </button>
-                                ))}
+                                        </button>
+                                    ),
+                                )}
                             </div>
                         ) : (
                             <button
@@ -105,7 +117,9 @@ export default function KanaTypingBoxes({
                                     </div>
                                 )}
                                 <div className="relative flex h-full w-full items-center justify-center border-b border-(--color-border)">
-                                    {displayTypingCharacter(cells?.[index] ?? filled[index] ?? "")}
+                                    {displayTypingCharacter(
+                                        cells?.[index] ?? filled[index] ?? "",
+                                    )}
                                 </div>
                             </button>
                         )}

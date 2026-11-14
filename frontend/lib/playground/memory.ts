@@ -14,7 +14,8 @@ export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
-export type SchedulerReason = "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
+export type SchedulerReason =
+    "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
 export type RecallProgress = {
     attemptCount: number;
     incorrectInputCount?: number;
@@ -199,7 +200,8 @@ export const parseAnswerModeStats = (
             (candidate.lastAttemptAt !== null &&
                 (typeof candidate.lastAttemptAt !== "string" ||
                     !Number.isFinite(Date.parse(candidate.lastAttemptAt))))
-        ) return undefined;
+        )
+            return undefined;
         return {
             attempts: candidate.attempts as number,
             correct: candidate.correct as number,
@@ -212,8 +214,9 @@ export const parseAnswerModeStats = (
     return recognition && recall ? { recognition, recall } : undefined;
 };
 
-export const isValidAnswerModeStats = (value: unknown): value is AnswerModeStats =>
-    parseAnswerModeStats(value) !== undefined;
+export const isValidAnswerModeStats = (
+    value: unknown,
+): value is AnswerModeStats => parseAnswerModeStats(value) !== undefined;
 
 export const toMemoryState = (row: {
     user_id: string;
@@ -395,7 +398,9 @@ export const applyRecallObservation = ({
         // Speed controls session repetition, not the magnitude of long-term gain.
         const weight = evaluation.memoryEvidence === "weak_recall" ? 0.2 : 1;
         const gain = current.lastReviewedAt
-            ? (1 - getRetrievability(current, now.getTime())) * RETENTION_GAIN_FACTOR * weight
+            ? (1 - getRetrievability(current, now.getTime())) *
+              RETENTION_GAIN_FACTOR *
+              weight
             : 0;
         stability = current.lastReviewedAt
             ? Math.max(0.12, stability * (1 + gain))

@@ -3,6 +3,7 @@ export type TypedRecallItem = {
     type: "typed_recall";
     prompt: string;
     answer: string;
+    readings?: string[];
 };
 export type Item = TypedRecallItem;
 export type User = { id: string; displayName?: string; pulse?: string };

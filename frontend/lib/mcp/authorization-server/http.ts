@@ -253,16 +253,21 @@ async function interaction(
     }
     if (req.headers.accept?.includes("application/json")) {
         res.setHeader("Content-Type", "application/json; charset=utf-8");
-        res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
-        res.end(JSON.stringify({
-            client: {
-                name: client.clientName || "名称未設定のアプリ",
-                uri: client.clientUri || null,
-            },
-            redirect_uri: redirectUri,
-            scope: details.params.scope,
-            csrf: csrf(user, purpose),
-        }));
+        res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'",
+        );
+        res.end(
+            JSON.stringify({
+                client: {
+                    name: client.clientName || "名称未設定のアプリ",
+                    uri: client.clientUri || null,
+                },
+                redirect_uri: redirectUri,
+                scope: details.params.scope,
+                csrf: csrf(user, purpose),
+            }),
+        );
         return;
     }
     res.statusCode = 303;
@@ -340,20 +345,26 @@ export function oauthDiagnosticRoute(pathname: string) {
     if (
         pathname === "/api/oauth/authorize" ||
         /^\/api\/oauth\/authorize\/[A-Za-z0-9_-]+$/.test(pathname)
-    ) return "authorize";
+    )
+        return "authorize";
     const route = pathname.startsWith("/api/oauth/")
         ? pathname.slice("/api/oauth/".length)
         : "";
     if (
-        route === "token" || route === "register" ||
-        route === "revoke" || route === "jwks"
-    ) return route;
+        route === "token" ||
+        route === "register" ||
+        route === "revoke" ||
+        route === "jwks"
+    )
+        return route;
     return null;
 }
 
 /** Current-user injection is for integration tests; production verifies the
  * ETB Supabase browser session through Auth getUser. */
-export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticatedUser) {
+export function createOAuthHandler(
+    currentUser: CurrentUser = getMcpAuthenticatedUser,
+) {
     return async (req: NextApiRequest, res: NextApiResponse) => {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("X-Content-Type-Options", "nosniff");
@@ -397,8 +408,7 @@ export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticate
                     res.statusCode = 303;
                     res.setHeader(
                         "Location",
-                        "/sign-in?next=" +
-                            encodeURIComponent(url.pathname),
+                        "/sign-in?next=" + encodeURIComponent(url.pathname),
                     );
                     res.end();
                     return;
@@ -470,74 +480,85 @@ export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticate
                 return;
             }
             stage = "database_connect";
-            await atomicResponse(res, async () => {
-                stage = "rate_limit";
-                if (
-                    !(await rateLimit("all", 600)) ||
-                    (url.pathname === "/api/oauth/register" &&
-                        !(await rateLimit("register", 30)))
-                ) {
-                    res.statusCode = 429;
-                    res.setHeader("Retry-After", "60");
-                    res.end();
-                    return;
-                }
-                if (
-                    url.pathname === "/api/oauth/revoke" &&
-                    req.method === "POST"
-                ) {
-                    stage = "revocation";
-                    // The provider deliberately rejects JWTs at its revocation endpoint.
-                    // Resolve our JWT to a short-lived opaque surrogate for the same
-                    // grant, then let the provider authenticate the client and apply its
-                    // native revocation policy. The surrogate is never returned to a
-                    // client and is not accepted by MCP (which requires an at+jwt).
-                    const form = await body(req);
-                    const token = form.get("token") ?? "";
-                    if (token.includes(".")) {
-                        form.set("token", "unknown-structured-access-token");
-                        try {
-                            const principal = await verifyMcpToken(token);
-                            const provider = getMcpProvider();
-                            const client = await provider.Client.find(
-                                principal.clientId,
-                            );
-                            if (client) {
-                                const surrogate = new provider.AccessToken({
-                                    accountId: principal.userId,
-                                    client,
-                                    gty: "revocation",
-                                    grantId: principal.grantId,
-                                    scope: MCP_SCOPE,
-                                });
-                                form.set("token", await surrogate.save());
-                                form.set("token_type_hint", "access_token");
-                            }
-                        } catch (error) {
-                            // Unknown/invalid JWTs still go through client authentication;
-                            // infrastructure failures must not claim a successful revoke.
-                            if (
-                                !(error instanceof InvalidMcpTokenError) &&
-                                !(error instanceof joseErrors.JOSEError)
-                            )
-                                throw error;
-                        }
+            await atomicResponse(
+                res,
+                async () => {
+                    stage = "rate_limit";
+                    if (
+                        !(await rateLimit("all", 600)) ||
+                        (url.pathname === "/api/oauth/register" &&
+                            !(await rateLimit("register", 30)))
+                    ) {
+                        res.statusCode = 429;
+                        res.setHeader("Retry-After", "60");
+                        res.end();
+                        return;
                     }
-                    // The provider supports an upstream parsed body when its
-                    // stream has ended; preserve duplicate rejection above.
-                    req.body = Object.fromEntries(form);
-                }
-                stage = "provider";
-                await getMcpProvider().callback()(req, res);
-            }, onPhase);
+                    if (
+                        url.pathname === "/api/oauth/revoke" &&
+                        req.method === "POST"
+                    ) {
+                        stage = "revocation";
+                        // The provider deliberately rejects JWTs at its revocation endpoint.
+                        // Resolve our JWT to a short-lived opaque surrogate for the same
+                        // grant, then let the provider authenticate the client and apply its
+                        // native revocation policy. The surrogate is never returned to a
+                        // client and is not accepted by MCP (which requires an at+jwt).
+                        const form = await body(req);
+                        const token = form.get("token") ?? "";
+                        if (token.includes(".")) {
+                            form.set(
+                                "token",
+                                "unknown-structured-access-token",
+                            );
+                            try {
+                                const principal = await verifyMcpToken(token);
+                                const provider = getMcpProvider();
+                                const client = await provider.Client.find(
+                                    principal.clientId,
+                                );
+                                if (client) {
+                                    const surrogate = new provider.AccessToken({
+                                        accountId: principal.userId,
+                                        client,
+                                        gty: "revocation",
+                                        grantId: principal.grantId,
+                                        scope: MCP_SCOPE,
+                                    });
+                                    form.set("token", await surrogate.save());
+                                    form.set("token_type_hint", "access_token");
+                                }
+                            } catch (error) {
+                                // Unknown/invalid JWTs still go through client authentication;
+                                // infrastructure failures must not claim a successful revoke.
+                                if (
+                                    !(error instanceof InvalidMcpTokenError) &&
+                                    !(error instanceof joseErrors.JOSEError)
+                                )
+                                    throw error;
+                            }
+                        }
+                        // The provider supports an upstream parsed body when its
+                        // stream has ended; preserve duplicate rejection above.
+                        req.body = Object.fromEntries(form);
+                    }
+                    stage = "provider";
+                    await getMcpProvider().callback()(req, res);
+                },
+                onPhase,
+            );
             // oidc-provider handles OAuth protocol errors without throwing.
             // Capture only a fixed route label and the final status.
             const route = oauthDiagnosticRoute(url.pathname);
             if (
                 res.statusCode >= 400 &&
-                (route === "authorize" || route === "token" ||
-                    route === "register" || route === "revoke" || route === "jwks")
-            ) logOAuthProtocolFailure(route, res.statusCode);
+                (route === "authorize" ||
+                    route === "token" ||
+                    route === "register" ||
+                    route === "revoke" ||
+                    route === "jwks")
+            )
+                logOAuthProtocolFailure(route, res.statusCode);
         } catch (error) {
             const invalidRequest =
                 error instanceof oauthErrors.SessionNotFound ||
@@ -552,9 +573,13 @@ export function createOAuthHandler(currentUser: CurrentUser = getMcpAuthenticate
                     new URL(req.url ?? "/", "https://invalid.example").pathname,
                 );
                 if (
-                    route === "authorize" || route === "token" ||
-                    route === "register" || route === "revoke" || route === "jwks"
-                ) logOAuthProtocolFailure(route, res.statusCode);
+                    route === "authorize" ||
+                    route === "token" ||
+                    route === "register" ||
+                    route === "revoke" ||
+                    route === "jwks"
+                )
+                    logOAuthProtocolFailure(route, res.statusCode);
                 res.end(
                     invalidRequest
                         ? "Invalid or expired authorization request"

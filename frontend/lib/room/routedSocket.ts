@@ -201,11 +201,12 @@ export class RoutedSocket {
     private acceptsTombstoneRoute(ownership?: Ownership | null) {
         const tombstone = this.tombstoneRoute;
         if (!tombstone) return true;
-        return !!ownership && (
-            ownership.epoch > tombstone.epoch ||
-            (ownership.epoch === tombstone.epoch &&
-                ownership.lifecycle === "DELETED" &&
-                ownership.instance === tombstone.instance)
+        return (
+            !!ownership &&
+            (ownership.epoch > tombstone.epoch ||
+                (ownership.epoch === tombstone.epoch &&
+                    ownership.lifecycle === "DELETED" &&
+                    ownership.instance === tombstone.instance))
         );
     }
 
@@ -442,7 +443,9 @@ export class RoutedSocket {
                         if (response.ok) {
                             const value = await response.json();
                             if (!this.acceptsTombstoneRoute(value.ownership))
-                                throw new Error("Route conflicts with a newer deletion tombstone");
+                                throw new Error(
+                                    "Route conflicts with a newer deletion tombstone",
+                                );
                             if (
                                 this.meta &&
                                 !acceptsRoomRoute(this.meta, value.ownership)
@@ -581,8 +584,12 @@ export class RoutedSocket {
                                         "Routing endpoint unavailable",
                                     );
                                 const value = await response.json();
-                                if (!this.acceptsTombstoneRoute(value.ownership))
-                                    throw new Error("Route conflicts with a newer deletion tombstone");
+                                if (
+                                    !this.acceptsTombstoneRoute(value.ownership)
+                                )
+                                    throw new Error(
+                                        "Route conflicts with a newer deletion tombstone",
+                                    );
                                 if (
                                     this.meta &&
                                     !acceptsRoomRoute(
@@ -716,13 +723,16 @@ export class RoutedSocket {
             // higher tiers are unavailable.
             const failedTombstoneOwner = this.tombstoneRoute?.failedOwner;
             const failedTombstoneDepth = failedTombstoneOwner
-                ? ordered.find((server) => server.id === failedTombstoneOwner)?.depth
+                ? ordered.find((server) => server.id === failedTombstoneOwner)
+                      ?.depth
                 : undefined;
             const candidates =
                 !own || own.lifecycle === "DELETED"
                     ? failedTombstoneDepth === undefined
                         ? ordered
-                        : ordered.filter((server) => server.depth > failedTombstoneDepth)
+                        : ordered.filter(
+                              (server) => server.depth > failedTombstoneDepth,
+                          )
                     : ordered.filter((server) => server.id === own.owner);
             for (const server of candidates) {
                 if (attempt !== this.attempt || this.stopped) return this;

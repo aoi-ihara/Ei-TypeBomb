@@ -1,3 +1,4 @@
+import { promptLengthError, answerLengthError } from "../room/item-limits.mjs";
 import type { Item } from "@/type";
 
 export const validateEmail = (email?: string) => {
@@ -36,7 +37,6 @@ export const validateEmail = (email?: string) => {
 };
 
 export const validateItems = (items?: Item[]) => {
-    const MAX_TEXT_LENGTH = 32;
     const MAX_ARRAY_LENGTH = 512;
 
     if (!items) {
@@ -56,9 +56,8 @@ export const validateItems = (items?: Item[]) => {
         ids.add(item.id);
 
         if (item.type === "typed_recall") {
-            if (item.prompt.length > MAX_TEXT_LENGTH) {
-                return "問題文は32文字以内で入力してください。";
-            }
+            const lengthError = promptLengthError(item.prompt) ?? answerLengthError(item.answer);
+            if (lengthError) return lengthError;
 
             if (!item.answer.trim()) {
                 return "回答を入力してください。";

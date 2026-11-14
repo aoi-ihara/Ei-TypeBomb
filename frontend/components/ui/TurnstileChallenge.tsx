@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import { Turnstile } from "@marsidev/react-turnstile";
-import Button from "./Button";
 
 const FAILED_MESSAGE =
     "ロボットではないことの確認に失敗しました。もう一度お試しください。";
@@ -16,17 +14,13 @@ type TurnstileChallengeProps = {
 export const TurnstileChallenge = ({
     onSuccess,
     onFail,
-    onCancel,
 }: TurnstileChallengeProps) => {
-    const [widgetLoaded, setWidgetLoaded] = useState(false);
-
     return (
         <>
             <Turnstile
                 options={{ language: "ja" }}
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
                 scriptOptions={{ onError: () => onFail(FAILED_MESSAGE) }}
-                onWidgetLoad={() => setWidgetLoaded(true)}
                 onSuccess={onSuccess}
                 onError={(errorCode) => onFail(FAILED_MESSAGE, errorCode)}
                 onExpire={() =>

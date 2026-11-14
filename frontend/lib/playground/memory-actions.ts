@@ -3,10 +3,7 @@
 import { createClient } from "@/lib/db/server";
 import { getMemoryAuthStatus } from "@/lib/auth/session";
 import type { ItemMemoryState } from "@/lib/playground/memory";
-import {
-    isValidAnswerModeStats,
-    toMemoryState,
-} from "@/lib/playground/memory";
+import { isValidAnswerModeStats, toMemoryState } from "@/lib/playground/memory";
 
 const LEGACY_MEMORY_COLUMNS =
     "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
@@ -60,7 +57,8 @@ export const loadPlaygroundMemory = async (roomId: string) => {
               .eq("room_id", roomId)
               .eq("user_id", userId)
         : null;
-    const readError = legacyResult?.error ?? (missingAnswerModeStats ? null : error);
+    const readError =
+        legacyResult?.error ?? (missingAnswerModeStats ? null : error);
     if (readError) {
         return {
             userId,
@@ -74,7 +72,7 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         userId,
         persistenceDisabled: missingAnswerModeStats,
         memoryByItem: Object.fromEntries(
-            ((legacyResult?.data ?? data) ?? []).map((row) => {
+            (legacyResult?.data ?? data ?? []).map((row) => {
                 const memory = toMemoryState(row);
                 return [memory.itemId, memory];
             }),

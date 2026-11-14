@@ -1,3 +1,4 @@
+import { getTypingAnswer } from "./typing-answer.cjs";
 import type { GameState, User } from "./types";
 import type { ServerGameEvent } from "./protocol";
 import { roomSnapshot } from "./protocol";
@@ -348,7 +349,8 @@ export function applyGameEvent(
                 bomb.wordIndex === undefined
             )
                 return ignored();
-            const answerLength = room.items[bomb.wordIndex]?.answer.length ?? 0;
+            const item = room.items[bomb.wordIndex];
+            const answerLength = item ? getTypingAnswer(item)?.length ?? 0 : 0;
             if (
                 !Number.isInteger(event.length) ||
                 event.length < 0 ||

@@ -11,7 +11,6 @@ import type {
     LearningMode,
     RecallObservation,
     RecallProgress,
-    ItemMemoryState,
 } from "@/lib/playground/memory";
 import type { AnswerMode } from "@/lib/answer-mode";
 import { getRoomItems } from "@/lib/item";
@@ -63,7 +62,6 @@ type Props = {
     soloMode?: boolean;
     isPaused?: boolean;
     answerMode: AnswerMode;
-    answerModeMemory?: ItemMemoryState;
     onSelectionAnswer?: (correct: boolean) => void;
     onResume?: () => void;
     onStop?: () => void;
@@ -115,7 +113,6 @@ export default function GameView({
     soloMode = false,
     isPaused = false,
     answerMode,
-    answerModeMemory,
     onSelectionAnswer,
     onResume,
     onStop,
@@ -214,7 +211,6 @@ export default function GameView({
                         item={currentItem}
                         items={getRoomItems(room)}
                         answerMode={answerMode}
-                        answerModeMemory={answerModeMemory}
                         onSelectionAnswer={(correct) => {
                             if (userId !== currentTurnUser?.id) return;
                             if (!correct) triggerFailAnimation();

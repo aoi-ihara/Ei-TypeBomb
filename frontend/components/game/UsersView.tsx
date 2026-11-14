@@ -55,7 +55,9 @@ export default function UsersView({
                                 top: `calc(${posY + 50}% - ${position.h / 2}px)`,
                             }}
                         >
-                            <div className={`${users[index]?.id === userId ? "bg-cyan-600" : "bg-(--color-foreground)"} w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb`}>
+                            <div
+                                className={`${users[index]?.id === userId ? "bg-cyan-600" : "bg-(--color-foreground)"} w-full h-full flex rounded-full relative transition-transform duration-(--duration-etb) ease-etb`}
+                            >
                                 <div
                                     className="absolute flex-col pointer-events-none rounded-full transition-all font-bold duration-500 ease-etb text-center items-center text-sm pb-2 w-32 flex justify-center"
                                     style={{
@@ -63,7 +65,13 @@ export default function UsersView({
                                         bottom: `calc(${position.h}px + 4px)`,
                                     }}
                                 >
-                                    <span className={users[index]?.id === userId ? "text-cyan-600" : undefined}>
+                                    <span
+                                        className={
+                                            users[index]?.id === userId
+                                                ? "text-cyan-600"
+                                                : undefined
+                                        }
+                                    >
                                         {users[index]?.displayName ?? ""}
                                     </span>
                                 </div>

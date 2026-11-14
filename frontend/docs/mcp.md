@@ -46,17 +46,17 @@ MCP access tokens. After sign-in, ETB returns to the pending MCP consent page.
 
 For `ETB_BASE_URL=https://ei-typebomb.com`:
 
-| Endpoint | Purpose |
-| --- | --- |
-| `/.well-known/oauth-protected-resource/api/mcp` | RFC 9728 resource metadata |
-| `/.well-known/oauth-authorization-server` | RFC 8414 authorization server metadata |
-| `/api/oauth/register` | DCR for public and confidential clients |
-| `/api/oauth/authorize` | Authorization code + S256 PKCE |
-| `/api/oauth/interaction/:uid` | ETB login and explicit approve/deny |
-| `/api/oauth/token` | Code exchange and refresh |
-| `/api/oauth/jwks` | Public ES256 signing keys |
-| `/api/oauth/revoke` | Refresh-token or access-JWT revocation |
-| `/api/oauth/connections` | User's active grants and disconnect controls |
+| Endpoint                                        | Purpose                                      |
+| ----------------------------------------------- | -------------------------------------------- |
+| `/.well-known/oauth-protected-resource/api/mcp` | RFC 9728 resource metadata                   |
+| `/.well-known/oauth-authorization-server`       | RFC 8414 authorization server metadata       |
+| `/api/oauth/register`                           | DCR for public and confidential clients      |
+| `/api/oauth/authorize`                          | Authorization code + S256 PKCE               |
+| `/api/oauth/interaction/:uid`                   | ETB login and explicit approve/deny          |
+| `/api/oauth/token`                              | Code exchange and refresh                    |
+| `/api/oauth/jwks`                               | Public ES256 signing keys                    |
+| `/api/oauth/revoke`                             | Refresh-token or access-JWT revocation       |
+| `/api/oauth/connections`                        | User's active grants and disconnect controls |
 
 The issuer is the exact canonical ETB origin. The only allowed resource and JWT
 `aud` is `${ETB_BASE_URL}/api/mcp`; the scope is `etb:rooms` (create, read, update
@@ -96,7 +96,7 @@ fetch registration-supplied URLs. CIMD is not advertised or implemented.
 
 Access JWTs use ES256, `typ=at+jwt`, a 5-minute lifetime, UUID `sub`, dynamic
 `client_id`, `grant_id` and scope. MCP verifies their signature against the public
-portion of the *same configured JWKS* served at `/api/oauth/jwks`, issuer,
+portion of the _same configured JWKS_ served at `/api/oauth/jwks`, issuer,
 exact single audience, type, required claims, expiry and live grant ownership.
 The resource server uses local public keys because issuer and resource are in
 the same deployment; it does not perform a self-fetch on every cold start.
@@ -141,14 +141,14 @@ service is required. The module is externalized in `next.config.ts`.
 Set these **server-side** environment variables independently for Production
 and Preview. Do not use a `NEXT_PUBLIC_` prefix for MCP keys or credentials.
 
-| Variable | Value |
-| --- | --- |
-| `ETB_BASE_URL` | Exact HTTPS origin, e.g. `https://ei-typebomb.com` or `https://beta.ei-typebomb.com` |
-| `ETB_MCP_OAUTH_ENABLED` | `true` after provisioning storage and keys |
-| `ETB_MCP_DATABASE_URL` | PostgreSQL connection URL with `sslmode=verify-full`; a dedicated role restricted to the new schema |
-| `ETB_MCP_STORAGE_KEY` | 32 random bytes encoded as base64url |
-| `ETB_MCP_COOKIE_KEYS` | Comma-separated random signing keys, each at least 32 characters; current key first |
-| `ETB_MCP_SIGNING_JWKS` | Private ES256 JWKS JSON; unique `kid`, `alg=ES256`, `use=sig`; current key first |
+| Variable                | Value                                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `ETB_BASE_URL`          | Exact HTTPS origin, e.g. `https://ei-typebomb.com` or `https://beta.ei-typebomb.com`                |
+| `ETB_MCP_OAUTH_ENABLED` | `true` after provisioning storage and keys                                                          |
+| `ETB_MCP_DATABASE_URL`  | PostgreSQL connection URL with `sslmode=verify-full`; a dedicated role restricted to the new schema |
+| `ETB_MCP_STORAGE_KEY`   | 32 random bytes encoded as base64url                                                                |
+| `ETB_MCP_COOKIE_KEYS`   | Comma-separated random signing keys, each at least 32 characters; current key first                 |
+| `ETB_MCP_SIGNING_JWKS`  | Private ES256 JWKS JSON; unique `kid`, `alg=ES256`, `use=sig`; current key first                    |
 
 MCP OAuth is independent of website login; `ETB_MCP_OAUTH_ENABLED=true`
 activates the authorization server while ETB continues to use its own

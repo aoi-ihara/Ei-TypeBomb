@@ -1,4 +1,5 @@
 "use server";
+import { prepareRoomUpdate } from "./prepare-update";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
 import { validRoomUpdate } from "./partial-update";
@@ -136,6 +137,17 @@ export const updateRoomFromId = async (
     updateData.updated_at = new Date();
 
     const supabase = await createAdminClient();
+    const prepared = await prepareRoomUpdate(
+        supabase,
+        room.id,
+        userId,
+        room.items,
+        expectedEditVersion,
+    );
+    if (prepared.status === "conflict") return { status: "conflict" };
+    if (prepared.status === "error")
+        return { status: "error", message: "ルームを取得できませんでした。" };
+    updateData.items = prepared.items;
     const { data, error: updateError } = await supabase
         .from("ei_typebomb_rooms")
         .update(updateData)
@@ -148,12 +160,21 @@ export const updateRoomFromId = async (
     if (updateError) {
         console.error(updateError);
         if (updateError.code === "23505") {
-            return { status: "error", message: "このリンクはすでに使用されています。" };
+            return {
+                status: "error",
+                message: "このリンクはすでに使用されています。",
+            };
         }
         if (updateError.code === "23514") {
-            return { status: "error", message: "公開設定とパスワードの組み合わせが正しくありません。" };
+            return {
+                status: "error",
+                message: "公開設定とパスワードの組み合わせが正しくありません。",
+            };
         }
-        return { status: "error", message: "ルームを保存できませんでした。もう一度お試しください。" };
+        return {
+            status: "error",
+            message: "ルームを保存できませんでした。もう一度お試しください。",
+        };
     }
     if (!data) {
         const { data: existing, error: lookupError } = await supabase

@@ -54,7 +54,10 @@ function load(overrides = {}) {
 
 test("ETB password sign-in uses Supabase Auth even without legacy OAuth", async () => {
     const { submit, calls } = load();
-    assert.equal(await submit("sign-in", "a@example.com", "password123", "captcha"), null);
+    assert.equal(
+        await submit("sign-in", "a@example.com", "password123", "captcha"),
+        null,
+    );
     assert.equal(calls[0][0], "signInWithPassword");
     assert.equal(calls[0][1].options.captchaToken, "captcha");
 });

@@ -29,7 +29,12 @@ export function snapshotFromRoom(room: Room): EditorSnapshot {
         maxPlayers: String(room.maxPlayers ?? 2),
         gameDuration: room.gameDuration ?? 20,
         bombCount: room.bombCount ?? null,
-        items: room.items ?? [],
+        items: (room.items ?? []).map(({ id, type, prompt, answer }) => ({
+            id,
+            type,
+            prompt,
+            answer,
+        })),
         roomLink: room.link ?? room.id,
     };
 }

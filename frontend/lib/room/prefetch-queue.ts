@@ -8,8 +8,7 @@ let timeout: ReturnType<typeof setTimeout> | null = null;
 function drain() {
     timeout = null;
     const first = queue.entries().next().value as
-        | [string, () => void]
-        | undefined;
+        [string, () => void] | undefined;
     if (!first) return;
 
     const [url, prefetch] = first;

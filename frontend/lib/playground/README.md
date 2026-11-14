@@ -129,19 +129,13 @@ Research: [Qu et al. (2026), diminishing cues](https://pubmed.ncbi.nlm.nih.gov/4
 
 ## Answer formats
 
-Each player chooses `selection`, `auto`, or `input` when entering a room.
+Solo players choose `selection` or `input`. A saved `auto` mode opens in selection.
 Selection questions use up to four unique answers from the same room, with the
 correct answer and distractors shuffled for each presented turn. Duplicate
 answers are excluded to avoid ambiguous options.
 
-Automatic mode starts uncertain or new items as recognition choices. Three
-consecutive correct choices promote a typable item to input; an independent,
-unaided typed recall keeps it in input for up to seven days. A failed typed
-attempt or hint-assisted completion returns it to recognition practice.
-Existing memory rows without answer-mode statistics can enter input when they
-have at least three reviews and predicted retrievability of 0.7 or higher.
-
-Typing support is determined per answer. Unsupported characters always force
+Typing uses the first stored kana reading when supported, then falls back to
+the original answer. If neither can be typed, the game switches
 that item to selection, even in input mode. If no item in a room is typable,
 the room offers selection only. Answer text is no longer restricted to the
 typing character set or the old 32-character limit; empty answers remain

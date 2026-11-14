@@ -1,5 +1,7 @@
 "use client";
 
+import { getTypingAnswer } from "@/lib/answer-mode";
+
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -232,9 +234,9 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-    // Room snapshots are replaced on each broadcast; only a new room identity
-    // should reset the learning session and reload its memory.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Room snapshots are replaced on each broadcast; only a new room identity
+        // should reset the learning session and reload its memory.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [flushOnlineMemory, memoryRoomId]);
 
     const publishOnlineRecommendation = useCallback(() => {
@@ -1253,7 +1255,8 @@ export default function Clinet({
                         {
                             key: recallAttemptKey(room.gameId, focusedBomb),
                             itemId: focusedItem.id,
-                            answerLength: focusedItem.answer.length,
+                            answerLength:
+                                getTypingAnswer(focusedItem)?.length ?? 0,
                             progress,
                         },
                         session,
