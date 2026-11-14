@@ -2,6 +2,7 @@
 
 import {
     isHiragana,
+    isJapaneseTypingCharacter,
     kanaCompositionLayout,
     displayTypingCharacter,
 } from "@/lib/romaji-input.mjs";
@@ -60,7 +61,7 @@ export default function KanaTypingBoxes({
                       ? layout.slots * 32
                       : char === " "
                         ? 16
-                        : isHiragana(char)
+                        : isJapaneseTypingCharacter(char)
                           ? 40
                           : 32;
 
@@ -108,7 +109,7 @@ export default function KanaTypingBoxes({
                                 data-cursor="button"
                                 data-cursor-shape={readonly ? "2" : "1"}
                                 onClick={() => onSelect?.(index)}
-                                className={`relative h-16 cursor-text rounded-sm p-1 font-bold transition-colors duration-150 ease-etb ${char === " " ? "w-4 text-2xl" : isHiragana(char) ? "w-10 text-3xl" : "w-8 font-mono text-3xl"} ${isActive ? "bg-(--color-border)" : ""}`}
+                                className={`relative h-16 cursor-text rounded-sm p-1 font-bold transition-colors duration-150 ease-etb ${char === " " ? "w-4 text-2xl" : isJapaneseTypingCharacter(char) ? "w-10 text-3xl" : "w-8 font-mono text-3xl"} ${isActive ? "bg-(--color-border)" : ""}`}
                                 aria-label={`文字 ${index + 1}`}
                             >
                                 {index < hintLength && (
