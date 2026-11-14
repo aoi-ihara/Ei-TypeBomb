@@ -50,6 +50,7 @@ import {
     BookmarkOff,
     Lightbulb,
     SquareArrowOutUpRight,
+    Clock,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -103,6 +104,7 @@ const icons: Record<string, LucideIcon> = {
     bookmarkOff: BookmarkOff,
     lightbulb: Lightbulb,
     squareArrowOutUpRight: SquareArrowOutUpRight,
+    clock: Clock,
 };
 
 export type IconName = keyof typeof icons;
