@@ -232,7 +232,7 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-    }, [memoryRoomId]);
+    }, [flushOnlineMemory, memoryRoomId, room]);
 
     const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
@@ -735,8 +735,8 @@ export default function Clinet({
                     setSharedFocusPlayerId(sharedPlayerId);
                     viewedHolderIdRef.current = sharedPlayerId;
                     setCurrentInput(newRoom.typingFocusInput ?? "");
-                    setUserPositions(
-                        newPositions(newRoom.users, userPositions),
+                    setUserPositions((previous) =>
+                        newPositions(newRoom.users, previous),
                     );
                 },
             );

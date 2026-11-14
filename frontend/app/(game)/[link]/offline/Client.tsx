@@ -482,7 +482,7 @@ export default function Client({
         });
 
         startGame();
-    }, [items.length, memoryReady, room.id, startGame]);
+    }, [items.length, memoryReady, room.id, startGame, users.length]);
 
     useEffect(() => {
         if (
