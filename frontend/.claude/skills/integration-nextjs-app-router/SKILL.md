@@ -2,8 +2,8 @@
 name: integration-nextjs-app-router
 description: PostHog integration for Next.js App Router applications
 metadata:
-    author: PostHog
-    version: 1.36.0
+  author: PostHog
+  version: 1.65.0
 ---
 
 # PostHog integration for Next.js App Router
@@ -26,8 +26,8 @@ Follow these steps in order to complete the integration:
 - `references/2-edit.md` - Implement PostHog event tracking in the identified files, following best practices and the example project
 - `references/3-revise.md` - Review and fix any errors in the PostHog integration implementation
 - `references/4-conclude.md` - Review and fix any errors in the PostHog integration implementation
-- `references/next-js.md` - Next.js - docs
-- `references/identify-users.md` - Identify users - docs
+- `references/next-js.md` - Next.js
+- `references/identify-users.md` - Identify users
 - `references/COMMANDMENTS.md` - Framework-specific rules the integration must follow
 
 The example project shows the target implementation pattern. Consult the documentation for API details.
@@ -40,8 +40,10 @@ The example project shows the target implementation pattern. Consult the documen
 
 ## Framework guidelines
 
-- A missing PostHog configuration must never break the app — read keys optionally (never a required setting), guard init and capture behind their presence, and keep build and boot working with no PostHog environment set — but never silently: in development or debug builds fail loudly, using the language's idiomatic error, with the message "<VAR> variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once <VAR> is configured" (substituting the actual variable name); production stays a no-op
+- A missing PostHog configuration must never break the app — read keys optionally (never a required setting, and never with a format check such as a URL rule in an env schema, which a blank value fails at boot), guard init and capture behind their presence, and keep build and boot working with no PostHog environment set — but never silently: in development or debug builds fail loudly, using the language's idiomatic error, with the message "<VAR> variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once <VAR> is configured" (substituting the actual variable name); production stays a no-op. Only client code, in a browser or on a device, raises it as an error. Server-side code (a server, a worker, a module they load) logs that message as a warning outside production and keeps running, because an error there stops the process from booting for anyone without PostHog keys. A process another program launches, such as an MCP server on STDIO, has nobody watching it boot and no development build — it always writes the warning to stderr (never stdout, which can carry the protocol)
+- Sending analytics must never fail or stall the app's own work. Where the app waits on a flush, handle any error it raises and keep the wait short. A long-running server or worker whose SDK sends in the background needs no flush after each capture
 - For Next.js 15.3+, initialize PostHog in instrumentation-client.ts for the simplest setup
+- Call posthog.init at the top level of instrumentation-client.ts. Next.js runs that file once for its side effects and reads only its onRouterTransitionStart export, so an init inside an exported register() or any other function never runs. Write the missing-configuration guard as a top-level if/else around the init
 - For feature flags, use useFeatureFlagEnabled() or useFeatureFlagPayload() hooks - they handle loading states and external sync automatically
 - Add analytics capture in event handlers where user actions occur, NOT in useEffect reacting to state changes
 - Do NOT use useEffect for data transformation - calculate derived values during render instead
@@ -69,7 +71,8 @@ The example project shows the target implementation pattern. Consult the documen
 - Add posthog.capture() calls in route handlers for meaningful user actions – every route that creates, updates, or deletes data should track an event with contextual properties
 - Add posthog.captureException(err, distinctId) in the application's error handler (e.g., Express error middleware, Fastify setErrorHandler, Koa app.on('error'))
 - The SDK batches events and flushes asynchronously. await flush() or await shutdown() before letting that process exit. If unsure, set flushAt 1 and flushInterval 0.
-- `posthog.capture()` enqueues synchronously and returns; the batched HTTP send happens afterwards. Treat every per-request handler as short-lived even when the framework feels like a server: Next.js / Nuxt / SvelteKit / Remix route handlers, serverless and edge functions, and Lambda are torn down per invocation before the send runs. Create the client with flushAt 1 and flushInterval 0, then await the send before returning. Always use `await posthog.flush()` for a shared/singleton client, `await posthog.shutdown()` for a per-request client. Never skip the awaited flush or risk the enqueued event being silently dropped.
+- `posthog.capture()` enqueues synchronously and returns; the batched HTTP send happens afterwards. Treat every per-request handler as short-lived even when the framework feels like a server: Next.js / Nuxt / SvelteKit / Remix route handlers, serverless and edge functions, and Lambda are torn down per invocation before the send runs. Create the client with flushAt 1, flushInterval 0, requestTimeout 2000 and fetchRetryCount 0, then await the send before returning. Always use `await posthog.flush().catch(() => {})` for a shared/singleton client, `await posthog.shutdown()` for a per-request client. Never skip the awaited flush or risk the enqueued event being silently dropped.
+- Never leave a flush uncaught or on default timeouts where the app waits on it. With defaults, `await posthog.flush()` rejects when PostHog is down, which fails a handler whose own work succeeded, and holds it for about 50 seconds when PostHog hangs. A long-running server or queue worker needs no flush per capture at all. Let it batch on the SDK default timeout and retries, and flush only at shutdown with a bounded wait such as `posthog.shutdown(3000)`. A module both of them load follows the handler rule
 - Reverse proxy is NOT needed for server-side Node.js – only client-side JavaScript needs a proxy to avoid ad blockers
 
 ## Identifying users
