@@ -1,11 +1,9 @@
 "use client";
 
 import ProgressSignal from "./ProgressSignal";
-import { Icon } from "../ui/Icon";
 import { useRouter } from "next/navigation";
-import { startNavigationProgress } from "@/lib/navigation-progress";
-import Link from "next/link";
 import Button from "../ui/Button";
+import Header from "./Header";
 
 type AuthShellProps = {
     title?: string;
@@ -16,6 +14,9 @@ type AuthShellProps = {
     animateAppear?: boolean;
     showBackButton?: boolean;
     backLink?: string;
+    showHeader?: boolean;
+    sidebar?: React.ReactNode;
+    header?: React.ReactNode;
 };
 
 export default function Shell({
@@ -27,12 +28,15 @@ export default function Shell({
     animateAppear = false,
     showBackButton = false,
     backLink,
+    showHeader = true,
+    sidebar,
+    header,
 }: AuthShellProps) {
     const router = useRouter();
 
     if (loading) return <ProgressSignal />;
 
-    return (
+    const content = (
         <div className="flex flex-col items-center w-full">
             {title && (
                 <div
@@ -78,5 +82,19 @@ export default function Shell({
                 {children}
             </div>
         </div>
+    );
+
+    return (
+        <>
+            {showHeader && <Header>{header}</Header>}
+            {sidebar ? (
+                <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+                    {sidebar}
+                    {content}
+                </div>
+            ) : (
+                content
+            )}
+        </>
     );
 }
