@@ -75,6 +75,7 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "../auth/validator": validators,
     });
     const route = load("app/api/mcp/route.ts", {
+        "@posthog/mcp": {},
         "@/lib/room/item-limits.mjs": require("../lib/room/item-limits.mjs"),
         "@/lib/config/base-url": { getEtbUrl: (p) => p },
         "@/lib/mcp/oauth": {
@@ -93,7 +94,7 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "@/lib/room/get": { invalidatePublicRooms: async () => calls.push("invalidate") },
         "@/lib/room/revalidate": { revalidateRoomContent() {} },
         "@/lib/room/list-data": {}, "@/lib/room/list-view": {},
-    }, { TextEncoder, crypto: require("node:crypto") });
+    }, { TextEncoder, performance, process: { env: {} }, crypto: require("node:crypto") });
     return { update: action.updateRoomFromId, calls, writes,
         mcp: (args, name = "update_room") => route.POST({
             headers: new Map([["content-type", "application/json"]]),
