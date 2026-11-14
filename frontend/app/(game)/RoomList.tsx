@@ -63,7 +63,7 @@ export default function RoomList({
               {
                   value: "latest",
                   label: "最新",
-                  url: "/latest",
+                  url: "/?filter=latest",
                   iconName: "clock",
               },
               {
@@ -89,7 +89,7 @@ export default function RoomList({
               {
                   value: "latest",
                   label: "最新",
-                  url: "/latest",
+                  url: "/?filter=latest",
                   iconName: "clock",
               },
           ];
