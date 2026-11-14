@@ -98,9 +98,11 @@ test("unsupported and long answers can be saved and empty answers cannot", () =>
     assert.equal(
         validateItems([
             { ...item, answer: "東京都🍎" },
-            { ...items[1], answer: "x".repeat(200) },
+            { ...items[1], prompt: "問".repeat(1000), answer: "🍎".repeat(100) },
         ]),
         null,
     );
+    assert.notEqual(validateItems([{ ...item, prompt: "問".repeat(1001) }]), null);
+    assert.notEqual(validateItems([{ ...item, answer: "🍎".repeat(101) }]), null);
     assert.notEqual(validateItems([{ ...item, answer: "   " }]), null);
 });

@@ -1,3 +1,4 @@
+import { MAX_PROMPT_LENGTH, MAX_ANSWER_LENGTH } from "@/lib/room/item-limits.mjs";
 import { getEtbUrl } from "@/lib/config/base-url";
 import {
     authenticateMcpRequest,
@@ -107,8 +108,8 @@ const itemSchema = {
     properties: {
         id: { type: "string" },
         type: { const: "typed_recall" },
-        prompt: { type: "string" },
-        answer: { type: "string" },
+        prompt: { type: "string", maxLength: MAX_PROMPT_LENGTH },
+        answer: { type: "string", maxLength: MAX_ANSWER_LENGTH },
     },
     required: ["id", "type", "prompt", "answer"],
     additionalProperties: false,

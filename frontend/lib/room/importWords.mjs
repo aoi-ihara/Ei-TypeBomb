@@ -1,4 +1,5 @@
 import { allowedAnswerChar, isAllowedTypingAnswer } from "../../../backend/shared/typing-answer.cjs";
+import { promptLengthError, answerLengthError } from "./item-limits.mjs";
 export { isAllowedTypingAnswer };
 
 const COUNTED_CHAR = /^[a-zA-Z0-9ぁ-ゖ]$/u;
@@ -38,7 +39,8 @@ function validatePair(left, right, rowNumber, rolesExplicit = false) {
         : orientImportPair(left.trim(), right.trim());
     // Import is intentionally permissive: an answer may be unplayable until
     // its author edits it. The room editor shows a per-item validation error.
-    // Reject only malformed pairs, never an answer's character set here.
+    const lengthError = promptLengthError(item.jp) ?? answerLengthError(item.en);
+    if (lengthError) throw new Error(`行${rowNumber}: ${lengthError}`);
     return item;
 }
 

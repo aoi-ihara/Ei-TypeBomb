@@ -299,3 +299,13 @@ test("aggregate CSV threshold requires a strict longer side with >= 2x count", (
         { jp: "b", en: "x" },
     ]); // left 5 vs right 3, below 2x
 });
+
+test("CSV and JSON enforce inclusive limits after assigning field roles", () => {
+    const prompt = "問".repeat(1000);
+    const answer = "a".repeat(100);
+    for (const encode of [(p, a) => JSON.stringify({ [p]: a }), (p, a) => `${a},${p}`]) {
+        assert.deepEqual(parseImportedPairs(encode(prompt, answer)), [{ jp: prompt, en: answer }]);
+        assert.throws(() => parseImportedPairs(encode(prompt + "問", answer)), /行1.*1000文字/);
+        assert.throws(() => parseImportedPairs(encode(prompt, answer + "a")), /行1.*100文字/);
+    }
+});

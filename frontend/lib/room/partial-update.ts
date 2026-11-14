@@ -1,3 +1,4 @@
+import { answerLengthError } from "./item-limits.mjs";
 import type { Room, Item } from "../../type";
 import {
     validateTitle,
@@ -39,6 +40,12 @@ export function validRoomUpdate(room: Room): Room {
         delete valid.bombCount;
     }
     if (room.items !== undefined) {
+        // Answers were previously unbounded. Never replace the list with a
+        // filtered copy that silently deletes a previously saved question.
+        if (room.items.some((item) => answerLengthError(item.answer))) {
+            delete valid.items;
+            return valid;
+        }
         const ids = new Set<string>();
         const items: Item[] = [];
         for (const item of room.items) {
