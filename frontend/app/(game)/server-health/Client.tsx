@@ -22,7 +22,6 @@ import {
     parseStoredServerConfig,
     SERVER_CONFIG_CHANGE_EVENT,
 } from "@/lib/room/serverUrl";
-import Header from "@/components/layout/Header";
 
 const subscribeConfig = (listener: () => void) => {
     window.addEventListener("storage", listener);
@@ -231,55 +230,52 @@ export default function ServerHealth({
     });
 
     return (
-        <>
-            <Header />
-            <Shell title="サーバーの状況" size="small">
-                {servers.length === 0 && (
-                    <p className="opacity-50">サーバーが設定されていません。</p>
-                )}
-                {servers.map((url, index) => {
-                    const rowId = healthRowKey(index, url);
-                    return (
-                        <HealthRow
-                            key={rowId}
-                            rowId={rowId}
-                            url={url}
-                            name={
-                                index === 0
-                                    ? "プライマリサーバー"
-                                    : index === 1
-                                      ? "セカンダリサーバー"
-                                      : index === 2
-                                        ? "フォールバックサーバー"
-                                        : `第${index + 1}サーバー`
-                            }
-                            serverRole={
-                                index === 0
-                                    ? "primary"
-                                    : index === 1
-                                      ? "secondary"
-                                      : "fallback"
-                            }
-                            refreshSignal={refresh.signal}
-                            refreshTrigger={refresh.trigger}
-                            onStatus={onStatus}
-                        />
-                    );
-                })}
-                <Button
-                    iconName="rotateCcw"
-                    onClick={() =>
-                        setRefresh((previous) => ({
-                            signal: previous.signal + 1,
-                            trigger: "manual",
-                        }))
-                    }
-                    loading={refreshing}
-                    className="w-full"
-                >
-                    更新
-                </Button>
-            </Shell>
-        </>
+        <Shell title="サーバーの状況" size="small">
+            {servers.length === 0 && (
+                <p className="opacity-50">サーバーが設定されていません。</p>
+            )}
+            {servers.map((url, index) => {
+                const rowId = healthRowKey(index, url);
+                return (
+                    <HealthRow
+                        key={rowId}
+                        rowId={rowId}
+                        url={url}
+                        name={
+                            index === 0
+                                ? "プライマリサーバー"
+                                : index === 1
+                                  ? "セカンダリサーバー"
+                                  : index === 2
+                                    ? "フォールバックサーバー"
+                                    : `第${index + 1}サーバー`
+                        }
+                        serverRole={
+                            index === 0
+                                ? "primary"
+                                : index === 1
+                                  ? "secondary"
+                                  : "fallback"
+                        }
+                        refreshSignal={refresh.signal}
+                        refreshTrigger={refresh.trigger}
+                        onStatus={onStatus}
+                    />
+                );
+            })}
+            <Button
+                iconName="rotateCcw"
+                onClick={() =>
+                    setRefresh((previous) => ({
+                        signal: previous.signal + 1,
+                        trigger: "manual",
+                    }))
+                }
+                loading={refreshing}
+                className="w-full"
+            >
+                更新
+            </Button>
+        </Shell>
     );
 }

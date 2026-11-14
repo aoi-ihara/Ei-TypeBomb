@@ -78,7 +78,20 @@ const ROOM_PAGE_COLUMNS =
     "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility";
 
 // Request-local deduplication for metadata/page; browser reuse is Next Router Cache.
-const getCachedRoomPageDataFromLink = cache(async (link: string) => {
+type RoomPageData = {
+    id: string;
+    link: string;
+    title: string | null | undefined;
+    visibility: string;
+    requiresPassword: boolean;
+    authorized: boolean;
+    isSignedIn: boolean;
+    isOwner: boolean;
+    room: Room | null;
+    itemCount: number;
+};
+
+const getCachedRoomPageDataFromLink = cache(async (link: string): Promise<RoomPageData | null> => {
     if (!link) return null;
 
     const supabase = await createAdminClient();

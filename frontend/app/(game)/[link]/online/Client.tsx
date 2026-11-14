@@ -1,6 +1,6 @@
 "use client";
-import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
+import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
@@ -232,7 +232,10 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-    }, [memoryRoomId]);
+    // Room snapshots are replaced on each broadcast; only a new room identity
+    // should reset the learning session and reload its memory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [flushOnlineMemory, memoryRoomId]);
 
     const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
@@ -735,8 +738,8 @@ export default function Clinet({
                     setSharedFocusPlayerId(sharedPlayerId);
                     viewedHolderIdRef.current = sharedPlayerId;
                     setCurrentInput(newRoom.typingFocusInput ?? "");
-                    setUserPositions(
-                        newPositions(newRoom.users, userPositions),
+                    setUserPositions((previous) =>
+                        newPositions(newRoom.users, previous),
                     );
                 },
             );
