@@ -1,5 +1,7 @@
 "use client";
 
+import { promptLengthError, answerLengthError } from "@/lib/room/item-limits.mjs";
+
 import {
     DndContext,
     PointerSensor,
@@ -1297,13 +1299,12 @@ export default function EditorClient({
                                                             setItems(newItems);
                                                         }}
                                                     />
-                                                    {item.prompt.length >
-                                                        32 && (
+                                                    {promptLengthError(item.prompt) && (
                                                         <div
                                                             className="text-red-500"
                                                             data-cursor="text"
                                                         >
-                                                            32文字以内で入力してください。
+                                                            {promptLengthError(item.prompt)}
                                                         </div>
                                                     )}
                                                     {!item.prompt && (
@@ -1340,6 +1341,14 @@ export default function EditorClient({
                                                             setItems(newItems);
                                                         }}
                                                     />
+                                                    {answerLengthError(item.answer) && (
+                                                        <div
+                                                            className="text-red-500"
+                                                            data-cursor="text"
+                                                        >
+                                                            {answerLengthError(item.answer)}
+                                                        </div>
+                                                    )}
                                                     {!item.answer.trim() && (
                                                         <div
                                                             className="text-red-500"
