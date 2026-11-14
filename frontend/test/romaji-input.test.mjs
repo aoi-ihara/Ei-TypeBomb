@@ -5,6 +5,7 @@ import {
     decodeKanaProgress,
     encodeKanaProgress,
     hasHiragana,
+    isJapaneseTypingCharacter,
     kanaCompositionLayout,
     romanSlotCount,
     advanceEditableKanaAt,
@@ -169,7 +170,11 @@ test("English ASCII hyphens remain literal, while fullwidth answer hyphens accep
     assert.equal(ascii.cells[4], "-");
     const fullwidth = editKanaCell("co－operate", ["", "", ""], 2, "", "-");
     assert.equal(fullwidth.cells[2], "－");
-    assert.equal(displayTypingCharacter("ー"), "-");
+    assert.equal(displayTypingCharacter("ー"), "ー");
+    assert.equal(isJapaneseTypingCharacter("ー"), true);
+    assert.equal(isJapaneseTypingCharacter("ち"), true);
+    assert.equal(isJapaneseTypingCharacter("-"), false);
+    assert.equal(isJapaneseTypingCharacter("－"), false);
     assert.equal(displayTypingCharacter("－"), "-");
     assert.equal(displayTypingCharacter("-"), "-");
     assert.equal(displayTypingCharacter("ち"), "ち");
