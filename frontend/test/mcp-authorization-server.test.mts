@@ -826,6 +826,91 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
       },
     );
     await t.test(
+      "anonymous JWKS and registration floods cannot spend reserved OAuth capacity",
+      async () => {
+        const clear = () => db.query(
+          "delete from etb_mcp_oauth.rate_limits where issuer=$1", [issuer],
+        );
+        const count = async (bucket: string) => {
+          const { rows } = await db.query(
+            "select count from etb_mcp_oauth.rate_limits where issuer=$1 and bucket=$2",
+            [issuer, createHash("sha256").update(bucket).digest("hex")],
+          );
+          return Number(rows[0]?.count ?? 0);
+        };
+        const seed = (bucket: string, count: number) => db.query(
+          `insert into etb_mcp_oauth.rate_limits (issuer,bucket,window_start,count)
+           values ($1,$2,date_trunc('minute',now()),$3)
+           on conflict (issuer,bucket) do update set
+             window_start=excluded.window_start,count=excluded.count`,
+          [issuer, createHash("sha256").update(bucket).digest("hex"), count],
+        );
+        const minute = async () => (await db.query(
+          "select date_trunc('minute',now())::text as window",
+        )).rows[0].window as string;
+        // The budgets intentionally reset at a database minute boundary. Retry
+        // only when that clock changes; stable-window assertion failures remain
+        // failures, and a passing attempt must also stay within one window.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await clear();
+          const { token } = await tokens();
+          await clear();
+          const started = await minute();
+          try {
+            // Seed the old shared budget too: a rolling deployment's previous
+            // anonymous traffic must not poison the new reserved allowances.
+            await seed("all", 600);
+            await seed("v2:jwks", 90);
+            await seed("v2:all", 90);
+            for (let i = 0; i < 600; i++) {
+              const denied = await request("/api/oauth/jwks");
+              assert.equal(denied.status, 429);
+              assert.equal(denied.headers.get("retry-after"), "60");
+            }
+            assert.equal(await count("v2:all"), 90,
+              "rejected JWKS calls must not spend other endpoints' budgets");
+
+            await seed("register", 30);
+            assert.equal((await register()).status, 429);
+            assert.equal(await count("v2:all"), 90);
+
+            // Initial authorization and its resume use the reserved authorize
+            // budget; a full real consent/code/PKCE/token flow still succeeds.
+            await tokens();
+            const refreshed = await request("/api/oauth/token", form({
+              grant_type: "refresh_token", client_id: clientId,
+              refresh_token: token.refresh_token, resource,
+            }));
+            assert.equal(refreshed.status, 200, await refreshed.clone().text());
+            const refreshedToken = await refreshed.json();
+
+            // Exhaust token admission too. Revocation has a distinct reservation.
+            await seed("v2:token", 240);
+            const before = await count("v2:all");
+            assert.equal((await request("/api/oauth/token", form({}))).status, 429);
+            assert.equal(await count("v2:all"), before);
+            const revoked = await request("/api/oauth/revoke", form({
+              client_id: clientId, token: refreshedToken.access_token,
+              token_type_hint: "access_token",
+            }));
+            assert.equal(revoked.status, 200, await revoked.clone().text());
+            await assert.rejects(verifyMcpToken(refreshedToken.access_token));
+
+            // The overall ceiling remains enforced even for an available route.
+            await clear();
+            await seed("v2:all", 600);
+            assert.equal((await request("/api/oauth/jwks")).status, 429);
+            if (await minute() === started) return;
+          } catch (error) {
+            if (await minute() === started) throw error;
+          } finally {
+            await clear();
+          }
+        }
+        assert.fail("Quota test could not finish within one database minute");
+      },
+    );
+    await t.test(
       "host spoofing, cross-origin forms and registration abuse fail closed",
       async () => {
         const spoof = await rawFetch(base + "/api/oauth/jwks", {
@@ -845,8 +930,11 @@ test("MCP authorization server with real PostgreSQL and HTTP", async (t) => {
           403,
         );
         await db.query(
-          "update etb_mcp_oauth.rate_limits set count=31 where issuer=$1 and count<100",
-          [issuer],
+          `insert into etb_mcp_oauth.rate_limits (issuer,bucket,window_start,count)
+           values ($1,$2,date_trunc('minute',now()),31)
+           on conflict (issuer,bucket) do update set
+             window_start=excluded.window_start,count=excluded.count`,
+          [issuer, createHash("sha256").update("register").digest("hex")],
         );
         assert.equal((await register()).status, 429);
         process.env.ETB_MCP_OAUTH_ENABLED = "false";

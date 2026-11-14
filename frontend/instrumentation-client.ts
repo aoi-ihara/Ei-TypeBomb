@@ -1,6 +1,7 @@
 import posthog from "posthog-js";
 
-const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const projectToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const token = projectToken || process.env.NEXT_PUBLIC_POSTHOG_KEY;
 
 if (!token && process.env.NODE_ENV !== "production") {
     console.error(
@@ -10,11 +11,24 @@ if (!token && process.env.NODE_ENV !== "production") {
 
 if (token && process.env.NODE_ENV === "production") {
     posthog.init(token, {
-        api_host: "/ingest",
+        api_host: projectToken ? "/ingest" : process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
         ui_host: "https://us.posthog.com",
         defaults: "2026-01-30",
-        capture_exceptions: true,
+        capture_pageview: "history_change",
+        autocapture: false,
+        disable_session_recording: true,
+        capture_exceptions: false,
+        ip: false,
+        save_campaign_params: false,
+        save_referrer: false,
+        capture_heatmaps: false,
+        enable_heatmaps: false,
+        property_denylist: [
+            "$current_url", "$referrer", "$initial_referrer", "$initial_current_url",
+            "$prev_pageview_pathname", "$pathname", "$set_once",
+        ],
     });
+    posthog.register({ app: "ei-typebomb" });
 }
 
 let gameNumber = 0;

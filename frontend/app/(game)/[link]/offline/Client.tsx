@@ -316,7 +316,6 @@ export default function Client({
                 console.error("Failed to load playground memory", message);
                 posthog.capture("playground_memory_load_failed", {
                     room_id: room.id,
-                    error_message: message,
                 });
                 initializeFallback(null);
                 return;
@@ -328,7 +327,6 @@ export default function Client({
                 console.error("Failed to load playground memory", message);
                 posthog.capture("playground_memory_load_failed", {
                     room_id: room.id,
-                    error_message: message,
                 });
                 if (loaded.userId) setIsSignedIn(true);
                 initializeFallback(loaded.userId);

@@ -1,4 +1,8 @@
-import { MAX_PROMPT_LENGTH, MAX_ANSWER_LENGTH } from "@/lib/room/item-limits.mjs";
+import { PostHogMCP } from "@posthog/mcp";
+import {
+    MAX_PROMPT_LENGTH,
+    MAX_ANSWER_LENGTH,
+} from "@/lib/room/item-limits.mjs";
 import { getEtbUrl } from "@/lib/config/base-url";
 import {
     authenticateMcpRequest,
@@ -34,6 +38,26 @@ const SUPPORTED_PROTOCOL_VERSIONS = new Set([
     "2025-03-26",
     "2024-11-05",
 ]);
+const serverInfo = { name: "ei-typebomb", version: "1.0.0" };
+const projectToken = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+const analytics = projectToken
+    ? new PostHogMCP(projectToken, {
+          host:
+              process.env.NEXT_PUBLIC_POSTHOG_HOST ||
+              "https://us.i.posthog.com",
+          serverBuild: process.env.VERCEL_GIT_COMMIT_SHA,
+          requestTimeout: 2000,
+          fetchRetryCount: 0,
+          disableGeoip: true,
+      })
+    : null;
+
+async function flushAnalytics() {
+    await analytics
+        ?.flush()
+        .catch(() => console.warn("MCP analytics flush failed"));
+}
+
 const MAX_BODY_BYTES = 32 * 1024;
 const ROOM_FIELDS =
     "id, link, title, explanation, max_players, bomb_count, game_duration, visibility, items, password, created_at, updated_at, edit_version";
@@ -414,7 +438,12 @@ async function callTool(
         ) {
             insert.password = null;
         } else if (typeof insert.password === "string") {
-            insert.password = await hashPassword(insert.password);
+            const hashed = await hashPassword(insert.password, userId);
+            if (hashed === null)
+                return toolError(
+                    "パスワードの変更が混み合っています。少し待ってから再度お試しください。",
+                );
+            insert.password = hashed;
         }
 
         insert.items = await prepareItemReadings(insert.items as Item[]);
@@ -501,9 +530,6 @@ async function callTool(
         if (Object.keys(patch).length === 0)
             return toolError("変更する項目を1つ以上指定してください。");
 
-        if (typeof patch.password === "string") {
-            patch.password = await hashPassword(patch.password);
-        }
         const version = args.expected_edit_version;
         if (
             version !== undefined &&
@@ -525,6 +551,14 @@ async function callTool(
         if (prepared.status === "conflict") return toolError(conflict);
         if (prepared.status === "error")
             return toolError("ルームを取得できませんでした。");
+        if (typeof patch.password === "string") {
+            const hashed = await hashPassword(patch.password, userId);
+            if (hashed === null)
+                return toolError(
+                    "パスワードの変更が混み合っています。少し待ってから再度お試しください。",
+                );
+            patch.password = hashed;
+        }
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
 
@@ -614,7 +648,7 @@ export async function POST(request: NextRequest) {
             {
                 protocolVersion,
                 capabilities: { tools: { listChanged: false } },
-                serverInfo: { name: "ei-typebomb", version: "1.0.0" },
+                serverInfo,
                 instructions:
                     "Ei-TypeBombのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。",
             },
@@ -624,7 +658,18 @@ export async function POST(request: NextRequest) {
 
     if (body.method === "ping") return jsonRpc(id, {});
 
+    const metadata = {
+        properties: {
+            $mcp_server_name: serverInfo.name,
+            $mcp_server_version: serverInfo.version,
+        },
+    };
     if (body.method === "tools/list") {
+        analytics?.captureToolsList({
+            ...metadata,
+            toolNames: tools.map((tool) => tool.name),
+        });
+        await flushAnalytics();
         return jsonRpc(id, { tools });
     }
 
@@ -638,13 +683,24 @@ export async function POST(request: NextRequest) {
     }
 
     const args = isRecord(params.arguments) ? params.arguments : {};
+    const started = performance.now();
+    let result: ToolResult;
     try {
-        const result = await callTool(params.name, args, principal.userId);
-        return jsonRpc(id, result);
+        result = await callTool(params.name, args, principal.userId);
     } catch (error) {
         console.error("MCP tool execution failed", error);
-        return jsonRpc(id, toolError("処理中にエラーが発生しました。"));
+        result = toolError("処理中にエラーが発生しました。");
     }
+    analytics?.captureToolCall({
+        ...metadata,
+        toolName: tools.some((tool) => tool.name === params.name)
+            ? params.name
+            : "unknown",
+        durationMs: Math.round(performance.now() - started),
+        isError: result.isError === true,
+    });
+    await flushAnalytics();
+    return jsonRpc(id, result);
 }
 
 export async function GET(request: NextRequest) {

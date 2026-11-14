@@ -216,11 +216,20 @@ delete from etb_mcp_oauth.models where expires_at < now();
 delete from etb_mcp_oauth.rate_limits where window_start < now() - interval '1 day';
 ```
 
-The database enforces deployment-wide caps of 30 registrations and 600 OAuth
-endpoint requests per minute (429 + Retry-After). Add Vercel Firewall per-IP
-limits for public registration/authorization/token routes to protect availability
-under abuse; the application never trusts a caller-supplied forwarding IP for
-security decisions. These caps may need tuning as usage grows.
+The database caps admitted OAuth requests at 600 per minute, partitioned into
+90 JWKS, 30 registration, 180 authorization (including resume), 240 token and
+60 revocation requests. Each endpoint checks its own admission budget before
+the aggregate counter, so rejected floods cannot spend another endpoint's
+reserved capacity. Exhausted budgets return 429 with Retry-After: 60. Versioned
+budget labels isolate the reservations from the previous shared counter during
+rollout; the existing registration counter is retained. No schema migration is
+needed.
+
+These are deployment-wide endpoint budgets, not per-user isolation. Add Vercel
+Firewall per-IP limits for public registration/authorization/token routes to
+protect availability within each endpoint; the application never trusts a
+caller-supplied forwarding IP or client ID as an authenticated quota identity.
+These caps may need tuning as usage grows.
 
 Do not enable this on arbitrary preview aliases: use the stable configured
 canonical preview domain and matching environment secrets. Requests on a
