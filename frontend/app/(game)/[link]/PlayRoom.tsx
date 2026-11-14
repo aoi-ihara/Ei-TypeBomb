@@ -150,7 +150,6 @@ export default function PlayRoom({
             posthog.capture("room_entry_failed", {
                 room_id: roomId,
                 play_mode: mode,
-                reason: result,
             });
             setError(result);
             setJoining(null);

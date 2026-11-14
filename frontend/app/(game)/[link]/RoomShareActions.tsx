@@ -30,7 +30,10 @@ export default function RoomShareActions({
         <>
             <div className="flex gap-4 w-full">
                 <Button
-                    onClick={() => setShowQrCode(true)}
+                    onClick={() => {
+                        if (!showQrCode) posthog.capture("room_qr_opened", { room_id: roomId });
+                        setShowQrCode(true);
+                    }}
                     iconName="qrCode"
                     className="w-full"
                 >
