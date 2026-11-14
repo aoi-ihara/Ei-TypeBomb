@@ -7,6 +7,8 @@ const entries = Object.entries(ROMAJI);
 
 /** @param {string} char */
 export const isHiragana = (char) => /^[ぁ-ゖ]$/u.test(char);
+/** Japanese display cells include the long-vowel mark, even though it is typed with -. */
+export const isJapaneseTypingCharacter = (char) => isHiragana(char) || char === "ー";
 /** @param {string} answer */
 export const hasHiragana = (answer) => Array.from(answer).some(isHiragana);
 
@@ -23,10 +25,10 @@ export const normalizeHyphenInput = (expected, key) =>
         ? expected
         : key;
 
-/** Input cells show the physical key, not the stored fullwidth glyph. */
+/** Display Japanese long vowels as written; fullwidth hyphen-minus uses its ASCII key label. */
 /** @param {string} character */
 export const displayTypingCharacter = (character) =>
-    asciiHyphenTargets.has(character) ? "-" : character;
+    character === "－" ? "-" : character;
 
 /** @typedef {{committed: string, composing: string}} KanaProgress */
 
