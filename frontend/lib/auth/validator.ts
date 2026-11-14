@@ -183,6 +183,7 @@ export const validateLink = (link?: string) => {
         "game",
         "game-demo",
         "join",
+        "latest",
         "manifest.json",
         "my-rooms",
         "playground",

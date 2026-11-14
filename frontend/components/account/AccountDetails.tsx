@@ -26,8 +26,8 @@ export default function AccountDetails({
     const router = useRouter();
 
     return (
-        <>
-            <div className="flex w-full flex-col sm:flex-row gap-12 sm:gap-0">
+        <Shell
+            sidebar={
                 <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll no-scrollbar">
                     {buttonNames.map((item, index) => (
                         <Button
@@ -57,19 +57,19 @@ export default function AccountDetails({
                         サインアウト
                     </Button>
                 </div>
-
-                <Shell title="アカウント" size="medium">
-                    <div className="w-full px-4 sm:px-0">
-                        {mcpEnabled && navigation == 0 ? (
-                            <Apps />
-                        ) : navigation == (mcpEnabled ? 1 : 0) ? (
-                            <AuthForm key="email" mode="email" />
-                        ) : (
-                            <AuthForm key="password" mode="password" />
-                        )}
-                    </div>
-                </Shell>
+            }
+            title="アカウント"
+            size="medium"
+        >
+            <div className="w-full px-4 sm:px-0">
+                {mcpEnabled && navigation == 0 ? (
+                    <Apps />
+                ) : navigation == (mcpEnabled ? 1 : 0) ? (
+                    <AuthForm key="email" mode="email" />
+                ) : (
+                    <AuthForm key="password" mode="password" />
+                )}
             </div>
-        </>
+        </Shell>
     );
 }

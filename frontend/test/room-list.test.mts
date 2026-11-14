@@ -27,7 +27,7 @@ const otherUnlisted: Room = {
     visibility: "unlisted",
 };
 
-function select(view: "recommended" | "mine" | "saved") {
+function select(view: "recommended" | "latest" | "mine" | "saved") {
     return selectRoomsForView({
         view,
         publicRooms: [otherPublic, myPublic, otherUnlisted],
@@ -79,4 +79,34 @@ test("guest never gains access from saved IDs alone", () => {
         currentUserId: null,
     });
     assert.deepEqual(result.map(({ id }) => id), ["public-other"]);
+});
+
+test("latest sorts public rooms by creation date, not update date or recommendation rank", () => {
+    const result = selectRoomsForView({
+        view: "latest",
+        publicRooms: [
+            { ...otherPublic, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-14T00:00:00Z" },
+            { ...myPublic, createdAt: "2026-11-13T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z" },
+            { ...otherUnlisted, createdAt: "2026-11-14T00:00:00Z" },
+        ],
+        myRooms: [myPrivate],
+        savedRoomIds: [],
+        currentUserId: "authenticated-user",
+    });
+    assert.deepEqual(result.map(({ id }) => id), ["public-mine", "public-other"]);
+});
+
+test("guests can browse latest public rooms without exposing private or unlisted rooms", () => {
+    const result = selectRoomsForView({
+        view: "latest",
+        publicRooms: [
+            { ...myPublic, createdAt: "2026-11-12T00:00:00Z" },
+            { ...otherUnlisted, createdAt: "2026-11-14T00:00:00Z" },
+            { ...otherPublic, createdAt: "2026-11-13T00:00:00Z" },
+        ],
+        myRooms: [],
+        savedRoomIds: [],
+        currentUserId: null,
+    });
+    assert.deepEqual(result.map(({ id }) => id), ["public-other", "public-mine"]);
 });
