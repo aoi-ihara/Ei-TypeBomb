@@ -233,7 +233,10 @@ function CustomCursor() {
             if (isPointerActiveRef.current === active) return;
             isPointerActiveRef.current = active;
             setIsPointerActive(active);
-            document.documentElement.classList.toggle("custom-cursor-active", active);
+            document.documentElement.classList.toggle(
+                "custom-cursor-active",
+                active,
+            );
             if (!active) cursorOpacity.set(0);
         };
 
@@ -336,7 +339,7 @@ function CustomCursor() {
         <motion.div
             ref={rootRef}
             // Keep the cursor's stacking context above picker menus (z-index: 50).
-            className="z-[100] pointer-events-none fixed"
+            className="z-100 pointer-events-none fixed"
             style={{
                 opacity: isPointerActive ? cursorOpacity : 0,
             }}

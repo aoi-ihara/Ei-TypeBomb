@@ -83,11 +83,13 @@ export async function generateWords(theme: string) {
                             properties: {
                                 en: {
                                     type: "string",
-                                    description: "Answer to type, in the inferred answer language.",
+                                    description:
+                                        "Answer to type, in the inferred answer language.",
                                 },
                                 jp: {
                                     type: "string",
-                                    description: "Question or clue, in the inferred question language.",
+                                    description:
+                                        "Question or clue, in the inferred question language.",
                                 },
                             },
                             required: ["en", "jp"],

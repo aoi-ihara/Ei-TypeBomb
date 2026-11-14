@@ -1,23 +1,7 @@
-import { ROMAJI } from "../romaji-input.mjs";
+import { allowedAnswerChar, isAllowedTypingAnswer } from "../../../backend/shared/typing-answer.cjs";
+export { isAllowedTypingAnswer };
 
-// The importer treats the two columns as *values*. It does not assume
-// that Japanese is always the question or that English is the answer.
-const ANSWER_CHAR = /^[a-zA-Z0-9 ,.?!\-、。！？ー]$/u;
-// Keep authoring validation aligned with the game romanization dictionary.
-const SUPPORTED_KANA = new Set(
-    Object.values(ROMAJI).flatMap((value) => Array.from(value)),
-);
-const allowedAnswerChar = (char) =>
-    ANSWER_CHAR.test(char) || SUPPORTED_KANA.has(char);
 const COUNTED_CHAR = /^[a-zA-Z0-9ぁ-ゖ]$/u;
-
-export function isAllowedTypingAnswer(value) {
-    return (
-        typeof value === "string" &&
-        value.length > 0 &&
-        Array.from(value).every(allowedAnswerChar)
-    );
-}
 
 export function filterTypingAnswer(value) {
     return Array.from(value).filter(allowedAnswerChar).join("");

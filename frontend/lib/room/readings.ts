@@ -9,7 +9,9 @@ const kana = /^[ぁ-ゖー]+$/u;
 const decompress = promisify(gunzip);
 
 async function loadDictionary() {
-    const bytes = await readFile(join(process.cwd(), "lib/room/ipadic/readings.tsv.gz"));
+    const bytes = await readFile(
+        join(process.cwd(), "lib/room/ipadic/readings.tsv.gz"),
+    );
     const lines = (await decompress(bytes)).toString().split("\n");
     const dictionary = new Map<string, string[]>();
     for (const line of lines) {
@@ -18,7 +20,11 @@ async function loadDictionary() {
     }
     // Technical stems missing from IPADIC; usable alone and within longer words.
     for (const [word, reading] of Object.entries({
-        塩析: "えんせき", 凝析: "ぎょうせき", 泳動: "えいどう", 懸濁: "けんだく", 乳濁: "にゅうだく",
+        塩析: "えんせき",
+        凝析: "ぎょうせき",
+        泳動: "えいどう",
+        懸濁: "けんだく",
+        乳濁: "にゅうだく",
     })) {
         if (!dictionary.has(word)) dictionary.set(word, [reading]);
     }
@@ -31,7 +37,9 @@ const target = /[\p{Script=Han}\p{Script=Katakana}]/u;
 const misses = new Map<string, number>();
 
 function hiragana(text: string) {
-    return text.replace(/[ァ-ヶ]/gu, c => String.fromCharCode(c.charCodeAt(0) - 96));
+    return text.replace(/[ァ-ヶ]/gu, (c) =>
+        String.fromCharCode(c.charCodeAt(0) - 96),
+    );
 }
 
 // Keep the longest segment with a fully readable suffix, backtracking over
@@ -45,7 +53,15 @@ function compoundReading(word: string, dictionary: Map<string, string[]>) {
             const part = word.slice(start, end);
             let reading = hiragana(part);
             if (!kana.test(reading)) {
-                if (part.length === 1 && !(start && end === word.length && "者化性法学液".includes(part))) continue;
+                if (
+                    part.length === 1 &&
+                    !(
+                        start &&
+                        end === word.length &&
+                        "者化性法学液".includes(part)
+                    )
+                )
+                    continue;
                 reading = dictionary.get(part)?.[0] ?? "";
             }
             if (reading) {
@@ -65,7 +81,7 @@ export async function generateReadings(answer: string): Promise<string[]> {
         return kana.test(reading) ? [reading] : [];
     }
     if ((misses.get(word) ?? 0) > Date.now()) return [];
-    dictionaryPromise ??= loadDictionary().catch(error => {
+    dictionaryPromise ??= loadDictionary().catch((error) => {
         dictionaryPromise = undefined;
         throw error;
     });
@@ -80,9 +96,13 @@ export async function generateReadings(answer: string): Promise<string[]> {
     return [];
 }
 
-export async function prepareItemReadings(items: Item[], stored: Item[] = [], generate = generateReadings,
-    onGenerationError?: () => void) {
-    const previous = new Map(stored.map(item => [item.id, item]));
+export async function prepareItemReadings(
+    items: Item[],
+    stored: Item[] = [],
+    generate = generateReadings,
+    onGenerationError?: () => void,
+) {
+    const previous = new Map(stored.map((item) => [item.id, item]));
     const generated = new Map<string, string[] | null>();
     const prepared: Item[] = [];
     for (const item of items) {
@@ -90,12 +110,17 @@ export async function prepareItemReadings(items: Item[], stored: Item[] = [], ge
         delete clean.readings;
         delete clean.reading_version;
         prepared.push(clean);
-        if (typeof item.answer !== "string" || !target.test(item.answer)) continue;
+        if (typeof item.answer !== "string" || !target.test(item.answer))
+            continue;
 
         const old = previous.get(item.id);
-        if (old?.answer === item.answer && old.reading_version === READING_VERSION &&
-            Array.isArray(old.readings) && old.readings.length > 0 &&
-            old.readings.every(r => typeof r === "string" && kana.test(r))) {
+        if (
+            old?.answer === item.answer &&
+            old.reading_version === READING_VERSION &&
+            Array.isArray(old.readings) &&
+            old.readings.length > 0 &&
+            old.readings.every((r) => typeof r === "string" && kana.test(r))
+        ) {
             clean.readings = old.readings;
             clean.reading_version = READING_VERSION;
             continue;

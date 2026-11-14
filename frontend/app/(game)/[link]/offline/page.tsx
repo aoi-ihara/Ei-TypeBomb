@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
 import { parseOfflineVoiceReading } from "@/lib/settings";
-import { isAnswerMode } from "@/lib/answer-mode";
+import { getTypingAnswer, normalizeAnswerMode } from "@/lib/answer-mode";
 
 export default async function OfflinePlayPage({
     params,
@@ -16,9 +16,6 @@ export default async function OfflinePlayPage({
     }>;
 }) {
     const [{ link }, query] = await Promise.all([params, searchParams]);
-    const answerMode = isAnswerMode(query.answerMode)
-        ? query.answerMode
-        : "auto";
     const [cookieStore, room] = await Promise.all([
         cookies(),
         getPlaygroundRoom(),
@@ -26,12 +23,14 @@ export default async function OfflinePlayPage({
 
     if (!room) redirect("/" + link);
 
+    const answerMode = normalizeAnswerMode(
+        query.answerMode,
+        room.items?.some(getTypingAnswer) ?? false,
+    );
     const canonicalLink = room.link ?? room.id;
     if (link !== canonicalLink) {
         if (link === room.id)
-            redirect(
-                "/" + canonicalLink + "/offline?answerMode=" + answerMode,
-            );
+            redirect("/" + canonicalLink + "/offline?answerMode=" + answerMode);
         redirect("/" + link);
     }
 

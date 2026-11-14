@@ -2,7 +2,11 @@
 
 import { getUser } from "@/lib/auth/session";
 import { getMcpProvider } from "@/lib/mcp/authorization-server/provider";
-import { OAuthStore, revokeGrant, withOAuthLock } from "@/lib/mcp/authorization-server/store";
+import {
+    OAuthStore,
+    revokeGrant,
+    withOAuthLock,
+} from "@/lib/mcp/authorization-server/store";
 
 type AuthorizedApp = { clientId: string; name: string; url: string | null };
 
@@ -33,19 +37,24 @@ export async function listAuthorizedApps(): Promise<{
             const grants = await new OAuthStore("Grant").forAccount(user);
             const uniqueClients = new Set<string>();
             for (const grant of grants) {
-                if (grant.accountId === user && typeof grant.clientId === "string" &&
-                    typeof grant.jti === "string") {
+                if (
+                    grant.accountId === user &&
+                    typeof grant.clientId === "string" &&
+                    typeof grant.jti === "string"
+                ) {
                     uniqueClients.add(grant.clientId);
                 }
             }
-            const apps = await Promise.all([...uniqueClients].map(async (clientId) => {
-                const client = await getMcpProvider().Client.find(clientId);
-                return {
-                    clientId,
-                    name: client?.clientName || "名称未設定のアプリ",
-                    url: safeClientUrl(client?.clientUri),
-                };
-            }));
+            const apps = await Promise.all(
+                [...uniqueClients].map(async (clientId) => {
+                    const client = await getMcpProvider().Client.find(clientId);
+                    return {
+                        clientId,
+                        name: client?.clientName || "名称未設定のアプリ",
+                        url: safeClientUrl(client?.clientUri),
+                    };
+                }),
+            );
             return { apps, error: null };
         });
     } catch {
@@ -74,7 +83,8 @@ export async function revokeAuthorizedApp(clientId: string): Promise<{
                     grant.clientId === clientId &&
                     typeof grant.jti === "string",
             );
-            if (related.length === 0) return { error: "接続が見つかりません。" };
+            if (related.length === 0)
+                return { error: "接続が見つかりません。" };
 
             // Every historical grant for this client must be invalidated.
             for (const grant of related) {

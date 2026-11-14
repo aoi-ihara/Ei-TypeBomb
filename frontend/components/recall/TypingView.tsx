@@ -522,7 +522,7 @@ function TypingAttempt({
                     learningMode === "encoding"
                         ? "encoding"
                         : (automaticEvidence?.answerWasFullyRevealed ??
-                          finalCueRatio >= 1)
+                            finalCueRatio >= 1)
                           ? "relearned"
                           : finalCueRatio === 0
                             ? "free_recall"

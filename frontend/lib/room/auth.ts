@@ -7,7 +7,14 @@ import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
 import { getUser } from "../auth/session";
 import argon2 from "argon2";
-import { importJWK, importPKCS8, importSPKI, jwtVerify, SignJWT, type JWK } from "jose";
+import {
+    importJWK,
+    importPKCS8,
+    importSPKI,
+    jwtVerify,
+    SignJWT,
+    type JWK,
+} from "jose";
 import { cookies } from "next/headers";
 import { createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 

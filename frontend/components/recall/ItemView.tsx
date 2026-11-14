@@ -1,7 +1,7 @@
 import TypedRecallView from "@/components/recall/TypedRecallView";
 import SelectionQuestionView from "@/components/recall/SelectionQuestionView";
 import {
-    resolveQuestionPresentation,
+    getTypingAnswer,
     type AnswerMode,
 } from "@/lib/answer-mode";
 import type { Item } from "@/type";
@@ -30,19 +30,16 @@ type Props = {
     isPaused?: boolean;
     items: Item[];
     answerMode: AnswerMode;
-    answerModeMemory?: import("@/lib/playground/memory").ItemMemoryState;
     onSelectionAnswer?: (correct: boolean) => void;
 };
 
 export default function ItemView(props: Readonly<Props>) {
     switch (props.item.type) {
         case "typed_recall": {
-            const presentation = resolveQuestionPresentation(
-                props.answerMode,
-                props.item,
-                props.answerModeMemory,
-            );
-            if (presentation === "selection") {
+            const typingAnswer = props.answerMode === "input"
+                ? getTypingAnswer(props.item)
+                : null;
+            if (typingAnswer === null) {
                 return (
                     <SelectionQuestionView
                         item={props.item}
@@ -58,6 +55,7 @@ export default function ItemView(props: Readonly<Props>) {
             }
             return (
                 <TypedRecallView
+                    typingAnswer={typingAnswer}
                     item={props.item}
                     currentInput={props.currentInput}
                     bombStatus={props.bombStatus}

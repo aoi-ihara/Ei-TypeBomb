@@ -175,7 +175,8 @@ const pickSpacedReview = (
             state.retries[id] ||
             isOnHold(state, id) ||
             id === state.lastUserItem
-        ) return false;
+        )
+            return false;
 
         // lastPresentedAt includes BOT exposure, which is not independent recall.
         const lastExposure = Date.parse(
@@ -201,10 +202,15 @@ const pickSpacedReview = (
 
 /** Return a deadline only when every room word is on hold. */
 export const nextSuspendedReviewAt = (state: SchedulerState): number | null => {
-    if (state.itemIds.length === 0 || state.itemIds.some((id) => !isOnHold(state, id)))
+    if (
+        state.itemIds.length === 0 ||
+        state.itemIds.some((id) => !isOnHold(state, id))
+    )
         return null;
     return Math.min(
-        ...state.itemIds.map((id) => state.struggles[id].suspendedUntil as number),
+        ...state.itemIds.map(
+            (id) => state.struggles[id].suspendedUntil as number,
+        ),
     );
 };
 
@@ -235,7 +241,8 @@ const trackStruggle = (
             };
         return false;
     }
-    if (!evaluation.independent || evaluation.retryNeed === "none") return false;
+    if (!evaluation.independent || evaluation.retryNeed === "none")
+        return false;
 
     const firstFailureAt = previous.firstFailureAt ?? now;
     const consecutiveFailures = previous.consecutiveFailures + 1;
@@ -372,16 +379,20 @@ export const chooseNextUserItem = (
     // cycle/retry schedule introduced new words even when learners struggled.
     let itemId: string | undefined = eligible[0]?.itemId;
     const dueHolds = Object.entries(state.struggles)
-        .filter(([id, entry]) =>
-            state.itemIds.includes(id) &&
-            entry.suspendedUntil != null &&
-            entry.suspendedUntil <= now,
+        .filter(
+            ([id, entry]) =>
+                state.itemIds.includes(id) &&
+                entry.suspendedUntil != null &&
+                entry.suspendedUntil <= now,
         )
-        .sort((a, b) =>
-            (a[1].suspendedUntil as number) - (b[1].suspendedUntil as number),
+        .sort(
+            (a, b) =>
+                (a[1].suspendedUntil as number) -
+                (b[1].suspendedUntil as number),
         );
     // Returning words get priority over brand-new words once a retry slot is free.
-    const resumedFromHold = !itemId &&
+    const resumedFromHold =
+        !itemId &&
         pending.length < MAX_ACTIVE_RELEARNING &&
         dueHolds.length > 0;
     if (resumedFromHold) itemId = dueHolds[0][0];
@@ -399,7 +410,10 @@ export const chooseNextUserItem = (
         );
     };
 
-    if (!itemId && pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)) {
+    if (
+        !itemId &&
+        pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
+    ) {
         const reviewId = pickSpacedReview(state, memories, random, now);
         if (reviewId) {
             itemId = reviewId;
@@ -413,21 +427,30 @@ export const chooseNextUserItem = (
 
     // When the active pool is full, any unanswered filler can fail and add
     // a fifth pending retry. Stay inside the pool until a slot clears.
-    if (!itemId && pending.length >= Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)) {
-        itemId = [...pending].sort((a, b) =>
-            a.earliestTurn - b.earliestTurn
-        )[0]?.itemId;
+    if (
+        !itemId &&
+        pending.length >= Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
+    ) {
+        itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0]
+            ?.itemId;
     }
 
     if (!itemId) {
         const fillers = state.itemIds.filter(
-            (id) => (state.userAnswered[id] ?? 0) > 0 && !state.retries[id] && !isOnHold(state, id),
+            (id) =>
+                (state.userAnswered[id] ?? 0) > 0 &&
+                !state.retries[id] &&
+                !isOnHold(state, id),
         );
         const varied = fillers.filter((id) => id !== state.lastUserItem);
         const pool = varied.length ? varied : fillers;
         if (pool.length) {
-            const least = Math.min(...pool.map((id) => state.userAnswered[id] ?? 0));
-            const ties = pool.filter((id) => (state.userAnswered[id] ?? 0) === least);
+            const least = Math.min(
+                ...pool.map((id) => state.userAnswered[id] ?? 0),
+            );
+            const ties = pool.filter(
+                (id) => (state.userAnswered[id] ?? 0) === least,
+            );
             itemId = ties[Math.floor(random() * ties.length)];
         }
     }
@@ -435,9 +458,8 @@ export const chooseNextUserItem = (
     // Tiny rooms can have every word protected. Reuse the earliest pending
     // word instead of failing to schedule a question.
     if (!itemId && pending.length) {
-        itemId = [...pending].sort(
-            (a, b) => a.earliestTurn - b.earliestTurn,
-        )[0]?.itemId;
+        itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0]
+            ?.itemId;
     }
     if (!itemId) itemId = pickFromCycle();
     // Every word may legitimately be paused until a later session.
@@ -465,10 +487,10 @@ export const chooseNextUserItem = (
               ? "retry"
               : spacedReview
                 ? "spaced_review"
-              : hasRecallHistory(memories[itemId]) &&
-                getRetrievability(memories[itemId], now) < 0.8
-              ? "long_term_due"
-              : "cycle",
+                : hasRecallHistory(memories[itemId]) &&
+                    getRetrievability(memories[itemId], now) < 0.8
+                  ? "long_term_due"
+                  : "cycle",
     };
     return state.current;
 };
@@ -487,7 +509,10 @@ export const chooseBotItem = (
     // Prefer words the user has already answered, while still avoiding upcoming
     // cycle/retry targets. This keeps BOT exposure from helping the next recall.
     const candidates = state.itemIds.filter(
-        (id) => (state.userAnswered[id] ?? 0) > 0 && !protectedIds.has(id) && !isOnHold(state, id),
+        (id) =>
+            (state.userAnswered[id] ?? 0) > 0 &&
+            !protectedIds.has(id) &&
+            !isOnHold(state, id),
     );
     const varied = candidates.filter((id) => id !== state.lastBotItem);
     const pool = varied.length ? varied : candidates;
@@ -529,7 +554,6 @@ export const recordBotPresentation = (
     state.lastBotItem = itemId;
 };
 
-
 // The scheduler is a learning session, not a page lifecycle. Keep its cycle and
 // pending reviews across reloads; memory rows remain the source of recall scores.
 export type SchedulerMode = "playground" | "online";
@@ -544,11 +568,14 @@ const isNonNegativeInteger = (value: unknown): value is number =>
     Number.isSafeInteger(value) && typeof value === "number" && value >= 0;
 
 const validStruggle = (value: unknown): StruggleEntry | null => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return null;
     const entry = value as Partial<StruggleEntry>;
     const validTimestamp = (stamp: unknown) =>
         stamp === null ||
-        (typeof stamp === "number" && Number.isSafeInteger(stamp) && stamp >= 0);
+        (typeof stamp === "number" &&
+            Number.isSafeInteger(stamp) &&
+            stamp >= 0);
     if (
         !isNonNegativeInteger(entry.consecutiveFailures) ||
         !validTimestamp(entry.firstFailureAt) ||
@@ -556,7 +583,8 @@ const validStruggle = (value: unknown): StruggleEntry | null => {
         entry.suspensionLevel > SUSPENSION_DELAYS_MS.length ||
         !validTimestamp(entry.suspendedUntil) ||
         (entry.suspensionLevel === 0 && entry.suspendedUntil !== null)
-    ) return null;
+    )
+        return null;
     return entry as StruggleEntry;
 };
 
@@ -652,9 +680,7 @@ export const loadSchedulerState = (
         const ids = [...new Set(itemIds)];
         const allowed = new Set(ids);
         const previousIds = new Set(
-            saved.itemIds.filter(
-                (id): id is string => typeof id === "string",
-            ),
+            saved.itemIds.filter((id): id is string => typeof id === "string"),
         );
         const queue = new Set<string>();
         for (const id of saved.cycleQueue) {
@@ -675,8 +701,11 @@ export const loadSchedulerState = (
 
         // Version 1 snapshots predate word suspensions; they remain readable.
         const struggles: Record<string, StruggleEntry> = {};
-        if (saved.struggles && typeof saved.struggles === "object" &&
-            !Array.isArray(saved.struggles)) {
+        if (
+            saved.struggles &&
+            typeof saved.struggles === "object" &&
+            !Array.isArray(saved.struggles)
+        ) {
             for (const [id, entry] of Object.entries(saved.struggles)) {
                 if (!allowed.has(id)) continue;
                 const valid = validStruggle(entry);
@@ -709,7 +738,13 @@ export const loadSchedulerState = (
             isNonNegativeInteger(selected.cycle) &&
             selected.cycle >= 1 &&
             typeof selected.advancesCycle === "boolean" &&
-            ["cycle", "retry", "long_term_due", "suspension_due", "spaced_review"].includes(selected.reason) &&
+            [
+                "cycle",
+                "retry",
+                "long_term_due",
+                "suspension_due",
+                "spaced_review",
+            ].includes(selected.reason) &&
             struggles[selected.itemId]?.suspendedUntil == null
         ) {
             const retry = selected.retry
