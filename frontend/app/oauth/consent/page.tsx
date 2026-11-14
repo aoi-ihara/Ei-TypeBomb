@@ -1,4 +1,3 @@
-import Header from "@/components/layout/Header";
 import Shell from "@/components/layout/Shell";
 import OAuthConsent from "@/components/account/OAuthConsent";
 import { getUser } from "@/lib/auth/session";
@@ -14,12 +13,9 @@ export default async function OAuthConsentPage({
     const { uid } = await searchParams;
     if (typeof uid !== "string" || !/^[A-Za-z0-9_-]{1,512}$/.test(uid)) {
         return (
-            <>
-                <Header />
-                <Shell title="認証に失敗しました" size="small">
-                    <p data-cursor="text">リクエストを確認できませんでした。</p>
-                </Shell>
-            </>
+            <Shell title="認証に失敗しました" size="small">
+                <p data-cursor="text">リクエストを確認できませんでした。</p>
+            </Shell>
         );
     }
     if (!(await getUser())) {
