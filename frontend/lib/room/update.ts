@@ -1,4 +1,6 @@
 "use server";
+import { revalidateRoomContent } from "./revalidate";
+import { invalidatePublicRooms } from "./get";
 import { validRoomUpdate } from "./partial-update";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
@@ -167,6 +169,10 @@ export const updateRoomFromId = async (
             message: "ルームが見つからないか、アクセス権限がありません。",
         };
     }
+
+    await invalidatePublicRooms();
+    // Also expires old aliases and lists in the calling browser after a commit.
+    revalidateRoomContent();
 
     const posthog = getPostHogClient();
     posthog.capture({

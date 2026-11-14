@@ -4,7 +4,7 @@ import { cache } from "react";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
-import { getUser } from "../auth/session";
+import { getClaimedViewerId, getUser } from "../auth/session";
 import { isRoomAuthorized } from "./auth";
 import { getOwnedRoomsForUser } from "./list-queries";
 import type { Item, Room } from "@/type";
@@ -77,18 +77,18 @@ export const getRoomRouteFromLink = async (link: string) => {
 const ROOM_PAGE_COLUMNS =
     "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility";
 
-// React cache shares this result between generateMetadata and the page render.
+// Request-local deduplication for metadata/page; browser reuse is Next Router Cache.
 const getCachedRoomPageDataFromLink = cache(async (link: string) => {
     if (!link) return null;
 
     const supabase = await createAdminClient();
-    const [{ data: roomData, error }, userId] = await Promise.all([
+    const [{ data: roomData, error }, claimedViewerId] = await Promise.all([
         supabase
             .from("ei_typebomb_rooms")
             .select(ROOM_PAGE_COLUMNS)
             .eq("link", link)
             .maybeSingle(),
-        getUser(),
+        getClaimedViewerId(),
     ]);
 
     if (error) {
@@ -117,6 +117,10 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
 
     if (!data) return null;
 
+    // Public/unlisted content is already readable by anyone. The verified JWT
+    // is used only for the owner UI hint; editing still rechecks getUser().
+    // Private content continues to require a fresh Auth lookup.
+    const userId = data.visibility === "private" ? await getUser() : claimedViewerId;
     const isOwner = data.user_id === userId;
     const requiresPassword = data.visibility === "private";
     const authorized =
@@ -149,6 +153,8 @@ const getCachedRoomPageDataFromLink = cache(async (link: string) => {
         visibility: data.visibility,
         requiresPassword,
         authorized,
+        // Viewing a room does not imply that the visitor is signed in.
+        isSignedIn: userId !== null,
         isOwner,
         room,
         itemCount: canViewDetails ? items.length : 0,
@@ -211,6 +217,13 @@ let publicRoomsCache:
     | { rooms: Room[]; expiresAt: number; staleUntil: number }
     | null = null;
 let publicRoomsRequest: Promise<Room[]> | null = null;
+let publicRoomsGeneration = 0;
+
+export const invalidatePublicRooms = async () => {
+    publicRoomsGeneration++;
+    publicRoomsCache = null;
+    publicRoomsRequest = null;
+};
 
 // Return fresh objects so callers cannot mutate the process-wide cache.
 const clonePublicRooms = (rooms: Room[]): Room[] =>
@@ -227,6 +240,7 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         return clonePublicRooms(await publicRoomsRequest);
     }
 
+    const generation = publicRoomsGeneration;
     const request = (async (): Promise<Room[]> => {
         const supabase = await createAdminClient();
         const { data, error } = await supabase.rpc(
@@ -275,14 +289,16 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         const rankedRooms = rankPublicRooms(rooms, statsByRoomId);
         const fetchedAt = Date.now();
 
-        publicRoomsCache = {
-            rooms: rankedRooms,
-            expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
-            staleUntil:
-                fetchedAt +
-                PUBLIC_ROOMS_CACHE_TTL_MS +
-                PUBLIC_ROOMS_STALE_IF_ERROR_MS,
-        };
+        if (generation === publicRoomsGeneration) {
+            publicRoomsCache = {
+                rooms: rankedRooms,
+                expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
+                staleUntil:
+                    fetchedAt +
+                    PUBLIC_ROOMS_CACHE_TTL_MS +
+                    PUBLIC_ROOMS_STALE_IF_ERROR_MS,
+            };
+        }
 
         return rankedRooms;
     })();
@@ -430,6 +446,62 @@ export const getRoomMetadataFromId = async (id: string) => {
         visibility: data.visibility,
     };
 };
+
+// Metadata and editor page share one authenticated room read per request.
+export const getRoomForEditFromLink = cache(async (link: string) => {
+    const userId = await getUser();
+    if (!userId) redirect(getSignInUrl());
+    if (!link) return null;
+
+    const supabase = await createAdminClient();
+    const fields =
+        "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, edit_version, items, link, game_duration, visibility";
+    const byLink = await supabase
+        .from("ei_typebomb_rooms")
+        .select(fields)
+        .eq("link", link)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (byLink.error) {
+        serverError("failed to fetch room", byLink.error, "DB");
+        return null;
+    }
+
+    let data = byLink.data;
+    if (!data && isUUID(link, 4)) {
+        const legacy = await supabase
+            .from("ei_typebomb_rooms")
+            .select(fields)
+            .eq("id", link)
+            .eq("user_id", userId)
+            .maybeSingle();
+        if (legacy.error) {
+            serverError("failed to fetch legacy room for edit", legacy.error, "DB");
+            return null;
+        }
+        data = legacy.data;
+    }
+    if (!data) return null;
+
+    serverLog("DB", "room fetched");
+    return {
+        id: data.id,
+        title: data.title,
+        userId: data.user_id,
+        explanation: data.explanation,
+        maxPlayers: data.max_players,
+        bombCount: data.bomb_count ?? null,
+        gameDuration: data.game_duration ?? 20,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+        editVersion: data.edit_version,
+        items: data.items,
+        itemCount: Array.isArray(data.items) ? data.items.length : 0,
+        link: data.link,
+        visibility: data.visibility,
+    } as Room;
+});
 
 export const getRoomFromId = async (id: string) => {
     const supabase = await createAdminClient();

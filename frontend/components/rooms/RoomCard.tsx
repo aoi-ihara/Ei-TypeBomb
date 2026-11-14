@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
@@ -8,21 +8,67 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 import Link from "next/link";
+import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
 export default function RoomCard({
     room,
     isOwner = false,
     isSaved = false,
     onToggleSaved,
+    eagerPrefetch = false,
 }: {
     room: Room;
     isOwner?: boolean;
     isSaved?: boolean;
     onToggleSaved?: () => void;
+    eagerPrefetch?: boolean;
 }) {
     const router = useRouter();
+    const lastPrefetchRef = useRef<{ link: string; at: number } | null>(null);
+    const articleRef = useRef<HTMLElement>(null);
     const [copied, setCopied] = useState(false);
     const roomLink = room.link ?? room.id;
+
+    const prefetchOnIntent = useCallback(() => {
+        if (room.visibility !== "public" || eagerPrefetch) return;
+        // ETB currently keeps dynamic Router Cache entries for 30 seconds.
+        // Limit duplicate prefetches but allow a new one after expiry.
+        const last = lastPrefetchRef.current;
+        if (last?.link === roomLink && Date.now() - last.at < 25_000) return;
+
+        lastPrefetchRef.current = { link: roomLink, at: Date.now() };
+        router.prefetch(`/${roomLink}`);
+    }, [room.visibility, eagerPrefetch, roomLink, router]);
+
+    // Preload rooms as they approach the viewport, paced across cards.
+    // Unlike eagerly prefetching every Link, this scales to long room lists.
+    useEffect(() => {
+        const article = articleRef.current;
+        if (
+            !article ||
+            room.visibility !== "public" ||
+            eagerPrefetch ||
+            typeof IntersectionObserver === "undefined"
+        ) return;
+
+        let cancelPrefetch: (() => void) | undefined;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (!entry.isIntersecting) return;
+                observer.disconnect();
+                cancelPrefetch = scheduleRoomPrefetch(
+                    `/${roomLink}`,
+                    prefetchOnIntent,
+                );
+            },
+            { rootMargin: "240px" },
+        );
+        observer.observe(article);
+        return () => {
+            observer.disconnect();
+            cancelPrefetch?.();
+        };
+    }, [room.visibility, eagerPrefetch, roomLink, prefetchOnIntent]);
 
     const copyRoomLink = async () => {
         try {
@@ -37,7 +83,7 @@ export default function RoomCard({
     };
 
     return (
-        <article className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
+        <article ref={articleRef} className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]">
             <div
                 className="rounded-lg h-full"
                 data-cursor="button"
@@ -47,9 +93,11 @@ export default function RoomCard({
                     className="flex flex-col items-start h-full gap-4 transition-all duration-(--duration-etb) ease-etb active:scale-95 cursor-pointer"
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
-                        startNavigationProgress();
-                        router.push("/" + roomLink);
                     }}
+                    onNavigate={() => startNavigationProgress()}
+                    prefetch={room.visibility === "public" && eagerPrefetch}
+                    onMouseEnter={prefetchOnIntent}
+                    onFocus={prefetchOnIntent}
                     href={`/${roomLink}`}
                 >
                     <div className="flex min-w-0 px-4 pt-4 items-center gap-2">
@@ -110,12 +158,14 @@ export default function RoomCard({
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     href={`/${roomLink}`}
+                    prefetch={room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"
                     padding="middle"
                 />
                 <Button
                     href={`/${roomLink}/edit`}
+                    prefetch={false}
                     iconName="pen"
                     variant="text"
                     padding="middle"

@@ -1,4 +1,5 @@
 "use server";
+import { revalidateRoomLists } from "./revalidate";
 
 import { createAdminClient } from "@/lib/db/server";
 import { getSavedRoomIdsForUser } from "./list-queries";
@@ -37,5 +38,6 @@ export const toggleSavedRoom = async (
         };
     }
 
+    revalidateRoomLists();
     return { saved: data, error: null };
 };
