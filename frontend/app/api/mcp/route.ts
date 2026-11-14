@@ -414,7 +414,10 @@ async function callTool(
         ) {
             insert.password = null;
         } else if (typeof insert.password === "string") {
-            insert.password = await hashPassword(insert.password);
+            const hashed = await hashPassword(insert.password, userId);
+            if (hashed === null)
+                return toolError("パスワードの変更が混み合っています。少し待ってから再度お試しください。");
+            insert.password = hashed;
         }
 
         insert.items = await prepareItemReadings(insert.items as Item[]);
@@ -501,9 +504,6 @@ async function callTool(
         if (Object.keys(patch).length === 0)
             return toolError("変更する項目を1つ以上指定してください。");
 
-        if (typeof patch.password === "string") {
-            patch.password = await hashPassword(patch.password);
-        }
         const version = args.expected_edit_version;
         if (
             version !== undefined &&
@@ -525,6 +525,12 @@ async function callTool(
         if (prepared.status === "conflict") return toolError(conflict);
         if (prepared.status === "error")
             return toolError("ルームを取得できませんでした。");
+        if (typeof patch.password === "string") {
+            const hashed = await hashPassword(patch.password, userId);
+            if (hashed === null)
+                return toolError("パスワードの変更が混み合っています。少し待ってから再度お試しください。");
+            patch.password = hashed;
+        }
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
 

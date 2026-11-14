@@ -484,10 +484,22 @@ export function createOAuthHandler(
                 res,
                 async () => {
                     stage = "rate_limit";
+                    // Fixed server-selected budgets sum to 600. No endpoint can
+                    // spend another's reserved capacity, including authorize's
+                    // resume URLs. Do not trust headers or claimed client IDs.
+                    // Check the route first: rejected floods must not charge all.
+                    const budget = isAuthorize
+                        ? { name: "v2:authorize", limit: 180 }
+                        : url.pathname === "/api/oauth/token"
+                          ? { name: "v2:token", limit: 240 }
+                          : url.pathname === "/api/oauth/revoke"
+                            ? { name: "v2:revoke", limit: 60 }
+                            : url.pathname === "/api/oauth/jwks"
+                              ? { name: "v2:jwks", limit: 90 }
+                              : { name: "register", limit: 30 };
                     if (
-                        !(await rateLimit("all", 600)) ||
-                        (url.pathname === "/api/oauth/register" &&
-                            !(await rateLimit("register", 30)))
+                        !(await rateLimit(budget.name, budget.limit)) ||
+                        !(await rateLimit("v2:all", 600))
                     ) {
                         res.statusCode = 429;
                         res.setHeader("Retry-After", "60");

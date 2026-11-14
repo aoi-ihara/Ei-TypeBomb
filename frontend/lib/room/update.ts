@@ -90,23 +90,21 @@ export const updateRoomFromId = async (
     }
 
     let shouldUpdatePassword = false;
-    let newHashedPassword: string | null | undefined;
+    let pendingPassword: string | null | undefined;
 
     if (room.visibility === "public" || room.visibility === "unlisted") {
         shouldUpdatePassword = true;
-        newHashedPassword = null;
+        pendingPassword = null;
     } else if (room.password !== undefined && room.password !== null) {
         const validatorResult = validatePassword(room.password);
         if (validatorResult) validationErrors.push(validatorResult);
         else {
             shouldUpdatePassword = true;
-            newHashedPassword = room.password
-                ? await hashPassword(room.password)
-                : room.password;
+            pendingPassword = room.password;
         }
     } else if (room.password === null) {
         shouldUpdatePassword = true;
-        newHashedPassword = null;
+        pendingPassword = null;
     }
 
     if (room.items !== undefined) {
@@ -121,7 +119,7 @@ export const updateRoomFromId = async (
         else updateData.link = room.link;
     }
 
-    if (shouldUpdatePassword) updateData.password = newHashedPassword;
+    if (shouldUpdatePassword) updateData.password = null;
 
     if (validationErrors.length > 0) {
         return { status: "error", message: validationErrors.join("\n") };
@@ -147,6 +145,18 @@ export const updateRoomFromId = async (
     if (prepared.status === "conflict") return { status: "conflict" };
     if (prepared.status === "error")
         return { status: "error", message: "ルームを取得できませんでした。" };
+    // Only an authenticated owner editing the current version may spend hashing
+    // resources. Keep the conditional UPDATE below to fence edits during hashing.
+    if (shouldUpdatePassword && typeof pendingPassword === "string") {
+        const hashed = await hashPassword(pendingPassword, userId);
+        if (hashed === null) {
+            return {
+                status: "error",
+                message: "パスワードの変更が混み合っています。少し待ってから再度お試しください。",
+            };
+        }
+        updateData.password = hashed;
+    }
     updateData.items = prepared.items;
     const { data, error: updateError } = await supabase
         .from("ei_typebomb_rooms")
