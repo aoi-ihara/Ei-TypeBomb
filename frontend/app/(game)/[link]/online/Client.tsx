@@ -232,7 +232,10 @@ export default function Clinet({
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
-    }, [flushOnlineMemory, memoryRoomId, room]);
+    // Room snapshots are replaced on each broadcast; only a new room identity
+    // should reset the learning session and reload its memory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [flushOnlineMemory, memoryRoomId]);
 
     const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
