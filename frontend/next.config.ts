@@ -39,6 +39,30 @@ const nextConfig: NextConfig = {
             },
         ];
     },
+    async redirects() {
+        // These legacy query links were previously handled by the dynamic
+        // home page. Handle them before resolving the shared ISR page.
+        return [
+            {
+                source: "/",
+                has: [{ type: "query", key: "filter", value: "mine" }],
+                destination: "/mine",
+                permanent: false,
+            },
+            {
+                source: "/",
+                has: [{ type: "query", key: "owner", value: "me" }],
+                destination: "/mine",
+                permanent: false,
+            },
+            {
+                source: "/",
+                has: [{ type: "query", key: "filter", value: "saved" }],
+                destination: "/saved",
+                permanent: false,
+            },
+        ];
+    },
     skipTrailingSlashRedirect: true,
 };
 
