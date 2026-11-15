@@ -24,6 +24,7 @@ import {
 import { prepareItemReadings } from "@/lib/room/readings";
 import { prepareRoomUpdate } from "@/lib/room/prepare-update";
 import { invalidatePublicRooms } from "@/lib/room/get";
+import { blockRoomDataCache, invalidateRoomDataCache, releaseRoomDataCache } from "@/lib/room/room-data-cache";
 import { revalidateRoomContent } from "@/lib/room/revalidate";
 import type { Item, Room, View } from "@/type";
 import { getRoomCollectionsForUser } from "@/lib/room/list-data";
@@ -504,7 +505,10 @@ async function callTool(
                 true,
             );
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            invalidateRoomDataCache(id, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
@@ -615,6 +619,16 @@ async function callTool(
         }
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
+        const restrictsAccess =
+            patch.visibility === "private" && prepared.previousVisibility !== "private";
+        let privacyFence: string | null = null;
+        if (restrictsAccess) {
+            try {
+                privacyFence = await blockRoomDataCache(roomId, prepared.previousLink, patch.link as string | undefined);
+            } catch {
+                return toolError("ルームの公開設定を安全に変更できませんでした。", "CACHE_UNAVAILABLE", true);
+            }
+        }
 
         const { data, error: updateError } = await supabase
             .from("ei_typebomb_rooms")
@@ -625,12 +639,19 @@ async function callTool(
             .select(ROOM_FIELDS)
             .maybeSingle();
 
+        if (restrictsAccess && (updateError || !data))
+            await releaseRoomDataCache(privacyFence, roomId, prepared.previousLink, patch.link as string | undefined);
         if (!updateError && !data) return toolError(conflict);
         if (updateError || !data) {
             console.error("MCP room update failed", updateError?.code);
             return toolError("ルームが見つからないか、更新できませんでした。", "DATABASE_ERROR", true);
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            restrictsAccess
+                ? releaseRoomDataCache(privacyFence, roomId, prepared.previousLink, data.link)
+                : invalidateRoomDataCache(roomId, prepared.previousLink, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({ room: presentRoom(data as unknown as JsonRecord) });
     }

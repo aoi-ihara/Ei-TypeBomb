@@ -60,6 +60,11 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "./partial-update": partial,
         "./revalidate": { revalidateRoomContent() { calls.push("revalidate"); } },
         "./get": { invalidatePublicRooms: async () => calls.push("invalidate") },
+        "./room-data-cache": {
+            invalidateRoomDataCache: async (...keys) => calls.push("invalidate-room:" + keys.join(",")),
+            blockRoomDataCache: async (...keys) => { calls.push("block-room:" + keys.join(",")); return "blocked:test"; },
+            releaseRoomDataCache: async (...args) => calls.push("release-room:" + args.join(",")),
+        },
         "@/lib/auth/sign-in-url": { getSignInUrl: () => "/sign-in" },
         "../db/server": { createAdminClient: async () => db },
         "../auth/session": { getUser: async () => { calls.push("auth"); return user; } },
@@ -97,6 +102,11 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "@/lib/room/readings": { prepareItemReadings: async (items) => items },
         "@/lib/room/prepare-update": prepared,
         "@/lib/room/get": { invalidatePublicRooms: async () => calls.push("invalidate") },
+        "@/lib/room/room-data-cache": {
+            invalidateRoomDataCache: async (...keys) => calls.push("invalidate-room:" + keys.join(",")),
+            blockRoomDataCache: async (...keys) => { calls.push("block-room:" + keys.join(",")); return "blocked:test"; },
+            releaseRoomDataCache: async (...args) => calls.push("release-room:" + args.join(",")),
+        },
         "@/lib/room/revalidate": { revalidateRoomContent() {} },
         "@/lib/room/list-data": {}, "@/lib/room/list-view": {},
     }, { TextEncoder, performance, URL, process: { env: { NEXT_PUBLIC_POSTHOG_KEY: "test" } }, crypto: require("node:crypto") });
@@ -275,4 +285,13 @@ test("MCP separates expected failures from database failures in PostHog", async 
     assert.equal(database.telemetry[0].isError, true);
     assert.equal(database.telemetry[0].properties.$etb_error_code, "DATABASE_ERROR");
     assert.equal(database.telemetry[0].properties.$etb_tool_outcome, "server_error");
+});
+
+test("successful owner and MCP updates invalidate the affected room aliases", async () => {
+    const owner = editor();
+    assert.equal((await owner.update({ id: "room", title: "Changed", link: "new-room" }, 3)).status, "saved");
+    assert.ok(owner.calls.includes("invalidate-room:room,custom-room,new-room"));
+    const mcp = editor();
+    assert.equal((await mcp.mcp({ room_id: "room", title: "Changed", expected_edit_version: 3 }, "update_room")).result.isError, undefined);
+    assert.ok(mcp.calls.some((call) => call.startsWith("invalidate-room:room,custom-room,")));
 });

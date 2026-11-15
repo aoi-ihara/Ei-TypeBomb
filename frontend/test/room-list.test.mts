@@ -128,3 +128,17 @@ test("edit action is available only for the signed-in creator, including in late
     assert.equal(editable.has("public-mine"), true);
     assert.deepEqual([...getEditableRoomIds(myRooms, null)], []);
 });
+
+test("minimal owner ID records preserve public details and edit ownership", () => {
+    const rooms = selectRoomsForView({
+        view: "recommended",
+        publicRooms: [{ ...otherPublic, title: "Original" }],
+        myRooms: [{ id: "public-other", userId: "authenticated-user" }],
+        savedRoomIds: [],
+        currentUserId: "authenticated-user",
+    });
+    assert.equal(rooms[0].title, "Original");
+    assert.equal(rooms[0].visibility, "public");
+    assert.equal(rooms[0].userId, "authenticated-user");
+    assert.equal(getEditableRoomIds([{ id: "public-other", userId: "authenticated-user" }], "authenticated-user").has("public-other"), true);
+});

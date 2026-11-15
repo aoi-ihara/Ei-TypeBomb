@@ -1,6 +1,7 @@
 "use server";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
+import { blockRoomDataCache, invalidateRoomDataCache, releaseRoomDataCache } from "./room-data-cache";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -14,24 +15,50 @@ export const deleteRoom = async (roomId: string) => {
 
     const supabase = await createAdminClient();
 
+    // Fence previously public/unlisted content before deleting its source.
+    const { data: existing, error: lookupError } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, link, visibility")
+        .eq("id", roomId)
+        .eq("user_id", userId)
+        .maybeSingle();
+    if (lookupError || !existing) {
+        return "ルームが見つからないか、削除する権限がありません。";
+    }
+    let privacyFence: string | null = null;
+    if (existing.visibility !== "private") {
+        try {
+            privacyFence = await blockRoomDataCache(roomId, existing.link);
+        } catch {
+            return "ルームを安全に削除できませんでした。もう一度お試しください。";
+        }
+    }
+
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .delete()
         .eq("id", roomId)
         .eq("user_id", userId)
-        .select("id")
+        .select("id, link")
         .maybeSingle();
 
     if (error) {
+        await releaseRoomDataCache(privacyFence, roomId, existing.link);
         console.error(error);
         return "ルームを削除できませんでした。もう一度お試しください。";
     }
 
     if (!data) {
+        await releaseRoomDataCache(privacyFence, roomId, existing.link);
         return "ルームが見つからないか、削除する権限がありません。";
     }
 
-    await invalidatePublicRooms();
+    await Promise.all([
+        invalidatePublicRooms(),
+        privacyFence
+            ? releaseRoomDataCache(privacyFence, roomId, data.link)
+            : invalidateRoomDataCache(roomId, data.link),
+    ]);
     // Also expires old aliases and lists in the calling browser after a commit.
     revalidateRoomContent();
 
