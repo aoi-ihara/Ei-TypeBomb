@@ -100,104 +100,172 @@ test("failed private DB lookups fail closed and are never CDN cached", async () 
     assert.equal(response.body.currentUser, undefined);
 });
 
-test("public feeds are ISR pages and never await personalized room list data", () => {
+test("anonymous feeds keep their ISR pages with no private data", () => {
     for (const page of ["page.tsx", "latest/page.tsx"]) {
-        const pathToPage = path.join(__dirname, "../app/(game)/", page);
-        const code = readFileSync(pathToPage, "utf8");
+        const code = readFileSync(path.join(__dirname, "../app/(game)/", page), "utf8");
         assert.match(code, /export const dynamic = "force-static"/);
         assert.match(code, /export const revalidate = 3600/);
-        assert.match(code, /getPublicRooms\(\{ failOnError: true \}\)/);
-        assert.match(code, /deferViewer/);
-        assert.doesNotMatch(code, /getRoomListData|getUserDetails|searchParams/);
+        assert.match(code, /getPublicRooms\\(\\{ failOnError: true \\}\\)/);
+        assert.match(code, /currentUser=\\{null\\}/);
+        assert.doesNotMatch(code, /deferViewer|getRoomListData|getUserDetails/);
     }
-    const client = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
-        "utf8",
-    );
-    const provider = readFileSync(
-        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
-        "utf8",
-    );
-    const layout = readFileSync(
-        path.join(__dirname, "../app/(game)/layout.tsx"),
-        "utf8",
-    );
-    assert.match(layout, /<RoomListViewerProvider>/);
-    assert.match(client, /useRoomListViewer\(\)/);
-    assert.match(client, /viewer\.ensureLoaded\(\)/);
-    assert.match(provider, /fetch\("\/api\/room-list-viewer"/);
-    assert.match(provider, /cache: "no-store"/);
-    assert.match(provider, /requestRef\.current/);
-    assert.match(provider, /ownedRoomIds/);
 });
 
-test("same-route sign out clears deferred ownership and save controls before redirect", () => {
-    const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
-        "utf8",
-    );
-    const handlerStart = source.indexOf("const handleSignOut = async () => {");
-    const handlerEnd = source.indexOf("const viewTitle =", handlerStart);
-    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
-    const handler = source.slice(handlerStart, handlerEnd);
-    const redirect = handler.indexOf("await signOut()");
-    assert.ok(redirect > 0, "sign-out Server Action must still execute");
-    const sharedReset = handler.indexOf("viewer.resetToGuest()");
-    assert.ok(sharedReset > 0 && sharedReset < redirect);
-    // Logging out from /mine or /saved must also clear the shared provider.
-    assert.ok(sharedReset < handler.indexOf("if (!deferViewer)"));
-    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
-    assert.match(handler, /catch \(error\)/);
-    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
-    assert.match(handler, /unstable_rethrow\(error\)/);
+test("authenticated feeds verify identity in uncached server routes", () => {
+    const pages = [
+        ["feed-session/page.tsx", "recommended"],
+        ["feed-session/latest/page.tsx", "latest"],
+    ];
+    for (const [filename, view] of pages) {
+        const code = readFileSync(path.join(__dirname, "../app/(game)/", filename), "utf8");
+        assert.match(code, /export const dynamic = "force-dynamic"/);
+        assert.match(code, /robots: \\{ index: false, follow: false \\}/);
+        assert.ok(code.includes('getRoomListData("' + view + '")'));
+        assert.doesNotMatch(code, /deferViewer/);
+    }
+    const listData = readFileSync(path.join(__dirname, "../app/(game)/room-list-data.ts"), "utf8");
+    assert.match(listData, /getUserDetails\\(\\)/);
+    assert.match(listData, /getOwnedRoomIdsForUser/);
+    assert.match(listData, /getSavedRoomIdsForUser/);
 });
 
-test("public feed auth transitions preserve navbar, header and CTA dimensions", () => {
-    const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
-        "utf8",
-    );
-    const provider = readFileSync(
-        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
-        "utf8",
-    );
-    const header = readFileSync(
-        path.join(__dirname, "../components/layout/Header.tsx"),
-        "utf8",
-    );
-    const button = readFileSync(
-        path.join(__dirname, "../components/ui/Button.tsx"),
-        "utf8",
-    );
+test("room UI uses server-provided viewer directly; shared layout is untouched", () => {
+    const source = readFileSync(path.join(__dirname, "../app/(game)/RoomList.tsx"), "utf8");
+    const sidebar = readFileSync(path.join(__dirname, "../components/rooms/RoomNavigation.tsx"), "utf8");
+    const header = readFileSync(path.join(__dirname, "../components/layout/Header.tsx"), "utf8");
+    const button = readFileSync(path.join(__dirname, "../components/ui/Button.tsx"), "utf8");
 
-    assert.match(provider, /snapshotRef\.current\.status !== "idle"/);
-    assert.match(provider, /resetToGuest/);
-    assert.match(source, /viewer\.snapshot\.status === "idle"/);
-    assert.match(source, /className="invisible pointer-events-none"/);
-    assert.match(source, /<Button variant="text">サインイン<\/Button>/);
-    assert.doesNotMatch(source, /className="h-(?:9|10) w-28"/);
+    assert.doesNotMatch(source, /deferViewer|viewerLoading|viewerError|useRoomListViewer/);
+    assert.doesNotMatch(sidebar, /viewerLoading|viewer-placeholder/);
+    assert.match(source, /currentUser \\? \\(/);
+    assert.match(source, /<Menu/);
+    assert.match(source, /サインイン/);
+    assert.match(source, /setLocalCurrentUser\\(null\\)/);
+    assert.match(source, /setLocalSavedRoomIds\\(\\[\\]\\)/);
+    assert.match(source, /unstable_rethrow\\(error\\)/);
     assert.match(header, /className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4"/);
-    assert.doesNotMatch(header, /min-h-\[|absolute right-4/);
-    assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
     assert.match(button, /opacity-50 pointer-events-none/);
 });
 
-test("saved room toggles in personalized feeds update the shared viewer too", () => {
-    const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
-        "utf8",
-    );
-    const setterStart = source.indexOf("const setSavedRoomIds = (value:");
-    const setterEnd = source.indexOf("const viewerLoading =", setterStart);
-    assert.ok(setterStart >= 0 && setterEnd > setterStart);
-    const setter = source.slice(setterStart, setterEnd);
-    assert.match(setter, /setLocalSavedRoomIds\(value\)/);
-    assert.match(setter, /viewer\.setSavedRoomIds\(value\)/);
-    assert.match(setter, /viewer\.snapshot\.currentUser\?\.id === localCurrentUser\?\.id/);
-    const saveHandler = source.slice(
-        source.indexOf("const toggleSavedRoomState = async"),
-        source.indexOf("useEffect(() => {\n        if (!currentUser)", source.indexOf("const toggleSavedRoomState = async")),
-    );
-    assert.match(saveHandler, /setSavedRoomIds\(nextSavedIds\)/);
-    assert.match(saveHandler, /setSavedRoomIds\(\(current\) =>/);
+function proxyFixture({ pathname = "/", method = "GET", cookieNames = [], refreshCookies = [] } = {}) {
+    const code = readFileSync(path.join(__dirname, "../proxy.ts"), "utf8");
+    const compiled = ts.transpileModule(code, {
+        compilerOptions: {
+            target: ts.ScriptTarget.ES2022,
+            module: ts.ModuleKind.CommonJS,
+            esModuleInterop: true,
+        },
+    }).outputText;
+    const exports = {};
+    const cookieValues = new Map(cookieNames.map((name) => [name, "old"]));
+    const authCalls = [];
+    const request = {
+        method,
+        nextUrl: {
+            pathname,
+            clone() { return new URL("https://ei-typebomb.com" + pathname + "?sort=keep"); },
+        },
+        cookies: {
+            getAll() { return [...cookieValues].map(([name, value]) => ({ name, value })); },
+            set(name, value) { cookieValues.set(name, value); },
+        },
+    };
+    const response = (kind, url = null) => ({
+        kind,
+        url,
+        writtenCookies: [],
+        cookies: {
+            set(name, value, options) {
+                this.writtenCookies.push?.([name, value, options]);
+            },
+        },
+    });
+    // The response's cookies.set must be observable by the test.
+    const makeResponse = (kind, url) => {
+        const result = response(kind, url);
+        result.cookies.set = (name, value, options) =>
+            result.writtenCookies.push([name, value, options]);
+        return result;
+    };
+    vm.runInNewContext(compiled, {
+        exports,
+        process: { env: { NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example", NEXT_PUBLIC_SUPABASE_ANON_KEY: "test" } },
+        require(id) {
+            if (id === "next/server") return {
+                NextResponse: {
+                    next: () => makeResponse("next"),
+                    rewrite: (url) => makeResponse("rewrite", url),
+                },
+            };
+            if (id === "@/lib/db/cookie-options") return { cookieOptions: {} };
+            if (id === "@supabase/ssr") return {
+                createServerClient: (_url, _key, options) => ({
+                    auth: {
+                        async getClaims() {
+                            authCalls.push("getClaims");
+                            if (refreshCookies.length) options.cookies.setAll(refreshCookies);
+                            return { data: { claims: null }, error: null };
+                        },
+                    },
+                }),
+            };
+            throw Error("Unexpected dependency " + id);
+        },
+        URL,
+    });
+    return { proxy: exports.proxy, request, authCalls, cookieValues };
+}
+
+test("public guest feed stays ISR without auth lookups", async () => {
+    for (const pathname of ["/", "/latest"]) {
+        const f = proxyFixture({ pathname });
+        const result = await f.proxy(f.request);
+        assert.equal(result.kind, "next");
+        assert.deepEqual(f.authCalls, []);
+    }
+});
+
+test("unrelated cookies never opt visitors out of public ISR", async () => {
+    const f = proxyFixture({ cookieNames: ["theme", "sb-other-code-verifier"] });
+    assert.equal((await f.proxy(f.request)).kind, "next");
+    assert.deepEqual(f.authCalls, []);
+});
+
+test("Supabase session cookie routes / and /latest to uncached SSR", async () => {
+    for (const [pathname, destination] of [
+        ["/", "/feed-session"],
+        ["/latest", "/feed-session/latest"],
+    ]) {
+        const f = proxyFixture({ pathname, cookieNames: ["sb-project-auth-token.0"] });
+        const result = await f.proxy(f.request);
+        assert.equal(result.kind, "rewrite");
+        assert.equal(result.url.pathname, destination);
+        assert.equal(result.url.search, "?sort=keep");
+        assert.deepEqual(f.authCalls, ["getClaims"]);
+    }
+});
+
+test("refreshed session cookies survive SSR rewrite", async () => {
+    const f = proxyFixture({
+        cookieNames: ["sb-project-auth-token"],
+        refreshCookies: [{ name: "sb-project-auth-token", value: "renewed", options: { path: "/" } }],
+    });
+    const result = await f.proxy(f.request);
+    assert.equal(result.kind, "rewrite");
+    assert.equal(f.cookieValues.get("sb-project-auth-token"), "renewed");
+    assert.equal(result.writtenCookies[0][1], "renewed");
+});
+
+test("Server Action POST is never rewritten, but still refreshes authentication", async () => {
+    const f = proxyFixture({ method: "POST", cookieNames: ["sb-project-auth-token"] });
+    const result = await f.proxy(f.request);
+    assert.equal(result.kind, "next");
+    assert.deepEqual(f.authCalls, ["getClaims"]);
+});
+
+test("direct dynamic route remains subject to normal auth processing", async () => {
+    const f = proxyFixture({ pathname: "/feed-session" });
+    const result = await f.proxy(f.request);
+    assert.equal(result.kind, "next");
+    assert.deepEqual(f.authCalls, ["getClaims"]);
 });
