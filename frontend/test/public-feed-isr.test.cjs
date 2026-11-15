@@ -114,9 +114,21 @@ test("public feeds are ISR pages and never await personalized room list data", (
         path.join(__dirname, "../app/(game)/RoomList.tsx"),
         "utf8",
     );
-    assert.match(client, /fetch\("\/api\/room-list-viewer"/);
-    assert.match(client, /cache: "no-store"/);
-    assert.match(client, /ownedRoomIds/);
+    const provider = readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
+        "utf8",
+    );
+    const layout = readFileSync(
+        path.join(__dirname, "../app/(game)/layout.tsx"),
+        "utf8",
+    );
+    assert.match(layout, /<RoomListViewerProvider>/);
+    assert.match(client, /useRoomListViewer\(\)/);
+    assert.match(client, /viewer\.ensureLoaded\(\)/);
+    assert.match(provider, /fetch\("\/api\/room-list-viewer"/);
+    assert.match(provider, /cache: "no-store"/);
+    assert.match(provider, /requestRef\.current/);
+    assert.match(provider, /ownedRoomIds/);
 });
 
 test("same-route sign out clears deferred ownership and save controls before redirect", () => {
@@ -130,14 +142,38 @@ test("same-route sign out clears deferred ownership and save controls before red
     const handler = source.slice(handlerStart, handlerEnd);
     const redirect = handler.indexOf("await signOut()");
     assert.ok(redirect > 0, "sign-out Server Action must still execute");
-    for (const reset of [
-        "setCurrentUser(null)",
-        "setMyRooms([])",
-        "setSavedRoomIds([])",
-    ]) {
-        const position = handler.indexOf(reset);
-        assert.ok(position >= 0 && position < redirect, reset + " must precede the redirecting action");
-    }
+    assert.ok(handler.indexOf("viewer.resetToGuest()") > 0);
+    assert.ok(handler.indexOf("viewer.resetToGuest()") < redirect);
     assert.match(handler, /catch \(error\)/);
-    assert.match(handler, /setCurrentUser\(previousViewer.currentUser\)/);
+    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
+    assert.match(handler, /unstable_rethrow\(error\)/);
+});
+
+test("public feed auth transitions preserve navbar, header and CTA dimensions", () => {
+    const source = readFileSync(
+        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        "utf8",
+    );
+    const provider = readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
+        "utf8",
+    );
+    const header = readFileSync(
+        path.join(__dirname, "../components/layout/Header.tsx"),
+        "utf8",
+    );
+    const button = readFileSync(
+        path.join(__dirname, "../components/ui/Button.tsx"),
+        "utf8",
+    );
+
+    assert.match(provider, /snapshotRef\.current\.status !== "idle"/);
+    assert.match(provider, /resetToGuest/);
+    assert.match(source, /viewer\.snapshot\.status === "idle"/);
+    assert.match(source, /className="h-9 w-28"/);
+    assert.match(source, /dimWhenDisabled=\{false\}/);
+    assert.match(header, /min-h-\[68px\]/);
+    assert.match(header, /items-center/);
+    assert.match(button, /dimWhenDisabled = true/);
+    assert.match(button, /disabled && \(dimWhenDisabled/);
 });
