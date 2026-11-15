@@ -12,6 +12,11 @@ import {
     rankPublicRooms,
     type RoomRecommendationStats,
 } from "./recommendation";
+import {
+    readPublicRoomsCache,
+    writePublicRoomsCache,
+    invalidatePublicRoomsCache,
+} from "./public-rooms-cache";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
@@ -226,52 +231,49 @@ export const getRoomStatusFromId = async (id: string) => {
     return data.visibility === "private";
 };
 
-const PUBLIC_ROOMS_CACHE_TTL_MS = 2 * 60 * 1000;
-const PUBLIC_ROOMS_STALE_IF_ERROR_MS = 10 * 60 * 1000;
-
-let publicRoomsCache: {
-    rooms: Room[];
-    expiresAt: number;
-    staleUntil: number;
-} | null = null;
+// Only deduplicate simultaneous reads in this process. The long-lived cache
+// must be shared across Vercel instances and invalidated across deployments.
 let publicRoomsRequest: Promise<Room[]> | null = null;
-let publicRoomsGeneration = 0;
 
 export const invalidatePublicRooms = async () => {
-    publicRoomsGeneration++;
-    publicRoomsCache = null;
     publicRoomsRequest = null;
+    await invalidatePublicRoomsCache();
 };
 
-// Return fresh objects so callers cannot mutate the process-wide cache.
+// Return fresh objects so callers cannot mutate a shared response.
 const clonePublicRooms = (rooms: Room[]): Room[] =>
     rooms.map((room) => ({ ...room, items: [...(room.items ?? [])] }));
 
 export const getPublicRooms = async (): Promise<Room[]> => {
-    const now = Date.now();
-
-    if (publicRoomsCache && now < publicRoomsCache.expiresAt) {
-        return clonePublicRooms(publicRoomsCache.rooms);
-    }
-
     if (publicRoomsRequest) {
         return clonePublicRooms(await publicRoomsRequest);
     }
 
-    const generation = publicRoomsGeneration;
     const request = (async (): Promise<Room[]> => {
+        const startedAt = performance.now();
+        const cached = await readPublicRoomsCache();
+        const cacheMs = Math.round(performance.now() - startedAt);
+        if (cached.rooms !== null) {
+            if (process.env.ROOM_CACHE_LOGS === "1") {
+                serverLog("SERVER", "public rooms cache", {
+                    status: "hit",
+                    cache_ms: cacheMs,
+                    count: cached.rooms.length,
+                });
+            }
+            return cached.rooms;
+        }
+
+        const dbStartedAt = performance.now();
         const supabase = await createAdminClient();
         const { data, error } = await supabase.rpc(
             "get_ei_typebomb_public_rooms",
         );
+        const dbMs = Math.round(performance.now() - dbStartedAt);
 
         if (error) {
             serverError("failed to fetch public rooms", error, "DB");
-
-            if (publicRoomsCache && Date.now() < publicRoomsCache.staleUntil) {
-                return publicRoomsCache.rooms;
-            }
-
+            // Do not cache Supabase failures as empty lists.
             return [];
         }
 
@@ -305,17 +307,15 @@ export const getPublicRooms = async (): Promise<Room[]> => {
         );
 
         const rankedRooms = rankPublicRooms(rooms, statsByRoomId);
-        const fetchedAt = Date.now();
+        await writePublicRoomsCache(rankedRooms, cached.generation);
 
-        if (generation === publicRoomsGeneration) {
-            publicRoomsCache = {
-                rooms: rankedRooms,
-                expiresAt: fetchedAt + PUBLIC_ROOMS_CACHE_TTL_MS,
-                staleUntil:
-                    fetchedAt +
-                    PUBLIC_ROOMS_CACHE_TTL_MS +
-                    PUBLIC_ROOMS_STALE_IF_ERROR_MS,
-            };
+        if (process.env.ROOM_CACHE_LOGS === "1") {
+            serverLog("SERVER", "public rooms cache", {
+                status: cached.status,
+                cache_ms: cacheMs,
+                db_ms: dbMs,
+                count: rankedRooms.length,
+            });
         }
 
         return rankedRooms;
