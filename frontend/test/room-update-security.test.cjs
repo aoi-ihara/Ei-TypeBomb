@@ -76,6 +76,7 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
     });
     const route = load("app/api/mcp/route.ts", {
         "@posthog/mcp": {},
+        "@/lib/mcp/descriptions": { getMcpPresentation: async (tools, instructions) => ({ tools, instructions }) },
         "@/lib/room/item-limits.mjs": require("../lib/room/item-limits.mjs"),
         "@/lib/config/base-url": { getEtbUrl: (p) => p },
         "@/lib/mcp/oauth": {

@@ -1,4 +1,5 @@
 import { PostHogMCP } from "@posthog/mcp";
+import { getMcpPresentation } from "@/lib/mcp/descriptions";
 import {
     MAX_PROMPT_LENGTH,
     MAX_ANSWER_LENGTH,
@@ -231,6 +232,9 @@ const tools = [
         },
     },
 ];
+
+const fallbackInstructions =
+    "Ei-TypeBombのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。";
 
 function validateRoomPatch(input: JsonRecord): {
     patch: JsonRecord;
@@ -636,6 +640,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.method === "initialize") {
+        const presentation = await getMcpPresentation(tools, fallbackInstructions);
         const params = isRecord(body.params) ? body.params : {};
         const requestedVersion = params.protocolVersion;
         const protocolVersion =
@@ -649,8 +654,7 @@ export async function POST(request: NextRequest) {
                 protocolVersion,
                 capabilities: { tools: { listChanged: false } },
                 serverInfo,
-                instructions:
-                    "Ei-TypeBombのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。",
+                instructions: presentation.instructions,
             },
             protocolVersion,
         );
@@ -665,12 +669,13 @@ export async function POST(request: NextRequest) {
         },
     };
     if (body.method === "tools/list") {
+        const presentation = await getMcpPresentation(tools, fallbackInstructions);
         analytics?.captureToolsList({
             ...metadata,
             toolNames: tools.map((tool) => tool.name),
         });
         await flushAnalytics();
-        return jsonRpc(id, { tools });
+        return jsonRpc(id, { tools: presentation.tools });
     }
 
     if (body.method !== "tools/call") {
