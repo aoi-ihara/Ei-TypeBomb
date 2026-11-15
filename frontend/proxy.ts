@@ -17,7 +17,7 @@ export async function proxy(request: NextRequest) {
         feedView !== null &&
         request.cookies
             .getAll()
-            .some(({ name }) => /^sb-.+-auth-token(?:\\.\\d+)?$/.test(name));
+            .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
     if (feedView && !hasAuthCookie) return NextResponse.next();
 
     let response = NextResponse.next();
