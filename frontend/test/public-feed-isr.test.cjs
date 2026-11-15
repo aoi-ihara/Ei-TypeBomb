@@ -256,11 +256,28 @@ test("refreshed session cookies survive SSR rewrite", async () => {
     assert.equal(result.writtenCookies[0][1], "renewed");
 });
 
-test("Server Action POST is never rewritten, but still refreshes authentication", async () => {
-    const f = proxyFixture({ method: "POST", cookieNames: ["sb-project-auth-token"] });
+test("authenticated Server Action POST stays on SSR route for revalidation renders", async () => {
+    for (const [pathname, destination] of [
+        ["/", "/feed-session"],
+        ["/latest", "/feed-session/latest"],
+    ]) {
+        const f = proxyFixture({
+            pathname,
+            method: "POST",
+            cookieNames: ["sb-project-auth-token"],
+        });
+        const result = await f.proxy(f.request);
+        assert.equal(result.kind, "rewrite");
+        assert.equal(result.url.pathname, destination);
+        assert.deepEqual(f.authCalls, ["getClaims"]);
+    }
+});
+
+test("guest Server Action POST remains on the anonymous route", async () => {
+    const f = proxyFixture({ method: "POST" });
     const result = await f.proxy(f.request);
     assert.equal(result.kind, "next");
-    assert.deepEqual(f.authCalls, ["getClaims"]);
+    assert.deepEqual(f.authCalls, []);
 });
 
 test("direct dynamic route remains subject to normal auth processing", async () => {
