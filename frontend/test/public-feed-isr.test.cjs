@@ -106,7 +106,7 @@ test("public feeds are ISR pages and never await personalized room list data", (
         const code = readFileSync(pathToPage, "utf8");
         assert.match(code, /export const dynamic = "force-static"/);
         assert.match(code, /export const revalidate = 3600/);
-        assert.match(code, /getPublicRooms\(\)/);
+        assert.match(code, /getPublicRooms\(\{ failOnError: true \}\)/);
         assert.match(code, /deferViewer/);
         assert.doesNotMatch(code, /getRoomListData|getUserDetails|searchParams/);
     }
