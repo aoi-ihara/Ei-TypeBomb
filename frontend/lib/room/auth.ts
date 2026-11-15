@@ -77,6 +77,19 @@ export const prepareRoomJoin = async (link: string) => {
     return { id: data.id, requiresPassword: true };
 };
 
+const scheduleRoomPlayAnalytics = async (
+    roomId: string,
+    playMode?: RoomPlayMode,
+) => {
+    if (!playMode) return;
+    try {
+        await recordRoomPlay(roomId, playMode);
+    } catch (error) {
+        // Analytics errors must not block a successful game join.
+        console.error("Failed to schedule room play analytics:", error);
+    }
+};
+
 export const signInToRoom = async (
     room: Room,
     turnstileToken?: string,
@@ -129,13 +142,7 @@ export const signInToRoom = async (
             const isOwner = Boolean(userId) && data.user_id === userId;
             if (!isOwner) {
                 if (await isRoomAuthorized(room.id)) {
-                    if (playMode) {
-                        try {
-                            await recordRoomPlay(room.id, playMode);
-                        } catch (error) {
-                            console.error("Failed to schedule room play analytics:", error);
-                        }
-                    }
+                    await scheduleRoomPlayAnalytics(room.id, playMode);
                     return null;
                 }
                 return "パスワードを入力してください。";
@@ -147,13 +154,7 @@ export const signInToRoom = async (
 
     // Schedule analytics on the server after authorization, without a second
     // client-to-server Server Action round trip or a blocking database write.
-    if (playMode) {
-                        try {
-                            await recordRoomPlay(room.id, playMode);
-                        } catch (error) {
-                            console.error("Failed to schedule room play analytics:", error);
-                        }
-                    }
+    await scheduleRoomPlayAnalytics(room.id, playMode);
     return null;
 };
 
