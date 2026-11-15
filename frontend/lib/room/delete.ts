@@ -1,7 +1,7 @@
 "use server";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
-import { invalidateRoomDataCache } from "./room-data-cache";
+import { blockRoomDataCache, invalidateRoomDataCache } from "./room-data-cache";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -15,6 +15,22 @@ export const deleteRoom = async (roomId: string) => {
 
     const supabase = await createAdminClient();
 
+    // Fence previously public/unlisted content before deleting its source.
+    const { data: existing, error: lookupError } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id, link")
+        .eq("id", roomId)
+        .eq("user_id", userId)
+        .maybeSingle();
+    if (lookupError || !existing) {
+        return "ルームが見つからないか、削除する権限がありません。";
+    }
+    try {
+        await blockRoomDataCache(roomId, existing.link);
+    } catch {
+        return "ルームを安全に削除できませんでした。もう一度お試しください。";
+    }
+
     const { data, error } = await supabase
         .from("ei_typebomb_rooms")
         .delete()
@@ -24,11 +40,13 @@ export const deleteRoom = async (roomId: string) => {
         .maybeSingle();
 
     if (error) {
+        await invalidateRoomDataCache(roomId, existing.link);
         console.error(error);
         return "ルームを削除できませんでした。もう一度お試しください。";
     }
 
     if (!data) {
+        await invalidateRoomDataCache(roomId, existing.link);
         return "ルームが見つからないか、削除する権限がありません。";
     }
 
