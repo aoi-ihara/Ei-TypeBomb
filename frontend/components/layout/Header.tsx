@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function Header({ children }: { children?: React.ReactNode }) {
     return (
-        <header className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
+        <header className="flex shrink-0 top-0 left-0 w-full min-h-[68px] items-center justify-between px-4 py-4">
             <div className="flex gap-4">
                 <div className="rounded-lg" data-cursor="button">
                     <Link
