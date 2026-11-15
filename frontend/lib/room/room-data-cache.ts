@@ -4,6 +4,11 @@ import type { Item } from "@/type";
 import { serverError } from "@/lib/server-console";
 import { unstable_rethrow } from "next/navigation";
 import { randomUUID } from "node:crypto";
+import {
+    getDeploymentCacheNamespace,
+    isUpstashConfigured as configured,
+    runUpstashCommand as command,
+} from "./upstash-rest";
 
 /**
  * Room content shared between visitors, never an authenticated view or an
@@ -30,28 +35,15 @@ const TTL_SECONDS =
     Number.isSafeInteger(rawTtl) && rawTtl >= 60 && rawTtl <= 86400
         ? rawTtl
         : 86400;
-const TIMEOUT_MS = 1000;
 let lastWarningAt = 0;
 
-const configured = () =>
-    Boolean(
-        process.env.UPSTASH_REDIS_REST_URL &&
-            process.env.UPSTASH_REDIS_REST_TOKEN,
-    );
-
 const prefix = () => {
-    const environment = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "local";
-    const branch =
-        environment === "preview"
-            ? ":" + (process.env.VERCEL_GIT_COMMIT_REF ?? "default")
-            : "";
-    // Privacy invalidation must cross preview/production if they point to the
-    // same Supabase database. Default to database identity, not deployment.
+    // Room content must retain its database-aware fallback namespace.
     const namespace =
         process.env.UPSTASH_CACHE_NAMESPACE ??
         (process.env.NEXT_PUBLIC_SUPABASE_URL
             ? "db:" + process.env.NEXT_PUBLIC_SUPABASE_URL
-            : environment + branch);
+            : getDeploymentCacheNamespace());
     return "etb:room-data:v1:" + encodeURIComponent(namespace) + ":";
 };
 
@@ -64,30 +56,6 @@ function warn(error: unknown) {
     if (Date.now() - lastWarningAt < 60_000) return;
     lastWarningAt = Date.now();
     serverError("Upstash room-data cache unavailable; using Supabase", error);
-}
-
-async function command<T>(args: (string | number)[]): Promise<T | null> {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) throw new Error("Upstash is not configured");
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(args),
-        cache: "no-store",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error("Upstash HTTP " + response.status);
-    const body: unknown = await response.json();
-    if (!body || typeof body !== "object")
-        throw new Error("Invalid Upstash response");
-    const record = body as { result?: unknown; error?: string };
-    if (record.error) throw new Error("Upstash command failed");
-    if (!("result" in record)) throw new Error("Missing Upstash result");
-    return record.result as T | null;
 }
 
 const optionalString = (value: unknown): value is string | null =>
@@ -196,13 +164,7 @@ export async function writeRoomDataCache(
 }
 
 // EVAL is atomic: an unrelated edit must never clear an active privacy fence.
-const BLOCK_SCRIPT = [
-    "local old = redis.call('GET', KEYS[1])",
-    "if old and string.sub(old, 1, 8) == 'blocked:' then return 0 end",
-    "redis.call('SET', KEYS[1], ARGV[1])",
-    "return 1",
-].join("\n");
-const INVALIDATE_SCRIPT = [
+const UPDATE_IF_UNBLOCKED_SCRIPT = [
     "local old = redis.call('GET', KEYS[1])",
     "if old and string.sub(old, 1, 8) == 'blocked:' then return 0 end",
     "redis.call('SET', KEYS[1], ARGV[1])",
@@ -228,7 +190,7 @@ export async function blockRoomDataCache(
     try {
         for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
             const changed = await command<number>([
-                "EVAL", BLOCK_SCRIPT, 1, generationKey(identifier), token,
+                "EVAL", UPDATE_IF_UNBLOCKED_SCRIPT, 1, generationKey(identifier), token,
             ]);
             if (changed !== 1) throw new Error("Room cache is already privacy-fenced");
         }
@@ -267,7 +229,7 @@ export async function invalidateRoomDataCache(
     for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
         try {
             await command([
-                "EVAL", INVALIDATE_SCRIPT, 1, generationKey(identifier),
+                "EVAL", UPDATE_IF_UNBLOCKED_SCRIPT, 1, generationKey(identifier),
                 randomUUID(),
             ]);
         } catch (error) {

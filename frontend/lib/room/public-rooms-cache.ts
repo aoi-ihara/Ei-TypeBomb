@@ -3,6 +3,11 @@ import "server-only";
 import type { Room } from "@/type";
 import { unstable_rethrow } from "next/navigation";
 import { serverError } from "@/lib/server-console";
+import {
+    getDeploymentCacheNamespace,
+    isUpstashConfigured as configured,
+    runUpstashCommand as command,
+} from "./upstash-rest";
 
 /**
  * The shared cache contains ONLY public room-list summaries: never items,
@@ -14,57 +19,20 @@ const TTL_SECONDS =
     Number.isSafeInteger(configuredTtl) && configuredTtl >= 60 && configuredTtl <= 86400
         ? configuredTtl
         : 3600;
-const TIMEOUT_MS = 1000;
 let lastWarningAt = 0;
 
 const getPrefix = () => {
-    const environment = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "local";
-    const branch =
-        environment === "preview"
-            ? ":" + (process.env.VERCEL_GIT_COMMIT_REF ?? "default")
-            : "";
-    // Deployments sharing one Supabase database must also share this namespace.
-    const namespace = process.env.UPSTASH_CACHE_NAMESPACE ?? environment + branch;
+    // Preserve the original list-cache namespace (not the room-data fallback).
+    const namespace =
+        process.env.UPSTASH_CACHE_NAMESPACE ?? getDeploymentCacheNamespace();
     return "etb:public-rooms:v1:" + encodeURIComponent(namespace);
 };
-
-const configured = () =>
-    Boolean(
-        process.env.UPSTASH_REDIS_REST_URL &&
-        process.env.UPSTASH_REDIS_REST_TOKEN,
-    );
 
 const warn = (error: unknown) => {
     if (Date.now() - lastWarningAt < 60_000) return;
     lastWarningAt = Date.now();
     serverError("Upstash public-room cache unavailable; using Supabase", error);
 };
-
-async function command<T>(args: (string | number)[]): Promise<T | null> {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) throw new Error("Upstash is not configured");
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(args),
-        cache: "no-store",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-
-    if (!response.ok) throw new Error("Upstash HTTP " + response.status);
-    const body: unknown = await response.json();
-    if (!body || typeof body !== "object")
-        throw new Error("Invalid Upstash response");
-    const record = body as { result?: unknown; error?: string };
-    if (record.error) throw new Error("Upstash command failed");
-    if (!("result" in record)) throw new Error("Missing Upstash result");
-    return record.result as T | null;
-}
 
 const generationKey = () => getPrefix() + ":generation";
 const dataKey = (generation: string) =>
