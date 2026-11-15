@@ -25,9 +25,10 @@ export async function proxy(request: NextRequest) {
     }
 
     // Rewrites keep / and /latest in the address bar and as link targets.
-    // Never rewrite Server Action POST requests to a different page.
+    // Server Action POSTs must use the same SSR route as GET; their RSC
+    // response can rerender the feed after revalidateRoomLists().
     const rewriteUrl =
-        isSessionCandidate && (request.method === "GET" || request.method === "HEAD")
+        isSessionCandidate && (request.method === "GET" || request.method === "HEAD" || request.method === "POST")
             ? (() => {
                   const url = request.nextUrl.clone();
                   url.pathname =
