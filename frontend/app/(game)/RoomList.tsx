@@ -46,7 +46,6 @@ export default function RoomList({
     const [keyword, setKeyword] = useState("");
     // Keep typing responsive even when many rooms match the search.
     const deferredKeyword = useDeferredValue(keyword);
-    const viewer = useRoomListViewer();
     const [localCurrentUser, setLocalCurrentUser] = useState(initialCurrentUser);
     const [localMyRooms, setLocalMyRooms] = useState(initialMyRooms);
     const [localSavedRoomIds, setLocalSavedRoomIds] = useState(initialSavedRoomIds);
