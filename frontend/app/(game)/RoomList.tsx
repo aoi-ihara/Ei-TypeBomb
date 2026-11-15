@@ -226,7 +226,7 @@ export default function RoomList({
     }, [currentUser]);
 
     const addRoom = async () => {
-        if (creating) return;
+        if (creating || viewerLoading || viewerError) return;
         if (!currentUser) {
             startNavigationProgress();
             router.push(getSignInUrl());
@@ -327,6 +327,7 @@ export default function RoomList({
                 <Button
                     onClick={addRoom}
                     loading={creating}
+                    disabled={viewerLoading || viewerError}
                     padding="large"
                     variant="primary"
                     iconName="plus"
