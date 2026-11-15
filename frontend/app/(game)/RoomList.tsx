@@ -249,11 +249,30 @@ export default function RoomList({
     };
 
     const handleSignOut = async () => {
+        // A redirect back to the same ISR route can preserve this component.
+        // Remove per-viewer controls *before* the redirecting Server Action,
+        // instead of relying on a remount or the effect's unchanged deps.
+        const previousViewer = { currentUser, myRooms, savedRoomIds };
+        setCurrentUser(null);
+        setMyRooms([]);
+        setSavedRoomIds([]);
         posthog.capture("signed_out");
         posthog.reset();
-        await signOut();
-        startNavigationProgress();
-        router.replace("/");
+
+        try {
+            await signOut();
+            startNavigationProgress();
+            router.replace("/");
+        } catch (error) {
+            // If signing out fails, restore the last authenticated view.
+            setCurrentUser(previousViewer.currentUser);
+            setMyRooms(previousViewer.myRooms);
+            setSavedRoomIds(previousViewer.savedRoomIds);
+            if (previousViewer.currentUser) {
+                posthog.identify(previousViewer.currentUser.id);
+            }
+            console.error("Failed to sign out", error);
+        }
     };
 
     const viewTitle =
