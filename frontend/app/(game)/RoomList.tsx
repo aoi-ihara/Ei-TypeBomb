@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState, type SetStateAction } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
@@ -17,7 +17,6 @@ import Input from "@/components/ui/Input";
 import { View } from "@/type";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
 import { getEditableRoomIds, selectRoomsForView } from "@/lib/room/list-view";
-import { useRoomListViewer } from "@/components/rooms/RoomListViewerProvider";
 
 type CurrentUser = {
     id: string;
@@ -31,8 +30,6 @@ type Props = {
     initialView: View;
     currentUser: CurrentUser | null;
     initialSavedRoomIds: string[];
-    /** Public ISR pages hydrate account-only controls from a private endpoint. */
-    deferViewer?: boolean;
 };
 
 export default function RoomList({
@@ -41,7 +38,6 @@ export default function RoomList({
     initialView,
     currentUser: initialCurrentUser,
     initialSavedRoomIds,
-    deferViewer = false,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
@@ -55,48 +51,11 @@ export default function RoomList({
     const [localMyRooms, setLocalMyRooms] = useState(initialMyRooms);
     const [localSavedRoomIds, setLocalSavedRoomIds] = useState(initialSavedRoomIds);
 
-    // The provider outlives / and /latest. A subsequent route transition
-    // therefore never switches the sign-in button back to a placeholder.
-    useEffect(() => {
-        if (deferViewer) viewer.ensureLoaded();
-    }, [deferViewer, viewer.ensureLoaded]);
-
-    const currentUser = deferViewer ? viewer.snapshot.currentUser : localCurrentUser;
-    const myRooms = useMemo(
-        () =>
-            deferViewer
-                ? viewer.snapshot.currentUser
-                    ? viewer.snapshot.ownedRoomIds.map((id) => ({
-                          id,
-                          userId: viewer.snapshot.currentUser!.id,
-                      }))
-                    : []
-                : localMyRooms,
-        [
-            deferViewer,
-            localMyRooms,
-            viewer.snapshot.currentUser,
-            viewer.snapshot.ownedRoomIds,
-        ],
-    );
-    const savedRoomIds = deferViewer ? viewer.snapshot.savedRoomIds : localSavedRoomIds;
-    const setSavedRoomIds = (value: SetStateAction<string[]>) => {
-        if (deferViewer) {
-            viewer.setSavedRoomIds(value);
-        } else {
-            setLocalSavedRoomIds(value);
-            // These pages share a persistent layout with the public feeds.
-            // Keep the public bookmark UI synchronized, including rollback.
-            if (
-                viewer.snapshot.status === "ready" &&
-                viewer.snapshot.currentUser?.id === localCurrentUser?.id
-            ) {
-                viewer.setSavedRoomIds(value);
-            }
-        }
-    };
-    const viewerLoading = deferViewer && viewer.snapshot.status === "idle";
-    const viewerError = deferViewer && viewer.snapshot.status === "error";
+    // Each route receives viewer information in the initial server render.
+    const currentUser = localCurrentUser;
+    const myRooms = localMyRooms;
+    const savedRoomIds = localSavedRoomIds;
+    const setSavedRoomIds = setLocalSavedRoomIds;
 
     const navigationItems: {
         value: View;
@@ -218,7 +177,7 @@ export default function RoomList({
     }, [currentUser]);
 
     const addRoom = async () => {
-        if (creating || viewerLoading || viewerError) return;
+        if (creating) return;
         if (!currentUser) {
             startNavigationProgress();
             router.push(getSignInUrl());
@@ -244,18 +203,11 @@ export default function RoomList({
 
     const handleSignOut = async () => {
         const previousViewer = { currentUser, myRooms, savedRoomIds };
-        const previousSnapshot = viewer.snapshot;
 
-        // Clear privileged UI immediately, even when Next keeps this mounted
-        // through a same-route Server Action redirect.
-        // The provider also survives navigation from /mine or /saved to /.
-        // Always revoke its owner/bookmark UI before the redirect.
-        viewer.resetToGuest();
-        if (!deferViewer) {
-            setLocalCurrentUser(null);
-            setLocalMyRooms([]);
-            setLocalSavedRoomIds([]);
-        }
+        // Revoke local account controls immediately during sign-out.
+        setLocalCurrentUser(null);
+        setLocalMyRooms([]);
+        setLocalSavedRoomIds([]);
         posthog.capture("signed_out");
         posthog.reset();
 
@@ -266,12 +218,9 @@ export default function RoomList({
         } catch (error) {
             unstable_rethrow(error);
             // Failed sign-out: restore the account view without stale state.
-            viewer.restore(previousSnapshot);
-            if (!deferViewer) {
-                setLocalCurrentUser(previousViewer.currentUser);
-                setLocalMyRooms(previousViewer.myRooms);
-                setLocalSavedRoomIds(previousViewer.savedRoomIds);
-            }
+            setLocalCurrentUser(previousViewer.currentUser);
+            setLocalMyRooms(previousViewer.myRooms);
+            setLocalSavedRoomIds(previousViewer.savedRoomIds);
             if (previousViewer.currentUser) {
                 posthog.identify(previousViewer.currentUser.id);
             }
@@ -289,22 +238,10 @@ export default function RoomList({
                 <RoomNavigation
                     isSignedIn={!!currentUser}
                     currentView={view}
-                    viewerLoading={viewerLoading}
                 />
             }
             header={
-                viewerLoading ? (
-                    <div className="invisible pointer-events-none" aria-hidden="true">
-                        <Button variant="text">サインイン</Button>
-                    </div>
-                ) : viewerError ? (
-                    <Button
-                        variant="text"
-                        onClick={viewer.retry}
-                    >
-                        再読み込み
-                    </Button>
-                ) : currentUser ? (
+                currentUser ? (
                     <Menu
                         name="ユーザーアクション"
                         button={
@@ -353,7 +290,6 @@ export default function RoomList({
                 <Button
                     onClick={addRoom}
                     loading={creating}
-                    disabled={viewerLoading || viewerError}
                     padding="large"
                     variant="primary"
                     iconName="plus"
