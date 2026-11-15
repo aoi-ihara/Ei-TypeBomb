@@ -23,7 +23,7 @@ buttons or delayed account controls to cause layout shifts.
 
 When the original request for `/` or `/latest` contains a Supabase SSR
 session cookie (`sb-*-auth-token`, including chunked variants),
-`proxy.ts` internally rewrites GET/HEAD requests while retaining the
+`proxy.ts` internally rewrites GET/HEAD and Server Action POST requests while retaining the
 browser-visible URL:
 
 | Browser URL | Internal SSR route |
@@ -43,8 +43,8 @@ need for a duplicate public-room cache implementation.
 
 The existing Supabase `getClaims()` refresh in `proxy.ts` still runs on
 requests with session cookies and other non-feed requests. Refresh-set
-cookies are forwarded on the rewrite response. Server Action POSTs are
-**not rewritten**; query-aware legacy redirects remain in `next.config.ts`.
+cookies are forwarded on the rewrite response. Server Action POSTs use the **same** rewrite target so revalidation renders
+stay authenticated; query-aware legacy redirects remain in `next.config.ts`.
 
 Direct requests to the internal SSR routes cannot bypass authentication:
 they also invoke `getRoomListData`, which checks the active user.
