@@ -60,12 +60,15 @@ export default function RoomList({
     const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
     const [viewerLoading, setViewerLoading] = useState(deferViewer);
     const [viewerError, setViewerError] = useState(false);
+    const [viewerRetry, setViewerRetry] = useState(0);
 
     // Account state is intentionally excluded from the ISR HTML. This request
     // is never cached and is the only user-specific request on public feeds.
     useEffect(() => {
         if (!deferViewer) return;
         const controller = new AbortController();
+        setViewerLoading(true);
+        setViewerError(false);
         const loadViewer = async () => {
             try {
                 const response = await fetch("/api/room-list-viewer", {
@@ -102,7 +105,7 @@ export default function RoomList({
         };
         void loadViewer();
         return () => controller.abort();
-    }, [deferViewer]);
+    }, [deferViewer, viewerRetry]);
     const navigationItems: {
         value: View;
         label: string;
@@ -272,7 +275,7 @@ export default function RoomList({
                 viewerLoading ? (
                     <div className="h-10 w-28" aria-label="アカウント情報を読み込み中" />
                 ) : viewerError ? (
-                    <Button variant="text" onClick={() => router.refresh()}>
+                    <Button variant="text" onClick={() => setViewerRetry((count) => count + 1)}>
                         再読み込み
                     </Button>
                 ) : currentUser ? (
