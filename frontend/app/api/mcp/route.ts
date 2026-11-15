@@ -24,6 +24,7 @@ import {
 import { prepareItemReadings } from "@/lib/room/readings";
 import { prepareRoomUpdate } from "@/lib/room/prepare-update";
 import { invalidatePublicRooms } from "@/lib/room/get";
+import { invalidateRoomDataCache } from "@/lib/room/room-data-cache";
 import { revalidateRoomContent } from "@/lib/room/revalidate";
 import type { Item, Room, View } from "@/type";
 import { getRoomCollectionsForUser } from "@/lib/room/list-data";
@@ -504,7 +505,10 @@ async function callTool(
                 true,
             );
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            invalidateRoomDataCache(id, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
@@ -630,7 +634,10 @@ async function callTool(
             console.error("MCP room update failed", updateError?.code);
             return toolError("ルームが見つからないか、更新できませんでした。", "DATABASE_ERROR", true);
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            invalidateRoomDataCache(roomId, prepared.previousLink, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({ room: presentRoom(data as unknown as JsonRecord) });
     }
