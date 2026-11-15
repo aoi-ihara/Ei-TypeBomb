@@ -45,7 +45,13 @@ const prefix = () => {
         environment === "preview"
             ? ":" + (process.env.VERCEL_GIT_COMMIT_REF ?? "default")
             : "";
-    const namespace = process.env.UPSTASH_CACHE_NAMESPACE ?? environment + branch;
+    // Privacy invalidation must cross preview/production if they point to the
+    // same Supabase database. Default to database identity, not deployment.
+    const namespace =
+        process.env.UPSTASH_CACHE_NAMESPACE ??
+        (process.env.NEXT_PUBLIC_SUPABASE_URL
+            ? "db:" + process.env.NEXT_PUBLIC_SUPABASE_URL
+            : environment + branch);
     return "etb:room-data:v1:" + encodeURIComponent(namespace) + ":";
 };
 
