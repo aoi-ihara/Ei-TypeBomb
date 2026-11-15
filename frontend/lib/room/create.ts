@@ -1,6 +1,7 @@
 "use server";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
+import { invalidateRoomDataCache } from "./room-data-cache";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { after } from "next/server";
@@ -35,7 +36,10 @@ export const createNewRoom = async () => {
 
     if (!data.id || !data.link) return null;
 
-    await invalidatePublicRooms();
+    await Promise.all([
+        invalidatePublicRooms(),
+        invalidateRoomDataCache(uuid, data.link),
+    ]);
     // Also expires old aliases and lists in the calling browser after a commit.
     revalidateRoomContent();
 
