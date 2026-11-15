@@ -5,6 +5,7 @@ const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
+const loadUpstashRest = require("./helpers/load-upstash-rest.cjs");
 
 const filename = path.join(__dirname, "../lib/room/public-rooms-cache.ts");
 const compiled = ts.transpileModule(readFileSync(filename, "utf8"), {
@@ -65,19 +66,7 @@ function fixture(env = {}) {
     };
 
     const exported = {};
-    vm.runInNewContext(compiled, {
-        exports: exported,
-        require(id) {
-            if (id === "server-only") return {};
-            if (id === "next/navigation") return {
-                unstable_rethrow(error) {
-                    if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
-                },
-            };
-            if (id === "@/lib/server-console")
-                return { serverError: (message) => errors.push(message) };
-            throw new Error("Unexpected dependency: " + id);
-        },
+    const runtime = {
         process: {
             env: {
                 UPSTASH_REDIS_REST_URL: "https://cache.example",
@@ -89,6 +78,22 @@ function fixture(env = {}) {
         fetch: mockedFetch,
         AbortSignal,
         console,
+    };
+    vm.runInNewContext(compiled, {
+        ...runtime,
+        exports: exported,
+        require(id) {
+            if (id === "server-only") return {};
+            if (id === "./upstash-rest") return loadUpstashRest(runtime);
+            if (id === "next/navigation") return {
+                unstable_rethrow(error) {
+                    if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
+                },
+            };
+            if (id === "@/lib/server-console")
+                return { serverError: (message) => errors.push(message) };
+            throw new Error("Unexpected dependency: " + id);
+        },
     });
 
     return {
