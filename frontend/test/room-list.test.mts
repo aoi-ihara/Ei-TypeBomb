@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Room } from "../type/index";
-import { selectRoomsForView } from "../lib/room/list-view";
+import { getEditableRoomIds, selectRoomsForView } from "../lib/room/list-view";
 
 const otherPublic: Room = {
     id: "public-other",
@@ -109,4 +109,22 @@ test("guests can browse latest public rooms without exposing private or unlisted
         currentUserId: null,
     });
     assert.deepEqual(result.map(({ id }) => id), ["public-other", "public-mine"]);
+});
+
+test("edit action is available only for the signed-in creator, including in latest", () => {
+    const myRooms: Room[] = [
+        { ...myPublic, userId: "authenticated-user" },
+        { ...myPrivate, userId: "authenticated-user" },
+        { ...otherPublic, userId: "another-user" },
+        { id: "missing-owner" },
+    ];
+    const editable = getEditableRoomIds(myRooms, "authenticated-user");
+
+    assert.deepEqual([...editable].sort(), ["private-mine", "public-mine"]);
+    assert.equal(editable.has("public-other"), false);
+    assert.equal(editable.has("missing-owner"), false);
+    // Public latest listings have no userId; owned room IDs still allow editing.
+    assert.equal(select("latest").find((room) => room.id === "public-mine")?.userId, undefined);
+    assert.equal(editable.has("public-mine"), true);
+    assert.deepEqual([...getEditableRoomIds(myRooms, null)], []);
 });

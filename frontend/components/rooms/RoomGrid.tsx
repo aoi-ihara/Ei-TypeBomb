@@ -10,10 +10,12 @@ const PAGE_SIZE = 24;
 export default function RoomGrid({
     rooms,
     savedIds,
+    editableRoomIds,
     onToggleSaved,
 }: {
     rooms: Room[];
     savedIds: string[];
+    editableRoomIds: ReadonlySet<string>;
     onToggleSaved?: (roomId: string) => void;
 }) {
     const [renderCount, setRenderCount] = useState(PAGE_SIZE);
@@ -51,6 +53,7 @@ export default function RoomGrid({
                         key={room.id}
                         room={room}
                         isSaved={savedIds.includes(room.id)}
+                        isOwner={editableRoomIds.has(room.id)}
                         eagerPrefetch={index < 2}
                         onToggleSaved={
                             onToggleSaved
