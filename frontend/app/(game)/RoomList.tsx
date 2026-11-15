@@ -352,7 +352,6 @@ export default function RoomList({
                     onClick={addRoom}
                     loading={creating}
                     disabled={viewerLoading || viewerError}
-                    dimWhenDisabled={false}
                     padding="large"
                     variant="primary"
                     iconName="plus"
