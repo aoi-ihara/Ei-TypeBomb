@@ -17,8 +17,6 @@ type ButtonProps = Pick<
     onPointerUp?: React.MouseEventHandler<HTMLButtonElement>;
     onPointerCancel?: React.MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
-    /** Keep its normal appearance when an operation is temporarily unavailable. */
-    dimWhenDisabled?: boolean;
     loading?: boolean;
     loadingText?: string;
     className?: string;
@@ -58,7 +56,6 @@ export default function Button({
     onPointerUp,
     onPointerCancel,
     disabled = false,
-    dimWhenDisabled = true,
     loading = false,
     loadingText = "読み込み中…",
     className = "w-fit",
@@ -96,7 +93,7 @@ export default function Button({
                     prefetch={prefetch}
                     {...ariaProps}
                     type={type}
-                    className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && (dimWhenDisabled ? "opacity-50 pointer-events-none" : "pointer-events-none")} ${alignment === "left" ? "justify-start" : "justify-center"}`}
+                    className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
                 >
                     {iconName && (!loading || !children) && (
                         <Icon
@@ -141,7 +138,7 @@ export default function Button({
                 disabled={disabled}
                 value={value}
                 name={name}
-                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && (dimWhenDisabled ? "opacity-50 pointer-events-none" : "pointer-events-none")} ${alignment === "left" ? "justify-start" : "justify-center"}`}
+                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
                 {iconName && (!loading || !children) && (
                     <Icon
