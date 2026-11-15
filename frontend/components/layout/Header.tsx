@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function Header({ children }: { children?: React.ReactNode }) {
     return (
-        <header className="relative flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
+        <header className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
             <div className="flex gap-4">
                 <div className="rounded-lg" data-cursor="button">
                     <Link
@@ -24,9 +24,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                     </Link>
                 </div>
             </div>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                {children}
-            </div>
+            {children}
         </header>
     );
 }
