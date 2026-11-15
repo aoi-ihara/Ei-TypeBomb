@@ -3,7 +3,12 @@ import { Prompts } from "@posthog/ai";
 import { PostHog } from "posthog-node";
 
 type JsonRecord = Record<string, unknown>;
-type SchemaProperty = { description?: string; properties?: Record<string, SchemaProperty>; items?: SchemaProperty };
+type SchemaProperty = {
+    [key: string]: unknown;
+    description?: string;
+    properties?: Record<string, SchemaProperty>;
+    items?: SchemaProperty;
+};
 type McpTool = {
     name: string;
     description: string;
