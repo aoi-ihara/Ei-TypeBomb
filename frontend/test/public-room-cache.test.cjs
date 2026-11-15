@@ -48,6 +48,12 @@ function fixture(env = {}) {
             case "GET":
                 result = keys.get(key) ?? null;
                 break;
+            case "EVAL": {
+                assert.equal(value, 1);
+                const generation = String(keys.get(flag) ?? "0");
+                result = [generation, keys.get(ttl + generation) ?? null];
+                break;
+            }
             case "SET":
                 assert.equal(flag, "EX");
                 assert.equal(ttl, Number(env.PUBLIC_ROOM_CACHE_TTL_SECONDS ?? 3600));
@@ -107,6 +113,7 @@ test("cache miss, write and hit return only public summary fields", async () => 
     const first = await f.cache.readPublicRoomsCache();
     assert.equal(first.status, "miss");
     assert.equal(first.generation, "0");
+    assert.equal(f.commands.length, 1, "one Redis HTTP request per read");
 
     await f.cache.writePublicRoomsCache([{ ...f.source, extraSecret: "excluded" }], first.generation);
     const second = await f.cache.readPublicRoomsCache();
@@ -169,8 +176,8 @@ test("cache namespaces separate preview and production deployments", async () =>
     await production.cache.readPublicRoomsCache();
     await preview.cache.readPublicRoomsCache();
 
-    const productionKey = production.commands[0][1];
-    const previewKey = preview.commands[0][1];
+    const productionKey = production.commands[0][3];
+    const previewKey = preview.commands[0][3];
     assert.notEqual(productionKey, previewKey);
     assert.ok(previewKey.includes("feature%2Fcache"));
 });
