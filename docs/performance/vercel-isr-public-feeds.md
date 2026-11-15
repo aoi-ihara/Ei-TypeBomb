@@ -1,81 +1,97 @@
-# Vercel ISR for recommended and latest feeds
+# Guest ISR and authenticated SSR for public room feeds
 
 ## Goal
 
-Guest-facing ETB landing pages should not wait for a session lookup, Redis,
-or Supabase on a successful Vercel ISR cache hit.
+Render the correct account controls **on the first paint** for signed-in
+visitors, without sacrificing guest-facing CDN speed or exposing private
+viewer state through a shared cache.
 
-`/` (recommended) and `/latest` are forced-static, Node.js App Router
-pages with `revalidate = 3600`. Both use the existing public room feed
-`getPublicRooms({ failOnError: true })`; on a miss, the path remains
-Upstash Redis → Supabase RPC. A failed database fetch throws rather than
-caching an empty public feed for an hour. Next.js retains a previous good
-ISR artifact if regeneration fails.
+## Anonymous feed: ISR
 
-## Viewer-specific controls
+`/` (recommended) and `/latest` remain `dynamic = "force-static"`
+with `revalidate = 3600`. Both pages render with `currentUser = null`
+and use only `getPublicRooms({ failOnError: true })`.
 
-The shared HTML/RSC data contains **only public room summaries** and no
-authenticated viewer state. `RoomList` initializes in a neutral loading
-state, then requests `GET /api/room-list-viewer` with credentials and
-`cache: "no-store"`. Its response is `Cache-Control: private, no-store`
-on **all** paths, including guest and error responses.
+A warm ISR response needs neither Redis nor Supabase. A regeneration miss
+uses Upstash Redis → Supabase RPC and fails rather than caching a false
+"no rooms" result on a temporary Supabase outage.
 
-The viewer endpoint calls `getUserDetails()` to verify the user, then
-reads **only** owned room IDs and saved room IDs (in parallel). Failure to
-read either set returns HTTP 503, never a guest impersonation or partial
-ownership state. On the client, a save control is rendered only when
-`currentUser` is present; edit appears only for an owned room ID, and
-the edit Server Action continues to independently check authorization.
-Before the response arrives, these controls are hidden; a fixed header
-placeholder avoids large visual shifts. Room creation is disabled until
-viewer state has been checked.
+**No client-side auth lookup** runs on guest feeds. There are no placeholder
+buttons or delayed account controls to cause layout shifts.
 
-For other pages such as `/mine` and `/saved`, existing dynamic
-server-rendered authentication continues unchanged.
+## Authenticated feed: server-rendered
 
-`proxy.ts` skips session refresh **only** on exactly `/` and
-`/latest`; the viewer API and all privileged pages still go through
-session refresh. Legacy query redirects on the home page are handled
-before ISR by `next.config.ts` query-aware redirects.
+When the original request for `/` or `/latest` contains a Supabase SSR
+session cookie (`sb-*-auth-token`, including chunked variants),
+`proxy.ts` internally rewrites GET/HEAD requests while retaining the
+browser-visible URL:
 
-## Invalidation and boundaries
+| Browser URL | Internal SSR route |
+|---|---|
+| `/` | `/feed-session` |
+| `/latest` | `/feed-session/latest` |
 
-The existing `revalidateRoomLists()` invalidates both `/` and
-`/latest` after normal room changes. This is separate from the
-existing Redis generations. Public feed statistics may be delayed up to
-an hour. Direct manual Supabase changes bypassing ETB's mutation paths
-also bypass active invalidation; use a cache purge or wait for TTL.
+Both internal pages use `dynamic = "force-dynamic"` and
+`getRoomListData(view)`. This calls `getUserDetails()` to verify the
+user server-side and reads their owned room IDs and saved room IDs.
+A cookie is **only a routing hint, not proof of authentication**. Expired
+or invalid sessions still receive a guest view. The personalized response
+must not enter the shared ISR/CDN cache.
 
-An ISR cache hit avoids Redis/Supabase for **public feed HTML**, not for
-the subsequent authenticated viewer API. The viewer API intentionally
-does not share CDN/ISR data and must not be placed inside the static
-render tree.
+`getPublicRooms()` continues to use the same Redis cache. There is no
+need for a duplicate public-room cache implementation.
 
-Note: static generation may fetch the feed during `next build`, so
-production/preview build environments need the same valid Supabase
-connection as runtime. A failed Supabase fetch should fail generation
-rather than caching the misleading "no rooms" state.
+The existing Supabase `getClaims()` refresh in `proxy.ts` still runs on
+requests with session cookies and other non-feed requests. Refresh-set
+cookies are forwarded on the rewrite response. Server Action POSTs are
+**not rewritten**; query-aware legacy redirects remain in `next.config.ts`.
+
+Direct requests to the internal SSR routes cannot bypass authentication:
+they also invoke `getRoomListData`, which checks the active user.
+The routes are marked `robots: noindex`.
+
+## UI and compatibility
+
+`RoomList` now receives the correct user state from its server-rendered
+route. It never initially renders guest controls and then upgrades them
+to account controls. The post-hydration viewer provider and placeholders
+are removed. The actual Header, Shell, Button and navigation appearance
+are unchanged.
+
+The old `GET /api/room-list-viewer` endpoint remains present for
+compatibility, with `Cache-Control: private, no-store`, but the feeds no
+longer request it. `/mine` and `/saved` still use authenticated SSR.
+
+Editing and room creation continue to perform their existing server-side
+authorization checks. A visible edit/save button is not an authorization
+mechanism.
+
+## Invalidation
+
+`revalidateRoomLists()` still invalidates the public `/` and
+`/latest` ISR paths, independently of Redis generation invalidation.
+Mutations and direct Supabase edits have the same freshness boundaries as
+before this change.
 
 ## Verification
 
-Run from `frontend`:
+From `frontend`:
 
-- `npm run test:room-list`
+- `npm run test:room-list` — routing, auth presentation and feed tests
+- `npx tsc --noEmit`
 - `npm run build`
 
-In a Vercel Preview, inspect both anonymous and signed-in navigations:
+In a Preview or production smoke test:
 
-1. `/` and `/latest` contain no personal data in View Source.
-2. The browser downloads public HTML without awaiting the viewer endpoint.
-3. Guest cards show no save/edit, signed-in cards show save, owners show
-   edit, and non-owners do not.
-4. The viewer endpoint response has `Cache-Control: private, no-store`
-   and is never a CDN HIT.
-5. Warm feed requests have Vercel's `x-vercel-cache: HIT` header.
-   The first request can be MISS/STALE, and preview cache behavior can
-   differ from production.
-6. Create/edit/delete a public room, then verify both pages refresh;
-   change visibility to private and verify no cached room page grants
-   access to restricted content.
-7. Check legacy `/?filter=mine`, `/?owner=me`, `/?filter=saved`
-   links.
+1. Visit `/` and `/latest` in a fresh private window: both should
+   render immediately as guest ISR without a `room-list-viewer` request.
+2. Sign in and visit the same URLs: the **first response** should render
+   the user menu, saved flags and owner edit permissions with no flicker.
+3. Confirm that signed-in HTML is not shared or delivered with
+   `x-vercel-cache: HIT`; guest warm feed can be an ISR HIT.
+4. Refresh and expire a session cookie: server auth verification must
+   prevent any leaked personal room data.
+5. Save/unsave a room, sign out, and navigate between all four list
+   views; their user-specific controls should stay correct.
+6. Validate legacy `/?filter=mine`, `/?owner=me`,
+   `/?filter=saved` redirects and ensure no Server Actions break.
