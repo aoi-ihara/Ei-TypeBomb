@@ -13,11 +13,13 @@ import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 export default function RoomCard({
     room,
     isSaved = false,
+    isOwner,
     onToggleSaved,
     eagerPrefetch = false,
 }: {
     room: Room;
     isSaved?: boolean;
+    isOwner: boolean;
     onToggleSaved?: () => void;
     eagerPrefetch?: boolean;
 }) {
@@ -165,13 +167,15 @@ export default function RoomCard({
                     variant="text"
                     padding="middle"
                 />
-                <Button
-                    href={`/${roomLink}/edit`}
-                    prefetch={false}
-                    iconName="pen"
-                    variant="text"
-                    padding="middle"
-                />
+                {isOwner && (
+                    <Button
+                        href={`/${roomLink}/edit`}
+                        prefetch={false}
+                        iconName="pen"
+                        variant="text"
+                        padding="middle"
+                    />
+                )}
                 <Button
                     onClick={copyRoomLink}
                     iconName={copied ? "check" : "link"}
