@@ -265,9 +265,16 @@ export const invalidatePublicRooms = async () => {
 const clonePublicRooms = (rooms: Room[]): Room[] =>
     rooms.map((room) => ({ ...room, items: [...(room.items ?? [])] }));
 
-export const getPublicRooms = async (): Promise<Room[]> => {
+export const getPublicRooms = async (
+    options: { failOnError?: boolean } = {},
+): Promise<Room[]> => {
     if (publicRoomsRequest) {
-        return clonePublicRooms(await publicRoomsRequest);
+        try {
+            return clonePublicRooms(await publicRoomsRequest);
+        } catch (error) {
+            if (options.failOnError) throw error;
+            return [];
+        }
     }
 
     const request = (async (): Promise<Room[]> => {
@@ -294,8 +301,8 @@ export const getPublicRooms = async (): Promise<Room[]> => {
 
         if (error) {
             serverError("failed to fetch public rooms", error, "DB");
-            // Do not cache Supabase failures as empty lists.
-            return [];
+            // ISR must not cache a temporary Supabase outage as an empty feed.
+            throw new Error("Failed to fetch public room feed from Supabase");
         }
 
         const rows = Array.isArray(data)
@@ -346,6 +353,9 @@ export const getPublicRooms = async (): Promise<Room[]> => {
 
     try {
         return clonePublicRooms(await request);
+    } catch (error) {
+        if (options.failOnError) throw error;
+        return [];
     } finally {
         if (publicRoomsRequest === request) {
             publicRoomsRequest = null;
