@@ -23,7 +23,7 @@ function load(file, dependencies, globals = {}) {
 
 function editor({ user = "owner", owner = "owner", version = 3, busy = false,
     race = false, lookupError = false } = {}) {
-    const calls = [], writes = [];
+    const calls = [], writes = [], telemetry = [];
     let filters = {}, writing = false;
     const db = { from() {
         filters = {}; writing = false;
@@ -38,8 +38,8 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
                     assert.equal(filters.edit_version, 3);
                     return { data: race ? null : { id: "room", edit_version: 4 } };
                 }
-                return { data: filters.id === "room" && filters.user_id === owner
-                    ? { id: "room", items: [], edit_version: version } : null,
+                return { data: (filters.id === "room" || filters.link === "custom-room") && filters.user_id === owner
+                    ? { id: "room", link: "custom-room", items: [], edit_version: version } : null,
                     error: lookupError ? Error("database unavailable") : null };
             },
         };
@@ -75,10 +75,14 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "../auth/validator": validators,
     });
     const route = load("app/api/mcp/route.ts", {
-        "@posthog/mcp": {},
+        "@posthog/mcp": { PostHogMCP: class {
+            captureToolCall(event) { telemetry.push(event); }
+            captureToolsList() {}
+            async flush() {}
+        } },
         "@/lib/mcp/descriptions": { getMcpPresentation: async (tools, instructions) => ({ tools, instructions }) },
         "@/lib/room/item-limits.mjs": require("../lib/room/item-limits.mjs"),
-        "@/lib/config/base-url": { getEtbUrl: (p) => p },
+        "@/lib/config/base-url": { getEtbUrl: (p) => "https://ei-typebomb.com" + p },
         "@/lib/mcp/oauth": {
             authenticateMcpRequest: async () => user ? { userId: user } : null,
             unauthorizedMcpResponse: () => ({ unauthorized: true }),
@@ -95,8 +99,8 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "@/lib/room/get": { invalidatePublicRooms: async () => calls.push("invalidate") },
         "@/lib/room/revalidate": { revalidateRoomContent() {} },
         "@/lib/room/list-data": {}, "@/lib/room/list-view": {},
-    }, { TextEncoder, performance, process: { env: {} }, crypto: require("node:crypto") });
-    return { update: action.updateRoomFromId, calls, writes,
+    }, { TextEncoder, performance, URL, process: { env: { NEXT_PUBLIC_POSTHOG_KEY: "test" } }, crypto: require("node:crypto") });
+    return { update: action.updateRoomFromId, calls, writes, telemetry,
         mcp: (args, name = "update_room") => route.POST({
             headers: new Map([["content-type", "application/json"]]),
             text: async () => JSON.stringify({ jsonrpc: "2.0", id: 1,
@@ -230,4 +234,45 @@ test("admitted password hashes remain compatible with the existing Argon2 verifi
     assert.match(hash, /^\$argon2id\$/);
     assert.equal(await argon2.verify(hash, "password123"), true);
     assert.equal(await argon2.verify(hash, "wrong-password"), false);
+});
+
+
+test("MCP get_room accepts canonical room URLs without changing ownership filters", async () => {
+    for (const identifier of ["custom-room", "/custom-room",
+        "https://ei-typebomb.com/custom-room?ref=chat"]) {
+        const h = editor();
+        const response = await h.mcp({ room_identifier: identifier }, "get_room");
+        assert.equal(response.result.isError, undefined);
+        assert.equal(response.result.structuredContent.room.link, "custom-room");
+        assert.equal(h.telemetry[0].isError, false);
+    }
+    for (const identifier of ["https://example.org/custom-room",
+        "https://ei-typebomb.com/another/path"]) {
+        const h = editor();
+        const response = await h.mcp({ room_identifier: identifier }, "get_room");
+        assert.equal(response.result.isError, true);
+        assert.equal(h.telemetry[0].isError, false);
+        assert.equal(h.telemetry[0].properties.$etb_tool_outcome, "expected_error");
+    }
+    const notOwner = editor({ owner: "someone-else" });
+    const forbidden = await notOwner.mcp({ room_identifier: "custom-room" }, "get_room");
+    assert.equal(forbidden.result.isError, true);
+    assert.equal(notOwner.telemetry[0].properties.$etb_error_code, "ROOM_NOT_FOUND");
+});
+
+test("MCP separates expected failures from database failures in PostHog", async () => {
+    const expected = editor();
+    const missing = await expected.mcp({ room_identifier: "missing" }, "get_room");
+    assert.equal(missing.result.isError, true);
+    assert.equal("errorCode" in missing.result, false);
+    assert.equal("reportToErrorTracking" in missing.result, false);
+    assert.equal(expected.telemetry[0].isError, false);
+    assert.equal(expected.telemetry[0].properties.$etb_error_code, "ROOM_NOT_FOUND");
+
+    const database = editor({ lookupError: true });
+    const failed = await database.mcp({ room_identifier: "custom-room" }, "get_room");
+    assert.equal(failed.result.isError, true);
+    assert.equal(database.telemetry[0].isError, true);
+    assert.equal(database.telemetry[0].properties.$etb_error_code, "DATABASE_ERROR");
+    assert.equal(database.telemetry[0].properties.$etb_tool_outcome, "server_error");
 });
