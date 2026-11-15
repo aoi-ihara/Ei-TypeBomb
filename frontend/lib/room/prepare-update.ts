@@ -11,7 +11,7 @@ export async function prepareRoomUpdate(
 ) {
     const { data, error } = await db
         .from("ei_typebomb_rooms")
-        .select("items, edit_version, link")
+        .select("items, edit_version, link, visibility")
         .eq("id", id)
         .eq("user_id", userId)
         .maybeSingle();
@@ -28,5 +28,6 @@ export async function prepareRoomUpdate(
         items: await prepareItemReadings(items ?? stored, stored),
         editVersion: data.edit_version as number,
         previousLink: data.link as string | null,
+        previousVisibility: data.visibility as string,
     } as const;
 }
