@@ -169,7 +169,7 @@ const UPDATE_IF_UNBLOCKED_SCRIPT = [
     "if old and string.sub(old, 1, 8) == 'blocked:' then return 0 end",
     "redis.call('SET', KEYS[1], ARGV[1])",
     "return 1",
-].join("\\n");
+].join("\n");
 const RELEASE_SCRIPT = [
     "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end",
     "redis.call('SET', KEYS[1], ARGV[2])",
