@@ -100,14 +100,14 @@ test("failed private DB lookups fail closed and are never CDN cached", async () 
     assert.equal(response.body.currentUser, undefined);
 });
 
-test("public feeds are ISR pages and never await personalized room list data", () => {
+test("guest feeds remain public ISR pages without personalized lookups", () => {
     for (const page of ["page.tsx", "latest/page.tsx"]) {
         const pathToPage = path.join(__dirname, "../app/(game)/", page);
         const code = readFileSync(pathToPage, "utf8");
         assert.match(code, /export const dynamic = "force-static"/);
         assert.match(code, /export const revalidate = 3600/);
         assert.match(code, /getPublicRooms\(\{ failOnError: true \}\)/);
-        assert.match(code, /deferViewer/);
+        assert.doesNotMatch(code, /deferViewer/);
         assert.doesNotMatch(code, /getRoomListData|getUserDetails|searchParams/);
     }
     const client = readFileSync(
@@ -129,6 +129,16 @@ test("public feeds are ISR pages and never await personalized room list data", (
     assert.match(provider, /cache: "no-store"/);
     assert.match(provider, /requestRef\.current/);
     assert.match(provider, /ownedRoomIds/);
+
+    // Authenticated / and /latest are rewritten to this dynamic SSR route.
+    const authenticated = readFileSync(
+        path.join(__dirname, "../app/(game)/feed-ssr/[view]/page.tsx"),
+        "utf8",
+    );
+    assert.match(authenticated, /export const dynamic = "force-dynamic"/);
+    assert.match(authenticated, /getRoomListData\(view as View\)/);
+    assert.match(authenticated, /<RoomList \{\.\.\.data\} initialView=\{view\}/);
+    assert.doesNotMatch(authenticated, /deferViewer/);
 });
 
 test("same-route sign out clears deferred ownership and save controls before redirect", () => {
