@@ -12,7 +12,7 @@ export default async function Page({
     if (filter === "mine" || owner === "me") redirect("/mini");
     if (filter === "saved") redirect("/saved");
 
-    const roomListData = await getRoomListData();
+    const roomListData = await getRoomListData("recommended");
 
     return <RoomList {...roomListData} initialView="recommended" />;
 }
