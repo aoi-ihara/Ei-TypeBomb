@@ -61,3 +61,22 @@ export const getSavedRoomIdsForUser = async (
 
     return data.map((row) => row.room_id);
 };
+
+/** Minimal owner IDs for public feeds. Never download full owned-room summaries
+ * just to decide whether the signed-in viewer may see an edit button. */
+export const getOwnedRoomIdsForUser = async (
+    userId: string,
+): Promise<Room[] | null> => {
+    const supabase = await createAdminClient();
+    const { data, error } = await supabase
+        .from("ei_typebomb_rooms")
+        .select("id")
+        .eq("user_id", userId);
+
+    if (error || !data) {
+        serverError("failed to fetch owned room IDs", error, "DB");
+        return null;
+    }
+
+    return data.map(({ id }) => ({ id, userId }));
+};
