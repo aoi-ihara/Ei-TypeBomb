@@ -30,14 +30,23 @@ type Props = {
     initialView: View;
     currentUser: CurrentUser | null;
     initialSavedRoomIds: string[];
+    /** Public ISR pages hydrate account-only controls from a private endpoint. */
+    deferViewer?: boolean;
+};
+
+type ViewerPayload = {
+    currentUser: CurrentUser | null;
+    ownedRoomIds: string[];
+    savedRoomIds: string[];
 };
 
 export default function RoomList({
     publicRooms,
-    myRooms,
+    myRooms: initialMyRooms,
     initialView,
-    currentUser,
+    currentUser: initialCurrentUser,
     initialSavedRoomIds,
+    deferViewer = false,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
@@ -46,7 +55,55 @@ export default function RoomList({
     const [keyword, setKeyword] = useState("");
     // Keep typing responsive even when many rooms match the search.
     const deferredKeyword = useDeferredValue(keyword);
+    const [currentUser, setCurrentUser] = useState(initialCurrentUser);
+    const [myRooms, setMyRooms] = useState(initialMyRooms);
     const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
+    const [viewerLoading, setViewerLoading] = useState(deferViewer);
+    const [viewerError, setViewerError] = useState(false);
+    const [viewerRetry, setViewerRetry] = useState(0);
+
+    // Account state is intentionally excluded from the ISR HTML. This request
+    // is never cached and is the only user-specific request on public feeds.
+    useEffect(() => {
+        if (!deferViewer) return;
+        const controller = new AbortController();
+        const loadViewer = async () => {
+            try {
+                const response = await fetch("/api/room-list-viewer", {
+                    credentials: "same-origin",
+                    cache: "no-store",
+                    signal: controller.signal,
+                });
+                if (!response.ok) throw new Error("Viewer lookup failed");
+                const data = (await response.json()) as ViewerPayload;
+                if (
+                    !Array.isArray(data.ownedRoomIds) ||
+                    !Array.isArray(data.savedRoomIds)
+                ) {
+                    throw new Error("Invalid viewer payload");
+                }
+                if (controller.signal.aborted) return;
+                setCurrentUser(data.currentUser);
+                setMyRooms(
+                    data.currentUser
+                        ? data.ownedRoomIds.map((id) => ({
+                              id,
+                              userId: data.currentUser!.id,
+                          }))
+                        : [],
+                );
+                setSavedRoomIds(data.currentUser ? data.savedRoomIds : []);
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                console.error("Failed to load room viewer state", error);
+                setViewerError(true);
+            } finally {
+                if (!controller.signal.aborted) setViewerLoading(false);
+            }
+        };
+        void loadViewer();
+        return () => controller.abort();
+    }, [deferViewer, viewerRetry]);
     const navigationItems: {
         value: View;
         label: string;
@@ -167,7 +224,7 @@ export default function RoomList({
     }, [currentUser]);
 
     const addRoom = async () => {
-        if (creating) return;
+        if (creating || viewerLoading || viewerError) return;
         if (!currentUser) {
             startNavigationProgress();
             router.push(getSignInUrl());
@@ -192,11 +249,30 @@ export default function RoomList({
     };
 
     const handleSignOut = async () => {
+        // A redirect back to the same ISR route can preserve this component.
+        // Remove per-viewer controls *before* the redirecting Server Action,
+        // instead of relying on a remount or the effect's unchanged deps.
+        const previousViewer = { currentUser, myRooms, savedRoomIds };
+        setCurrentUser(null);
+        setMyRooms([]);
+        setSavedRoomIds([]);
         posthog.capture("signed_out");
         posthog.reset();
-        await signOut();
-        startNavigationProgress();
-        router.replace("/");
+
+        try {
+            await signOut();
+            startNavigationProgress();
+            router.replace("/");
+        } catch (error) {
+            // If signing out fails, restore the last authenticated view.
+            setCurrentUser(previousViewer.currentUser);
+            setMyRooms(previousViewer.myRooms);
+            setSavedRoomIds(previousViewer.savedRoomIds);
+            if (previousViewer.currentUser) {
+                posthog.identify(previousViewer.currentUser.id);
+            }
+            console.error("Failed to sign out", error);
+        }
     };
 
     const viewTitle =
@@ -206,10 +282,27 @@ export default function RoomList({
     return (
         <Shell
             sidebar={
-                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
+                <RoomNavigation
+                    isSignedIn={!!currentUser}
+                    currentView={view}
+                    viewerLoading={viewerLoading}
+                />
             }
             header={
-                currentUser ? (
+                viewerLoading ? (
+                    <div className="h-10 w-28" aria-label="アカウント情報を読み込み中" />
+                ) : viewerError ? (
+                    <Button
+                        variant="text"
+                        onClick={() => {
+                            setViewerLoading(true);
+                            setViewerError(false);
+                            setViewerRetry((count) => count + 1);
+                        }}
+                    >
+                        再読み込み
+                    </Button>
+                ) : currentUser ? (
                     <Menu
                         name="ユーザーアクション"
                         button={
@@ -258,6 +351,7 @@ export default function RoomList({
                 <Button
                     onClick={addRoom}
                     loading={creating}
+                    disabled={viewerLoading || viewerError}
                     padding="large"
                     variant="primary"
                     iconName="plus"

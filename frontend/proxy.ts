@@ -4,6 +4,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 /** Refresh ETB's local Supabase Auth session before route handlers and pages. */
 export async function proxy(request: NextRequest) {
+    // The two feed pages contain only public ISR HTML. Their private viewer
+    // endpoint still passes through this proxy and refreshes session cookies.
+    // Avoid JWT refresh overhead on every public CDN/HTML request.
+    if (request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/latest") {
+        return NextResponse.next();
+    }
+
     let response = NextResponse.next();
     const client = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
