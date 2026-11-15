@@ -195,21 +195,44 @@ export async function writeRoomDataCache(
     }
 }
 
+// EVAL is atomic: an unrelated edit must never clear an active privacy fence.
+const BLOCK_SCRIPT = [
+    "local old = redis.call('GET', KEYS[1])",
+    "if old and string.sub(old, 1, 8) == 'blocked:' then return 0 end",
+    "redis.call('SET', KEYS[1], ARGV[1])",
+    "return 1",
+].join("\n");
+const INVALIDATE_SCRIPT = [
+    "local old = redis.call('GET', KEYS[1])",
+    "if old and string.sub(old, 1, 8) == 'blocked:' then return 0 end",
+    "redis.call('SET', KEYS[1], ARGV[1])",
+    "return 1",
+].join("\n");
+const RELEASE_SCRIPT = [
+    "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end",
+    "redis.call('SET', KEYS[1], ARGV[2])",
+    "return 1",
+].join("\n");
+
 /**
- * Fail closed before revoking public access or deleting a room. If Redis is
- * configured but this write fails, the mutation must not proceed: otherwise
- * previously public questions could remain readable for the full cache TTL.
- * The blocked generation is safe to leave behind if the following DB write
- * fails or cache invalidation is unavailable: readers bypass Redis.
+ * Install a unique privacy fence before changing visibility/deleting.
+ * Returns a token that ONLY the same mutation may release. Existing fences
+ * cannot be overwritten; on partial failure, any installed fences remain
+ * blocked (safe fail-closed) until explicitly released.
  */
 export async function blockRoomDataCache(
     ...identifiers: Array<string | null | undefined>
-): Promise<void> {
-    if (!configured()) return;
+): Promise<string | null> {
+    if (!configured()) return null;
+    const token = "blocked:" + randomUUID();
     try {
         for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
-            await command(["SET", generationKey(identifier), "blocked:" + randomUUID()]);
+            const changed = await command<number>([
+                "EVAL", BLOCK_SCRIPT, 1, generationKey(identifier), token,
+            ]);
+            if (changed !== 1) throw new Error("Room cache is already privacy-fenced");
         }
+        return token;
     } catch (error) {
         unstable_rethrow(error);
         warn(error);
@@ -217,15 +240,36 @@ export async function blockRoomDataCache(
     }
 }
 
-/** Invalidate canonical, legacy-ID and old-link entries after a mutation. */
+/** Release only fences owned by this mutation; unrelated blocks are retained. */
+export async function releaseRoomDataCache(
+    token: string | null,
+    ...identifiers: Array<string | null | undefined>
+): Promise<void> {
+    if (!configured() || !token) return;
+    for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
+        try {
+            await command([
+                "EVAL", RELEASE_SCRIPT, 1, generationKey(identifier),
+                token, randomUUID(),
+            ]);
+        } catch (error) {
+            unstable_rethrow(error);
+            warn(error);
+        }
+    }
+}
+
+/** Non-restrictive edits never clear another mutation's privacy fence. */
 export async function invalidateRoomDataCache(
     ...identifiers: Array<string | null | undefined>
 ): Promise<void> {
     if (!configured()) return;
     for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
         try {
-            // A random generation cannot be reused by an in-flight stale read.
-            await command(["SET", generationKey(identifier), randomUUID()]);
+            await command([
+                "EVAL", INVALIDATE_SCRIPT, 1, generationKey(identifier),
+                randomUUID(),
+            ]);
         } catch (error) {
             unstable_rethrow(error);
             warn(error);
