@@ -89,7 +89,9 @@ const ROOM_PAGE_COLUMNS =
 
 // Public and unlisted contents may be cached; private rows are always
 // resolved directly from Supabase before applying request-specific auth.
-type RoomPageRow = Omit<CacheableRoomData, "visibility"> & { visibility: string };
+type RoomPageRow = Omit<CacheableRoomData, "visibility"> & {
+    visibility: "public" | "unlisted" | "private";
+};
 
 // Request-local deduplication for metadata/page; browser reuse is Next Router Cache.
 type RoomPageData = {
