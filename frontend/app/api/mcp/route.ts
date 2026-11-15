@@ -24,7 +24,7 @@ import {
 import { prepareItemReadings } from "@/lib/room/readings";
 import { prepareRoomUpdate } from "@/lib/room/prepare-update";
 import { invalidatePublicRooms } from "@/lib/room/get";
-import { invalidateRoomDataCache } from "@/lib/room/room-data-cache";
+import { blockRoomDataCache, invalidateRoomDataCache } from "@/lib/room/room-data-cache";
 import { revalidateRoomContent } from "@/lib/room/revalidate";
 import type { Item, Room, View } from "@/type";
 import { getRoomCollectionsForUser } from "@/lib/room/list-data";
@@ -619,6 +619,15 @@ async function callTool(
         }
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
+        const restrictsAccess =
+            patch.visibility === "private" && prepared.previousVisibility !== "private";
+        if (restrictsAccess) {
+            try {
+                await blockRoomDataCache(roomId, prepared.previousLink, patch.link as string | undefined);
+            } catch {
+                return toolError("ルームの公開設定を安全に変更できませんでした。", "CACHE_UNAVAILABLE", true);
+            }
+        }
 
         const { data, error: updateError } = await supabase
             .from("ei_typebomb_rooms")
@@ -629,6 +638,8 @@ async function callTool(
             .select(ROOM_FIELDS)
             .maybeSingle();
 
+        if (restrictsAccess && (updateError || !data))
+            await invalidateRoomDataCache(roomId, prepared.previousLink, patch.link as string | undefined);
         if (!updateError && !data) return toolError(conflict);
         if (updateError || !data) {
             console.error("MCP room update failed", updateError?.code);
