@@ -18,6 +18,7 @@ import { View } from "@/type";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
 import { getEditableRoomIds, selectRoomsForView } from "@/lib/room/list-view";
 import { useRoomListViewer } from "@/components/rooms/RoomListViewerProvider";
+import { getRoomListNavigationItems } from "@/lib/room/list-navigation";
 
 type CurrentUser = {
     id: string;
@@ -98,52 +99,7 @@ export default function RoomList({
     const viewerLoading = deferViewer && viewer.snapshot.status === "idle";
     const viewerError = deferViewer && viewer.snapshot.status === "error";
 
-    const navigationItems: {
-        value: View;
-        label: string;
-        url: string;
-        iconName: string;
-    }[] = currentUser
-        ? [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-              {
-                  value: "mine",
-                  label: "自分のルーム",
-                  url: "/mine",
-                  iconName: "user",
-              },
-              {
-                  value: "saved",
-                  label: "保存済み",
-                  url: "/saved",
-                  iconName: "bookmark",
-              },
-          ]
-        : [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-          ];
+    const navigationItems = getRoomListNavigationItems(!!currentUser);
 
     const roomsInView = useMemo(
         () =>
