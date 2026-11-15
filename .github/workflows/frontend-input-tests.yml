@@ -33,3 +33,9 @@ jobs:
             - name: Typecheck
               run: npx tsc --noEmit
               working-directory: frontend
+            - name: Room cache regression tests
+              run: npm run test:room-cache
+              working-directory: frontend
+            - name: Room list regression tests
+              run: npm run test:room-list
+              working-directory: frontend
