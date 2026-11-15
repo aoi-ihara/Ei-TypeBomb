@@ -50,7 +50,7 @@ function fixture(env = {}) {
                 break;
             case "SET":
                 assert.equal(flag, "EX");
-                assert.equal(ttl, 120);
+                assert.equal(ttl, Number(env.PUBLIC_ROOM_CACHE_TTL_SECONDS ?? 3600));
                 keys.set(key, value);
                 result = "OK";
                 break;
@@ -191,4 +191,11 @@ test("Next.js dynamic-rendering bailout is rethrown, not logged as Redis failure
         (error) => error.digest === "DYNAMIC_SERVER_USAGE",
     );
     assert.deepEqual(f.errors, []);
+});
+
+test("configured TTL overrides the one-hour default", async () => {
+    const f = fixture({ PUBLIC_ROOM_CACHE_TTL_SECONDS: "7200" });
+    const first = await f.cache.readPublicRoomsCache();
+    await f.cache.writePublicRoomsCache([f.source], first.generation);
+    assert.equal(f.commands.find((args) => args[0] === "SET")[4], 7200);
 });
