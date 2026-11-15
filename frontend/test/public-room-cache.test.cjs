@@ -19,6 +19,7 @@ function fixture(env = {}) {
     const keys = new Map();
     const commands = [];
     let unavailable = false;
+    let dynamicBailout = false;
     const errors = [];
     const source = {
         id: "public-room",
@@ -30,6 +31,11 @@ function fixture(env = {}) {
     };
 
     const mockedFetch = async (_url, options) => {
+        if (dynamicBailout) {
+            const error = new Error("Next.js dynamic server usage");
+            error.digest = "DYNAMIC_SERVER_USAGE";
+            throw error;
+        }
         if (unavailable) throw new Error("Upstash offline");
         assert.equal(options.headers.Authorization, "Bearer test-secret");
         assert.equal(options.cache, "no-store");
@@ -63,6 +69,11 @@ function fixture(env = {}) {
         exports: exported,
         require(id) {
             if (id === "server-only") return {};
+            if (id === "next/navigation") return {
+                unstable_rethrow(error) {
+                    if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
+                },
+            };
             if (id === "@/lib/server-console")
                 return { serverError: (message) => errors.push(message) };
             throw new Error("Unexpected dependency: " + id);
@@ -87,6 +98,7 @@ function fixture(env = {}) {
         errors,
         source,
         setUnavailable(value) { unavailable = value; },
+        setDynamicBailout(value) { dynamicBailout = value; },
     };
 }
 
@@ -161,4 +173,22 @@ test("cache namespaces separate preview and production deployments", async () =>
     const previewKey = preview.commands[0][1];
     assert.notEqual(productionKey, previewKey);
     assert.ok(previewKey.includes("feature%2Fcache"));
+});
+
+test("Next.js dynamic-rendering bailout is rethrown, not logged as Redis failure", async () => {
+    const f = fixture();
+    f.setDynamicBailout(true);
+    await assert.rejects(
+        f.cache.readPublicRoomsCache(),
+        (error) => error.digest === "DYNAMIC_SERVER_USAGE",
+    );
+    await assert.rejects(
+        f.cache.writePublicRoomsCache([f.source], "0"),
+        (error) => error.digest === "DYNAMIC_SERVER_USAGE",
+    );
+    await assert.rejects(
+        f.cache.invalidatePublicRoomsCache(),
+        (error) => error.digest === "DYNAMIC_SERVER_USAGE",
+    );
+    assert.deepEqual(f.errors, []);
 });
