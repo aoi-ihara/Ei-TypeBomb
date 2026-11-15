@@ -142,8 +142,11 @@ test("same-route sign out clears deferred ownership and save controls before red
     const handler = source.slice(handlerStart, handlerEnd);
     const redirect = handler.indexOf("await signOut()");
     assert.ok(redirect > 0, "sign-out Server Action must still execute");
-    assert.ok(handler.indexOf("viewer.resetToGuest()") > 0);
-    assert.ok(handler.indexOf("viewer.resetToGuest()") < redirect);
+    const sharedReset = handler.indexOf("viewer.resetToGuest()");
+    assert.ok(sharedReset > 0 && sharedReset < redirect);
+    // Logging out from /mine or /saved must also clear the shared provider.
+    assert.ok(sharedReset < handler.indexOf("if (!deferViewer)"));
+    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
     assert.match(handler, /catch \(error\)/);
     assert.match(handler, /viewer.restore\(previousSnapshot\)/);
     assert.match(handler, /unstable_rethrow\(error\)/);
@@ -176,4 +179,24 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     assert.match(header, /items-center/);
     assert.match(button, /dimWhenDisabled = true/);
     assert.match(button, /disabled && \(dimWhenDisabled/);
+});
+
+test("saved room toggles in personalized feeds update the shared viewer too", () => {
+    const source = readFileSync(
+        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        "utf8",
+    );
+    const setterStart = source.indexOf("const setSavedRoomIds = (value:");
+    const setterEnd = source.indexOf("const viewerLoading =", setterStart);
+    assert.ok(setterStart >= 0 && setterEnd > setterStart);
+    const setter = source.slice(setterStart, setterEnd);
+    assert.match(setter, /setLocalSavedRoomIds\(value\)/);
+    assert.match(setter, /viewer\.setSavedRoomIds\(value\)/);
+    assert.match(setter, /viewer\.snapshot\.currentUser\?\.id === localCurrentUser\?\.id/);
+    const saveHandler = source.slice(
+        source.indexOf("const toggleSavedRoomState = async"),
+        source.indexOf("useEffect(() => {\n        if (!currentUser)", source.indexOf("const toggleSavedRoomState = async")),
+    );
+    assert.match(saveHandler, /setSavedRoomIds\(nextSavedIds\)/);
+    assert.match(saveHandler, /setSavedRoomIds\(\(current\) =>/);
 });
