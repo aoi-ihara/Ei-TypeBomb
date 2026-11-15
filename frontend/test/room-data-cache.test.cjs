@@ -40,6 +40,7 @@ function fixture(env = {}) {
         exports: exported,
         require(id) {
             if (id === "server-only") return {};
+            if (id === "node:crypto") return require("node:crypto");
             if (id === "next/navigation") return {
                 unstable_rethrow(error) {
                     if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
@@ -64,6 +65,10 @@ function fixture(env = {}) {
             const [verb, key, value, ex, ttl] = args;
             if (verb === "GET") return { ok: true, json: async () => ({ result: keys.get(key) ?? null }) };
             if (verb === "SET") {
+                if (ex === undefined) {
+                    keys.set(key, value);
+                    return { ok: true, json: async () => ({ result: "OK" }) };
+                }
                 assert.equal(ex, "EX");
                 assert.equal(ttl, Number(env.ROOM_DATA_CACHE_TTL_SECONDS ?? 86400));
                 keys.set(key, value);
@@ -149,4 +154,25 @@ test("namespaces keep unrelated deployments apart", async () => {
     await a.cache.readRoomDataCache("slug-a");
     await b.cache.readRoomDataCache("slug-a");
     assert.notEqual(a.commands[0][1], b.commands[0][1]);
+});
+
+test("blocking prior to a privacy change bypasses stale data until invalidated", async () => {
+    const f = fixture();
+    const first = await f.cache.readRoomDataCache("slug-a");
+    await f.cache.writeRoomDataCache("slug-a", f.source, first.generation);
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "hit");
+    await f.cache.blockRoomDataCache("slug-a");
+    const blocked = await f.cache.readRoomDataCache("slug-a");
+    assert.equal(blocked.status, "blocked");
+    assert.equal(blocked.room, null);
+    assert.equal(blocked.generation, null);
+    await f.cache.invalidateRoomDataCache("slug-a");
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "miss");
+});
+
+test("a cache outage refuses privacy revocation while allowing DB fallback reads", async () => {
+    const f = fixture();
+    f.setUnavailable(true);
+    await assert.rejects(f.cache.blockRoomDataCache("slug-a"), /protection is unavailable/);
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "unavailable");
 });
