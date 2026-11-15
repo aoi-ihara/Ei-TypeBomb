@@ -13,7 +13,7 @@ type McpTool = {
     name: string;
     description: string;
     inputSchema: {
-        properties?: Record<string, SchemaProperty>;
+        properties?: Record<string, SchemaProperty | undefined>;
         [key: string]: unknown;
     };
 };
@@ -86,14 +86,15 @@ function parseDescriptions(value: string): Descriptions {
 }
 
 function overlayProperties(
-    base: Record<string, SchemaProperty> | undefined,
+    base: Record<string, SchemaProperty | undefined> | undefined,
     toolProperties: Record<string, string> | undefined,
     roomProperties: Record<string, string>,
     itemProperties: Record<string, string>,
-): Record<string, SchemaProperty> | undefined {
+): Record<string, SchemaProperty | undefined> | undefined {
     if (!base) return base;
     return Object.fromEntries(
         Object.entries(base).map(([name, property]) => {
+            if (!property) return [name, property];
             const replacement = toolProperties?.[name] ?? roomProperties[name];
             const updated: SchemaProperty = {
                 ...property,
