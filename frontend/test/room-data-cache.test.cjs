@@ -78,6 +78,12 @@ function fixture(env = {}) {
                 const [, script, count, redisKey, ...scriptArgs] = args;
                 assert.equal(count, 1);
                 const current = keys.get(redisKey) ?? null;
+                if (script.includes("local data =")) {
+                    const generation = current ?? "0";
+                    const data = generation.startsWith("blocked:")
+                        ? null : keys.get(scriptArgs[0] + generation) ?? null;
+                    return { ok: true, json: async () => ({ result: [generation, data] }) };
+                }
                 if (script.includes("~= ARGV[1]")) {
                     if (current !== scriptArgs[0]) return { ok: true, json: async () => ({ result: 0 }) };
                     keys.set(redisKey, scriptArgs[1]);
@@ -105,6 +111,7 @@ test("room cache stores only public/unlisted source fields, never passwords", as
     const f = fixture();
     const first = await f.cache.readRoomDataCache("slug-a");
     assert.equal(first.status, "miss");
+    assert.equal(f.commands.length, 1, "one Redis HTTP request per read");
     await f.cache.writeRoomDataCache("slug-a", {
         ...f.source,
         password: "must-not-cache",
@@ -167,7 +174,7 @@ test("namespaces keep unrelated deployments apart", async () => {
     const b = fixture({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "example" });
     await a.cache.readRoomDataCache("slug-a");
     await b.cache.readRoomDataCache("slug-a");
-    assert.notEqual(a.commands[0][1], b.commands[0][1]);
+    assert.notEqual(a.commands[0][3], b.commands[0][3]);
 });
 
 test("blocking prior to a privacy change bypasses stale data until invalidated", async () => {
