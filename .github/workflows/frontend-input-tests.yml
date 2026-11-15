@@ -33,3 +33,6 @@ jobs:
             - name: Typecheck
               run: npx tsc --noEmit
               working-directory: frontend
+            - name: Verify authenticated SSR and public ISR routing
+              run: npm run test:room-list
+              working-directory: frontend
