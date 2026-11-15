@@ -67,8 +67,6 @@ export default function RoomList({
     useEffect(() => {
         if (!deferViewer) return;
         const controller = new AbortController();
-        setViewerLoading(true);
-        setViewerError(false);
         const loadViewer = async () => {
             try {
                 const response = await fetch("/api/room-list-viewer", {
@@ -275,7 +273,14 @@ export default function RoomList({
                 viewerLoading ? (
                     <div className="h-10 w-28" aria-label="アカウント情報を読み込み中" />
                 ) : viewerError ? (
-                    <Button variant="text" onClick={() => setViewerRetry((count) => count + 1)}>
+                    <Button
+                        variant="text"
+                        onClick={() => {
+                            setViewerLoading(true);
+                            setViewerError(false);
+                            setViewerRetry((count) => count + 1);
+                        }}
+                    >
                         再読み込み
                     </Button>
                 ) : currentUser ? (
