@@ -114,9 +114,21 @@ test("public feeds are ISR pages and never await personalized room list data", (
         path.join(__dirname, "../app/(game)/RoomList.tsx"),
         "utf8",
     );
-    assert.match(client, /fetch\("\/api\/room-list-viewer"/);
-    assert.match(client, /cache: "no-store"/);
-    assert.match(client, /ownedRoomIds/);
+    const provider = readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
+        "utf8",
+    );
+    const layout = readFileSync(
+        path.join(__dirname, "../app/(game)/layout.tsx"),
+        "utf8",
+    );
+    assert.match(layout, /<RoomListViewerProvider>/);
+    assert.match(client, /useRoomListViewer\(\)/);
+    assert.match(client, /viewer\.ensureLoaded\(\)/);
+    assert.match(provider, /fetch\("\/api\/room-list-viewer"/);
+    assert.match(provider, /cache: "no-store"/);
+    assert.match(provider, /requestRef\.current/);
+    assert.match(provider, /ownedRoomIds/);
 });
 
 test("same-route sign out clears deferred ownership and save controls before redirect", () => {
@@ -130,14 +142,62 @@ test("same-route sign out clears deferred ownership and save controls before red
     const handler = source.slice(handlerStart, handlerEnd);
     const redirect = handler.indexOf("await signOut()");
     assert.ok(redirect > 0, "sign-out Server Action must still execute");
-    for (const reset of [
-        "setCurrentUser(null)",
-        "setMyRooms([])",
-        "setSavedRoomIds([])",
-    ]) {
-        const position = handler.indexOf(reset);
-        assert.ok(position >= 0 && position < redirect, reset + " must precede the redirecting action");
-    }
+    const sharedReset = handler.indexOf("viewer.resetToGuest()");
+    assert.ok(sharedReset > 0 && sharedReset < redirect);
+    // Logging out from /mine or /saved must also clear the shared provider.
+    assert.ok(sharedReset < handler.indexOf("if (!deferViewer)"));
+    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
     assert.match(handler, /catch \(error\)/);
-    assert.match(handler, /setCurrentUser\(previousViewer.currentUser\)/);
+    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
+    assert.match(handler, /unstable_rethrow\(error\)/);
+});
+
+test("public feed auth transitions preserve navbar, header and CTA dimensions", () => {
+    const source = readFileSync(
+        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        "utf8",
+    );
+    const provider = readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
+        "utf8",
+    );
+    const header = readFileSync(
+        path.join(__dirname, "../components/layout/Header.tsx"),
+        "utf8",
+    );
+    const button = readFileSync(
+        path.join(__dirname, "../components/ui/Button.tsx"),
+        "utf8",
+    );
+
+    assert.match(provider, /snapshotRef\.current\.status !== "idle"/);
+    assert.match(provider, /resetToGuest/);
+    assert.match(source, /viewer\.snapshot\.status === "idle"/);
+    assert.match(source, /className="invisible pointer-events-none"/);
+    assert.match(source, /<Button variant="text">サインイン<\/Button>/);
+    assert.doesNotMatch(source, /className="h-(?:9|10) w-28"/);
+    assert.match(header, /className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4"/);
+    assert.doesNotMatch(header, /min-h-\[|absolute right-4/);
+    assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
+    assert.match(button, /opacity-50 pointer-events-none/);
+});
+
+test("saved room toggles in personalized feeds update the shared viewer too", () => {
+    const source = readFileSync(
+        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        "utf8",
+    );
+    const setterStart = source.indexOf("const setSavedRoomIds = (value:");
+    const setterEnd = source.indexOf("const viewerLoading =", setterStart);
+    assert.ok(setterStart >= 0 && setterEnd > setterStart);
+    const setter = source.slice(setterStart, setterEnd);
+    assert.match(setter, /setLocalSavedRoomIds\(value\)/);
+    assert.match(setter, /viewer\.setSavedRoomIds\(value\)/);
+    assert.match(setter, /viewer\.snapshot\.currentUser\?\.id === localCurrentUser\?\.id/);
+    const saveHandler = source.slice(
+        source.indexOf("const toggleSavedRoomState = async"),
+        source.indexOf("useEffect(() => {\n        if (!currentUser)", source.indexOf("const toggleSavedRoomState = async")),
+    );
+    assert.match(saveHandler, /setSavedRoomIds\(nextSavedIds\)/);
+    assert.match(saveHandler, /setSavedRoomIds\(\(current\) =>/);
 });
