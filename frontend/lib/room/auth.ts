@@ -6,6 +6,7 @@ import isUUID from "validator/es/lib/isUUID";
 import { validatePassword } from "../auth/validator";
 import { verifyTurnstile } from "../auth/turnstile";
 import { getUser } from "../auth/session";
+import { recordRoomPlay, type RoomPlayMode } from "./analytics";
 import argon2 from "argon2";
 import {
     importJWK,
@@ -76,7 +77,11 @@ export const prepareRoomJoin = async (link: string) => {
     return { id: data.id, requiresPassword: true };
 };
 
-export const signInToRoom = async (room: Room, turnstileToken?: string) => {
+export const signInToRoom = async (
+    room: Room,
+    turnstileToken?: string,
+    playMode?: RoomPlayMode,
+) => {
     if (!isUUID(room.id, 4)) return "ルームIDが正しくありません。";
 
     if (room.password) {
@@ -123,7 +128,10 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
             const userId = await getUser();
             const isOwner = Boolean(userId) && data.user_id === userId;
             if (!isOwner) {
-                if (await isRoomAuthorized(room.id)) return null;
+                if (await isRoomAuthorized(room.id)) {
+                    if (playMode) await recordRoomPlay(room.id, playMode);
+                    return null;
+                }
                 return "パスワードを入力してください。";
             }
         }
@@ -131,6 +139,9 @@ export const signInToRoom = async (room: Room, turnstileToken?: string) => {
         await setAuthCookie(room.id);
     }
 
+    // Schedule analytics on the server after authorization, without a second
+    // client-to-server Server Action round trip or a blocking database write.
+    if (playMode) await recordRoomPlay(room.id, playMode);
     return null;
 };
 
