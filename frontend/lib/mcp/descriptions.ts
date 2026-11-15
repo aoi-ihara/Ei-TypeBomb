@@ -97,21 +97,15 @@ function overlayProperties(
             if (name === "items" && property.items?.properties) {
                 updated.items = {
                     ...property.items,
-                    properties: overlayProperties(
-                        property.items.properties,
-                        undefined,
-                        {},
-                        {},
+                    properties: Object.fromEntries(
+                        Object.entries(property.items.properties).map(([key, item]) => [
+                            key,
+                            itemProperties[key]
+                                ? { ...item, description: itemProperties[key] }
+                                : item,
+                        ]),
                     ),
                 };
-                updated.items.properties = Object.fromEntries(
-                    Object.entries(updated.items.properties ?? {}).map(([key, item]) => [
-                        key,
-                        itemProperties[key]
-                            ? { ...item, description: itemProperties[key] }
-                            : item,
-                    ]),
-                );
             }
             return [name, updated];
         }),
