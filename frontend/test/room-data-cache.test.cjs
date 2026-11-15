@@ -75,17 +75,17 @@ function fixture(env = {}) {
                 return { ok: true, json: async () => ({ result: "OK" }) };
             }
             if (verb === "EVAL") {
-                const [, script, count, redisKey, ...args] = args;
+                const [, script, count, redisKey, ...scriptArgs] = args;
                 assert.equal(count, 1);
                 const current = keys.get(redisKey) ?? null;
                 if (script.includes("~= ARGV[1]")) {
-                    if (current !== args[0]) return { ok: true, json: async () => ({ result: 0 }) };
-                    keys.set(redisKey, args[1]);
+                    if (current !== scriptArgs[0]) return { ok: true, json: async () => ({ result: 0 }) };
+                    keys.set(redisKey, scriptArgs[1]);
                     return { ok: true, json: async () => ({ result: 1 }) };
                 }
                 if (current?.startsWith("blocked:"))
                     return { ok: true, json: async () => ({ result: 0 }) };
-                keys.set(redisKey, args[0]);
+                keys.set(redisKey, scriptArgs[0]);
                 return { ok: true, json: async () => ({ result: 1 }) };
             }
             if (verb === "INCR") {
