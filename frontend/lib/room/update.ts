@@ -2,7 +2,7 @@
 import { prepareRoomUpdate } from "./prepare-update";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
-import { blockRoomDataCache, invalidateRoomDataCache } from "./room-data-cache";
+import { blockRoomDataCache, invalidateRoomDataCache, releaseRoomDataCache } from "./room-data-cache";
 import { validRoomUpdate } from "./partial-update";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
@@ -161,9 +161,10 @@ export const updateRoomFromId = async (
     updateData.items = prepared.items;
     const restrictsAccess =
         updateData.visibility === "private" && prepared.previousVisibility !== "private";
+    let privacyFence: string | null = null;
     if (restrictsAccess) {
         try {
-            await blockRoomDataCache(room.id, prepared.previousLink, room.link);
+            privacyFence = await blockRoomDataCache(room.id, prepared.previousLink, room.link);
         } catch {
             return { status: "error", message: "ルームの公開設定を安全に変更できませんでした。もう一度お試しください。" };
         }
@@ -179,7 +180,7 @@ export const updateRoomFromId = async (
 
     if (restrictsAccess && (updateError || !data)) {
         // The DB update did not commit; release the temporary cache fence.
-        await invalidateRoomDataCache(room.id, prepared.previousLink, room.link);
+        await releaseRoomDataCache(privacyFence, room.id, prepared.previousLink, room.link);
     }
 
     if (updateError) {
@@ -218,7 +219,9 @@ export const updateRoomFromId = async (
 
     await Promise.all([
         invalidatePublicRooms(),
-        invalidateRoomDataCache(room.id, prepared.previousLink, room.link),
+        restrictsAccess
+            ? releaseRoomDataCache(privacyFence, room.id, prepared.previousLink, room.link)
+            : invalidateRoomDataCache(room.id, prepared.previousLink, room.link),
     ]);
     // Also expires old aliases and lists in the calling browser after a commit.
     revalidateRoomContent();
