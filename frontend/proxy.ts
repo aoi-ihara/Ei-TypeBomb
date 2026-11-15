@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 // Only the public guest feed is served from shared ISR. Supabase SSR auth
 // cookies may be chunked (sb-...-auth-token.0), so match the cookie prefix.
 const hasAuthCookie = (request: NextRequest) =>
-    request.cookies.getAll().some(({ name }) => /^sb-.+-auth-token(?:\\.\\d+)?$/.test(name));
+    request.cookies.getAll().some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
 
 /** Refresh ETB's local Supabase Auth session before route handlers and pages. */
 export async function proxy(request: NextRequest) {
