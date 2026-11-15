@@ -18,17 +18,19 @@ export const deleteRoom = async (roomId: string) => {
     // Fence previously public/unlisted content before deleting its source.
     const { data: existing, error: lookupError } = await supabase
         .from("ei_typebomb_rooms")
-        .select("id, link")
+        .select("id, link, visibility")
         .eq("id", roomId)
         .eq("user_id", userId)
         .maybeSingle();
     if (lookupError || !existing) {
         return "ルームが見つからないか、削除する権限がありません。";
     }
-    try {
-        await blockRoomDataCache(roomId, existing.link);
-    } catch {
-        return "ルームを安全に削除できませんでした。もう一度お試しください。";
+    if (existing.visibility !== "private") {
+        try {
+            await blockRoomDataCache(roomId, existing.link);
+        } catch {
+            return "ルームを安全に削除できませんでした。もう一度お試しください。";
+        }
     }
 
     const { data, error } = await supabase
