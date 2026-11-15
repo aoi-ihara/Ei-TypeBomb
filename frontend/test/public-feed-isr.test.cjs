@@ -105,8 +105,8 @@ test("anonymous feeds keep their ISR pages with no private data", () => {
         const code = readFileSync(path.join(__dirname, "../app/(game)/", page), "utf8");
         assert.match(code, /export const dynamic = "force-static"/);
         assert.match(code, /export const revalidate = 3600/);
-        assert.match(code, /getPublicRooms\\(\\{ failOnError: true \\}\\)/);
-        assert.match(code, /currentUser=\\{null\\}/);
+        assert.match(code, /getPublicRooms\(\{ failOnError: true \}\)/);
+        assert.match(code, /currentUser=\{null\}/);
         assert.doesNotMatch(code, /deferViewer|getRoomListData|getUserDetails/);
     }
 });
@@ -119,12 +119,12 @@ test("authenticated feeds verify identity in uncached server routes", () => {
     for (const [filename, view] of pages) {
         const code = readFileSync(path.join(__dirname, "../app/(game)/", filename), "utf8");
         assert.match(code, /export const dynamic = "force-dynamic"/);
-        assert.match(code, /robots: \\{ index: false, follow: false \\}/);
+        assert.match(code, /robots: \{ index: false, follow: false \}/);
         assert.ok(code.includes('getRoomListData("' + view + '")'));
         assert.doesNotMatch(code, /deferViewer/);
     }
     const listData = readFileSync(path.join(__dirname, "../app/(game)/room-list-data.ts"), "utf8");
-    assert.match(listData, /getUserDetails\\(\\)/);
+    assert.match(listData, /getUserDetails\(\)/);
     assert.match(listData, /getOwnedRoomIdsForUser/);
     assert.match(listData, /getSavedRoomIdsForUser/);
 });
@@ -137,12 +137,12 @@ test("room UI uses server-provided viewer directly; shared layout is untouched",
 
     assert.doesNotMatch(source, /deferViewer|viewerLoading|viewerError|useRoomListViewer/);
     assert.doesNotMatch(sidebar, /viewerLoading|viewer-placeholder/);
-    assert.match(source, /currentUser \\? \\(/);
+    assert.match(source, /currentUser \? \(/);
     assert.match(source, /<Menu/);
     assert.match(source, /サインイン/);
-    assert.match(source, /setLocalCurrentUser\\(null\\)/);
-    assert.match(source, /setLocalSavedRoomIds\\(\\[\\]\\)/);
-    assert.match(source, /unstable_rethrow\\(error\\)/);
+    assert.match(source, /setLocalCurrentUser\(null\)/);
+    assert.match(source, /setLocalSavedRoomIds\(\[\]\)/);
+    assert.match(source, /unstable_rethrow\(error\)/);
     assert.match(header, /className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4"/);
     assert.match(button, /opacity-50 pointer-events-none/);
 });
