@@ -118,3 +118,26 @@ test("public feeds are ISR pages and never await personalized room list data", (
     assert.match(client, /cache: "no-store"/);
     assert.match(client, /ownedRoomIds/);
 });
+
+test("same-route sign out clears deferred ownership and save controls before redirect", () => {
+    const source = readFileSync(
+        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        "utf8",
+    );
+    const handlerStart = source.indexOf("const handleSignOut = async () => {");
+    const handlerEnd = source.indexOf("const viewTitle =", handlerStart);
+    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+    const handler = source.slice(handlerStart, handlerEnd);
+    const redirect = handler.indexOf("await signOut()");
+    assert.ok(redirect > 0, "sign-out Server Action must still execute");
+    for (const reset of [
+        "setCurrentUser(null)",
+        "setMyRooms([])",
+        "setSavedRoomIds([])",
+    ]) {
+        const position = handler.indexOf(reset);
+        assert.ok(position >= 0 && position < redirect, reset + " must precede the redirecting action");
+    }
+    assert.match(handler, /catch \(error\)/);
+    assert.match(handler, /setCurrentUser\(previousViewer.currentUser\)/);
+});
