@@ -30,6 +30,9 @@ jobs:
             - name: Test kana and hyphen input
               run: npm run test:kana
               working-directory: frontend
+            - name: Test authenticated and guest room feeds
+              run: npm run test:room-list
+              working-directory: frontend
             - name: Typecheck
               run: npx tsc --noEmit
               working-directory: frontend
