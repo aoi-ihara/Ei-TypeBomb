@@ -74,6 +74,20 @@ function fixture(env = {}) {
                 keys.set(key, value);
                 return { ok: true, json: async () => ({ result: "OK" }) };
             }
+            if (verb === "EVAL") {
+                const [, script, count, redisKey, ...args] = args;
+                assert.equal(count, 1);
+                const current = keys.get(redisKey) ?? null;
+                if (script.includes("~= ARGV[1]")) {
+                    if (current !== args[0]) return { ok: true, json: async () => ({ result: 0 }) };
+                    keys.set(redisKey, args[1]);
+                    return { ok: true, json: async () => ({ result: 1 }) };
+                }
+                if (current?.startsWith("blocked:"))
+                    return { ok: true, json: async () => ({ result: 0 }) };
+                keys.set(redisKey, args[0]);
+                return { ok: true, json: async () => ({ result: 1 }) };
+            }
             if (verb === "INCR") {
                 const next = Number(keys.get(key) ?? "0") + 1;
                 keys.set(key, String(next));
@@ -161,12 +175,14 @@ test("blocking prior to a privacy change bypasses stale data until invalidated",
     const first = await f.cache.readRoomDataCache("slug-a");
     await f.cache.writeRoomDataCache("slug-a", f.source, first.generation);
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "hit");
-    await f.cache.blockRoomDataCache("slug-a");
+    const fence = await f.cache.blockRoomDataCache("slug-a");
     const blocked = await f.cache.readRoomDataCache("slug-a");
     assert.equal(blocked.status, "blocked");
     assert.equal(blocked.room, null);
     assert.equal(blocked.generation, null);
     await f.cache.invalidateRoomDataCache("slug-a");
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "blocked");
+    await f.cache.releaseRoomDataCache(fence, "slug-a");
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "miss");
 });
 
@@ -175,4 +191,18 @@ test("a cache outage refuses privacy revocation while allowing DB fallback reads
     f.setUnavailable(true);
     await assert.rejects(f.cache.blockRoomDataCache("slug-a"), /protection is unavailable/);
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "unavailable");
+});
+
+test("overlapping edit cannot clear another mutation's active privacy fence", async () => {
+    const f = fixture();
+    const first = await f.cache.readRoomDataCache("slug-a");
+    await f.cache.writeRoomDataCache("slug-a", f.source, first.generation);
+    const fence = await f.cache.blockRoomDataCache("slug-a");
+    await f.cache.invalidateRoomDataCache("slug-a");
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "blocked");
+    await assert.rejects(f.cache.blockRoomDataCache("slug-a"), /protection is unavailable/);
+    await f.cache.releaseRoomDataCache("blocked:another-mutation", "slug-a");
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "blocked");
+    await f.cache.releaseRoomDataCache(fence, "slug-a");
+    assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "miss");
 });
