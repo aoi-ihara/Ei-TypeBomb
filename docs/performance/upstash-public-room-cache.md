@@ -1,7 +1,7 @@
 # Upstash cache for public feeds and shared room content
 
 ETB uses Upstash Redis to avoid repeated Supabase reads across Vercel instances.
-Redis is optional: normal room-page and feed reads fall back to Supabase.
+Redis is optional: normal room-page and feed reads fall back to Supabase. Cache reads use one atomic Upstash EVAL request to fetch both generation and payload. On a miss, Next.js `after()` populates Redis after the response instead of blocking it; generation-based invalidation still prevents stale in-flight writes from becoming active.
 
 ## Configuration
 
