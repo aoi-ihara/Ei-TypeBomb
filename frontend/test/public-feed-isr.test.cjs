@@ -174,11 +174,10 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     assert.match(provider, /resetToGuest/);
     assert.match(source, /viewer\.snapshot\.status === "idle"/);
     assert.match(source, /className="h-9 w-28"/);
-    assert.match(source, /dimWhenDisabled=\{false\}/);
     assert.match(header, /min-h-\[68px\]/);
     assert.match(header, /items-center/);
-    assert.match(button, /dimWhenDisabled = true/);
-    assert.match(button, /disabled && \(dimWhenDisabled/);
+    assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
+    assert.match(button, /opacity-50 pointer-events-none/);
 });
 
 test("saved room toggles in personalized feeds update the shared viewer too", () => {
