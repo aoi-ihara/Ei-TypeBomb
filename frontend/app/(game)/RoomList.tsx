@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, type SetStateAction } from "react";
 import { unstable_rethrow, useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
@@ -80,9 +80,21 @@ export default function RoomList({
         ],
     );
     const savedRoomIds = deferViewer ? viewer.snapshot.savedRoomIds : localSavedRoomIds;
-    const setSavedRoomIds = deferViewer
-        ? viewer.setSavedRoomIds
-        : setLocalSavedRoomIds;
+    const setSavedRoomIds = (value: SetStateAction<string[]>) => {
+        if (deferViewer) {
+            viewer.setSavedRoomIds(value);
+        } else {
+            setLocalSavedRoomIds(value);
+            // These pages share a persistent layout with the public feeds.
+            // Keep the public bookmark UI synchronized, including rollback.
+            if (
+                viewer.snapshot.status === "ready" &&
+                viewer.snapshot.currentUser?.id === localCurrentUser?.id
+            ) {
+                viewer.setSavedRoomIds(value);
+            }
+        }
+    };
     const viewerLoading = deferViewer && viewer.snapshot.status === "idle";
     const viewerError = deferViewer && viewer.snapshot.status === "error";
 
@@ -236,9 +248,10 @@ export default function RoomList({
 
         // Clear privileged UI immediately, even when Next keeps this mounted
         // through a same-route Server Action redirect.
-        if (deferViewer) {
-            viewer.resetToGuest();
-        } else {
+        // The provider also survives navigation from /mine or /saved to /.
+        // Always revoke its owner/bookmark UI before the redirect.
+        viewer.resetToGuest();
+        if (!deferViewer) {
             setLocalCurrentUser(null);
             setLocalMyRooms([]);
             setLocalSavedRoomIds([]);
@@ -253,9 +266,8 @@ export default function RoomList({
         } catch (error) {
             unstable_rethrow(error);
             // Failed sign-out: restore the account view without stale state.
-            if (deferViewer) {
-                viewer.restore(previousSnapshot);
-            } else {
+            viewer.restore(previousSnapshot);
+            if (!deferViewer) {
                 setLocalCurrentUser(previousViewer.currentUser);
                 setLocalMyRooms(previousViewer.myRooms);
                 setLocalSavedRoomIds(previousViewer.savedRoomIds);
