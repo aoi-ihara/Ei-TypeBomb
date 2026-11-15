@@ -140,8 +140,11 @@ function toolError(
 // A tool's expected failure is still an MCP error, but not a server exception.
 // Keep internal telemetry fields out of structured MCP responses.
 function publicToolResult(result: ToolResult): ToolResult {
-    const { errorCode: _errorCode, reportToErrorTracking: _report, ...response } = result;
-    return response;
+    return {
+        content: result.content,
+        ...(result.structuredContent ? { structuredContent: result.structuredContent } : {}),
+        ...(result.isError ? { isError: true } : {}),
+    };
 }
 
 function normalizeRoomIdentifier(value: string): string | null {
