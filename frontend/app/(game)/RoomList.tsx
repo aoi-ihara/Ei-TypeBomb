@@ -16,7 +16,7 @@ import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import { View } from "@/type";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
-import { selectRoomsForView } from "@/lib/room/list-view";
+import { getEditableRoomIds, selectRoomsForView } from "@/lib/room/list-view";
 
 type CurrentUser = {
     id: string;
@@ -104,6 +104,11 @@ export default function RoomList({
                 currentUserId: currentUser?.id ?? null,
             }),
         [view, publicRooms, myRooms, savedRoomIds, currentUser?.id],
+    );
+
+    const editableRoomIds = useMemo(
+        () => getEditableRoomIds(myRooms, currentUser?.id ?? null),
+        [myRooms, currentUser?.id],
     );
 
     const filteredRooms = useMemo(() => {
@@ -273,6 +278,7 @@ export default function RoomList({
                     key={view + ":" + deferredKeyword}
                     rooms={filteredRooms}
                     savedIds={savedRoomIds}
+                    editableRoomIds={editableRoomIds}
                     onToggleSaved={
                         currentUser ? toggleSavedRoomState : undefined
                     }
