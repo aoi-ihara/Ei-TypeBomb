@@ -1,6 +1,7 @@
 "use server";
 import { revalidateRoomContent } from "./revalidate";
 import { invalidatePublicRooms } from "./get";
+import { invalidateRoomDataCache } from "./room-data-cache";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -19,7 +20,7 @@ export const deleteRoom = async (roomId: string) => {
         .delete()
         .eq("id", roomId)
         .eq("user_id", userId)
-        .select("id")
+        .select("id, link")
         .maybeSingle();
 
     if (error) {
@@ -31,7 +32,10 @@ export const deleteRoom = async (roomId: string) => {
         return "ルームが見つからないか、削除する権限がありません。";
     }
 
-    await invalidatePublicRooms();
+    await Promise.all([
+        invalidatePublicRooms(),
+        invalidateRoomDataCache(roomId, data.link),
+    ]);
     // Also expires old aliases and lists in the calling browser after a commit.
     revalidateRoomContent();
 
