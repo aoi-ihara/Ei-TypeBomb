@@ -128,7 +128,7 @@ export async function readPublicRoomsCache(): Promise<CacheRead> {
         if (!Array.isArray(result) || result.length !== 2)
             throw new Error("Invalid public-room cache read");
         const generation = String(result[0]);
-        if (!/^\\d+$/.test(generation))
+        if (!/^\d+$/.test(generation))
             throw new Error("Invalid cache generation");
         const encoded = result[1];
         if (encoded === null)
