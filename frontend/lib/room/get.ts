@@ -111,8 +111,10 @@ const getCachedRoomPageDataFromLink = cache(
 
         // Cache only the shared room content, never owner/auth/password state.
         // Auth is evaluated on every request, including Redis hits.
-        const claimedViewerIdRequest = getClaimedViewerId();
-        const cached = await readRoomDataCache(link);
+        const [cached, claimedViewerId] = await Promise.all([
+            readRoomDataCache(link),
+            getClaimedViewerId(),
+        ]);
         let data: RoomPageRow | null = cached.room;
 
         if (!data) {
@@ -152,7 +154,6 @@ const getCachedRoomPageDataFromLink = cache(
         }
 
         if (!data) return null;
-        const claimedViewerId = await claimedViewerIdRequest;
 
         // Public/unlisted content is already readable by anyone. The verified JWT
         // is used only for the owner UI hint; editing still rechecks getUser().
