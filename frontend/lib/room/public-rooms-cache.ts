@@ -9,7 +9,11 @@ import { serverError } from "@/lib/server-console";
  * passwords, ownership metadata, private rooms, or unlisted room contents.
  * A generation key fences writes made by requests that began before an edit.
  */
-const TTL_SECONDS = 120;
+const configuredTtl = Number(process.env.PUBLIC_ROOM_CACHE_TTL_SECONDS ?? 3600);
+const TTL_SECONDS =
+    Number.isSafeInteger(configuredTtl) && configuredTtl >= 60 && configuredTtl <= 86400
+        ? configuredTtl
+        : 3600;
 const TIMEOUT_MS = 1000;
 let lastWarningAt = 0;
 
