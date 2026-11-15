@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Room } from "@/type";
+import { unstable_rethrow } from "next/navigation";
 import { serverError } from "@/lib/server-console";
 
 /**
@@ -128,6 +129,8 @@ export async function readPublicRoomsCache(): Promise<CacheRead> {
         if (!rooms) throw new Error("Invalid public-room cache contents");
         return { rooms, generation, status: "hit" };
     } catch (error) {
+        // Preserve Next.js control-flow exceptions such as dynamic rendering.
+        unstable_rethrow(error);
         warn(error);
         return { rooms: null, generation: null, status: "unavailable" };
     }
@@ -149,6 +152,8 @@ export async function writePublicRoomsCache(
         // currently active cache key after an invalidation.
         await command(["SET", dataKey(generation), JSON.stringify(summaries), "EX", TTL_SECONDS]);
     } catch (error) {
+        // Preserve Next.js control-flow exceptions such as dynamic rendering.
+        unstable_rethrow(error);
         warn(error);
     }
 }
@@ -162,6 +167,8 @@ export async function invalidatePublicRoomsCache(): Promise<void> {
     } catch (error) {
         // Redis is never the source of truth. Cached summaries are bounded by
         // TTL; edits succeed even if the cache service is temporarily down.
+        // Preserve Next.js control-flow exceptions such as dynamic rendering.
+        unstable_rethrow(error);
         warn(error);
     }
 }
