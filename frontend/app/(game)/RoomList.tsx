@@ -294,7 +294,9 @@ export default function RoomList({
             }
             header={
                 viewerLoading ? (
-                    <div className="h-9 w-28" aria-label="アカウント情報を読み込み中" />
+                    <div className="invisible pointer-events-none" aria-hidden="true">
+                        <Button variant="text">サインイン</Button>
+                    </div>
                 ) : viewerError ? (
                     <Button
                         variant="text"
