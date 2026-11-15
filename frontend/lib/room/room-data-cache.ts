@@ -3,6 +3,7 @@ import "server-only";
 import type { Item } from "@/type";
 import { serverError } from "@/lib/server-console";
 import { unstable_rethrow } from "next/navigation";
+import { randomUUID } from "node:crypto";
 
 /**
  * Room content shared between visitors, never an authenticated view or an
@@ -127,7 +128,7 @@ export function toCacheableRoomData(value: unknown): CacheableRoomData | null {
 type RoomCacheRead = {
     room: CacheableRoomData | null;
     generation: string | null;
-    status: "hit" | "miss" | "disabled" | "unavailable";
+    status: "hit" | "miss" | "blocked" | "disabled" | "unavailable";
 };
 
 export async function readRoomDataCache(identifier: string): Promise<RoomCacheRead> {
@@ -140,7 +141,11 @@ export async function readRoomDataCache(identifier: string): Promise<RoomCacheRe
             generationKey(identifier),
         ]);
         const generation = rawGeneration === null ? "0" : String(rawGeneration);
-        if (!/^\d+$/.test(generation))
+        // A restricted/deleted room is fenced before the DB mutation.
+        // No cached content may be read or written until invalidation succeeds.
+        if (generation.startsWith("blocked:"))
+            return { room: null, generation: null, status: "blocked" };
+        if (!/^(?:\d+|[0-9a-f-]{36})$/.test(generation))
             throw new Error("Invalid room cache generation");
         const encoded = await command<string>([
             "GET",
@@ -184,6 +189,28 @@ export async function writeRoomDataCache(
     }
 }
 
+/**
+ * Fail closed before revoking public access or deleting a room. If Redis is
+ * configured but this write fails, the mutation must not proceed: otherwise
+ * previously public questions could remain readable for the full cache TTL.
+ * The blocked generation is safe to leave behind if the following DB write
+ * fails or cache invalidation is unavailable: readers bypass Redis.
+ */
+export async function blockRoomDataCache(
+    ...identifiers: Array<string | null | undefined>
+): Promise<void> {
+    if (!configured()) return;
+    try {
+        for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
+            await command(["SET", generationKey(identifier), "blocked:" + randomUUID()]);
+        }
+    } catch (error) {
+        unstable_rethrow(error);
+        warn(error);
+        throw new Error("Room cache protection is unavailable", { cause: error });
+    }
+}
+
 /** Invalidate canonical, legacy-ID and old-link entries after a mutation. */
 export async function invalidateRoomDataCache(
     ...identifiers: Array<string | null | undefined>
@@ -191,7 +218,8 @@ export async function invalidateRoomDataCache(
     if (!configured()) return;
     for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
         try {
-            await command(["INCR", generationKey(identifier)]);
+            // A random generation cannot be reused by an in-flight stale read.
+            await command(["SET", generationKey(identifier), randomUUID()]);
         } catch (error) {
             unstable_rethrow(error);
             warn(error);
