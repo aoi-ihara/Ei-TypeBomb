@@ -7,7 +7,7 @@ export const dynamic = "force-static";
 export const revalidate = 3600;
 
 export default async function Page() {
-    const publicRooms = await getPublicRooms();
+    const publicRooms = await getPublicRooms({ failOnError: true });
 
     return (
         <RoomList
