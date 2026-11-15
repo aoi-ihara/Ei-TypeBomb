@@ -1,6 +1,7 @@
 "use server";
 
 import { cache } from "react";
+import { after } from "next/server";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { createAdminClient } from "../db/server";
@@ -152,7 +153,10 @@ const getCachedRoomPageDataFromLink = cache(
             }
 
             // Private rooms are deliberately excluded from the shared cache.
-            if (data) await writeRoomDataCache(link, data, cached.generation);
+            if (data && cached.generation !== null) {
+                const fresh = data;
+                after(() => writeRoomDataCache(link, fresh, cached.generation));
+            }
         }
 
         if (!data) return null;
@@ -335,7 +339,9 @@ export const getPublicRooms = async (
         );
 
         const rankedRooms = rankPublicRooms(rooms, statsByRoomId);
-        await writePublicRoomsCache(rankedRooms, cached.generation);
+        if (cached.generation !== null) {
+            after(() => writePublicRoomsCache(rankedRooms, cached.generation));
+        }
 
         if (process.env.ROOM_CACHE_LOGS === "1") {
             serverLog("SERVER", "public rooms cache", {
