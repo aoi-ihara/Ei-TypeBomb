@@ -17,6 +17,11 @@ import {
     writePublicRoomsCache,
     invalidatePublicRoomsCache,
 } from "./public-rooms-cache";
+import {
+    readRoomDataCache,
+    writeRoomDataCache,
+    type CacheableRoomData,
+} from "./room-data-cache";
 import isUUID from "validator/es/lib/isUUID";
 import { redirect } from "next/navigation";
 import { serverError, serverLog } from "../server-console";
@@ -82,6 +87,10 @@ export const getRoomRouteFromLink = async (link: string) => {
 const ROOM_PAGE_COLUMNS =
     "id, title, user_id, explanation, max_players, bomb_count, created_at, updated_at, items, link, game_duration, visibility";
 
+// Public and unlisted contents may be cached; private rows are always
+// resolved directly from Supabase before applying request-specific auth.
+type RoomPageRow = Omit<CacheableRoomData, "visibility"> & { visibility: string };
+
 // Request-local deduplication for metadata/page; browser reuse is Next Router Cache.
 type RoomPageData = {
     id: string;
@@ -100,41 +109,50 @@ const getCachedRoomPageDataFromLink = cache(
     async (link: string): Promise<RoomPageData | null> => {
         if (!link) return null;
 
-        const supabase = await createAdminClient();
-        const [{ data: roomData, error }, claimedViewerId] = await Promise.all([
-            supabase
+        // Cache only the shared room content, never owner/auth/password state.
+        // Auth is evaluated on every request, including Redis hits.
+        const claimedViewerIdRequest = getClaimedViewerId();
+        const cached = await readRoomDataCache(link);
+        let data: RoomPageRow | null = cached.room;
+
+        if (!data) {
+            const supabase = await createAdminClient();
+            const { data: byLink, error } = await supabase
                 .from("ei_typebomb_rooms")
                 .select(ROOM_PAGE_COLUMNS)
                 .eq("link", link)
-                .maybeSingle(),
-            getClaimedViewerId(),
-        ]);
-
-        if (error) {
-            serverError("failed to fetch room page data", error, "DB");
-            return null;
-        }
-
-        let data = roomData;
-        if (!data && isUUID(link, 4)) {
-            const { data: legacyRoom, error: legacyError } = await supabase
-                .from("ei_typebomb_rooms")
-                .select(ROOM_PAGE_COLUMNS)
-                .eq("id", link)
                 .maybeSingle();
 
-            if (legacyError) {
-                serverError(
-                    "failed to fetch legacy room page data",
-                    legacyError,
-                    "DB",
-                );
+            if (error) {
+                serverError("failed to fetch room page data", error, "DB");
                 return null;
             }
-            data = legacyRoom;
+
+            data = byLink as RoomPageRow | null;
+            if (!data && isUUID(link, 4)) {
+                const { data: legacyRoom, error: legacyError } = await supabase
+                    .from("ei_typebomb_rooms")
+                    .select(ROOM_PAGE_COLUMNS)
+                    .eq("id", link)
+                    .maybeSingle();
+
+                if (legacyError) {
+                    serverError(
+                        "failed to fetch legacy room page data",
+                        legacyError,
+                        "DB",
+                    );
+                    return null;
+                }
+                data = legacyRoom as RoomPageRow | null;
+            }
+
+            // Private rooms are deliberately excluded from the shared cache.
+            if (data) await writeRoomDataCache(link, data, cached.generation);
         }
 
         if (!data) return null;
+        const claimedViewerId = await claimedViewerIdRequest;
 
         // Public/unlisted content is already readable by anyone. The verified JWT
         // is used only for the owner UI hint; editing still rechecks getUser().
