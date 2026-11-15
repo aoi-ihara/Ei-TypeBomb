@@ -5,7 +5,7 @@ import RoomList from "../RoomList";
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-    const roomListData = await getRoomListData();
+    const roomListData = await getRoomListData("latest");
 
     return <RoomList {...roomListData} initialView="latest" />;
 }
