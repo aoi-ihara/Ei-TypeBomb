@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomGrid from "@/components/rooms/RoomGrid";
@@ -33,12 +33,6 @@ type Props = {
     initialSavedRoomIds: string[];
     /** Public ISR pages hydrate account-only controls from a private endpoint. */
     deferViewer?: boolean;
-};
-
-type ViewerPayload = {
-    currentUser: CurrentUser | null;
-    ownedRoomIds: string[];
-    savedRoomIds: string[];
 };
 
 export default function RoomList({
@@ -257,6 +251,7 @@ export default function RoomList({
             startNavigationProgress();
             router.replace("/");
         } catch (error) {
+            unstable_rethrow(error);
             // Failed sign-out: restore the account view without stale state.
             if (deferViewer) {
                 viewer.restore(previousSnapshot);
