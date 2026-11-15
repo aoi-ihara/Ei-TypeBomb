@@ -16,7 +16,6 @@ export default async function Page() {
             initialSavedRoomIds={[]}
             currentUser={null}
             initialView="latest"
-            deferViewer
         />
     );
 }
