@@ -174,9 +174,8 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     assert.match(provider, /resetToGuest/);
     assert.match(source, /viewer\.snapshot\.status === "idle"/);
     assert.match(source, /className="h-9 w-28"/);
-    assert.match(header, /className="relative flex shrink-0/);
-    assert.match(header, /absolute right-4 top-1\/2 -translate-y-1\/2/);
-    assert.doesNotMatch(header, /min-h-\[/);
+    assert.match(header, /className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4"/);
+    assert.doesNotMatch(header, /min-h-\[|absolute right-4/);
     assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
     assert.match(button, /opacity-50 pointer-events-none/);
 });
