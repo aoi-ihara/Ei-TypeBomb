@@ -23,7 +23,6 @@ const TurnstileChallenge = dynamic(() =>
 );
 import { getRoomStatusFromId } from "@/lib/room/get";
 import { signInToRoom } from "@/lib/room/auth";
-import { recordRoomPlay } from "@/lib/room/analytics";
 import posthog from "posthog-js";
 
 type PlayMode = "online" | "offline";
@@ -101,11 +100,10 @@ export default function PlayRoom({
         };
     }, [roomId, alreadyAuthorized]);
 
-    const navigateToMode = async (
+    const navigateToMode = (
         mode: PlayMode,
         selectedAnswerMode: AnswerMode,
     ) => {
-        await recordRoomPlay(roomId, mode);
         posthog.capture("room_entered", {
             room_id: roomId,
             play_mode: mode,
@@ -140,10 +138,11 @@ export default function PlayRoom({
                     password: showPasswordField ? roomPassword : "",
                 },
                 turnstileToken,
+                mode,
             );
 
             if (result === null) {
-                await navigateToMode(mode, selectedAnswerMode);
+                navigateToMode(mode, selectedAnswerMode);
                 return;
             }
 
