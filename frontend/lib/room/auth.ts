@@ -129,7 +129,13 @@ export const signInToRoom = async (
             const isOwner = Boolean(userId) && data.user_id === userId;
             if (!isOwner) {
                 if (await isRoomAuthorized(room.id)) {
-                    if (playMode) await recordRoomPlay(room.id, playMode);
+                    if (playMode) {
+                        try {
+                            await recordRoomPlay(room.id, playMode);
+                        } catch (error) {
+                            console.error("Failed to schedule room play analytics:", error);
+                        }
+                    }
                     return null;
                 }
                 return "パスワードを入力してください。";
@@ -141,7 +147,13 @@ export const signInToRoom = async (
 
     // Schedule analytics on the server after authorization, without a second
     // client-to-server Server Action round trip or a blocking database write.
-    if (playMode) await recordRoomPlay(room.id, playMode);
+    if (playMode) {
+                        try {
+                            await recordRoomPlay(room.id, playMode);
+                        } catch (error) {
+                            console.error("Failed to schedule room play analytics:", error);
+                        }
+                    }
     return null;
 };
 
