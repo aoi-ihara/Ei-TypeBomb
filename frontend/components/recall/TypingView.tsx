@@ -12,7 +12,6 @@ import {
 } from "@/lib/playground/automatic-hint-evidence";
 import KanaTypingBoxes from "@/components/recall/KanaTypingBoxes";
 import {
-    advanceKanaInput,
     decodeKanaProgress,
     editKanaCell,
     hasHiragana,
@@ -21,6 +20,7 @@ import {
     displayTypingCharacter,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
+    shouldIgnoreIncorrectHintKey,
 } from "@/lib/romaji-input.mjs";
 import { io } from "@/lib/room/socket";
 import { getAuthToken } from "@/lib/room/auth";
@@ -98,6 +98,8 @@ function TypingAttempt({
     const kanaCommitSpansRef = useRef<number[]>([]);
     const isKanaAnswer = Boolean(english && hasHiragana(english));
     const inputStateRef = useRef(input);
+    const kanaComposingRef = useRef("");
+    const currentSelectionRef = useRef(0);
     const revealedHintLengthRef = useRef(initialCueLength);
     const automaticHintEvidenceRef = useRef(
         createAutomaticHintEvidence(english ?? "", initialCueLength),
@@ -145,9 +147,11 @@ function TypingAttempt({
 
     useEffect(() => {
         inputStateRef.current = input;
+        kanaComposingRef.current = kanaComposing;
+        currentSelectionRef.current = currentSelection;
         onChangeInputRef.current = onChangeInput;
         onHintChangeRef.current = onHintChange;
-    }, [input, onChangeInput, onHintChange]);
+    }, [input, kanaComposing, currentSelection, onChangeInput, onHintChange]);
 
     useEffect(() => {
         if (isReadonly || !english) return;
@@ -277,6 +281,8 @@ function TypingAttempt({
                         english,
                         inputStateRef.current,
                         nextLength,
+                        currentSelectionRef.current,
+                        kanaComposingRef.current,
                     )
                 ) {
                     attemptCountRef.current += 1;
@@ -473,27 +479,8 @@ function TypingAttempt({
             maxCorrectPrefixRef.current = nextCorrectPrefixLength;
             lastCorrectProgressAtRef.current = getActiveElapsedMs();
         }
-        const typedInsideHint = Array.from(
-            { length: advance },
-            (_, offset) => currentSelection + offset,
-        ).some((index) => index < hintLength && next[index] !== english[index]);
-
-        // Romanized kana answers are editable at any position, including
-        // positions that have subsequently received an automatic hint.
-        // Keep the pre-existing strict English hint behaviour unchanged.
-        // Once the full answer is revealed, any incorrect committed
-        // character should immediately clear the input (as in Playground),
-        // even when it is outside the previously hinted prefix.
-        const incorrectAfterReveal =
-            answerRevealed &&
-            Array.from(
-                { length: advance },
-                (_, offset) => currentSelection + offset,
-            ).some((index) => next[index] !== english[index]);
-        if (incorrectAfterReveal || (typedInsideHint && !manualHints)) {
-            resetInput();
-            return;
-        }
+        // Invalid keys in revealed cells are ignored before editing, so
+        // entering a hinted answer never resets previously correct input.
 
         // Kana cells may be edited out of order. A wrong answer is only
         // evaluated after all cells are filled, not at the first mistake
@@ -823,6 +810,28 @@ function TypingAttempt({
                                         lastKeyWasSpaceRef.current = false;
                                     }
                                 }
+                                const activeHintLength = manualHints
+                                    ? answerRevealed
+                                        ? english.length
+                                        : 0
+                                    : Math.max(
+                                          hintLength,
+                                          revealedHintLengthRef.current,
+                                      );
+                                if (
+                                    shouldIgnoreIncorrectHintKey(
+                                        english,
+                                        currentSelection,
+                                        kanaComposing,
+                                        char,
+                                        activeHintLength,
+                                    )
+                                ) {
+                                    // Ignore wrong keys without changing
+                                    // composition, progress, or mistake counts.
+                                    setCharInput("");
+                                    return;
+                                }
                                 if (firstKeyAtRef.current === null) {
                                     firstKeyAtRef.current =
                                         getActiveElapsedMs();
@@ -839,26 +848,6 @@ function TypingAttempt({
                                         // An impossible roman sequence (e.g. zz)
                                         // fails immediately, even with no hints.
                                         resetInput();
-                                        return;
-                                    }
-                                    if (
-                                        (answerRevealed ||
-                                            (!manualHints &&
-                                                currentSelection <
-                                                    hintLength)) &&
-                                        !advanceKanaInput(
-                                            english.slice(currentSelection),
-                                            {
-                                                committed: "",
-                                                composing: kanaComposing,
-                                            },
-                                            char,
-                                        ).accepted
-                                    ) {
-                                        // During a full hint, reject the first
-                                        // incorrect roman key without waiting.
-                                        resetInput();
-                                        setCharInput("");
                                         return;
                                     }
                                     if (edit.accepted) {
