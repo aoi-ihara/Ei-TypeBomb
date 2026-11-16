@@ -404,14 +404,18 @@ function TypingAttempt({
         setAnswerRevealed(true);
         onHintChange?.(english.length);
 
-        // A correctly committed kana prefix stays on screen when hints are
-        // revealed, even if the user is still composing its roman letters.
-        const hasIncorrectInput = isKanaAnswer
-            ? !english.startsWith(input.join(""))
-            : input.some(
-                  (char, index) => char !== "" && char !== english[index],
-              );
-        if (hasIncorrectInput) {
+        // Reset mistakes that existed before the hint was revealed, including
+        // incompatible unfinished romaji. Valid partial romanization remains
+        // editable after the answer appears.
+        if (
+            shouldClearForTimedHint(
+                english,
+                input,
+                english.length,
+                currentSelection,
+                kanaComposing,
+            )
+        ) {
             resetInput();
         }
     };
