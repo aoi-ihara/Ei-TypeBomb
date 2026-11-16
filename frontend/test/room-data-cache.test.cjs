@@ -20,7 +20,22 @@ function fixture(env = {}) {
     const keys = new Map();
     const commands = [];
     const errors = [];
+    const expirations = new Map();
+    let now = 0;
     let unavailable = false;
+    let loseBlockResponse = false;
+    const get = (key) => {
+        if (expirations.has(key) && expirations.get(key) <= now) {
+            keys.delete(key);
+            expirations.delete(key);
+        }
+        return keys.get(key) ?? null;
+    };
+    const put = (key, value, seconds) => {
+        keys.set(key, value);
+        if (seconds) expirations.set(key, now + seconds);
+        else expirations.delete(key);
+    };
     const source = {
         id: "room-a",
         link: "slug-a",
@@ -51,7 +66,7 @@ function fixture(env = {}) {
             const args = JSON.parse(options.body);
             commands.push(args);
             const [verb, key, value, ex, ttl] = args;
-            if (verb === "GET") return { ok: true, json: async () => ({ result: keys.get(key) ?? null }) };
+            if (verb === "GET") return { ok: true, json: async () => ({ result: get(key) }) };
             if (verb === "SET") {
                 if (ex === undefined) {
                     keys.set(key, value);
@@ -59,27 +74,49 @@ function fixture(env = {}) {
                 }
                 assert.equal(ex, "EX");
                 assert.equal(ttl, Number(env.ROOM_DATA_CACHE_TTL_SECONDS ?? 86400));
-                keys.set(key, value);
+                put(key, value, ex === "EX" ? ttl : null);
                 return { ok: true, json: async () => ({ result: "OK" }) };
             }
             if (verb === "EVAL") {
-                const [, script, count, redisKey, ...scriptArgs] = args;
-                assert.equal(count, 1);
-                const current = keys.get(redisKey) ?? null;
+                const [, script, count, ...rest] = args;
+                const redisKeys = rest.slice(0, count);
+                const scriptArgs = rest.slice(count);
+                const redisKey = redisKeys[0];
+                const current = get(redisKey);
                 if (script.includes("local data =")) {
+                    assert.equal(count, 1);
                     const generation = current ?? "0";
                     const data = generation.startsWith("blocked:")
-                        ? null : keys.get(scriptArgs[0] + generation) ?? null;
+                        ? null : get(scriptArgs[0] + generation);
                     return { ok: true, json: async () => ({ result: [generation, data] }) };
+                }
+                if (script.includes("for index = 1, #KEYS do")) {
+                    if (redisKeys.some((cacheKey) => get(cacheKey)?.startsWith("blocked:")))
+                        return { ok: true, json: async () => ({ result: 0 }) };
+                    assert.equal(scriptArgs[1], 86400 + 60);
+                    redisKeys.forEach((cacheKey) => put(cacheKey, scriptArgs[0], scriptArgs[1]));
+                    if (loseBlockResponse) {
+                        loseBlockResponse = false;
+                        unavailable = true;
+                        throw Error("Lost Redis response after committing the block");
+                    }
+                    return { ok: true, json: async () => ({ result: 1 }) };
+                }
+                if (script.includes("KEYS[2]")) {
+                    assert.equal(count, 2);
+                    if ((current ?? "0") !== scriptArgs[0])
+                        return { ok: true, json: async () => ({ result: 0 }) };
+                    put(redisKeys[1], scriptArgs[1], scriptArgs[2]);
+                    return { ok: true, json: async () => ({ result: 1 }) };
                 }
                 if (script.includes("~= ARGV[1]")) {
                     if (current !== scriptArgs[0]) return { ok: true, json: async () => ({ result: 0 }) };
-                    keys.set(redisKey, scriptArgs[1]);
+                    put(redisKey, scriptArgs[1]);
                     return { ok: true, json: async () => ({ result: 1 }) };
                 }
                 if (current?.startsWith("blocked:"))
                     return { ok: true, json: async () => ({ result: 0 }) };
-                keys.set(redisKey, scriptArgs[0]);
+                put(redisKey, scriptArgs[0]);
                 return { ok: true, json: async () => ({ result: 1 }) };
             }
             if (verb === "INCR") {
@@ -109,7 +146,10 @@ function fixture(env = {}) {
         },
     });
     return { cache: exported, keys, commands, source, errors,
-        setUnavailable(value) { unavailable = value; } };
+        setUnavailable(value) { unavailable = value; },
+        loseNextBlockResponse() { loseBlockResponse = true; },
+        advanceSeconds(value) { now += value; },
+        seedCacheWithTTL(key, value, seconds) { put(key, value, seconds); } };
 }
 
 test("room cache stores only public/unlisted source fields, never passwords", async () => {
@@ -139,7 +179,7 @@ test("private room entries are never cached or accepted from Redis", async () =>
         { ...f.source, visibility: "private" }, initial.generation);
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "miss");
     await f.cache.writeRoomDataCache("slug-a", f.source, initial.generation);
-    const key = f.commands.find((c) => c[0] === "SET")[1];
+    const key = f.commands.find((c) => c[0] === "EVAL" && c[1].includes("KEYS[2]"))[4];
     f.keys.set(key, JSON.stringify({ ...f.source, visibility: "private" }));
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "unavailable");
 });
@@ -217,4 +257,72 @@ test("overlapping edit cannot clear another mutation's active privacy fence", as
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "blocked");
     await f.cache.releaseRoomDataCache(fence, "slug-a");
     assert.equal((await f.cache.readRoomDataCache("slug-a")).status, "miss");
+});
+
+test("fencing multiple aliases is atomic when an alias is already blocked", async () => {
+    const f = fixture();
+    const firstToken = await f.cache.blockRoomDataCache("room-a", "old-alias");
+    await assert.rejects(
+        f.cache.blockRoomDataCache("new-alias", "old-alias"),
+        /protection is unavailable/,
+    );
+    assert.equal((await f.cache.readRoomDataCache("new-alias")).status, "miss");
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "blocked");
+    await f.cache.releaseRoomDataCache(firstToken, "room-a", "old-alias");
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+});
+
+test("a lost block response cannot strand a permanent fence or restore stale data", async () => {
+    const f = fixture();
+    const original = await f.cache.readRoomDataCache("old-alias");
+    await f.cache.writeRoomDataCache("old-alias", f.source, original.generation);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "hit");
+
+    f.loseNextBlockResponse();
+    await assert.rejects(
+        f.cache.blockRoomDataCache("room-a", "old-alias"),
+        /protection is unavailable/,
+    );
+    // The block succeeded in Redis, but its response was lost and recovery
+    // could not connect. Reads stay fail-closed until TTL expiry.
+    f.setUnavailable(false);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "blocked");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "blocked");
+
+    // A delayed write from before the block cannot revive old contents.
+    await f.cache.writeRoomDataCache("old-alias", f.source, original.generation);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "blocked");
+
+    f.advanceSeconds(86400 + 61);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "miss");
+    const retry = await f.cache.blockRoomDataCache("room-a", "old-alias");
+    await f.cache.releaseRoomDataCache(retry, "room-a", "old-alias");
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+});
+
+test("shortening room-data TTL never releases a fence before old 24h payloads expire", async () => {
+    const f = fixture({ ROOM_DATA_CACHE_TTL_SECONDS: "60" });
+    const read = await f.cache.readRoomDataCache("old-alias");
+    assert.equal(read.status, "miss");
+    const readCommand = f.commands.at(-1);
+    // A prior deployment sharing this namespace wrote with the maximum TTL.
+    // This data must be inaccessible while a privacy fence can expire.
+    f.seedCacheWithTTL(readCommand[4] + read.generation, JSON.stringify(f.source), 86400);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "hit");
+
+    f.loseNextBlockResponse();
+    await assert.rejects(f.cache.blockRoomDataCache("room-a", "old-alias"),
+        /protection is unavailable/);
+    f.setUnavailable(false);
+
+    f.advanceSeconds(121); // Longer than 60s configured cache TTL + 60s.
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "blocked");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "blocked");
+
+    // Even an unreleased orphan eventually recovers, but only after the
+    // older maximum-TTL payload has definitely expired in Redis.
+    f.advanceSeconds(86400 - 121 + 61);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "miss");
 });

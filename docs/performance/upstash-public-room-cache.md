@@ -54,11 +54,25 @@ invalidation replaces that block with a fresh unique generation.
 
 **If Redis is configured but the pre-mutation block fails, the privacy
 restriction/deletion fails rather than risking stale disclosure.**
+All aliases are fenced in one atomic Redis EVAL (not one request per alias).
+A lost response is rolled back by its unique token when Redis is reachable.
+Otherwise, orphaned fences expire after the **maximum supported room-data
+TTL (86400 seconds) plus 60 seconds**, regardless of the current configured
+TTL. This protects payloads written by older deployments before the TTL was
+lowered within a shared namespace. Cache writes also
+check the active generation atomically and cannot populate an obsolete entry
+while a block is active.
+
 If post-mutation invalidation fails, the blocked generation remains, forcing
-Supabase reads. Non-restrictive edits use best-effort invalidation and can
-temporarily serve stale content if Redis invalidation fails. Edits made
-directly in Supabase (bypassing ETB's mutation paths) do not invalidate Redis:
-operators should invalidate the affected namespace after such edits.
+Supabase reads until explicit release or safe expiry. Deletion is conditional
+on the edit_version read before fencing; a concurrent rename/edit aborts the
+DELETE and releases only the original fences. Successful deletion invalidates
+the old alias and defensively invalidates any differing returned alias.
+
+Non-restrictive edits use best-effort invalidation and can temporarily serve
+stale content if Redis invalidation fails. Edits made directly in Supabase
+(bypassing ETB's mutation paths) do not invalidate Redis: operators should
+invalidate the affected namespace after such edits.
 
 ## View-specific DB queries
 

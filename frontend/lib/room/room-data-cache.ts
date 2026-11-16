@@ -30,11 +30,18 @@ export type CacheableRoomData = {
     visibility: "public" | "unlisted";
 };
 
-const rawTtl = Number(process.env.ROOM_DATA_CACHE_TTL_SECONDS ?? 86400);
+// Keep this ceiling in sync with the accepted ROOM_DATA_CACHE_TTL_SECONDS range.
+// A prior deployment may have written entries with a longer TTL than the current
+// setting, while sharing the same Redis namespace.
+const MAX_DATA_TTL_SECONDS = 86400;
+const rawTtl = Number(process.env.ROOM_DATA_CACHE_TTL_SECONDS ?? MAX_DATA_TTL_SECONDS);
 const TTL_SECONDS =
-    Number.isSafeInteger(rawTtl) && rawTtl >= 60 && rawTtl <= 86400
+    Number.isSafeInteger(rawTtl) && rawTtl >= 60 && rawTtl <= MAX_DATA_TTL_SECONDS
         ? rawTtl
-        : 86400;
+        : MAX_DATA_TTL_SECONDS;
+// Even if the configured TTL is lowered, an orphaned fence may expire only
+// after every entry written by a previous supported deployment has expired.
+const FENCE_TTL_SECONDS = MAX_DATA_TTL_SECONDS + 60;
 let lastWarningAt = 0;
 
 const prefix = () => {
@@ -157,18 +164,40 @@ export async function writeRoomDataCache(
         if (!data) return; // Never cache private rooms or invalid payloads.
         // The generation was read BEFORE the DB request. A concurrent edit
         // fences this late write into an obsolete key.
+        // A late DB read must never restore an obsolete generation after
+        // a privacy fence was installed.
         await command([
-            "SET",
-            dataKey(identifier, generation),
-            JSON.stringify(data),
-            "EX",
-            TTL_SECONDS,
+            "EVAL", WRITE_IF_CURRENT_SCRIPT, 2,
+            generationKey(identifier), dataKey(identifier, generation),
+            generation, JSON.stringify(data), TTL_SECONDS,
         ]);
     } catch (error) {
         unstable_rethrow(error);
         warn(error);
     }
 }
+
+// Check generation and store in one atomic operation, so a delayed read
+// cannot repopulate data while a privacy fence is active.
+const WRITE_IF_CURRENT_SCRIPT = [
+    "local current = redis.call('GET', KEYS[1]) or '0'",
+    "if current ~= ARGV[1] then return 0 end",
+    "redis.call('SET', KEYS[2], ARGV[2], 'EX', tonumber(ARGV[3]))",
+    "return 1",
+].join("\n");
+
+// Fence all identifiers together or none at all. A lost HTTP response
+// cannot strand an indefinite block because fences expire after cache data.
+const BLOCK_SCRIPT = [
+    "for index = 1, #KEYS do",
+    "    local current = redis.call('GET', KEYS[index])",
+    "    if current and string.sub(current, 1, 8) == 'blocked:' then return 0 end",
+    "end",
+    "for index = 1, #KEYS do",
+    "    redis.call('SET', KEYS[index], ARGV[1], 'EX', tonumber(ARGV[2]))",
+    "end",
+    "return 1",
+].join("\n");
 
 // EVAL is atomic: an unrelated edit must never clear an active privacy fence.
 const UPDATE_IF_UNBLOCKED_SCRIPT = [
@@ -186,24 +215,28 @@ const RELEASE_SCRIPT = [
 /**
  * Install a unique privacy fence before changing visibility/deleting.
  * Returns a token that ONLY the same mutation may release. Existing fences
- * cannot be overwritten; on partial failure, any installed fences remain
- * blocked (safe fail-closed) until explicitly released.
+ * cannot be overwritten; aliases are acquired atomically and an orphaned
+ * fence expires only after older cached payloads are guaranteed to expire.
  */
 export async function blockRoomDataCache(
     ...identifiers: Array<string | null | undefined>
 ): Promise<string | null> {
     if (!configured()) return null;
+    const uniqueIdentifiers = [...new Set(identifiers.filter((id): id is string => !!id))];
+    if (!uniqueIdentifiers.length) return null;
     const token = "blocked:" + randomUUID();
     try {
-        for (const identifier of new Set(identifiers.filter((id): id is string => !!id))) {
-            const changed = await command<number>([
-                "EVAL", UPDATE_IF_UNBLOCKED_SCRIPT, 1, generationKey(identifier), token,
-            ]);
-            if (changed !== 1) throw new Error("Room cache is already privacy-fenced");
-        }
+        const changed = await command<number>([
+            "EVAL", BLOCK_SCRIPT, uniqueIdentifiers.length,
+            ...uniqueIdentifiers.map(generationKey), token, FENCE_TTL_SECONDS,
+        ]);
+        if (changed !== 1) throw new Error("Room cache is already privacy-fenced");
         return token;
     } catch (error) {
         unstable_rethrow(error);
+        // A timed-out request can still commit on Redis. Recover by token
+        // when possible; expiry handles outages that persist after this call.
+        await releaseRoomDataCache(token, ...uniqueIdentifiers);
         warn(error);
         throw new Error("Room cache protection is unavailable", { cause: error });
     }
