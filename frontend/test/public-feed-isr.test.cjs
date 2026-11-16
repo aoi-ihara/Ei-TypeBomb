@@ -135,9 +135,10 @@ test("cookie-bearing feed requests bypass guest ISR", () => {
     const proxy = readFileSync(path.join(__dirname, "../proxy.ts"), "utf8");
     assert.match(proxy, /hasAuthCookie\(request\)/);
     assert.match(proxy, /NextResponse\.rewrite\(destination/);
-    assert.match(proxy, /\/_viewer-feed/);
+    assert.match(proxy, /\/viewer-feed-internal/);
+    assert.doesNotMatch(proxy, /\/_viewer-feed/);
     for (const page of ["page.tsx", "latest/page.tsx"]) {
-        const source = readFileSync(path.join(__dirname, "../app/(game)/_viewer-feed", page), "utf8");
+        const source = readFileSync(path.join(__dirname, "../app/(game)/viewer-feed-internal", page), "utf8");
         assert.match(source, /force-dynamic/);
         assert.match(source, /getRoomListData/);
         assert.doesNotMatch(source, /deferViewer/);

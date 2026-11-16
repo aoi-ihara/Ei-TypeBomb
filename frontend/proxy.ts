@@ -17,7 +17,7 @@ export async function proxy(request: NextRequest) {
     const destination = request.nextUrl.clone();
     if (feed) {
         destination.pathname =
-            request.nextUrl.pathname === "/" ? "/_viewer-feed" : "/_viewer-feed/latest";
+            request.nextUrl.pathname === "/" ? "/viewer-feed-internal" : "/viewer-feed-internal/latest";
     }
     const createResponse = () =>
         feed ? NextResponse.rewrite(destination, { request }) : NextResponse.next({ request });

@@ -5,7 +5,7 @@
 Guest-facing ETB landing pages should not wait for a session lookup, Redis,
 or Supabase on a successful Vercel ISR cache hit.
 
-`/` (recommended) and `/latest` are forced-static **only for requests without Supabase Auth cookies**. The proxy rewrites requests bearing those cookies to dynamic `/_viewer-feed` routes that render their personalized data on the server and refresh their Supabase session. Cookie presence is only a routing hint, never an authorization check. The guest URLs are Node.js App Router
+`/` (recommended) and `/latest` are forced-static **only for requests without Supabase Auth cookies**. The proxy rewrites requests bearing those cookies to dynamic `/viewer-feed-internal` routes that render their personalized data on the server and refresh their Supabase session. Cookie presence is only a routing hint, never an authorization check. The guest URLs are Node.js App Router
 pages with `revalidate = 3600`. Both use the existing public room feed
 `getPublicRooms({ failOnError: true })`; on a miss, the path remains
 Upstash Redis → Supabase RPC. A failed database fetch throws rather than
