@@ -18,7 +18,7 @@ export const deleteRoom = async (roomId: string) => {
     // Fence previously public/unlisted content before deleting its source.
     const { data: existing, error: lookupError } = await supabase
         .from("ei_typebomb_rooms")
-        .select("id, link, visibility")
+        .select("id, link, visibility, edit_version")
         .eq("id", roomId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -39,6 +39,10 @@ export const deleteRoom = async (roomId: string) => {
         .delete()
         .eq("id", roomId)
         .eq("user_id", userId)
+        // Every room UPDATE increments edit_version via the DB trigger.
+        // Never delete a room that was renamed/edited after we fenced its
+        // old link: the new alias would otherwise remain publicly cached.
+        .eq("edit_version", existing.edit_version)
         .select("id, link")
         .maybeSingle();
 
@@ -50,14 +54,19 @@ export const deleteRoom = async (roomId: string) => {
 
     if (!data) {
         await releaseRoomDataCache(privacyFence, roomId, existing.link);
-        return "ルームが見つからないか、削除する権限がありません。";
+        return "ルームが更新されたか、削除する権限がありません。ページを再読み込みしてください。";
     }
 
     await Promise.all([
         invalidatePublicRooms(),
         privacyFence
-            ? releaseRoomDataCache(privacyFence, roomId, data.link)
-            : invalidateRoomDataCache(roomId, data.link),
+            ? releaseRoomDataCache(privacyFence, roomId, existing.link)
+            : invalidateRoomDataCache(roomId, existing.link),
+        // Defensive cleanup if the returned alias differs from the one
+        // used for the privacy fence.
+        data.link !== existing.link
+            ? invalidateRoomDataCache(data.link)
+            : Promise.resolve(),
     ]);
     // Also expires old aliases and lists in the calling browser after a commit.
     revalidateRoomContent();
