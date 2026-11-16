@@ -1472,22 +1472,23 @@ test("full manual hint reuses the inline overlay and keeps typing enabled", () =
     );
 });
 
-test("Playground full hints and online partial hints clear incorrect English and kana input", () => {
+test("existing mistakes clear when hints appear, while new incorrect keys are ignored", () => {
     const source = fs.readFileSync(
         path.join(root, "components/recall/TypingView.tsx"),
         "utf8",
     );
+    // Playground manual hints and timed online hints both check previously
+    // entered mistakes at reveal time.
     assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
     assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
-    assert.match(source, /const incorrectAfterReveal =\s*answerRevealed &&/);
-    // Playground's fully revealed hint applies to all answer types.
-    // Online hints enforce immediate failure within the revealed prefix.
-    assert.match(source, /const typedInsideHint = Array\.from\(/);
+    assert.match(source, /shouldClearForTimedHint\(/);
     assert.match(source, /onChangeInput\("", true\)/);
-    assert.match(
-        source,
-        /if \(incorrectAfterReveal \|\| \(typedInsideHint && !manualHints\)\) \{\s*resetInput\(\);\s*return;/,
-    );
+
+    // After a hint is displayed, wrong keys are ignored before input changes.
+    assert.match(source, /const activeHintLength = manualHints/);
+    assert.match(source, /shouldIgnoreIncorrectHintKey\(/);
+    assert.doesNotMatch(source, /const incorrectAfterReveal =/);
+    assert.doesNotMatch(source, /const typedInsideHint =/);
 });
 
 test("actual manual hint callback reveals the full answer and records one answer event", () => {
