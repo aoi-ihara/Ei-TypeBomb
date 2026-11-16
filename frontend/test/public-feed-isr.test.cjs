@@ -131,6 +131,20 @@ test("public feeds are ISR pages and never await personalized room list data", (
     assert.match(provider, /ownedRoomIds/);
 });
 
+test("cookie-bearing feed requests bypass guest ISR", () => {
+    const proxy = readFileSync(path.join(__dirname, "../proxy.ts"), "utf8");
+    assert.match(proxy, /hasAuthCookie\(request\)/);
+    assert.match(proxy, /NextResponse\.rewrite\(destination/);
+    assert.match(proxy, /\/viewer-feed-internal/);
+    assert.doesNotMatch(proxy, /\/_viewer-feed/);
+    for (const page of ["page.tsx", "latest/page.tsx"]) {
+        const source = readFileSync(path.join(__dirname, "../app/(game)/viewer-feed-internal", page), "utf8");
+        assert.match(source, /force-dynamic/);
+        assert.match(source, /getRoomListData/);
+        assert.doesNotMatch(source, /deferViewer/);
+    }
+});
+
 test("same-route sign out clears deferred ownership and save controls before redirect", () => {
     const source = readFileSync(
         path.join(__dirname, "../app/(game)/RoomList.tsx"),

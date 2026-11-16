@@ -105,26 +105,33 @@ type RoomCacheRead = {
     status: "hit" | "miss" | "blocked" | "disabled" | "unavailable";
 };
 
+// Resolve the active generation and data within one atomic Redis execution.
+const READ_SCRIPT = [
+    "local generation = redis.call('GET', KEYS[1]) or '0'",
+    "if string.sub(generation, 1, 8) == 'blocked:' then return {generation, false} end",
+    "local data = redis.call('GET', ARGV[1] .. generation)",
+    "return {generation, data or false}",
+].join("\n");
+
 export async function readRoomDataCache(identifier: string): Promise<RoomCacheRead> {
     if (!configured())
         return { room: null, generation: null, status: "disabled" };
 
     try {
-        const rawGeneration = await command<string | number>([
-            "GET",
-            generationKey(identifier),
+        const result = await command<[string | number, string | null]>([
+            "EVAL", READ_SCRIPT, 1, generationKey(identifier),
+            baseKey(identifier) + ":data:",
         ]);
-        const generation = rawGeneration === null ? "0" : String(rawGeneration);
+        if (!Array.isArray(result) || result.length !== 2)
+            throw new Error("Invalid room cache read");
+        const generation = String(result[0]);
         // A restricted/deleted room is fenced before the DB mutation.
         // No cached content may be read or written until invalidation succeeds.
         if (generation.startsWith("blocked:"))
             return { room: null, generation: null, status: "blocked" };
         if (!/^(?:\d+|[0-9a-f-]{36})$/.test(generation))
             throw new Error("Invalid room cache generation");
-        const encoded = await command<string>([
-            "GET",
-            dataKey(identifier, generation),
-        ]);
+        const encoded = result[1];
         if (encoded === null)
             return { room: null, generation, status: "miss" };
         if (typeof encoded !== "string")

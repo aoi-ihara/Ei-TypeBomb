@@ -38,13 +38,12 @@ const generationKey = () => getPrefix() + ":generation";
 const dataKey = (generation: string) =>
     getPrefix() + ":list:" + generation;
 
-async function getGeneration(): Promise<string> {
-    const value = await command<string | number>(["GET", generationKey()]);
-    if (value === null) return "0";
-    const generation = String(value);
-    if (!/^\d+$/.test(generation)) throw new Error("Invalid cache generation");
-    return generation;
-}
+// Read generation and its matching payload atomically in one Upstash request.
+const READ_SCRIPT = [
+    "local generation = redis.call('GET', KEYS[1]) or '0'",
+    "local value = redis.call('GET', ARGV[1] .. generation)",
+    "return {generation, value or false}",
+].join("\n");
 
 type CacheRead = {
     rooms: Room[] | null;
@@ -91,8 +90,15 @@ export async function readPublicRoomsCache(): Promise<CacheRead> {
         return { rooms: null, generation: null, status: "disabled" };
 
     try {
-        const generation = await getGeneration();
-        const encoded = await command<string>(["GET", dataKey(generation)]);
+        const result = await command<[string | number, string | null]>([
+            "EVAL", READ_SCRIPT, 1, generationKey(), getPrefix() + ":list:",
+        ]);
+        if (!Array.isArray(result) || result.length !== 2)
+            throw new Error("Invalid public-room cache read");
+        const generation = String(result[0]);
+        if (!/^\d+$/.test(generation))
+            throw new Error("Invalid cache generation");
+        const encoded = result[1];
         if (encoded === null)
             return { rooms: null, generation, status: "miss" };
         if (typeof encoded !== "string")
