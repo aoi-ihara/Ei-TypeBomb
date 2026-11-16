@@ -13,6 +13,7 @@ import {
     nextKanaCursor,
     shouldIgnoreNonSpaceAtSpace,
     shouldClearForTimedHint,
+    shouldIgnoreIncorrectHintKey,
     normalizeHyphenInput,
     displayTypingCharacter,
 } from "../lib/romaji-input.mjs";
@@ -398,19 +399,71 @@ test("fa and fi convert as combined kana, including optional fe and fo", () => {
     }
 });
 
-test("timed hints never erase editable kana or its unhinted cells", () => {
-    const cases = [
-        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 0 },
-        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 1 },
-        { answer: "さくら", cells: ["さ", "た", ""], hintLength: 3 },
-        { answer: "ふぁ", cells: ["ふ", ""], hintLength: 2 },
-    ];
-    for (const { answer, cells, hintLength } of cases) {
-        assert.equal(shouldClearForTimedHint(answer, cells, hintLength), false);
-    }
-    // Existing English behaviour must be preserved.
+test("timed hints clear pre-existing mistakes, including incorrect kana", () => {
     assert.equal(shouldClearForTimedHint("cat", ["c", "x", ""], 1), false);
     assert.equal(shouldClearForTimedHint("cat", ["c", "x", ""], 2), true);
+    assert.equal(shouldClearForTimedHint("さくら", ["さ", "た", ""], 1), false);
+    assert.equal(shouldClearForTimedHint("さくら", ["さ", "た", ""], 2), true);
+    assert.equal(shouldClearForTimedHint("さくら", ["さ", "た", ""], 3), true);
+    assert.equal(shouldClearForTimedHint("ふぁ", ["ふ", ""], 2), false);
+    assert.equal(shouldClearForTimedHint("てすと", ["", "", ""], 1, 0, "s"), true);
+    assert.equal(shouldClearForTimedHint("てすと", ["", "", ""], 1, 0, "t"), false);
+    assert.equal(shouldClearForTimedHint("ちゃ", ["", ""], 2, 0, "ch"), false);
+    // A pending key outside the newly hinted prefix must not be cleared.
+    assert.equal(shouldClearForTimedHint("さくら", ["さ", "", ""], 1, 1, "t"), false);
+});
+
+test("hinted Latin cells ignore wrong keys but accept spaces and literal hyphens", () => {
+    assert.equal(shouldIgnoreIncorrectHintKey("cat", 0, "", "x", 1), true);
+    assert.equal(shouldIgnoreIncorrectHintKey("cat", 0, "", "c", 1), false);
+    assert.equal(shouldIgnoreIncorrectHintKey("cat", 1, "", "x", 1), false);
+    assert.equal(shouldIgnoreIncorrectHintKey("co－", 2, "", "-", 3), false);
+    assert.equal(shouldIgnoreIncorrectHintKey("co－", 2, "", "x", 3), true);
+    assert.equal(shouldIgnoreIncorrectHintKey("ice cream", 3, "", " ", 4), false);
+});
+
+test("hinted kana accepts every valid romanization and ignores wrong keys", () => {
+    function typeWithHint(answer, keys) {
+        let cells = Array.from(answer, () => "");
+        let cursor = 0;
+        let composing = "";
+        let ignored = 0;
+        for (const key of keys) {
+            if (
+                shouldIgnoreIncorrectHintKey(
+                    answer,
+                    cursor,
+                    composing,
+                    key,
+                    answer.length,
+                )
+            ) {
+                ignored++;
+                continue;
+            }
+            const result = editKanaCell(answer, cells, cursor, composing, key);
+            assert.equal(result.accepted, true, `Rejected ${key} in ${keys}`);
+            cells = result.cells;
+            cursor = result.cursor;
+            composing = result.composing;
+        }
+        return { cells, composing, ignored };
+    }
+
+    assert.deepEqual(typeWithHint("し", "si").cells, ["し"]);
+    assert.deepEqual(typeWithHint("し", "shi").cells, ["し"]);
+    assert.deepEqual(typeWithHint("ちゃ", "tya").cells, ["ち", "ゃ"]);
+    assert.deepEqual(typeWithHint("ちゃ", "cha").cells, ["ち", "ゃ"]);
+    assert.deepEqual(typeWithHint("だんな", "danna").cells, ["だ", "ん", "な"]);
+    assert.deepEqual(typeWithHint("だんな", "dannna").cells, ["だ", "ん", "な"]);
+    assert.deepEqual(typeWithHint("がっこう", "gakkou").cells, ["が", "っ", "こ", "う"]);
+    assert.deepEqual(typeWithHint("ちーたー", "ti-ta-").cells, ["ち", "ー", "た", "ー"]);
+
+    const withMistakes = typeWithHint("ちゃ", "tzya");
+    assert.deepEqual(withMistakes.cells, ["ち", "ゃ"]);
+    assert.equal(withMistakes.ignored, 1);
+    assert.equal(shouldIgnoreIncorrectHintKey("ちゃ", 0, "", "z", 2), true);
+    assert.equal(shouldIgnoreIncorrectHintKey("さくら", 0, "", "t", 0), false);
 });
 
 test("input in a blank unhinted kana slot remains editable through completion", () => {
