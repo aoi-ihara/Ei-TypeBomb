@@ -30,14 +30,18 @@ export type CacheableRoomData = {
     visibility: "public" | "unlisted";
 };
 
-const rawTtl = Number(process.env.ROOM_DATA_CACHE_TTL_SECONDS ?? 86400);
+// Keep this ceiling in sync with the accepted ROOM_DATA_CACHE_TTL_SECONDS range.
+// A prior deployment may have written entries with a longer TTL than the current
+// setting, while sharing the same Redis namespace.
+const MAX_DATA_TTL_SECONDS = 86400;
+const rawTtl = Number(process.env.ROOM_DATA_CACHE_TTL_SECONDS ?? MAX_DATA_TTL_SECONDS);
 const TTL_SECONDS =
-    Number.isSafeInteger(rawTtl) && rawTtl >= 60 && rawTtl <= 86400
+    Number.isSafeInteger(rawTtl) && rawTtl >= 60 && rawTtl <= MAX_DATA_TTL_SECONDS
         ? rawTtl
-        : 86400;
-// An orphaned fence must outlive any previously cached payload before its
-// automatic recovery can safely expose the generation again.
-const FENCE_TTL_SECONDS = TTL_SECONDS + 60;
+        : MAX_DATA_TTL_SECONDS;
+// Even if the configured TTL is lowered, an orphaned fence may expire only
+// after every entry written by a previous supported deployment has expired.
+const FENCE_TTL_SECONDS = MAX_DATA_TTL_SECONDS + 60;
 let lastWarningAt = 0;
 
 const prefix = () => {
