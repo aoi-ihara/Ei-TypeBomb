@@ -17,7 +17,7 @@
         "test:mcp-oauth": "node --test test/account-auth.test.cjs test/mcp-etb-auth.test.cjs test/mcp-oauth-discovery.test.mjs && tsx --test test/mcp-oauth-diagnostics.test.mts",
         "test:account": "node --test test/account-auth.test.cjs",
         "test:room-list": "node --test test/public-feed-isr.test.cjs && tsx --test test/room-list.test.mts",
-        "test:room-cache": "node --test test/public-room-cache.test.cjs test/room-data-cache.test.cjs",
+        "test:room-cache": "node --test test/public-room-cache.test.cjs test/room-data-cache.test.cjs test/room-delete-security.test.cjs",
         "test:editor": "node --test test/room-update-security.test.cjs && tsx --test test/editor-rebase.test.mts test/partial-update.test.mts test/room-readings.test.mts",
         "check:mcp-oauth": "node scripts/check-mcp-oauth.mjs",
         "test:mcp-server": "tsx --test test/mcp-authorization-server.test.mts test/mcp-database-tls.test.mts",
