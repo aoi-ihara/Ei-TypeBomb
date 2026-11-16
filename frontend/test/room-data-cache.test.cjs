@@ -93,7 +93,7 @@ function fixture(env = {}) {
                 if (script.includes("for index = 1, #KEYS do")) {
                     if (redisKeys.some((cacheKey) => get(cacheKey)?.startsWith("blocked:")))
                         return { ok: true, json: async () => ({ result: 0 }) };
-                    assert.equal(scriptArgs[1], Number(env.ROOM_DATA_CACHE_TTL_SECONDS ?? 86400) + 60);
+                    assert.equal(scriptArgs[1], 86400 + 60);
                     redisKeys.forEach((cacheKey) => put(cacheKey, scriptArgs[0], scriptArgs[1]));
                     if (loseBlockResponse) {
                         loseBlockResponse = false;
@@ -148,7 +148,8 @@ function fixture(env = {}) {
     return { cache: exported, keys, commands, source, errors,
         setUnavailable(value) { unavailable = value; },
         loseNextBlockResponse() { loseBlockResponse = true; },
-        advanceSeconds(value) { now += value; } };
+        advanceSeconds(value) { now += value; },
+        seedCacheWithTTL(key, value, seconds) { put(key, value, seconds); } };
 }
 
 test("room cache stores only public/unlisted source fields, never passwords", async () => {
@@ -298,4 +299,30 @@ test("a lost block response cannot strand a permanent fence or restore stale dat
     const retry = await f.cache.blockRoomDataCache("room-a", "old-alias");
     await f.cache.releaseRoomDataCache(retry, "room-a", "old-alias");
     assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+});
+
+test("shortening room-data TTL never releases a fence before old 24h payloads expire", async () => {
+    const f = fixture({ ROOM_DATA_CACHE_TTL_SECONDS: "60" });
+    const read = await f.cache.readRoomDataCache("old-alias");
+    assert.equal(read.status, "miss");
+    const readCommand = f.commands.at(-1);
+    // A prior deployment sharing this namespace wrote with the maximum TTL.
+    // This data must be inaccessible while a privacy fence can expire.
+    f.seedCacheWithTTL(readCommand[4] + read.generation, JSON.stringify(f.source), 86400);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "hit");
+
+    f.loseNextBlockResponse();
+    await assert.rejects(f.cache.blockRoomDataCache("room-a", "old-alias"),
+        /protection is unavailable/);
+    f.setUnavailable(false);
+
+    f.advanceSeconds(121); // Longer than 60s configured cache TTL + 60s.
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "blocked");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "blocked");
+
+    // Even an unreleased orphan eventually recovers, but only after the
+    // older maximum-TTL payload has definitely expired in Redis.
+    f.advanceSeconds(86400 - 121 + 61);
+    assert.equal((await f.cache.readRoomDataCache("old-alias")).status, "miss");
+    assert.equal((await f.cache.readRoomDataCache("room-a")).status, "miss");
 });
