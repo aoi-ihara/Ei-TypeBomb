@@ -1479,9 +1479,9 @@ test("existing mistakes clear when hints appear, while new incorrect keys are ig
     );
     // Playground manual hints and timed online hints both check previously
     // entered mistakes at reveal time.
-    assert.match(source, /const hasIncorrectInput = isKanaAnswer\s*\?/);
-    assert.match(source, /if \(hasIncorrectInput\) \{\s*resetInput\(\);\s*\}/);
     assert.match(source, /shouldClearForTimedHint\(/);
+    assert.match(source, /currentSelection,\s*kanaComposing,/);
+    assert.doesNotMatch(source, /const hasIncorrectInput = isKanaAnswer/);
     assert.match(source, /onChangeInput\("", true\)/);
 
     // After a hint is displayed, wrong keys are ignored before input changes.
@@ -1491,7 +1491,8 @@ test("existing mistakes clear when hints appear, while new incorrect keys are ig
     assert.doesNotMatch(source, /const typedInsideHint =/);
 });
 
-test("actual manual hint callback reveals the full answer and records one answer event", () => {
+test("actual manual hint callback reveals the full answer and records one answer event", async () => {
+    const { shouldClearForTimedHint } = await import("../lib/romaji-input.mjs");
     const typed = ["r", "e", "c", "i", "e", "v", "e"];
     const events = { current: [] };
     const lastKeyWasSpaceRef = { current: true };
@@ -1501,6 +1502,9 @@ test("actual manual hint callback reveals the full answer and records one answer
         english: "receive",
         answerRevealed: false,
         isKanaAnswer: false,
+        currentSelection: 6,
+        kanaComposing: "",
+        shouldClearForTimedHint,
         completedRef: { current: false },
         input: typed,
         onHintChange: () => {},
@@ -1521,6 +1525,43 @@ test("actual manual hint callback reveals the full answer and records one answer
     assert.equal(events.current[0].kind, "answer");
     assert.equal(events.current[0].correctBefore, 5);
     assert.equal(events.current[0].source, "manual");
+});
+
+test("manual full hint clears incompatible pending romaji but keeps valid prefixes", async () => {
+    const { shouldClearForTimedHint, shouldIgnoreIncorrectHintKey } =
+        await import("../lib/romaji-input.mjs");
+    for (const { answer, cells, cursor, composing, clears } of [
+        { answer: "てすと", cells: ["", "", ""], cursor: 0, composing: "s", clears: true },
+        { answer: "てすと", cells: ["", "", ""], cursor: 0, composing: "t", clears: false },
+        { answer: "ちゃ", cells: ["", ""], cursor: 0, composing: "ch", clears: false },
+        { answer: "さくら", cells: ["さ", "", ""], cursor: 1, composing: "k", clears: false },
+        { answer: "さくら", cells: ["さ", "た", ""], cursor: 2, composing: "", clears: true },
+        { answer: "cat", cells: ["c", "x", ""], cursor: 2, composing: "", clears: true },
+    ]) {
+        let resetCount = 0;
+        let revealed = false;
+        const callback = getInputFunction("requestHint", {
+            manualHints: true,
+            english: answer,
+            answerRevealed: false,
+            completedRef: { current: false },
+            input: cells,
+            currentSelection: cursor,
+            kanaComposing: composing,
+            shouldClearForTimedHint,
+            hintEventsRef: { current: [] },
+            lastKeyWasSpaceRef: { current: false },
+            onHintChange: () => {},
+            setAnswerRevealed: (value) => { revealed = value; },
+            resetInput: () => { resetCount++; },
+        });
+        callback();
+        assert.equal(revealed, true, `Hint not revealed for ${answer}`);
+        assert.equal(resetCount, Number(clears), `Wrong reset for ${answer}/${composing}`);
+    }
+    // A rejected pre-hint "s" no longer blocks a correct "t" after reset.
+    assert.equal(shouldIgnoreIncorrectHintKey("てすと", 0, "", "t", 3), false);
+    assert.equal(shouldIgnoreIncorrectHintKey("てすと", 0, "s", "t", 3), true);
 });
 
 test("actual solo progress callback keeps hint state without bomb pressure", () => {
