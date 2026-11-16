@@ -370,20 +370,73 @@ export const nextKanaCursor = (cursor, direction, length) =>
     Math.max(0, Math.min(length - 1, cursor + direction));
 
 /**
- * English retains its legacy behaviour when a timed hint uncovers an incorrect
- * cell. Kana input must stay editable: a hint is visual guidance, not an
- * implicit incorrect-answer submission.
+ * A newly revealed hint exposes mistakes already entered in that prefix.
+ * Check both committed cells and any unfinished romanization at the cursor.
  *
  * @param {string} answer
  * @param {string[]} cells
  * @param {number} hintLength
+ * @param {number} [cursor]
+ * @param {string} [composing]
  */
-export const shouldClearForTimedHint = (answer, cells, hintLength) =>
-    !hasHiragana(answer) &&
-    cells.some(
-        (char, index) =>
-            index < hintLength && char !== "" && char !== answer[index],
-    );
+export function shouldClearForTimedHint(
+    answer,
+    cells,
+    hintLength,
+    cursor = 0,
+    composing = "",
+) {
+    if (
+        cells.some(
+            (char, index) =>
+                index < hintLength && char !== "" && char !== answer[index],
+        )
+    )
+        return true;
+    if (!composing || cursor < 0 || cursor >= hintLength) return false;
+
+    // An uncommitted prefix can be valid romaji but still unable to produce
+    // this answer (e.g. "s" typed before a hint reveals て).
+    let progress = { committed: answer.slice(0, cursor), composing: "" };
+    for (const key of composing) {
+        const next = advanceKanaInput(answer, progress, key);
+        if (!next.accepted || next.committed !== progress.committed) return true;
+        progress = { committed: next.committed, composing: next.composing };
+    }
+    return progress.composing !== composing;
+}
+
+/**
+ * Only keys that can advance the correct answer are accepted inside a hint.
+ * The strict kana parser handles all supported alternate romanizations,
+ * including carried n and doubled consonants. Outside hints, editable
+ * typing retains its existing error handling.
+ *
+ * @param {string} answer
+ * @param {number} cursor
+ * @param {string} composing
+ * @param {string} key
+ * @param {number} hintLength
+ */
+export function shouldIgnoreIncorrectHintKey(
+    answer,
+    cursor,
+    composing,
+    key,
+    hintLength,
+) {
+    if (cursor < 0 || cursor >= answer.length || cursor >= hintLength)
+        return false;
+    const target = answer[cursor];
+    if (!isHiragana(target))
+        return normalizeHyphenInput(target, key) !== target;
+
+    return !advanceKanaInput(
+        answer,
+        { committed: answer.slice(0, cursor), composing },
+        key,
+    ).accepted;
+}
 
 /**
  * Space placeholders are not answer-validation targets for other keys.

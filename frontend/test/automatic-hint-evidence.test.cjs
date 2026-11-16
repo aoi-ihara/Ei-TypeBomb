@@ -124,6 +124,8 @@ function attempt(
         revealedHintLengthRef: ref(initialLength),
         timedHintIndexRef: ref(0),
         inputStateRef: ref(cells),
+        currentSelectionRef: ref(0),
+        kanaComposingRef: ref(""),
         lastHintAtRef: ref(0),
         lastCorrectProgressAtRef: ref(0),
         maxCorrectPrefixRef: ref(0),
@@ -148,6 +150,7 @@ function attempt(
         },
         setCurrentSelection: (next) => {
             cursor = next;
+            globals.currentSelectionRef.current = next;
         },
         setRevealedHintLength: (next) => {
             globals.hintLength = next;
@@ -166,7 +169,10 @@ function attempt(
             globals.hintCount =
                 Number(initialLength > 0) + globals.timedHintCount;
         },
-        setKanaComposing: noop,
+        setKanaComposing: (next) => {
+            globals.kanaComposing = next;
+            globals.kanaComposingRef.current = next;
+        },
         setCharInput: noop,
         onChangeInput: noop,
         onChangeInputRef: ref(noop),
@@ -178,17 +184,21 @@ function attempt(
         console: { log: noop },
         shouldClearForTimedHint: romaji.shouldClearForTimedHint,
     };
-    const render = () =>
+    const render = () => {
         Object.assign(globals, { input: cells, currentSelection: cursor });
+        globals.currentSelectionRef.current = cursor;
+    };
     globals.resetInput = () => {
         globals.attemptCountRef.current++;
         resets.push(true);
         globals.setInput(Array(answer.length).fill(""));
         cursor = 0;
+        globals.currentSelectionRef.current = 0;
     };
     const commit = (text, position = cursor) => {
         render();
         globals.currentSelection = position;
+        globals.currentSelectionRef.current = position;
         const next = [...cells];
         Array.from(text).forEach((char, offset) => {
             next[position + offset] = char;
@@ -302,14 +312,25 @@ test("full reliance retains insufficient evidence and a short retry, ignoring la
     assert.equal(memory.evaluateRecall(o).retryNeed, "short");
 });
 
-test("timed clearing preserves credit for correct cells and assistance across retries", () => {
+test("timed clearing preserves correct recall credit; later hinted mistakes are ignored", () => {
     const a = attempt("abcdefghij", { prefix: "abx" });
-    a.hint(); // shows abcd and clears the incorrect prefix
+    a.hint(); // shows abcd and clears the pre-existing incorrect prefix
     assert.equal(a.globals.attemptCountRef.current, 2);
     a.commit("abcd");
     assert.equal(a.report().assistedPositions.join(), "2,3");
-    a.commit("x", 2); // incorrect hinted cell clears input again
-    a.commit("abcdefghij");
+    // The actual input handler guards this before committing any cell.
+    assert.equal(
+        romaji.shouldIgnoreIncorrectHintKey(
+            "abcdefghij",
+            2,
+            "",
+            "x",
+            a.globals.hintLength,
+        ),
+        true,
+    );
+    assert.equal(a.globals.attemptCountRef.current, 2);
+    a.commit("efghij");
     const o = a.observations[0];
     assert.equal(o.assistedPositions.join(), "2,3");
     assert.equal(o.hintCount, 1);
