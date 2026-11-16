@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 /** Refresh only the server data paths affected by room collections. */
 export const revalidateRoomLists = () => {
     revalidatePath("/");
+    revalidatePath("/latest");
     revalidatePath("/mine");
     revalidatePath("/saved");
 };

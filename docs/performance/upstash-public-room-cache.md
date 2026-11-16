@@ -1,64 +1,104 @@
-# Upstash public-room list cache
+# Upstash cache for public feeds and shared room content
 
-The public room feed used to cache the Supabase `get_ei_typebomb_public_rooms`
-RPC result only in the Vercel process's memory. Separate functions/instances
-missed each other's cache and local invalidation did not propagate.
+ETB uses Upstash Redis to avoid repeated Supabase reads across Vercel instances.
+Redis is optional: normal room-page and feed reads fall back to Supabase. Cache reads use one atomic Upstash EVAL request to fetch both generation and payload. On a miss, Next.js `after()` populates Redis after the response instead of blocking it; generation-based invalidation still prevents stale in-flight writes from becoming active.
 
-## Deployment
+## Configuration
 
-Set these **server-side** Vercel environment variables (do not use
-`NEXT_PUBLIC_`, commit tokens, or expose them to a browser):
+Set server-only environment variables in Vercel:
 
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN` (read/write: GET, SET, INCR)
-- Optional `UPSTASH_CACHE_NAMESPACE` when multiple deployments share a
-  Supabase database. **All writers and readers for the same Supabase database
-  must use the same namespace** to share invalidations.
-- Optional `ROOM_CACHE_LOGS=1` to log cache hit/miss state, cache read time,
-  Supabase RPC time and result count in server logs, without room contents.
+- UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (GET, SET).
+- PUBLIC_ROOM_CACHE_TTL_SECONDS: optional, default **3600** (60–86400).
+- ROOM_DATA_CACHE_TTL_SECONDS: optional, default **86400** (60–86400).
+- UPSTASH_CACHE_NAMESPACE: optional for deployments sharing one database.
+  **Every writer and reader of one Supabase database must use the same
+  namespace**, or a mutation in one deployment cannot invalidate another.
+- ROOM_CACHE_LOGS=1: optional public-feed hit/miss timing logs.
 
-By default the cache separates `production`, preview branches and local
-`development` deployments. This is convenient only when they use separate
-Supabase databases. If they share one database, configure
-`UPSTASH_CACHE_NAMESPACE` identically across those deployments.
+Keep Redis near the Next.js server functions (Tokyo in ETB's setup).
+Never expose credentials through NEXT_PUBLIC_ variables.
 
-The Redis database should be in the same region as the Next.js server
-functions (Tokyo for the current ETB Vercel deployment).
+## Public room list
 
-## Scope / security
+Recommended/latest/public saved listings share a generation-fenced Redis entry.
+Cached list summaries exclude items, passwords, private and unlisted rooms.
+Create/update/delete via website and MCP create/update invalidate the list.
+Recommendation statistics from plays/saves can remain stale for up to one hour.
 
-Only the shared **public room list** (used by recommended/latest and the
-public portion of saved/search views) is cached. Its summaries never contain
-question/answer items, room passwords, private/unlisted room contents or
-owner-specific lists. Full room pages, editable rooms, user-owned rooms and
-saved-room IDs continue to be read from Supabase with their existing
-authorization checks. In particular, **do not cache the combined
-`getRoomPageDataFromLink` result**, which includes private content and
-viewer-specific authorization state.
+## Individual room pages
 
-- Redis stores one list per cache generation, with a 120-second TTL.
-- Successful website create/update/delete and MCP create/update operations
-  increment the Redis generation. In-flight reads writing to an earlier
-  generation cannot overwrite the currently active list.
-- Public recommendation stats can change through plays and saves. Their
-  freshness is bounded by this same TTL, as with the previous 2-minute cache.
-- If Redis is absent or times out (1 second), the read falls back to the
-  existing Supabase RPC. Redis errors never block room changes.
-- A failed invalidation can leave the **public summaries** stale until TTL
-  expiry. This is why full room items and private data are excluded.
-- The process-local optimization is now only in-flight request deduplication,
-  not a second long-lived cache that other Vercel instances cannot invalidate.
+The shared part of getRoomPageDataFromLink is cached **by requested link**.
+It includes a public or unlisted room's content (questions/answers) and display
+fields. The cache is server-only, contains **no passwords**, and never stores
+a private room or a per-viewer authorization decision.
 
-## Verify
+The viewer's identity, room ownership, and password authorization are
+computed on each request **outside** this cache. Editing routes
+(getRoomForEditFromLink and getRoomFromId) always fetch the authoritative
+record from Supabase with owner checks and edit_version. Server-side room
+join/password validation continues to read Supabase directly. Socket.IO
+communication and live gameplay state are unchanged.
 
-Run `cd frontend && npm run test:room-cache` to exercise hit/miss, isolated
-namespaces, late writer fencing, malformed/private entries, and Redis failures.
+A successful website or MCP edit invalidates the room ID, previous link and
+new link. Deletion invalidates the room ID and deleted link. Generations fence
+late in-flight cache writes; the cache entry's TTL is a backup expiry.
 
-After deployment, enable `ROOM_CACHE_LOGS=1` temporarily and compare:
-- `status=miss`, `db_ms` and total request time on a cold navigation;
-- `status=hit`, `cache_ms` and total request time on the same warm view;
-- Upstash command counts and bandwidth; Supabase RPC counts.
+### Visibility and deletion security
 
-Then turn debug logs off. The cache is an acceleration layer, not the source of
-truth. Never rely on it to authorize access or to synchronously enforce a
-privacy change to full room content.
+Full question content requires stronger invalidation than public feed
+summaries. Before an existing public/unlisted room is switched to **private**
+or deleted, its cache generation is set to a special **blocked** value.
+Readers seeing the block bypass Redis and read Supabase directly; they cannot
+populate Redis while the block remains. After the database write succeeds,
+invalidation replaces that block with a fresh unique generation.
+
+**If Redis is configured but the pre-mutation block fails, the privacy
+restriction/deletion fails rather than risking stale disclosure.**
+All aliases are fenced in one atomic Redis EVAL (not one request per alias).
+A lost response is rolled back by its unique token when Redis is reachable.
+Otherwise, orphaned fences expire after the **maximum supported room-data
+TTL (86400 seconds) plus 60 seconds**, regardless of the current configured
+TTL. This protects payloads written by older deployments before the TTL was
+lowered within a shared namespace. Cache writes also
+check the active generation atomically and cannot populate an obsolete entry
+while a block is active.
+
+If post-mutation invalidation fails, the blocked generation remains, forcing
+Supabase reads until explicit release or safe expiry. Deletion is conditional
+on the edit_version read before fencing; a concurrent rename/edit aborts the
+DELETE and releases only the original fences. Successful deletion invalidates
+the old alias and defensively invalidates any differing returned alias.
+
+Non-restrictive edits use best-effort invalidation and can temporarily serve
+stale content if Redis invalidation fails. Edits made directly in Supabase
+(bypassing ETB's mutation paths) do not invalidate Redis: operators should
+invalidate the affected namespace after such edits.
+
+## View-specific DB queries
+
+- /mine: owned room summaries + user's saved IDs; **no public list RPC**.
+- / and /latest: cached public list + minimal owned IDs for edit buttons
+  and saved IDs; **no full owned room summaries**.
+- /saved: public list + owned room summaries + saved IDs, so users still see
+  saved private rooms they own.
+- Ownership-only records are merged with public summaries to preserve titles
+  and visibility.
+
+Entering a game schedules play analytics from the authorized join Server
+Action, eliminating the second client-to-server request that was awaited
+before navigation.
+
+## Validation
+
+Run from frontend:
+
+- npm run test:room-cache
+- npm run test:room-list
+- npm run test:editor
+- npm run build
+
+In staging, compare cold and warm /, /mine, /latest, /saved, and room pages,
+including a room edited in another tab. Verify link renames, private visibility
+transitions, deletions, editor freshness, and Redis outage behavior. Use
+ROOM_CACHE_LOGS=1 temporarily and compare public-feed db_ms, cache_ms,
+Supabase request counts, and Upstash REST request durations.

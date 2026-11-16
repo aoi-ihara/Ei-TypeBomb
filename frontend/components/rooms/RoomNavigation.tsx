@@ -2,60 +2,18 @@
 
 import Button from "@/components/ui/Button";
 import { View } from "@/type";
+import { getRoomListNavigationItems } from "@/lib/room/list-navigation";
 
 export default function RoomNavigation({
     isSignedIn,
     currentView,
+    viewerLoading = false,
 }: {
     isSignedIn: boolean;
     currentView?: View;
+    viewerLoading?: boolean;
 }) {
-    const navigationItems: {
-        value: View;
-        label: string;
-        url: string;
-        iconName: string;
-    }[] = isSignedIn
-        ? [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-              {
-                  value: "mine",
-                  label: "自分のルーム",
-                  url: "/mine",
-                  iconName: "user",
-              },
-              {
-                  value: "saved",
-                  label: "保存済み",
-                  url: "/saved",
-                  iconName: "bookmark",
-              },
-          ]
-        : [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-          ];
+    const navigationItems = getRoomListNavigationItems(isSignedIn);
 
     return (
         <div className="w-full sm:w-48 sm:pr-0 shrink-0 px-4 flex sm:flex-col gap-4 overflow-x-scroll no-scrollbar">
@@ -80,6 +38,13 @@ export default function RoomNavigation({
                 >
                     {item.label}
                 </Button>
+            ))}
+            {viewerLoading && [0, 1].map((index) => (
+                <div
+                    key={`viewer-placeholder-${index}`}
+                    aria-hidden="true"
+                    className="hidden sm:block h-10 w-full shrink-0"
+                />
             ))}
         </div>
     );

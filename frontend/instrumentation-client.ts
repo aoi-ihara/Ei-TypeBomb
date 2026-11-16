@@ -17,6 +17,7 @@ if (token && process.env.NODE_ENV === "production") {
         capture_pageview: "history_change",
         autocapture: false,
         disable_session_recording: true,
+        disable_conversations: true,
         capture_exceptions: false,
         ip: false,
         save_campaign_params: false,

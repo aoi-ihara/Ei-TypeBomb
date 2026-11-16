@@ -24,6 +24,7 @@ import {
 import { prepareItemReadings } from "@/lib/room/readings";
 import { prepareRoomUpdate } from "@/lib/room/prepare-update";
 import { invalidatePublicRooms } from "@/lib/room/get";
+import { blockRoomDataCache, invalidateRoomDataCache, releaseRoomDataCache } from "@/lib/room/room-data-cache";
 import { revalidateRoomContent } from "@/lib/room/revalidate";
 import type { Item, Room, View } from "@/type";
 import { getRoomCollectionsForUser } from "@/lib/room/list-data";
@@ -70,6 +71,9 @@ type ToolResult = {
     content: Array<{ type: "text"; text: string }>;
     structuredContent?: JsonRecord;
     isError?: boolean;
+    // Internal telemetry only: never exposed in the MCP response.
+    errorCode?: string;
+    reportToErrorTracking?: boolean;
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -121,11 +125,47 @@ function toolResult(value: JsonRecord): ToolResult {
     };
 }
 
-function toolError(message: string): ToolResult {
+function toolError(
+    message: string,
+    errorCode = "VALIDATION_ERROR",
+    reportToErrorTracking = false,
+): ToolResult {
     return {
         content: [{ type: "text", text: message }],
         isError: true,
+        errorCode,
+        reportToErrorTracking,
     };
+}
+
+// A tool's expected failure is still an MCP error, but not a server exception.
+// Keep internal telemetry fields out of structured MCP responses.
+function publicToolResult(result: ToolResult): ToolResult {
+    return {
+        content: result.content,
+        ...(result.structuredContent ? { structuredContent: result.structuredContent } : {}),
+        ...(result.isError ? { isError: true } : {}),
+    };
+}
+
+function normalizeRoomIdentifier(value: string): string | null {
+    const identifier = value.trim();
+    if (!identifier) return null;
+    if (!/^https?:\/\//i.test(identifier) && !identifier.startsWith("/")) {
+        return identifier;
+    }
+    try {
+        const url = new URL(identifier, getEtbUrl("/"));
+        const canonical = new URL(getEtbUrl("/"));
+        if (url.origin !== canonical.origin || url.username || url.password) {
+            return null;
+        }
+        const segments = url.pathname.split("/").filter(Boolean);
+        if (segments.length !== 1) return null;
+        return decodeURIComponent(segments[0]) || null;
+    } catch {
+        return null;
+    }
 }
 
 const itemSchema = {
@@ -461,9 +501,14 @@ async function callTool(
             console.error("MCP room creation failed", insertError?.code);
             return toolError(
                 "ルームを作成できませんでした。入力内容と設定を確認してください。",
+                "DATABASE_ERROR",
+                true,
             );
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            invalidateRoomDataCache(id, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({
             room: presentRoom(data as unknown as JsonRecord),
@@ -472,9 +517,13 @@ async function callTool(
     }
 
     if (name === "get_room") {
-        const identifier = args.room_identifier;
-        if (typeof identifier !== "string" || !identifier.trim()) {
+        const rawIdentifier = args.room_identifier;
+        if (typeof rawIdentifier !== "string" || !rawIdentifier.trim()) {
             return toolError("room_identifierを指定してください。");
+        }
+        const identifier = normalizeRoomIdentifier(rawIdentifier);
+        if (!identifier) {
+            return toolError("有効なEi-TypeBombのルームIDまたは共有リンクを指定してください。");
         }
         // The id column is UUID-typed, while custom room links are arbitrary strings.
         // Avoid sending non-UUID links to the id filter (which causes a Postgres cast error).
@@ -494,7 +543,9 @@ async function callTool(
             if (error) {
                 console.error("MCP room lookup by id failed", error.code);
                 return toolError(
-                    "ルームが見つからないか、アクセス権限がありません。",
+                    "ルームを取得できませんでした。",
+                    "DATABASE_ERROR",
+                    true,
                 );
             }
             if (data) room = data as unknown as JsonRecord;
@@ -510,7 +561,9 @@ async function callTool(
             if (error) {
                 console.error("MCP room lookup by link failed", error.code);
                 return toolError(
-                    "ルームが見つからないか、アクセス権限がありません。",
+                    "ルームを取得できませんでした。",
+                    "DATABASE_ERROR",
+                    true,
                 );
             }
             if (data) room = data as unknown as JsonRecord;
@@ -519,6 +572,7 @@ async function callTool(
         if (!room)
             return toolError(
                 "ルームが見つからないか、アクセス権限がありません。",
+                "ROOM_NOT_FOUND",
             );
         return toolResult({ room: presentRoom(room) });
     }
@@ -552,9 +606,9 @@ async function callTool(
         );
         const conflict =
             "ルームが更新されました。get_roomで再取得してください。";
-        if (prepared.status === "conflict") return toolError(conflict);
+        if (prepared.status === "conflict") return toolError(conflict, "EDIT_CONFLICT");
         if (prepared.status === "error")
-            return toolError("ルームを取得できませんでした。");
+            return toolError("ルームを取得できませんでした。", "DATABASE_ERROR", true);
         if (typeof patch.password === "string") {
             const hashed = await hashPassword(patch.password, userId);
             if (hashed === null)
@@ -565,6 +619,16 @@ async function callTool(
         }
         patch.items = prepared.items;
         patch.updated_at = new Date().toISOString();
+        const restrictsAccess =
+            patch.visibility === "private" && prepared.previousVisibility !== "private";
+        let privacyFence: string | null = null;
+        if (restrictsAccess) {
+            try {
+                privacyFence = await blockRoomDataCache(roomId, prepared.previousLink, patch.link as string | undefined);
+            } catch {
+                return toolError("ルームの公開設定を安全に変更できませんでした。", "CACHE_UNAVAILABLE", true);
+            }
+        }
 
         const { data, error: updateError } = await supabase
             .from("ei_typebomb_rooms")
@@ -575,12 +639,19 @@ async function callTool(
             .select(ROOM_FIELDS)
             .maybeSingle();
 
+        if (restrictsAccess && (updateError || !data))
+            await releaseRoomDataCache(privacyFence, roomId, prepared.previousLink, patch.link as string | undefined);
         if (!updateError && !data) return toolError(conflict);
         if (updateError || !data) {
             console.error("MCP room update failed", updateError?.code);
-            return toolError("ルームが見つからないか、更新できませんでした。");
+            return toolError("ルームが見つからないか、更新できませんでした。", "DATABASE_ERROR", true);
         }
-        await invalidatePublicRooms();
+        await Promise.all([
+            invalidatePublicRooms(),
+            restrictsAccess
+                ? releaseRoomDataCache(privacyFence, roomId, prepared.previousLink, data.link)
+                : invalidateRoomDataCache(roomId, prepared.previousLink, data.link),
+        ]);
         revalidateRoomContent();
         return toolResult({ room: presentRoom(data as unknown as JsonRecord) });
     }
@@ -694,18 +765,29 @@ export async function POST(request: NextRequest) {
         result = await callTool(params.name, args, principal.userId);
     } catch (error) {
         console.error("MCP tool execution failed", error);
-        result = toolError("処理中にエラーが発生しました。");
+        result = toolError("処理中にエラーが発生しました。", "INTERNAL_ERROR", true);
     }
     analytics?.captureToolCall({
         ...metadata,
+        properties: {
+            ...metadata.properties,
+            $etb_tool_outcome: !result.isError
+                ? "success"
+                : result.reportToErrorTracking
+                  ? "server_error"
+                  : "expected_error",
+            ...(result.errorCode ? { $etb_error_code: result.errorCode } : {}),
+        },
         toolName: tools.some((tool) => tool.name === params.name)
             ? params.name
             : "unknown",
         durationMs: Math.round(performance.now() - started),
-        isError: result.isError === true,
+        // PostHog's MCP SDK creates Error Tracking issues for isError=true.
+        // Expected validation/not-found results are not server exceptions.
+        isError: result.isError === true && result.reportToErrorTracking === true,
     });
     await flushAnalytics();
-    return jsonRpc(id, result);
+    return jsonRpc(id, publicToolResult(result));
 }
 
 export async function GET(request: NextRequest) {

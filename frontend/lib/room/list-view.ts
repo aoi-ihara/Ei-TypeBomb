@@ -8,6 +8,19 @@ type RoomListViewInput = {
     currentUserId: string | null;
 };
 
+/** Only the signed-in room creator can access the edit action. */
+export const getEditableRoomIds = (
+    myRooms: readonly Room[],
+    currentUserId: string | null,
+): ReadonlySet<string> =>
+    new Set(
+        currentUserId
+            ? myRooms
+                  .filter((room) => room.userId === currentUserId)
+                  .map((room) => room.id)
+            : [],
+    );
+
 /**
  * Shared selection/ordering rules for the website and MCP.
  * Only public rooms and rooms owned by the authenticated user may enter this
@@ -44,6 +57,8 @@ export const selectRoomsForView = ({
     }
     for (const room of myRooms) {
         roomsById.set(room.id, {
+            // Minimal owner-ID records must not replace full public summaries.
+            ...(roomsById.get(room.id) ?? {}),
             ...room,
             userId: room.userId ?? currentUserId ?? undefined,
         });

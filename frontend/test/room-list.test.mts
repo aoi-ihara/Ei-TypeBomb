@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Room } from "../type/index";
-import { selectRoomsForView } from "../lib/room/list-view";
+import { getEditableRoomIds, selectRoomsForView } from "../lib/room/list-view";
+import { getRoomListNavigationItems } from "../lib/room/list-navigation";
 
 const otherPublic: Room = {
     id: "public-other",
@@ -109,4 +110,54 @@ test("guests can browse latest public rooms without exposing private or unlisted
         currentUserId: null,
     });
     assert.deepEqual(result.map(({ id }) => id), ["public-other", "public-mine"]);
+});
+
+test("edit action is available only for the signed-in creator, including in latest", () => {
+    const myRooms: Room[] = [
+        { ...myPublic, userId: "authenticated-user" },
+        { ...myPrivate, userId: "authenticated-user" },
+        { ...otherPublic, userId: "another-user" },
+        { id: "missing-owner" },
+    ];
+    const editable = getEditableRoomIds(myRooms, "authenticated-user");
+
+    assert.deepEqual([...editable].sort(), ["private-mine", "public-mine"]);
+    assert.equal(editable.has("public-other"), false);
+    assert.equal(editable.has("missing-owner"), false);
+    // Public latest listings have no userId; owned room IDs still allow editing.
+    assert.equal(select("latest").find((room) => room.id === "public-mine")?.userId, undefined);
+    assert.equal(editable.has("public-mine"), true);
+    assert.deepEqual([...getEditableRoomIds(myRooms, null)], []);
+});
+
+test("minimal owner ID records preserve public details and edit ownership", () => {
+    const rooms = selectRoomsForView({
+        view: "recommended",
+        publicRooms: [{ ...otherPublic, title: "Original" }],
+        myRooms: [{ id: "public-other", userId: "authenticated-user" }],
+        savedRoomIds: [],
+        currentUserId: "authenticated-user",
+    });
+    assert.equal(rooms[0].title, "Original");
+    assert.equal(rooms[0].visibility, "public");
+    assert.equal(rooms[0].userId, "authenticated-user");
+    assert.equal(getEditableRoomIds([{ id: "public-other", userId: "authenticated-user" }], "authenticated-user").has("public-other"), true);
+});
+
+test("sidebar and page titles share identical guest and signed-in navigation", () => {
+    const guest = getRoomListNavigationItems(false);
+    const signedIn = getRoomListNavigationItems(true);
+
+    assert.deepEqual(guest.map((item) => [item.value, item.label, item.url, item.iconName]), [
+        ["recommended", "おすすめ", "/", "wandSparkles"],
+        ["latest", "最新", "/latest", "clock"],
+    ]);
+    assert.deepEqual(signedIn.map((item) => [item.value, item.label, item.url, item.iconName]), [
+        ["recommended", "おすすめ", "/", "wandSparkles"],
+        ["latest", "最新", "/latest", "clock"],
+        ["mine", "自分のルーム", "/mine", "user"],
+        ["saved", "保存済み", "/saved", "bookmark"],
+    ]);
+    assert.equal(getRoomListNavigationItems(false).some((item) => item.value === "mine"), false);
+    assert.equal(getRoomListNavigationItems(true).find((item) => item.value === "mine")?.label, "自分のルーム");
 });

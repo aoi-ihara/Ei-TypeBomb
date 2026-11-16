@@ -1,11 +1,22 @@
-import { getRoomListData } from "../room-list-data";
+import { getPublicRooms } from "@/lib/room/get";
 import RoomList from "../RoomList";
 
-// Public room data is fetched from Upstash/Supabase at request time.
-export const dynamic = "force-dynamic";
+// The latest view shares the public feed's ISR data, but sorts it on the
+// client without requesting account data during prerendering.
+export const dynamic = "force-static";
+export const revalidate = 3600;
 
 export default async function Page() {
-    const roomListData = await getRoomListData();
+    const publicRooms = await getPublicRooms({ failOnError: true });
 
-    return <RoomList {...roomListData} initialView="latest" />;
+    return (
+        <RoomList
+            publicRooms={publicRooms}
+            myRooms={[]}
+            initialSavedRoomIds={[]}
+            currentUser={null}
+            initialView="latest"
+            deferViewer
+        />
+    );
 }

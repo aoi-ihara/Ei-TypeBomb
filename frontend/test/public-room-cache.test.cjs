@@ -5,6 +5,7 @@ const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
+const loadUpstashRest = require("./helpers/load-upstash-rest.cjs");
 
 const filename = path.join(__dirname, "../lib/room/public-rooms-cache.ts");
 const compiled = ts.transpileModule(readFileSync(filename, "utf8"), {
@@ -48,9 +49,15 @@ function fixture(env = {}) {
             case "GET":
                 result = keys.get(key) ?? null;
                 break;
+            case "EVAL": {
+                assert.equal(value, 1);
+                const generation = String(keys.get(flag) ?? "0");
+                result = [generation, keys.get(ttl + generation) ?? null];
+                break;
+            }
             case "SET":
                 assert.equal(flag, "EX");
-                assert.equal(ttl, 120);
+                assert.equal(ttl, Number(env.PUBLIC_ROOM_CACHE_TTL_SECONDS ?? 3600));
                 keys.set(key, value);
                 result = "OK";
                 break;
@@ -65,19 +72,7 @@ function fixture(env = {}) {
     };
 
     const exported = {};
-    vm.runInNewContext(compiled, {
-        exports: exported,
-        require(id) {
-            if (id === "server-only") return {};
-            if (id === "next/navigation") return {
-                unstable_rethrow(error) {
-                    if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
-                },
-            };
-            if (id === "@/lib/server-console")
-                return { serverError: (message) => errors.push(message) };
-            throw new Error("Unexpected dependency: " + id);
-        },
+    const runtime = {
         process: {
             env: {
                 UPSTASH_REDIS_REST_URL: "https://cache.example",
@@ -89,6 +84,22 @@ function fixture(env = {}) {
         fetch: mockedFetch,
         AbortSignal,
         console,
+    };
+    vm.runInNewContext(compiled, {
+        ...runtime,
+        exports: exported,
+        require(id) {
+            if (id === "server-only") return {};
+            if (id === "./upstash-rest") return loadUpstashRest(runtime);
+            if (id === "next/navigation") return {
+                unstable_rethrow(error) {
+                    if (error?.digest === "DYNAMIC_SERVER_USAGE") throw error;
+                },
+            };
+            if (id === "@/lib/server-console")
+                return { serverError: (message) => errors.push(message) };
+            throw new Error("Unexpected dependency: " + id);
+        },
     });
 
     return {
@@ -107,6 +118,7 @@ test("cache miss, write and hit return only public summary fields", async () => 
     const first = await f.cache.readPublicRoomsCache();
     assert.equal(first.status, "miss");
     assert.equal(first.generation, "0");
+    assert.equal(f.commands.length, 1, "one Redis HTTP request per read");
 
     await f.cache.writePublicRoomsCache([{ ...f.source, extraSecret: "excluded" }], first.generation);
     const second = await f.cache.readPublicRoomsCache();
@@ -169,8 +181,8 @@ test("cache namespaces separate preview and production deployments", async () =>
     await production.cache.readPublicRoomsCache();
     await preview.cache.readPublicRoomsCache();
 
-    const productionKey = production.commands[0][1];
-    const previewKey = preview.commands[0][1];
+    const productionKey = production.commands[0][3];
+    const previewKey = preview.commands[0][3];
     assert.notEqual(productionKey, previewKey);
     assert.ok(previewKey.includes("feature%2Fcache"));
 });
@@ -191,4 +203,11 @@ test("Next.js dynamic-rendering bailout is rethrown, not logged as Redis failure
         (error) => error.digest === "DYNAMIC_SERVER_USAGE",
     );
     assert.deepEqual(f.errors, []);
+});
+
+test("configured TTL overrides the one-hour default", async () => {
+    const f = fixture({ PUBLIC_ROOM_CACHE_TTL_SECONDS: "7200" });
+    const first = await f.cache.readPublicRoomsCache();
+    await f.cache.writePublicRoomsCache([f.source], first.generation);
+    assert.equal(f.commands.find((args) => args[0] === "SET")[4], 7200);
 });

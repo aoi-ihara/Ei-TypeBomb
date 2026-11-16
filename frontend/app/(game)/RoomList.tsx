@@ -1,7 +1,7 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useDeferredValue, useEffect, useMemo, useState, type SetStateAction } from "react";
+import { unstable_rethrow, useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import type { Room } from "@/type";
 import RoomGrid from "@/components/rooms/RoomGrid";
@@ -16,7 +16,9 @@ import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
 import { View } from "@/type";
 import RoomNavigation from "@/components/rooms/RoomNavigation";
-import { selectRoomsForView } from "@/lib/room/list-view";
+import { getEditableRoomIds, selectRoomsForView } from "@/lib/room/list-view";
+import { useRoomListViewer } from "@/components/rooms/RoomListViewerProvider";
+import { getRoomListNavigationItems } from "@/lib/room/list-navigation";
 
 type CurrentUser = {
     id: string;
@@ -30,14 +32,17 @@ type Props = {
     initialView: View;
     currentUser: CurrentUser | null;
     initialSavedRoomIds: string[];
+    /** Public ISR pages hydrate account-only controls from a private endpoint. */
+    deferViewer?: boolean;
 };
 
 export default function RoomList({
     publicRooms,
-    myRooms,
+    myRooms: initialMyRooms,
     initialView,
-    currentUser,
+    currentUser: initialCurrentUser,
     initialSavedRoomIds,
+    deferViewer = false,
 }: Props) {
     const router = useRouter();
     const [creating, setCreating] = useState(false);
@@ -46,53 +51,55 @@ export default function RoomList({
     const [keyword, setKeyword] = useState("");
     // Keep typing responsive even when many rooms match the search.
     const deferredKeyword = useDeferredValue(keyword);
-    const [savedRoomIds, setSavedRoomIds] = useState(initialSavedRoomIds);
-    const navigationItems: {
-        value: View;
-        label: string;
-        url: string;
-        iconName: string;
-    }[] = currentUser
-        ? [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-              {
-                  value: "mine",
-                  label: "自分のルーム",
-                  url: "/mine",
-                  iconName: "user",
-              },
-              {
-                  value: "saved",
-                  label: "保存済み",
-                  url: "/saved",
-                  iconName: "bookmark",
-              },
-          ]
-        : [
-              {
-                  value: "recommended",
-                  label: "おすすめ",
-                  url: "/",
-                  iconName: "wandSparkles",
-              },
-              {
-                  value: "latest",
-                  label: "最新",
-                  url: "/latest",
-                  iconName: "clock",
-              },
-          ];
+    const viewer = useRoomListViewer();
+    const [localCurrentUser, setLocalCurrentUser] = useState(initialCurrentUser);
+    const [localMyRooms, setLocalMyRooms] = useState(initialMyRooms);
+    const [localSavedRoomIds, setLocalSavedRoomIds] = useState(initialSavedRoomIds);
+
+    // The provider outlives / and /latest. A subsequent route transition
+    // therefore never switches the sign-in button back to a placeholder.
+    useEffect(() => {
+        if (deferViewer) viewer.ensureLoaded();
+    }, [deferViewer, viewer.ensureLoaded]);
+
+    const currentUser = deferViewer ? viewer.snapshot.currentUser : localCurrentUser;
+    const myRooms = useMemo(
+        () =>
+            deferViewer
+                ? viewer.snapshot.currentUser
+                    ? viewer.snapshot.ownedRoomIds.map((id) => ({
+                          id,
+                          userId: viewer.snapshot.currentUser!.id,
+                      }))
+                    : []
+                : localMyRooms,
+        [
+            deferViewer,
+            localMyRooms,
+            viewer.snapshot.currentUser,
+            viewer.snapshot.ownedRoomIds,
+        ],
+    );
+    const savedRoomIds = deferViewer ? viewer.snapshot.savedRoomIds : localSavedRoomIds;
+    const setSavedRoomIds = (value: SetStateAction<string[]>) => {
+        if (deferViewer) {
+            viewer.setSavedRoomIds(value);
+        } else {
+            setLocalSavedRoomIds(value);
+            // These pages share a persistent layout with the public feeds.
+            // Keep the public bookmark UI synchronized, including rollback.
+            if (
+                viewer.snapshot.status === "ready" &&
+                viewer.snapshot.currentUser?.id === localCurrentUser?.id
+            ) {
+                viewer.setSavedRoomIds(value);
+            }
+        }
+    };
+    const viewerLoading = deferViewer && viewer.snapshot.status === "idle";
+    const viewerError = deferViewer && viewer.snapshot.status === "error";
+
+    const navigationItems = getRoomListNavigationItems(!!currentUser);
 
     const roomsInView = useMemo(
         () =>
@@ -104,6 +111,11 @@ export default function RoomList({
                 currentUserId: currentUser?.id ?? null,
             }),
         [view, publicRooms, myRooms, savedRoomIds, currentUser?.id],
+    );
+
+    const editableRoomIds = useMemo(
+        () => getEditableRoomIds(myRooms, currentUser?.id ?? null),
+        [myRooms, currentUser?.id],
     );
 
     const filteredRooms = useMemo(() => {
@@ -162,7 +174,7 @@ export default function RoomList({
     }, [currentUser]);
 
     const addRoom = async () => {
-        if (creating) return;
+        if (creating || viewerLoading || viewerError) return;
         if (!currentUser) {
             startNavigationProgress();
             router.push(getSignInUrl());
@@ -187,11 +199,40 @@ export default function RoomList({
     };
 
     const handleSignOut = async () => {
+        const previousViewer = { currentUser, myRooms, savedRoomIds };
+        const previousSnapshot = viewer.snapshot;
+
+        // Clear privileged UI immediately, even when Next keeps this mounted
+        // through a same-route Server Action redirect.
+        // The provider also survives navigation from /mine or /saved to /.
+        // Always revoke its owner/bookmark UI before the redirect.
+        viewer.resetToGuest();
+        if (!deferViewer) {
+            setLocalCurrentUser(null);
+            setLocalMyRooms([]);
+            setLocalSavedRoomIds([]);
+        }
         posthog.capture("signed_out");
         posthog.reset();
-        await signOut();
-        startNavigationProgress();
-        router.replace("/");
+
+        try {
+            await signOut();
+            startNavigationProgress();
+            router.replace("/");
+        } catch (error) {
+            unstable_rethrow(error);
+            // Failed sign-out: restore the account view without stale state.
+            viewer.restore(previousSnapshot);
+            if (!deferViewer) {
+                setLocalCurrentUser(previousViewer.currentUser);
+                setLocalMyRooms(previousViewer.myRooms);
+                setLocalSavedRoomIds(previousViewer.savedRoomIds);
+            }
+            if (previousViewer.currentUser) {
+                posthog.identify(previousViewer.currentUser.id);
+            }
+            console.error("Failed to sign out", error);
+        }
     };
 
     const viewTitle =
@@ -201,10 +242,25 @@ export default function RoomList({
     return (
         <Shell
             sidebar={
-                <RoomNavigation isSignedIn={!!currentUser} currentView={view} />
+                <RoomNavigation
+                    isSignedIn={!!currentUser}
+                    currentView={view}
+                    viewerLoading={viewerLoading}
+                />
             }
             header={
-                currentUser ? (
+                viewerLoading ? (
+                    <div className="invisible pointer-events-none" aria-hidden="true">
+                        <Button variant="text">サインイン</Button>
+                    </div>
+                ) : viewerError ? (
+                    <Button
+                        variant="text"
+                        onClick={viewer.retry}
+                    >
+                        再読み込み
+                    </Button>
+                ) : currentUser ? (
                     <Menu
                         name="ユーザーアクション"
                         button={
@@ -253,6 +309,7 @@ export default function RoomList({
                 <Button
                     onClick={addRoom}
                     loading={creating}
+                    disabled={viewerLoading || viewerError}
                     padding="large"
                     variant="primary"
                     iconName="plus"
@@ -273,6 +330,7 @@ export default function RoomList({
                     key={view + ":" + deferredKeyword}
                     rooms={filteredRooms}
                     savedIds={savedRoomIds}
+                    editableRoomIds={editableRoomIds}
                     onToggleSaved={
                         currentUser ? toggleSavedRoomState : undefined
                     }

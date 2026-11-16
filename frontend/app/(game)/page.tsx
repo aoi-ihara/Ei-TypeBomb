@@ -1,18 +1,22 @@
-import { redirect } from "next/navigation";
-import { getRoomListData } from "./room-list-data";
+import { getPublicRooms } from "@/lib/room/get";
 import RoomList from "./RoomList";
 
-export default async function Page({
-    searchParams,
-}: {
-    searchParams: Promise<{ filter?: string; owner?: string }>;
-}) {
-    const { filter, owner } = await searchParams;
+// Share the public feed HTML across visitors. Account-specific controls load
+// from a separate private endpoint after hydration.
+export const dynamic = "force-static";
+export const revalidate = 3600;
 
-    if (filter === "mine" || owner === "me") redirect("/mini");
-    if (filter === "saved") redirect("/saved");
+export default async function Page() {
+    const publicRooms = await getPublicRooms({ failOnError: true });
 
-    const roomListData = await getRoomListData();
-
-    return <RoomList {...roomListData} initialView="recommended" />;
+    return (
+        <RoomList
+            publicRooms={publicRooms}
+            myRooms={[]}
+            initialSavedRoomIds={[]}
+            currentUser={null}
+            initialView="recommended"
+            deferViewer
+        />
+    );
 }

@@ -24,6 +24,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+    ...(process.env.BETA_ENVIRONMENT === "true"
+        ? { robots: { index: false, follow: false } }
+        : {}),
     metadataBase: new URL(getEtbBaseUrl()),
     title: "Ei-TypeBomb",
     description:

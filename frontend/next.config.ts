@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
     // Consent must be protected on the React document, not only the OAuth API.
     async headers() {
         return [
+            ...(process.env.BETA_ENVIRONMENT === "true"
+                ? [{
+                      source: "/:path*",
+                      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+                  }]
+                : []),
             {
                 source: "/oauth/consent",
                 headers: [
@@ -36,6 +42,30 @@ const nextConfig: NextConfig = {
             {
                 source: "/ingest/:path*",
                 destination: "https://us.i.posthog.com/:path*",
+            },
+        ];
+    },
+    async redirects() {
+        // These legacy query links were previously handled by the dynamic
+        // home page. Handle them before resolving the shared ISR page.
+        return [
+            {
+                source: "/",
+                has: [{ type: "query", key: "filter", value: "mine" }],
+                destination: "/mine",
+                permanent: false,
+            },
+            {
+                source: "/",
+                has: [{ type: "query", key: "owner", value: "me" }],
+                destination: "/mine",
+                permanent: false,
+            },
+            {
+                source: "/",
+                has: [{ type: "query", key: "filter", value: "saved" }],
+                destination: "/saved",
+                permanent: false,
             },
         ];
     },
