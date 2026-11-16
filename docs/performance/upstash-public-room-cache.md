@@ -56,8 +56,10 @@ invalidation replaces that block with a fresh unique generation.
 restriction/deletion fails rather than risking stale disclosure.**
 All aliases are fenced in one atomic Redis EVAL (not one request per alias).
 A lost response is rolled back by its unique token when Redis is reachable.
-Otherwise, orphaned fences expire after the configured room-data TTL plus
-60 seconds, so older cached payloads have already expired. Cache writes also
+Otherwise, orphaned fences expire after the **maximum supported room-data
+TTL (86400 seconds) plus 60 seconds**, regardless of the current configured
+TTL. This protects payloads written by older deployments before the TTL was
+lowered within a shared namespace. Cache writes also
 check the active generation atomically and cannot populate an obsolete entry
 while a block is active.
 
