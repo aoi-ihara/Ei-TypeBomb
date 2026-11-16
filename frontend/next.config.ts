@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
     // Consent must be protected on the React document, not only the OAuth API.
     async headers() {
         return [
+            ...(process.env.BETA_ENVIRONMENT === "true"
+                ? [{
+                      source: "/:path*",
+                      headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }],
+                  }]
+                : []),
             {
                 source: "/oauth/consent",
                 headers: [
