@@ -14,19 +14,40 @@ export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
-// Choice speed is a small, positive recognition signal, never evidence of a
-// failure. Long idle sessions are ignored entirely; medium-long answers
-// saturate so a slow reading speed cannot accumulate a large penalty.
-// All values are provisional product hypotheses.
+// Recognition speed only adjusts ordering, never correctness, retries or
+// long-term recall. The 30s cutoff and bounded score prevent idle reading from
+// imposing a large penalty. These are uncalibrated product hypotheses.
 export const CHOICE_SPEED_IGNORE_AFTER_MS = 30_000;
-export const CHOICE_SPEED_SATURATION_MS = 10_000;
-const CHOICE_SPEED_BONUS_MAX = 0.05;
-const CHOICE_SPEED_EMA_ALPHA = 0.2;
-export const getRecognitionSpeedBonus = (averageResponseMs?: number): number =>
-    typeof averageResponseMs === "number" && Number.isFinite(averageResponseMs)
-        ? CHOICE_SPEED_BONUS_MAX *
-          clamp((CHOICE_SPEED_SATURATION_MS - averageResponseMs) / 8_000, 0, 1)
-        : 0;
+const CHOICE_SPEED_NEUTRAL_MS = 8_000;
+const CHOICE_SPEED_FAST_MS = 2_000;
+const CHOICE_SPEED_FAST_BONUS = 0.15;
+const CHOICE_SPEED_SLOW_PENALTY = 0.08;
+const CHOICE_SPEED_EMA_ALPHA = 0.35;
+// Negative is a strong, quick first-try recognition (less priority); positive
+// is slower but still correct (slightly more priority). Accuracy remains primary.
+export const getRecognitionSpeedAdjustment = (averageResponseMs?: number): number => {
+    if (
+        typeof averageResponseMs !== "number" ||
+        !Number.isFinite(averageResponseMs) ||
+        averageResponseMs < 0 ||
+        averageResponseMs >= CHOICE_SPEED_IGNORE_AFTER_MS
+    ) return 0;
+    if (averageResponseMs <= CHOICE_SPEED_NEUTRAL_MS)
+        return -CHOICE_SPEED_FAST_BONUS *
+            clamp(
+                (CHOICE_SPEED_NEUTRAL_MS - averageResponseMs) /
+                    (CHOICE_SPEED_NEUTRAL_MS - CHOICE_SPEED_FAST_MS),
+                0,
+                1,
+            );
+    return CHOICE_SPEED_SLOW_PENALTY *
+        clamp(
+            (averageResponseMs - CHOICE_SPEED_NEUTRAL_MS) /
+                (CHOICE_SPEED_IGNORE_AFTER_MS - CHOICE_SPEED_NEUTRAL_MS),
+            0,
+            1,
+        );
+};
 
 export type SchedulerReason =
     "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
@@ -227,7 +248,7 @@ export const parseAnswerModeStats = (
             ...(typeof candidate.averageResponseMs === "number" &&
             Number.isFinite(candidate.averageResponseMs) &&
             candidate.averageResponseMs >= 0 &&
-            candidate.averageResponseMs <= CHOICE_SPEED_SATURATION_MS
+            candidate.averageResponseMs < CHOICE_SPEED_IGNORE_AFTER_MS
                 ? { averageResponseMs: candidate.averageResponseMs }
                 : {}),
         };
@@ -317,7 +338,7 @@ const updateAnswerModeStats = (
         responseMs >= 0 &&
         responseMs < CHOICE_SPEED_IGNORE_AFTER_MS
     ) {
-        const sample = Math.min(responseMs, CHOICE_SPEED_SATURATION_MS);
+        const sample = responseMs;
         nextTrack.averageResponseMs =
             previous.averageResponseMs === undefined
                 ? sample
