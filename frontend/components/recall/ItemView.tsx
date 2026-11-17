@@ -30,7 +30,7 @@ type Props = {
     isPaused?: boolean;
     items: Item[];
     answerMode: AnswerMode;
-    onSelectionAnswer?: (correct: boolean) => void;
+    onSelectionAnswer?: (correct: boolean, hadMistake: boolean) => void;
 };
 
 export default function ItemView(props: Readonly<Props>) {
@@ -45,8 +45,8 @@ export default function ItemView(props: Readonly<Props>) {
                         item={props.item}
                         items={props.items}
                         currentInput={props.currentInput}
-                        onAnswer={(correct) =>
-                            props.onSelectionAnswer?.(correct)
+                        onAnswer={(correct, hadMistake) =>
+                            props.onSelectionAnswer?.(correct, hadMistake)
                         }
                         onSuccess={props.onSuccess}
                         isPaused={props.isPaused}
