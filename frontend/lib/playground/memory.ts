@@ -32,7 +32,8 @@ export const getRecognitionSpeedAdjustment = (averageResponseMs?: number): numbe
         averageResponseMs < 0 ||
         averageResponseMs >= CHOICE_SPEED_IGNORE_AFTER_MS
     ) return 0;
-    if (averageResponseMs <= CHOICE_SPEED_NEUTRAL_MS)
+    if (averageResponseMs === CHOICE_SPEED_NEUTRAL_MS) return 0;
+    if (averageResponseMs < CHOICE_SPEED_NEUTRAL_MS)
         return -CHOICE_SPEED_FAST_BONUS *
             clamp(
                 (CHOICE_SPEED_NEUTRAL_MS - averageResponseMs) /
