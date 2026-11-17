@@ -120,6 +120,22 @@ test("online incorrect selection schedules a retry but never credits free recall
     );
 });
 
+test("online choice speed is recorded only for clean recognition", () => {
+    const roomId = "choice-speed-room";
+    const session = online.createOnlineMemorySession(roomId, ids, null, {});
+    const first = online.nextOnlineRecommendation(session);
+    const clean = online.recordOnlineAnswerModeResult(
+        session, first, "selection", true, undefined, false, 1_200,
+    );
+    assert.equal(clean.answerModeStats.recognition.averageResponseMs, 1_200);
+    const second = online.nextOnlineRecommendation(session);
+    const afterMistake = online.recordOnlineAnswerModeResult(
+        session, second, "selection", true, undefined, true, 200,
+    );
+    assert.equal(afterMistake.answerModeStats.recognition.averageResponseMs, undefined);
+    assert.equal(afterMistake.answerModeStats.recognition.correct, 0);
+});
+
 test("guest online memory is visible to Playground and survives reload", () => {
     const session = online.createOnlineMemorySession("room", ids, null, {});
     const itemId = online.nextOnlineRecommendation(session);
