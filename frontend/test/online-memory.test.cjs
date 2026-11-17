@@ -102,6 +102,24 @@ test("online selection answers persist recognition without recording free recall
     );
 });
 
+test("online incorrect selection schedules a retry but never credits free recall", () => {
+    const session = online.createOnlineMemorySession("mistake-choice-room", ids, null, {});
+    const itemId = online.nextOnlineRecommendation(session);
+    const updated = online.recordOnlineAnswerModeResult(
+        session, itemId, "selection", true, undefined, true,
+    );
+    assert.equal(updated.answerModeStats.recognition.attempts, 1);
+    assert.equal(updated.answerModeStats.recognition.correct, 0);
+    assert.equal(updated.reviewCount, 0);
+    assert.equal(session.scheduler.current, null);
+    assert.equal(session.scheduler.retries[itemId].reason, "failed_recall");
+    assert.equal(
+        online.loadOnlineGuestMemory("mistake-choice-room", ids)[itemId]
+            .answerModeStats.recognition.correct,
+        0,
+    );
+});
+
 test("guest online memory is visible to Playground and survives reload", () => {
     const session = online.createOnlineMemorySession("room", ids, null, {});
     const itemId = online.nextOnlineRecommendation(session);
