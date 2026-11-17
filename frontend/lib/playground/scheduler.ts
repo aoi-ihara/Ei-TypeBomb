@@ -670,6 +670,7 @@ export const loadSchedulerState = (
     itemIds: string[],
     memories: Record<string, ItemMemoryState> = {},
     now = Date.now(),
+    answerMode: SchedulerAnswerMode = "input",
 ): SchedulerState | null => {
     try {
         const raw: unknown = JSON.parse(
@@ -807,7 +808,7 @@ export const loadSchedulerState = (
         const cycleQueue = [...queue];
         if (age >= PRIORITY_REFRESH_MS) {
             cycleQueue.sort((a, b) =>
-                compareMemoryPriority(a, b, memories, now),
+                compareMemoryPriority(a, b, memories, now, answerMode),
             );
         }
 
