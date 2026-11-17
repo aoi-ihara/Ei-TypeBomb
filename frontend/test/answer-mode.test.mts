@@ -9,7 +9,7 @@ import {
 import {
     createInitialMemory,
     recordAnswerModeResult,
-    getRecognitionSpeedBonus,
+    getRecognitionSpeedAdjustment,
     parseAnswerModeStats,
     CHOICE_SPEED_IGNORE_AFTER_MS,
 } from "../lib/playground/memory";
@@ -129,7 +129,7 @@ test("choice clock skips paused and background time while preserving active resp
     assert.equal(readActiveResponseMs(clock, 3_604_700), 3_500);
 });
 
-test("selection speed is weak, bounded, and optional in existing memory rows", () => {
+test("selection speed has a bounded, stronger bias and ignores idle responses", () => {
     const now = new Date("2026-11-17T00:00:00Z");
     const save = (previous: ReturnType<typeof createInitialMemory> | undefined, responseMs: number, success = true) =>
         recordAnswerModeResult({
@@ -139,19 +139,29 @@ test("selection speed is weak, bounded, and optional in existing memory rows", (
         });
     const fast = save(undefined, 1_000);
     assert.equal(fast.answerModeStats?.recognition.averageResponseMs, 1_000);
-    assert.ok(getRecognitionSpeedBonus(1_000) <= 0.05);
-    assert.ok(getRecognitionSpeedBonus(1_000) > getRecognitionSpeedBonus(5_000));
-    assert.equal(getRecognitionSpeedBonus(10_000), 0);
-    assert.equal(getRecognitionSpeedBonus(undefined), 0);
+    assert.equal(getRecognitionSpeedAdjustment(1_000), -0.15);
+    assert.ok(getRecognitionSpeedAdjustment(5_000) < 0);
+    assert.equal(getRecognitionSpeedAdjustment(8_000), 0);
+    assert.ok(getRecognitionSpeedAdjustment(15_000) > 0);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) > getRecognitionSpeedAdjustment(15_000));
+    assert.ok(getRecognitionSpeedAdjustment(29_000) <= 0.08);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) - getRecognitionSpeedAdjustment(1_000) > 0.2);
+    assert.equal(getRecognitionSpeedAdjustment(30_000), 0);
+    assert.equal(getRecognitionSpeedAdjustment(undefined), 0);
 
     const slow = save(fast, 15_000);
-    assert.equal(slow.answerModeStats?.recognition.averageResponseMs, 2_800);
+    assert.equal(slow.answerModeStats?.recognition.averageResponseMs, 5_900);
+    // Responses under 30 seconds still count, rather than being clamped at 10.
+    const considered = save(slow, 29_000);
+    assert.equal(considered.answerModeStats?.recognition.averageResponseMs, 13_985);
     // A long idle answer adds no latency penalty and does not erase
     // an earlier response-speed sample.
-    const idle = save(slow, CHOICE_SPEED_IGNORE_AFTER_MS + 3_600_000);
-    assert.equal(idle.answerModeStats?.recognition.averageResponseMs, 2_800);
-    const failed = save(idle, 200, false);
-    assert.equal(failed.answerModeStats?.recognition.averageResponseMs, 2_800);
+    const idle = save(considered, CHOICE_SPEED_IGNORE_AFTER_MS + 3_600_000);
+    assert.equal(idle.answerModeStats?.recognition.averageResponseMs, 13_985);
+    const exactlyThirty = save(idle, CHOICE_SPEED_IGNORE_AFTER_MS);
+    assert.equal(exactlyThirty.answerModeStats?.recognition.averageResponseMs, 13_985);
+    const failed = save(exactlyThirty, 200, false);
+    assert.equal(failed.answerModeStats?.recognition.averageResponseMs, 13_985);
     assert.equal(failed.reviewCount, 0);
 
     const parsed = parseAnswerModeStats({
