@@ -766,10 +766,11 @@ test("intentional page exit immediately clears the active seat and session, unli
     assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
 });
 
-test("recommendations are single-use and cannot override recent-word protection", async () => {
+test("recommendations are single-use, accept eligible refreshes, and reject repeats", async () => {
     const items: Room["items"] = [
         room.items[0],
         { id: "r", type: "typed_recall", prompt: "r", answer: "b" },
+        { id: "s", type: "typed_recall", prompt: "s", answer: "c" },
     ];
     const f = fixture(items);
     await f.runtime.open({ ...room, items });
@@ -784,17 +785,28 @@ test("recommendations are single-use and cannot override recent-word protection"
     assert.equal(f.runtime.state.room.wordIndex, 1);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 
+    // No fresh recommendation. B receives q, then A receives r again
+    // through fallback after another word has been presented.
     await f.runtime.command(f.command("a", "word:success"), "a");
     await f.runtime.command(f.command("b", "word:success"), "b");
-    // No new recommendation: fallback avoids the immediately previous bomb
-    // word, even if that happens to select the former recommended ID again.
     assert.equal(f.runtime.state.room.wordIndex, 1);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 
-    // A refreshed recommendation is still single-use, but cannot override
-    // room-wide no-repeat protection while another word is available.
+    // A refreshed recommendation for s is eligible. It must be respected
+    // even though the deterministic fallback would choose r instead.
+    f.runtime.recommend("a", "s");
+    await f.runtime.command(f.command("a", "word:success"), "a");
+    assert.equal(f.runtime.state.room.wordIndex, 0);
+    await f.runtime.command(f.command("b", "word:success"), "b");
+    assert.equal(f.runtime.state.room.wordIndex, 2);
+    assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
+
+    // A newly refreshed q recommendation becomes ineligible when B's
+    // immediately preceding question is also q. Reject it and consume it,
+    // without pinning A to the stale recommendation on later turns.
     f.runtime.recommend("a", "q");
     await f.runtime.command(f.command("a", "word:success"), "a");
+    assert.equal(f.runtime.state.room.wordIndex, 0);
     await f.runtime.command(f.command("b", "word:success"), "b");
     assert.equal(f.runtime.state.room.wordIndex, 1);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
