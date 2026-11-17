@@ -766,7 +766,7 @@ test("intentional page exit immediately clears the active seat and session, unli
     assert.equal(f.runtime.checkpoint.value!.sessions.b.connected, true);
 });
 
-test("a recommendation is single-use, and a refreshed recommendation is respected", async () => {
+test("recommendations are single-use and cannot override recent-word protection", async () => {
     const items: Room["items"] = [
         room.items[0],
         { id: "r", type: "typed_recall", prompt: "r", answer: "b" },
@@ -791,10 +791,11 @@ test("a recommendation is single-use, and a refreshed recommendation is respecte
     assert.equal(f.runtime.state.room.wordIndex, 1);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 
-    // A fresh recommendation overrides fallback's no-repeat preference.
+    // A refreshed recommendation is still single-use, but cannot override
+    // room-wide no-repeat protection while another word is available.
     f.runtime.recommend("a", "q");
     await f.runtime.command(f.command("a", "word:success"), "a");
     await f.runtime.command(f.command("b", "word:success"), "b");
-    assert.equal(f.runtime.state.room.wordIndex, 0);
+    assert.equal(f.runtime.state.room.wordIndex, 1);
     assert.equal(f.runtime.checkpoint.value!.sessions.a.recommendation, undefined);
 });
