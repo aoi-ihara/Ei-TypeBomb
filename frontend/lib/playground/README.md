@@ -153,13 +153,19 @@ average of foreground response time is saved in the existing recognition
 JSON track (no migration). Time in the background tab or while paused does
 not count. Answers taking **30 seconds or longer** are excluded entirely as
 possibly idle. Within the eligible interval, a roughly 2-second or faster
-answer reduces recognition priority by 0.15, 8 seconds is neutral, and a
-nearly 30-second answer raises priority by at most 0.08. The speed adjustment
-is deliberately bounded and subordinate to correctness, with a 0.35 EMA
-factor so recent clean answers matter without overreacting to one sample.
-Long waits alone never trigger a retry, hold, or change typed recall memory.
-The thresholds and weights are uncalibrated heuristics; do not use response
-speed as a stand-alone measure of learning ability.
+answer reduces recognition priority by 0.30, 8 seconds is neutral, and a
+nearly 30-second answer raises priority by at most 0.18. The EMA factor
+remains 0.35 so recent clean answers matter without overreacting to one sample.
+
+Selection ranking uses a smoothed error fraction
+`(attempts - correct) / (attempts + 1)` instead of raw error rate. Thus a
+single missed question contributes 0.5 rather than 1.0 to priority; repeated
+misses keep increasing the score. An earlier fast response does not cancel
+out a *more recent* mistake because speed adjustment is ignored until the
+next clean correct turn. Scheduled short retries for mistakes still take
+precedence over this ordinary ordering. Long waits alone never trigger a
+retry, hold, or change typed recall memory. These weights and thresholds
+are uncalibrated heuristics, not estimates of learning ability.
 
 Typing uses the first stored kana reading when supported, then falls back to
 the original answer. If neither can be typed, the game switches
