@@ -387,6 +387,27 @@ test("selection-only recognition history prioritizes difficult questions without
     assert.equal(memory.getRetrievability(failed, stamp), 0);
 });
 
+test("choice response speed breaks accuracy ties but cannot override a real failure", () => {
+    const timestamp = now.getTime();
+    const choice = (id, success, responseMs) =>
+        memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: id, mode: "selection",
+            success, responseMs, now,
+        });
+    const quick = choice("quick", true, 1_000);
+    const slow = choice("slow", true, 15_000);
+    const failed = choice("failed", false, 100);
+    const memories = { quick, slow, failed };
+    const state = scheduler.createScheduler(["quick", "slow", "failed"], () => 0.5);
+    const selected = scheduler.chooseNextUserItem(state, memories, () => 0.5, timestamp, "selection");
+    assert.equal(selected.itemId, "failed");
+
+    const tied = scheduler.createScheduler(["quick", "slow"], () => 0.5);
+    const slower = scheduler.chooseNextUserItem(tied, memories, () => 0.5, timestamp, "selection");
+    assert.equal(slower.itemId, "slow");
+    assert.equal(slow.reviewCount, 0);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
