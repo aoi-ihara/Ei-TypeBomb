@@ -1,5 +1,6 @@
 import {
     getRetrievability,
+    getRecognitionSpeedBonus,
     type AttemptEvaluation,
     type ItemMemoryState,
     type SchedulerReason,
@@ -116,7 +117,12 @@ const compareMemoryPriority = (
         // selection mode, without modifying free-recall stability.
         const aErrorRate = (aStats.attempts - aStats.correct) / aStats.attempts;
         const bErrorRate = (bStats.attempts - bStats.correct) / bStats.attempts;
-        if (aErrorRate !== bErrorRate) return bErrorRate - aErrorRate;
+        // Response speed is at most a 5-point-percentage tie-breaker. It can
+        // slightly lower priority for consistently quick, correct recognition
+        // but can never override a substantial error-rate difference.
+        const aPriority = aErrorRate - getRecognitionSpeedBonus(aStats.averageResponseMs);
+        const bPriority = bErrorRate - getRecognitionSpeedBonus(bStats.averageResponseMs);
+        if (aPriority !== bPriority) return bPriority - aPriority;
         return Date.parse(aStats.lastAttemptAt ?? "") -
             Date.parse(bStats.lastAttemptAt ?? "");
     }
