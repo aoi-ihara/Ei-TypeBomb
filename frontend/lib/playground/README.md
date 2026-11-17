@@ -148,6 +148,17 @@ Input mode continues to prioritize independent recall, even when switching
 between modes. The online game also schedules a selection retry when a
 non-typable item was answered incorrectly before the correct choice.
 
+For **first-try correct** selection answers only, an optional exponential
+average of foreground response time is saved in the existing recognition
+JSON track (no migration). Time in the background tab or while paused does
+not count. Answers taking 10 seconds or longer saturate at the same neutral
+speed bonus; answers taking 30 seconds or longer are excluded entirely as
+possibly idle. Fast, clean choices can reduce future recognition priority by
+at most five percentage points relative to the error-rate score. Long waits
+cannot by themselves trigger a retry, hold, or change typed recall memory.
+The weight, thresholds, and EMA are uncalibrated heuristics; do not use
+response speed as a stand-alone measure of learning ability.
+
 Typing uses the first stored kana reading when supported, then falls back to
 the original answer. If neither can be typed, the game switches
 that item to selection, even in input mode. If no item in a room is typable,
