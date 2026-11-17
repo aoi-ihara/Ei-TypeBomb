@@ -9,7 +9,7 @@ type Props = {
     item: Item;
     items: Item[];
     currentInput: string | null;
-    onAnswer: (correct: boolean) => void;
+    onAnswer: (correct: boolean, hadMistake: boolean) => void;
     onSuccess: () => void;
     isPaused?: boolean;
 };
@@ -42,7 +42,7 @@ export default function SelectionQuestionView({
                 return;
 
             const correct = options[index] === item.answer;
-            onAnswer(correct);
+            onAnswer(correct, correct && wrongOptions.size > 0);
             if (correct) {
                 setCompleted(true);
                 onSuccess();
