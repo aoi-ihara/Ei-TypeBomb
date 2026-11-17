@@ -408,6 +408,53 @@ test("choice response speed breaks accuracy ties but cannot override a real fail
     assert.equal(slow.reviewCount, 0);
 });
 
+test("a single wrong choice is softened; repeated mistakes and speed still influence ordering", () => {
+    const timestamp = now.getTime();
+    const observeChoice = (itemId, success, responseMs, previous) =>
+        memory.recordAnswerModeResult({
+            memory: previous,
+            userId: "u",
+            roomId: "r",
+            itemId,
+            mode: "selection",
+            success,
+            responseMs,
+            now,
+        });
+
+    const quick = observeChoice("quick", true, 1_000);
+    const slow = observeChoice("slow", true, 29_000);
+    const once = observeChoice("once", false);
+    const twice = observeChoice(
+        "twice", false, null,
+        observeChoice("twice", false),
+    );
+    const quickThenWrong = observeChoice(
+        "quickThenWrong", false, null,
+        observeChoice("quickThenWrong", true, 1_000),
+    );
+    const memories = { quick, slow, once, twice, quickThenWrong };
+    const state = scheduler.createScheduler(Object.keys(memories), () => 0.5);
+    const order = [];
+    for (let index = 0; index < 5; index++) {
+        const selected = scheduler.chooseNextUserItem(
+            state, memories, () => 0.5, timestamp, "selection",
+        );
+        order.push(selected.itemId);
+        scheduler.recordRecognitionAnswer(state, selected.itemId);
+    }
+
+    // A single error is no longer scored as a hard 100% failure, while
+    // multiple mistakes still matter. A later miss cannot be hidden by a
+    // previous fast answer. All other things equal, slower clean answers
+    // receive earlier review than fast clean answers.
+    assert.deepEqual(order, [
+        "twice", "once", "quickThenWrong", "slow", "quick",
+    ]);
+    assert.equal(twice.reviewCount, 0);
+    assert.equal(slow.reviewCount, 0);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
