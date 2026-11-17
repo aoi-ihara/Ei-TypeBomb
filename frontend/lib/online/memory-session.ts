@@ -293,6 +293,7 @@ export const recordOnlineAnswerModeResult = (
     mode: AnswerModeResult,
     success: boolean,
     onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
+    hadMistake = false,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const selectedBefore = session.scheduler.current?.itemId ?? null;
@@ -303,11 +304,11 @@ export const recordOnlineAnswerModeResult = (
         roomId: session.roomId,
         itemId,
         mode,
-        success,
+        success: success && !(mode === "selection" && hadMistake),
     });
     if (mode === "selection" && success) {
         reconcileOnlineSchedulerItem(session.scheduler, itemId);
-        recordRecognitionAnswer(session.scheduler, itemId);
+        recordRecognitionAnswer(session.scheduler, itemId, hadMistake);
     }
     session.memory = { ...session.memory, [itemId]: updated };
     if (session.userId) session.pending.set(itemId, updated);
@@ -323,7 +324,7 @@ export const recordOnlineAnswerModeResult = (
         reconciled: success && selectedBefore !== itemId,
         previousRecommendedItemId: selectedBefore,
         retryCountBefore,
-        answerCorrect: success,
+        answerCorrect: success && !(mode === "selection" && hadMistake),
     });
     return updated;
 };
