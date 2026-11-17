@@ -62,7 +62,11 @@ type Props = {
     soloMode?: boolean;
     isPaused?: boolean;
     answerMode: AnswerMode;
-    onSelectionAnswer?: (correct: boolean) => void;
+    onSelectionAnswer?: (
+        correct: boolean,
+        hadMistake: boolean,
+        responseMs: number | null,
+    ) => void;
     onResume?: () => void;
     onStop?: () => void;
 };
@@ -211,10 +215,10 @@ export default function GameView({
                         item={currentItem}
                         items={getRoomItems(room)}
                         answerMode={answerMode}
-                        onSelectionAnswer={(correct) => {
+                        onSelectionAnswer={(correct, hadMistake, responseMs) => {
                             if (userId !== currentTurnUser?.id) return;
                             if (!correct) triggerFailAnimation();
-                            onSelectionAnswer?.(correct);
+                            onSelectionAnswer?.(correct, hadMistake, responseMs);
                         }}
                         remoteHintLength={remoteHintLength}
                         onHintChange={onHintChange}

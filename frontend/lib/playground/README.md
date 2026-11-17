@@ -134,6 +134,39 @@ Selection questions use up to four unique answers from the same room, with the
 correct answer and distractors shuffled for each presented turn. Duplicate
 answers are excluded to avoid ambiguous options.
 
+A completed selection turn records one recognition attempt: picking the right
+option on the first try is a success; reaching it after eliminating wrong
+options is a failed recognition. Incorrect turns use the **same** retry,
+confirmation, and escalating-hold scheduler as typing, including the shared
+two-question retry gap. In selection mode, previous recognition attempts
+prioritize low-accuracy items ahead of easier ones, and recognized items can
+participate in optional interleaved review. This ordering is a heuristic, not
+a calibrated memory model.
+
+Recognition never changes free-recall stability, difficulty, or review count.
+Input mode continues to prioritize independent recall, even when switching
+between modes. The online game also schedules a selection retry when a
+non-typable item was answered incorrectly before the correct choice.
+
+For **first-try correct** selection answers only, an optional exponential
+average of foreground response time is saved in the existing recognition
+JSON track (no migration). Time in the background tab or while paused does
+not count. Answers taking **30 seconds or longer** are excluded entirely as
+possibly idle. Within the eligible interval, a roughly 2-second or faster
+answer reduces recognition priority by 0.30, 8 seconds is neutral, and a
+nearly 30-second answer raises priority by at most 0.18. The EMA factor
+remains 0.35 so recent clean answers matter without overreacting to one sample.
+
+Selection ranking uses a smoothed error fraction
+`(attempts - correct) / (attempts + 1)` instead of raw error rate. Thus a
+single missed question contributes 0.5 rather than 1.0 to priority; repeated
+misses keep increasing the score. An earlier fast response does not cancel
+out a *more recent* mistake because speed adjustment is ignored until the
+next clean correct turn. Scheduled short retries for mistakes still take
+precedence over this ordinary ordering. Long waits alone never trigger a
+retry, hold, or change typed recall memory. These weights and thresholds
+are uncalibrated heuristics, not estimates of learning ability.
+
 Typing uses the first stored kana reading when supported, then falls back to
 the original answer. If neither can be typed, the game switches
 that item to selection, even in input mode. If no item in a room is typable,

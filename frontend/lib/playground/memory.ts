@@ -14,6 +14,43 @@ export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
 export const DEFAULT_EXPECTED_CHAR_MS = 220;
 
+// Recognition speed only adjusts ordering, never correctness, retries or
+// long-term recall. The 30s cutoff and bounded score prevent idle reading from
+// imposing a large penalty. These are uncalibrated product hypotheses.
+export const CHOICE_SPEED_IGNORE_AFTER_MS = 30_000;
+const CHOICE_SPEED_NEUTRAL_MS = 8_000;
+const CHOICE_SPEED_FAST_MS = 2_000;
+const CHOICE_SPEED_FAST_BONUS = 0.30;
+const CHOICE_SPEED_SLOW_PENALTY = 0.18;
+const CHOICE_SPEED_EMA_ALPHA = 0.35;
+// Negative is a strong, quick first-try recognition (less priority); positive
+// is slower but still correct (slightly more priority). Neither speed alone
+// nor a single error determines whether a short-term retry is due.
+export const getRecognitionSpeedAdjustment = (averageResponseMs?: number): number => {
+    if (
+        typeof averageResponseMs !== "number" ||
+        !Number.isFinite(averageResponseMs) ||
+        averageResponseMs < 0 ||
+        averageResponseMs >= CHOICE_SPEED_IGNORE_AFTER_MS
+    ) return 0;
+    if (averageResponseMs === CHOICE_SPEED_NEUTRAL_MS) return 0;
+    if (averageResponseMs < CHOICE_SPEED_NEUTRAL_MS)
+        return -CHOICE_SPEED_FAST_BONUS *
+            clamp(
+                (CHOICE_SPEED_NEUTRAL_MS - averageResponseMs) /
+                    (CHOICE_SPEED_NEUTRAL_MS - CHOICE_SPEED_FAST_MS),
+                0,
+                1,
+            );
+    return CHOICE_SPEED_SLOW_PENALTY *
+        clamp(
+            (averageResponseMs - CHOICE_SPEED_NEUTRAL_MS) /
+                (CHOICE_SPEED_IGNORE_AFTER_MS - CHOICE_SPEED_NEUTRAL_MS),
+            0,
+            1,
+        );
+};
+
 export type SchedulerReason =
     "cycle" | "retry" | "long_term_due" | "suspension_due" | "spaced_review";
 export type RecallProgress = {
@@ -75,6 +112,9 @@ export type AnswerModeTrack = {
     correct: number;
     correctStreak: number;
     lastAttemptAt: string | null;
+    // Exponential average of active first-choice response times (only clean
+    // correct turns). Optional for old saved recognition history.
+    averageResponseMs?: number;
 };
 export type AnswerModeStats = {
     recognition: AnswerModeTrack;
@@ -207,6 +247,12 @@ export const parseAnswerModeStats = (
             correct: candidate.correct as number,
             correctStreak: candidate.correctStreak as number,
             lastAttemptAt: candidate.lastAttemptAt ?? null,
+            ...(typeof candidate.averageResponseMs === "number" &&
+            Number.isFinite(candidate.averageResponseMs) &&
+            candidate.averageResponseMs >= 0 &&
+            candidate.averageResponseMs < CHOICE_SPEED_IGNORE_AFTER_MS
+                ? { averageResponseMs: candidate.averageResponseMs }
+                : {}),
         };
     };
     const recognition = parseTrack(source.recognition);
@@ -265,6 +311,7 @@ const updateAnswerModeStats = (
     mode: AnswerModeResult,
     success: boolean,
     now: Date,
+    responseMs: number | null = null,
 ): AnswerModeStats => {
     const emptyTrack = (): AnswerModeTrack => ({
         attempts: 0,
@@ -279,11 +326,27 @@ const updateAnswerModeStats = (
     const key = mode === "selection" ? "recognition" : "recall";
     const previous = stats[key];
     const nextTrack: AnswerModeTrack = {
+        ...previous,
         attempts: previous.attempts + 1,
         correct: previous.correct + Number(success),
         correctStreak: success ? previous.correctStreak + 1 : 0,
         lastAttemptAt: now.toISOString(),
     };
+    if (
+        mode === "selection" &&
+        success &&
+        responseMs !== null &&
+        Number.isFinite(responseMs) &&
+        responseMs >= 0 &&
+        responseMs < CHOICE_SPEED_IGNORE_AFTER_MS
+    ) {
+        const sample = responseMs;
+        nextTrack.averageResponseMs =
+            previous.averageResponseMs === undefined
+                ? sample
+                : previous.averageResponseMs * (1 - CHOICE_SPEED_EMA_ALPHA) +
+                  sample * CHOICE_SPEED_EMA_ALPHA;
+    }
     return {
         ...stats,
         [key]: nextTrack,
@@ -306,6 +369,7 @@ export const recordAnswerModeResult = ({
     mode,
     success,
     now = new Date(),
+    responseMs = null,
 }: {
     memory: ItemMemoryState | undefined;
     userId: string;
@@ -314,6 +378,7 @@ export const recordAnswerModeResult = ({
     mode: AnswerModeResult;
     success: boolean;
     now?: Date;
+    responseMs?: number | null;
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const iso = now.toISOString();
@@ -327,6 +392,7 @@ export const recordAnswerModeResult = ({
             mode,
             success,
             now,
+            responseMs,
         ),
         // A typing failure is an intermediate attempt within the current
         // presentation, not a new exposure. Preserve the previous timestamp

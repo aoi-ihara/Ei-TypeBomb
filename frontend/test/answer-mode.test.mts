@@ -9,7 +9,15 @@ import {
 import {
     createInitialMemory,
     recordAnswerModeResult,
+    getRecognitionSpeedAdjustment,
+    parseAnswerModeStats,
+    CHOICE_SPEED_IGNORE_AFTER_MS,
 } from "../lib/playground/memory";
+import {
+    createActiveResponseClock,
+    readActiveResponseMs,
+    setResponseClockActive,
+} from "../lib/selection-timing";
 import { validateItems } from "../lib/auth/validator";
 import type { Item } from "../type";
 
@@ -105,4 +113,73 @@ test("unsupported and long answers can be saved and empty answers cannot", () =>
     assert.notEqual(validateItems([{ ...item, prompt: "問".repeat(1001) }]), null);
     assert.notEqual(validateItems([{ ...item, answer: "🍎".repeat(101) }]), null);
     assert.notEqual(validateItems([{ ...item, answer: "   " }]), null);
+});
+
+test("choice clock skips paused and background time while preserving active response time", () => {
+    const clock = createActiveResponseClock();
+    assert.equal(readActiveResponseMs(clock, 0), null);
+    setResponseClockActive(clock, true, 1_000);
+    assert.equal(readActiveResponseMs(clock, 3_000), 2_000);
+    setResponseClockActive(clock, false, 3_000);
+    // One hour away from the question should not affect recognition latency.
+    assert.equal(readActiveResponseMs(clock, 3_603_000), 2_000);
+    setResponseClockActive(clock, true, 3_603_000);
+    assert.equal(readActiveResponseMs(clock, 3_604_500), 3_500);
+    setResponseClockActive(clock, false, 3_604_500);
+    assert.equal(readActiveResponseMs(clock, 3_604_700), 3_500);
+});
+
+test("selection speed has a bounded, stronger bias and ignores idle responses", () => {
+    const now = new Date("2026-11-17T00:00:00Z");
+    const save = (previous: ReturnType<typeof createInitialMemory> | undefined, responseMs: number, success = true) =>
+        recordAnswerModeResult({
+            memory: previous,
+            userId: "u", roomId: "r", itemId: "a",
+            mode: "selection", success, responseMs, now,
+        });
+    const fast = save(undefined, 1_000);
+    assert.equal(fast.answerModeStats?.recognition.averageResponseMs, 1_000);
+    assert.equal(getRecognitionSpeedAdjustment(1_000), -0.30);
+    assert.ok(getRecognitionSpeedAdjustment(5_000) < 0);
+    assert.equal(getRecognitionSpeedAdjustment(8_000), 0);
+    assert.ok(getRecognitionSpeedAdjustment(15_000) > 0);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) > getRecognitionSpeedAdjustment(15_000));
+    assert.ok(getRecognitionSpeedAdjustment(29_000) <= 0.18);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) - getRecognitionSpeedAdjustment(1_000) > 0.46);
+    assert.equal(getRecognitionSpeedAdjustment(30_000), 0);
+    assert.equal(getRecognitionSpeedAdjustment(undefined), 0);
+
+    const slow = save(fast, 15_000);
+    assert.equal(slow.answerModeStats?.recognition.averageResponseMs, 5_900);
+    // Responses under 30 seconds still count, rather than being clamped at 10.
+    const considered = save(slow, 29_000);
+    assert.equal(considered.answerModeStats?.recognition.averageResponseMs, 13_985);
+    // A long idle answer adds no latency penalty and does not erase
+    // an earlier response-speed sample.
+    const idle = save(considered, CHOICE_SPEED_IGNORE_AFTER_MS + 3_600_000);
+    assert.equal(idle.answerModeStats?.recognition.averageResponseMs, 13_985);
+    const exactlyThirty = save(idle, CHOICE_SPEED_IGNORE_AFTER_MS);
+    assert.equal(exactlyThirty.answerModeStats?.recognition.averageResponseMs, 13_985);
+    const failed = save(exactlyThirty, 200, false);
+    assert.equal(failed.answerModeStats?.recognition.averageResponseMs, 13_985);
+    assert.equal(failed.reviewCount, 0);
+
+    const parsed = parseAnswerModeStats({
+        recognition: {
+            attempts: 1, correct: 1, correctStreak: 1,
+            lastAttemptAt: now.toISOString(),
+        },
+        recall: {
+            attempts: 0, correct: 0, correctStreak: 0,
+            lastAttemptAt: null,
+        },
+    });
+    assert.ok(parsed);
+    assert.equal(parsed.recognition.averageResponseMs, undefined);
+    assert.ok(parseAnswerModeStats({
+        recognition: {
+            ...parsed.recognition, averageResponseMs: "invalid",
+        },
+        recall: parsed.recall,
+    }));
 });
