@@ -420,6 +420,9 @@ export default function Client({
         const id = chooseNextUserItem(
             scheduler,
             memoryByItemRef.current,
+            Math.random,
+            Date.now(),
+            answerMode,
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -430,7 +433,7 @@ export default function Client({
             );
         }
         return items.find((item) => item.id === id) ?? null;
-    }, [items, room.id]);
+    }, [items, room.id, answerMode]);
 
     const resolveTurnWithItem = useCallback(() => {
         const item = chooseItemForTurn();
@@ -857,26 +860,26 @@ export default function Client({
     );
 
     const handleSelectionAnswer = useCallback(
-        (correct: boolean) => {
+        (correct: boolean, hadMistake: boolean) => {
             const item = currentItemRef.current;
-            if (!item || isPaused) return;
-            if (correct) {
-                const scheduler = schedulerRef.current;
-                if (scheduler) {
-                    recordRecognitionAnswer(scheduler, item.id);
-                    if (!memoryPersistenceDisabledRef.current) {
-                        saveSchedulerState(
-                            "playground",
-                            authenticatedUserIdRef.current ??
-                                GUEST_MEMORY_USER_ID,
-                            room.id,
-                            scheduler,
-                        );
-                    }
+            if (!item || isPaused || !correct) return;
+            const scheduler = schedulerRef.current;
+            if (scheduler) {
+                recordRecognitionAnswer(scheduler, item.id, hadMistake);
+                if (!memoryPersistenceDisabledRef.current) {
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ??
+                            GUEST_MEMORY_USER_ID,
+                        room.id,
+                        scheduler,
+                    );
                 }
-                recallProgressRef.current = null;
             }
-            updateAnswerModeMemory(item, "selection", correct);
+            recallProgressRef.current = null;
+            // One completed question is one recognition attempt. A correct
+            // answer reached after eliminating wrong options is not a clean hit.
+            updateAnswerModeMemory(item, "selection", !hadMistake);
         },
         [isPaused, room.id, updateAnswerModeMemory],
     );
