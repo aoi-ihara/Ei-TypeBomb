@@ -1190,7 +1190,7 @@ export default function Clinet({
                 }
                 currentInput={currentInput}
                 answerMode="input"
-                onSelectionAnswer={(correct, hadMistake) => {
+                onSelectionAnswer={(correct, hadMistake, responseMs) => {
                     if (!correct) return;
                     if (
                         !focusedItem ||
@@ -1212,6 +1212,7 @@ export default function Clinet({
                                 diagnostic,
                             ),
                         hadMistake,
+                        responseMs,
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);
