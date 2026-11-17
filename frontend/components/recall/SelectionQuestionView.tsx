@@ -1,15 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import { createChoiceOptions } from "@/lib/answer-mode";
+import {
+    createActiveResponseClock,
+    readActiveResponseMs,
+    setResponseClockActive,
+} from "@/lib/selection-timing";
 
 type Props = {
     item: Item;
     items: Item[];
     currentInput: string | null;
-    onAnswer: (correct: boolean, hadMistake: boolean) => void;
+    onAnswer: (
+        correct: boolean,
+        hadMistake: boolean,
+        responseMs: number | null,
+    ) => void;
     onSuccess: () => void;
     isPaused?: boolean;
 };
@@ -30,6 +39,22 @@ export default function SelectionQuestionView({
     );
     const [completed, setCompleted] = useState(false);
     const disabled = currentInput !== null || isPaused || completed;
+    const responseClock = useRef(createActiveResponseClock());
+
+    useEffect(() => {
+        const syncClock = () =>
+            setResponseClockActive(
+                responseClock.current,
+                !disabled && document.visibilityState === "visible",
+                performance.now(),
+            );
+        syncClock();
+        document.addEventListener("visibilitychange", syncClock);
+        return () => {
+            document.removeEventListener("visibilitychange", syncClock);
+            setResponseClockActive(responseClock.current, false, performance.now());
+        };
+    }, [disabled]);
 
     const choose = useCallback(
         (index: number) => {
@@ -42,7 +67,13 @@ export default function SelectionQuestionView({
                 return;
 
             const correct = options[index] === item.answer;
-            onAnswer(correct, correct && wrongOptions.size > 0);
+            // A first-try answer is timed. Wrong choices already require a
+            // retry, so their time must not exaggerate that failure.
+            const responseMs =
+                correct && wrongOptions.size === 0
+                    ? readActiveResponseMs(responseClock.current, performance.now())
+                    : null;
+            onAnswer(correct, correct && wrongOptions.size > 0, responseMs);
             if (correct) {
                 setCompleted(true);
                 onSuccess();
