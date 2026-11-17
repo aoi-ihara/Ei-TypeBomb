@@ -20,11 +20,12 @@ export const DEFAULT_EXPECTED_CHAR_MS = 220;
 export const CHOICE_SPEED_IGNORE_AFTER_MS = 30_000;
 const CHOICE_SPEED_NEUTRAL_MS = 8_000;
 const CHOICE_SPEED_FAST_MS = 2_000;
-const CHOICE_SPEED_FAST_BONUS = 0.15;
-const CHOICE_SPEED_SLOW_PENALTY = 0.08;
+const CHOICE_SPEED_FAST_BONUS = 0.30;
+const CHOICE_SPEED_SLOW_PENALTY = 0.18;
 const CHOICE_SPEED_EMA_ALPHA = 0.35;
 // Negative is a strong, quick first-try recognition (less priority); positive
-// is slower but still correct (slightly more priority). Accuracy remains primary.
+// is slower but still correct (slightly more priority). Neither speed alone
+// nor a single error determines whether a short-term retry is due.
 export const getRecognitionSpeedAdjustment = (averageResponseMs?: number): number => {
     if (
         typeof averageResponseMs !== "number" ||
