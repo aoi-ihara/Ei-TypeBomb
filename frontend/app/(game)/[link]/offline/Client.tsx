@@ -286,6 +286,8 @@ export default function Client({
                         room.id,
                         itemIds,
                         fallbackMemory,
+                        Date.now(),
+                        answerMode,
                     ) ?? createScheduler(itemIds);
             } else {
                 schedulerRef.current = createScheduler(itemIds);
@@ -352,6 +354,8 @@ export default function Client({
                         room.id,
                         itemIds,
                         saved,
+                        Date.now(),
+                        answerMode,
                     ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
@@ -377,6 +381,8 @@ export default function Client({
                     room.id,
                     itemIds,
                     loaded.memoryByItem,
+                    Date.now(),
+                    answerMode,
                 ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
@@ -387,7 +393,7 @@ export default function Client({
         return () => {
             cancelled = true;
         };
-    }, [room.id, items]);
+    }, [room.id, items, answerMode]);
 
     const setTrackedItem = useCallback((item: Item | null) => {
         currentItemRef.current = item;
