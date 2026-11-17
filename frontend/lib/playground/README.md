@@ -151,13 +151,15 @@ non-typable item was answered incorrectly before the correct choice.
 For **first-try correct** selection answers only, an optional exponential
 average of foreground response time is saved in the existing recognition
 JSON track (no migration). Time in the background tab or while paused does
-not count. Answers taking 10 seconds or longer saturate at the same neutral
-speed bonus; answers taking 30 seconds or longer are excluded entirely as
-possibly idle. Fast, clean choices can reduce future recognition priority by
-at most five percentage points relative to the error-rate score. Long waits
-cannot by themselves trigger a retry, hold, or change typed recall memory.
-The weight, thresholds, and EMA are uncalibrated heuristics; do not use
-response speed as a stand-alone measure of learning ability.
+not count. Answers taking **30 seconds or longer** are excluded entirely as
+possibly idle. Within the eligible interval, a roughly 2-second or faster
+answer reduces recognition priority by 0.15, 8 seconds is neutral, and a
+nearly 30-second answer raises priority by at most 0.08. The speed adjustment
+is deliberately bounded and subordinate to correctness, with a 0.35 EMA
+factor so recent clean answers matter without overreacting to one sample.
+Long waits alone never trigger a retry, hold, or change typed recall memory.
+The thresholds and weights are uncalibrated heuristics; do not use response
+speed as a stand-alone measure of learning ability.
 
 Typing uses the first stored kana reading when supported, then falls back to
 the original answer. If neither can be typed, the game switches
