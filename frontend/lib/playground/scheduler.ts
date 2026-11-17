@@ -115,12 +115,22 @@ const compareMemoryPriority = (
         if (!aStats || !bStats) return 0;
         // Recognition is weaker evidence than recall: sort only within
         // selection mode, without modifying free-recall stability.
-        const aErrorRate = (aStats.attempts - aStats.correct) / aStats.attempts;
-        const bErrorRate = (bStats.attempts - bStats.correct) / bStats.attempts;
-        // Correct responses carry a modest, bounded speed adjustment in
-        // either direction. Errors are still more significant than speed.
-        const aPriority = aErrorRate + getRecognitionSpeedAdjustment(aStats.averageResponseMs);
-        const bPriority = bErrorRate + getRecognitionSpeedAdjustment(bStats.averageResponseMs);
+        // One missed question is noisy evidence. Use one virtual successful
+        // attempt as a prior, while repeated misses still raise priority.
+        const aErrorRate =
+            (aStats.attempts - aStats.correct) / (aStats.attempts + 1);
+        const bErrorRate =
+            (bStats.attempts - bStats.correct) / (bStats.attempts + 1);
+        // Never let an old fast response mask a more recent wrong turn.
+        // Clean, rapid recognition lowers priority; slow recognition raises it.
+        const aSpeed = getRecognitionSpeedAdjustment(
+            aStats.correctStreak > 0 ? aStats.averageResponseMs : undefined,
+        );
+        const bSpeed = getRecognitionSpeedAdjustment(
+            bStats.correctStreak > 0 ? bStats.averageResponseMs : undefined,
+        );
+        const aPriority = aErrorRate + aSpeed;
+        const bPriority = bErrorRate + bSpeed;
         if (aPriority !== bPriority) return bPriority - aPriority;
         return Date.parse(aStats.lastAttemptAt ?? "") -
             Date.parse(bStats.lastAttemptAt ?? "");
