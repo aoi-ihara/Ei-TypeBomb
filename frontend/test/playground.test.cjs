@@ -1185,6 +1185,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             Date: Clock,
             items,
             room: { id: "r" },
+            answerMode: "input",
             isPaused: false,
             offlineVoiceReading: "none",
             soundEffects: false,
