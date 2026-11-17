@@ -134,6 +134,20 @@ Selection questions use up to four unique answers from the same room, with the
 correct answer and distractors shuffled for each presented turn. Duplicate
 answers are excluded to avoid ambiguous options.
 
+A completed selection turn records one recognition attempt: picking the right
+option on the first try is a success; reaching it after eliminating wrong
+options is a failed recognition. Incorrect turns use the **same** retry,
+confirmation, and escalating-hold scheduler as typing, including the shared
+two-question retry gap. In selection mode, previous recognition attempts
+prioritize low-accuracy items ahead of easier ones, and recognized items can
+participate in optional interleaved review. This ordering is a heuristic, not
+a calibrated memory model.
+
+Recognition never changes free-recall stability, difficulty, or review count.
+Input mode continues to prioritize independent recall, even when switching
+between modes. The online game also schedules a selection retry when a
+non-typable item was answered incorrectly before the correct choice.
+
 Typing uses the first stored kana reading when supported, then falls back to
 the original answer. If neither can be typed, the game switches
 that item to selection, even in input mode. If no item in a room is typable,
