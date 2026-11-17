@@ -294,6 +294,7 @@ export const recordOnlineAnswerModeResult = (
     success: boolean,
     onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
     hadMistake = false,
+    responseMs: number | null = null,
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const selectedBefore = session.scheduler.current?.itemId ?? null;
@@ -305,6 +306,7 @@ export const recordOnlineAnswerModeResult = (
         itemId,
         mode,
         success: success && !(mode === "selection" && hadMistake),
+        responseMs,
     });
     if (mode === "selection" && success) {
         reconcileOnlineSchedulerItem(session.scheduler, itemId);
