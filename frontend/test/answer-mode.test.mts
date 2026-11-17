@@ -139,13 +139,13 @@ test("selection speed has a bounded, stronger bias and ignores idle responses", 
         });
     const fast = save(undefined, 1_000);
     assert.equal(fast.answerModeStats?.recognition.averageResponseMs, 1_000);
-    assert.equal(getRecognitionSpeedAdjustment(1_000), -0.15);
+    assert.equal(getRecognitionSpeedAdjustment(1_000), -0.30);
     assert.ok(getRecognitionSpeedAdjustment(5_000) < 0);
     assert.equal(getRecognitionSpeedAdjustment(8_000), 0);
     assert.ok(getRecognitionSpeedAdjustment(15_000) > 0);
     assert.ok(getRecognitionSpeedAdjustment(29_000) > getRecognitionSpeedAdjustment(15_000));
-    assert.ok(getRecognitionSpeedAdjustment(29_000) <= 0.08);
-    assert.ok(getRecognitionSpeedAdjustment(29_000) - getRecognitionSpeedAdjustment(1_000) > 0.2);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) <= 0.18);
+    assert.ok(getRecognitionSpeedAdjustment(29_000) - getRecognitionSpeedAdjustment(1_000) > 0.46);
     assert.equal(getRecognitionSpeedAdjustment(30_000), 0);
     assert.equal(getRecognitionSpeedAdjustment(undefined), 0);
 
