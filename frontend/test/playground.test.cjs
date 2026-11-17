@@ -344,6 +344,49 @@ test("recognition answers advance the scheduler without becoming free recall", (
     assert.notEqual(next.itemId, selected.itemId);
 });
 
+test("recognition mistakes reuse typing's short retry and confirmation schedule", () => {
+    const stamp = now.getTime();
+    const state = scheduler.createScheduler(["a", "b", "c", "d", "e"], () => 0.5);
+    const first = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp);
+    assert.ok(first);
+    assert.equal(scheduler.recordRecognitionAnswer(state, first.itemId, true, stamp), true);
+    assert.equal(state.userAnswered[first.itemId], 1);
+    assert.equal(state.retries[first.itemId].reason, "failed_recall");
+    assert.equal(state.retries[first.itemId].earliestTurn, 3);
+
+    const filler = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp + 1_000);
+    assert.notEqual(filler.itemId, first.itemId);
+    scheduler.recordRecognitionAnswer(state, filler.itemId, false, stamp + 1_000);
+
+    const retry = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp + 2_000);
+    assert.equal(retry.itemId, first.itemId);
+    assert.equal(retry.reason, "retry");
+    scheduler.recordRecognitionAnswer(state, retry.itemId, false, stamp + 2_000);
+    assert.equal(state.retries[first.itemId].reason, "uncertain_recall");
+    assert.equal(state.retries[first.itemId].successCount, 1);
+});
+
+test("selection-only recognition history prioritizes difficult questions without free recall", () => {
+    const stamp = now.getTime();
+    const failed = memory.recordAnswerModeResult({
+        userId: "u", roomId: "r", itemId: "hard", mode: "selection",
+        success: false, now,
+    });
+    const correct = memory.recordAnswerModeResult({
+        userId: "u", roomId: "r", itemId: "easy", mode: "selection",
+        success: true, now,
+    });
+    const memories = { hard: failed, easy: correct };
+    const state = scheduler.createScheduler(["new", "easy", "hard"], () => 0.5);
+    const picked = scheduler.chooseNextUserItem(
+        state, memories, () => 0.5, stamp, "selection",
+    );
+    assert.equal(picked.itemId, "hard");
+    assert.equal(failed.reviewCount, 0);
+    assert.equal(correct.reviewCount, 0);
+    assert.equal(memory.getRetrievability(failed, stamp), 0);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
