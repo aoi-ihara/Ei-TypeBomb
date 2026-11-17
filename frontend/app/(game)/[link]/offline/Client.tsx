@@ -681,7 +681,12 @@ export default function Client({
     );
 
     const updateAnswerModeMemory = useCallback(
-        (item: Item, mode: "selection" | "input", success: boolean) => {
+        (
+            item: Item,
+            mode: "selection" | "input",
+            success: boolean,
+            responseMs: number | null = null,
+        ) => {
             const userId =
                 authenticatedUserIdRef.current ??
                 (memoryPersistenceDisabledRef.current
@@ -705,6 +710,7 @@ export default function Client({
                 itemId: item.id,
                 mode,
                 success,
+                responseMs,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -866,7 +872,7 @@ export default function Client({
     );
 
     const handleSelectionAnswer = useCallback(
-        (correct: boolean, hadMistake: boolean) => {
+        (correct: boolean, hadMistake: boolean, responseMs: number | null) => {
             const item = currentItemRef.current;
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
@@ -885,7 +891,7 @@ export default function Client({
             recallProgressRef.current = null;
             // One completed question is one recognition attempt. A correct
             // answer reached after eliminating wrong options is not a clean hit.
-            updateAnswerModeMemory(item, "selection", !hadMistake);
+            updateAnswerModeMemory(item, "selection", !hadMistake, responseMs);
         },
         [isPaused, room.id, updateAnswerModeMemory],
     );
