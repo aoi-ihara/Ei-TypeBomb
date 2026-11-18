@@ -67,6 +67,7 @@ export type SchedulerState = {
     lastBotItem: string | null;
     lastUserItem: string | null;
     initialPriorityApplied: boolean;
+    priorityAnswerMode?: SchedulerAnswerMode;
     current: Selection | null;
 };
 const shuffle = (ids: string[], random: () => number) => {
@@ -167,6 +168,7 @@ export const createScheduler = (
         lastBotItem: null,
         lastUserItem: null,
         initialPriorityApplied: false,
+        priorityAnswerMode: undefined,
         current: null,
     };
 };
@@ -403,11 +405,12 @@ export const chooseNextUserItem = (
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
 
-    if (!state.initialPriorityApplied) {
-        state.cycleQueue = state.cycleQueue.sort((a, b) =>
+    if (!state.initialPriorityApplied || state.priorityAnswerMode !== mode) {
+        state.cycleQueue.sort((a, b) =>
             compareMemoryPriority(a, b, memories, now, mode),
         );
         state.initialPriorityApplied = true;
+        state.priorityAnswerMode = mode;
     }
 
     const turn = state.turn + 1;
@@ -448,6 +451,7 @@ export const chooseNextUserItem = (
             state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
                 compareMemoryPriority(a, b, memories, now, mode),
             );
+            state.priorityAnswerMode = mode;
         }
         return state.cycleQueue.find(
             (id) => !state.retries[id] && !isOnHold(state, id),
@@ -821,7 +825,14 @@ export const loadSchedulerState = (
         }
 
         const cycleQueue = [...queue];
-        if (age >= PRIORITY_REFRESH_MS) {
+        const savedPriorityMode =
+            saved.priorityAnswerMode === "input" ||
+            saved.priorityAnswerMode === "selection"
+                ? saved.priorityAnswerMode
+                : undefined;
+        const needsPriorityRefresh =
+            age >= PRIORITY_REFRESH_MS || savedPriorityMode !== answerMode;
+        if (needsPriorityRefresh) {
             cycleQueue.sort((a, b) =>
                 compareMemoryPriority(a, b, memories, now, answerMode),
             );
@@ -848,9 +859,10 @@ export const loadSchedulerState = (
                     ? saved.lastUserItem
                     : null,
             initialPriorityApplied:
-                age >= PRIORITY_REFRESH_MS
-                    ? true
-                    : saved.initialPriorityApplied === true,
+                needsPriorityRefresh || saved.initialPriorityApplied === true,
+            priorityAnswerMode: needsPriorityRefresh
+                ? answerMode
+                : savedPriorityMode,
             current,
         };
     } catch {
