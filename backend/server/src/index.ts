@@ -614,6 +614,10 @@ const createRoomIfNeeded = async (
                                       ?.id ?? null),
                         assignedItemId:
                             currentRoom.items[selection.itemIndex]?.id ?? null,
+                        rejectedRecommendedItemId:
+                            selection.rejectedRecommendedIndex === undefined
+                                ? null
+                                : (currentRoom.items[selection.rejectedRecommendedIndex]?.id ?? null),
                         itemIndex: selection.itemIndex,
                         source: selection.source,
                         trigger: event.type,
