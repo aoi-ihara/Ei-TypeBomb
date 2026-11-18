@@ -476,6 +476,92 @@ test("the first cycle preserves its Fisher–Yates order when no recall history 
 });
 
 
+
+test("cached queue is re-ranked on answer mode change while keeping current and retries", () => {
+    const timestamp = now.getTime();
+    const ids = ["recall-due", "recognition-hard", "retry", "current"];
+    const memories = {
+        "recall-due": {
+            ...initial("recall-due"), stability: 0.1,
+            lastReviewedAt: new Date(timestamp - 86_400_000).toISOString(),
+        },
+        "recognition-hard": memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: "recognition-hard",
+            mode: "selection", success: false, now,
+        }),
+    };
+    const state = scheduler.createScheduler(ids, () => 0.5);
+    state.cycleQueue = ["recognition-hard", "recall-due"];
+    state.initialPriorityApplied = true;
+    state.priorityAnswerMode = "selection";
+    state.turn = 4;
+    state.retries.retry = {
+        itemId: "retry", earliestTurn: 6, latestTurn: 8,
+        reason: "failed_recall", successCount: 0,
+    };
+    state.current = {
+        itemId: "current", turn: 4, cycle: 1,
+        reason: "cycle", advancesCycle: true,
+    };
+    scheduler.saveSchedulerState("playground", "switch-user", "room", state, timestamp);
+
+    const inputState = scheduler.loadSchedulerState(
+        "playground", "switch-user", "room", ids, memories,
+        timestamp + 1_000, "input",
+    );
+    assert.deepEqual(Array.from(inputState.cycleQueue), [
+        "recall-due", "recognition-hard",
+    ]);
+    assert.equal(inputState.current.itemId, "current");
+    assert.deepEqual({ ...inputState.retries.retry }, { ...state.retries.retry });
+    assert.equal(inputState.priorityAnswerMode, "input");
+    scheduler.recordRecognitionAnswer(inputState, "current");
+    assert.equal(scheduler.chooseNextUserItem(
+        inputState, memories, () => 0.5, timestamp + 1_000, "input",
+    ).itemId, "recall-due");
+
+    const selectionState = scheduler.loadSchedulerState(
+        "playground", "switch-user", "room", ids, memories,
+        timestamp + 1_000, "selection",
+    );
+    assert.deepEqual(Array.from(selectionState.cycleQueue), [
+        "recognition-hard", "recall-due",
+    ]);
+    assert.equal(selectionState.priorityAnswerMode, "selection");
+    scheduler.recordRecognitionAnswer(selectionState, "current");
+    assert.equal(scheduler.chooseNextUserItem(
+        selectionState, memories, () => 0.5, timestamp + 1_000, "selection",
+    ).itemId, "recognition-hard");
+});
+
+test("old caches without an answer mode re-rank on restore", () => {
+    const timestamp = now.getTime();
+    const ids = ["recall-due", "recognition-hard"];
+    const state = scheduler.createScheduler(ids, () => 0.5);
+    state.cycleQueue = [...ids].reverse();
+    state.initialPriorityApplied = true;
+    delete state.priorityAnswerMode;
+    const memories = {
+        "recall-due": {
+            ...initial("recall-due"), stability: 0.1,
+            lastReviewedAt: new Date(timestamp - 86_400_000).toISOString(),
+        },
+        "recognition-hard": memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: "recognition-hard",
+            mode: "selection", success: false, now,
+        }),
+    };
+    scheduler.saveSchedulerState("playground", "legacy-mode", "room", state, timestamp);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "legacy-mode", "room", ids, memories,
+        timestamp + 1_000, "input",
+    );
+    assert.deepEqual(Array.from(restored.cycleQueue), [
+        "recall-due", "recognition-hard",
+    ]);
+    assert.equal(restored.priorityAnswerMode, "input");
+});
+
 test("reload continues the exact pending cycle instead of reshuffling", () => {
     const ids = ["a", "b", "c", "d"];
     const state = scheduler.createScheduler(ids, rng(18));
