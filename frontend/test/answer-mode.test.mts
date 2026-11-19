@@ -23,6 +23,10 @@ import {
 } from "../lib/selection-timing";
 import { validateItems } from "../lib/auth/validator";
 import { createScheduler, chooseNextUserItem } from "../lib/playground/scheduler";
+import {
+    canHandleSelectionSpace,
+    nextSelectionSpacePress,
+} from "../lib/selection-shortcut";
 import type { Item } from "../type";
 
 const item: Item = {
@@ -104,6 +108,35 @@ test("choice options are unique, include the answer, and use at most four room a
     assert.equal(options.length, 4);
     assert.ok(options.includes(item.answer));
     assert.equal(new Set(options).size, options.length);
+});
+
+test("double-Space hint works when an answer button has focus", () => {
+    // Previously all focused buttons were excluded, silently preventing the
+    // shortcut for users who clicked a choice before pressing Space.
+    assert.equal(canHandleSelectionSpace(false, true, true), true);
+    assert.equal(canHandleSelectionSpace(false, false, false), true);
+
+    const first = nextSelectionSpacePress(false, true);
+    assert.deepEqual(first, { armed: true, reveal: false });
+    const second = nextSelectionSpacePress(first.armed, true);
+    assert.deepEqual(second, { armed: false, reveal: true });
+
+    // Key repeat is filtered at the keyboard handler: a different key resets
+    // the shortcut, so two nonconsecutive presses do not reveal the answer.
+    assert.deepEqual(nextSelectionSpacePress(true, false), {
+        armed: false,
+        reveal: false,
+    });
+    assert.deepEqual(nextSelectionSpacePress(false, true), {
+        armed: true,
+        reveal: false,
+    });
+
+    // Buttons outside the question keep their native Space behavior.
+    assert.equal(canHandleSelectionSpace(false, true, false), false);
+    // Focused inputs/contenteditable never activate the shortcut.
+    assert.equal(canHandleSelectionSpace(true, true, true), false);
+    assert.equal(canHandleSelectionSpace(true, false, false), false);
 });
 
 test("manual selection reveal disables only distractors, even in a small room", () => {
