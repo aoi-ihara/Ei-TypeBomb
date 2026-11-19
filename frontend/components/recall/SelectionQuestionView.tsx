@@ -5,6 +5,10 @@ import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
 import {
+    canHandleSelectionSpace,
+    nextSelectionSpacePress,
+} from "@/lib/selection-shortcut";
+import {
     createActiveResponseClock,
     readActiveResponseMs,
     setResponseClockActive,
@@ -43,6 +47,8 @@ export default function SelectionQuestionView({
     const [completed, setCompleted] = useState(false);
     const [hintUsed, setHintUsed] = useState(false);
     const lastKeyWasSpaceRef = useRef(false);
+    const spaceKeyHandledRef = useRef(false);
+    const questionRef = useRef<HTMLDivElement>(null);
     const disabled = currentInput !== null || isPaused || completed;
     const responseClock = useRef(createActiveResponseClock());
 
@@ -67,6 +73,7 @@ export default function SelectionQuestionView({
 
     useEffect(() => {
         lastKeyWasSpaceRef.current = false;
+        spaceKeyHandledRef.current = false;
     }, [disabled]);
 
     const revealHint = useCallback(() => {
@@ -124,9 +131,13 @@ export default function SelectionQuestionView({
     );
 
     useEffect(() => {
+        const isSpaceKey = (event: KeyboardEvent) =>
+            event.code === "Space" ||
+            event.key === " " ||
+            event.key === "Spacebar";
+
         const onKeyDown = (event: KeyboardEvent) => {
             if (
-                event.repeat ||
                 event.isComposing ||
                 event.altKey ||
                 event.ctrlKey ||
@@ -135,30 +146,57 @@ export default function SelectionQuestionView({
                 return;
 
             const target = event.target;
-            if (
+            const isEditable =
                 target instanceof HTMLElement &&
                 (target.isContentEditable ||
-                    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-            ) {
+                    Boolean(target.closest("input, textarea, select")));
+            if (isEditable) {
                 lastKeyWasSpaceRef.current = false;
                 return;
             }
 
-            if (allowHint && (event.code === "Space" || event.key === " ")) {
-                // Keep native Space activation for a focused button.
-                if (target instanceof HTMLElement && target.closest("button")) {
+            if (allowHint && isSpaceKey(event)) {
+                const isInteractive =
+                    target instanceof Element &&
+                    Boolean(
+                        target.closest(
+                            "button, a, summary, [role='button'], [role='link']",
+                        ),
+                    );
+                const isInsideQuestion =
+                    target instanceof Node &&
+                    questionRef.current?.contains(target) === true;
+
+                if (
+                    disabled ||
+                    hintUsed ||
+                    !canHandleSelectionSpace(
+                        isEditable,
+                        isInteractive,
+                        isInsideQuestion,
+                    )
+                ) {
                     lastKeyWasSpaceRef.current = false;
                     return;
                 }
-                if (disabled || hintUsed) return;
+
+                // Prevent scrolling and the native click of a focused answer
+                // button. Its focus must not disable the double-Space hint.
                 event.preventDefault();
-                if (lastKeyWasSpaceRef.current) revealHint();
-                else lastKeyWasSpaceRef.current = true;
+                spaceKeyHandledRef.current = true;
+                if (event.repeat) return;
+
+                const { armed, reveal } = nextSelectionSpacePress(
+                    lastKeyWasSpaceRef.current,
+                    true,
+                );
+                lastKeyWasSpaceRef.current = armed;
+                if (reveal) revealHint();
                 return;
             }
 
             lastKeyWasSpaceRef.current = false;
-            if (!/^[1-4]$/.test(event.key)) return;
+            if (event.repeat || !/^[1-4]$/.test(event.key)) return;
 
             const index = Number(event.key) - 1;
             if (disabled || index >= options.length || wrongOptions.has(index))
@@ -167,8 +205,21 @@ export default function SelectionQuestionView({
             event.preventDefault();
             choose(index);
         };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
+        const onKeyUp = (event: KeyboardEvent) => {
+            // Some browsers activate a focused button on Space keyup, not
+            // keydown. Suppress that click for consumed hint shortcuts only.
+            if (isSpaceKey(event) && spaceKeyHandledRef.current) {
+                event.preventDefault();
+                spaceKeyHandledRef.current = false;
+            }
+        };
+
+        window.addEventListener("keydown", onKeyDown, true);
+        window.addEventListener("keyup", onKeyUp, true);
+        return () => {
+            window.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("keyup", onKeyUp, true);
+        };
     }, [
         choose,
         disabled,
@@ -180,7 +231,7 @@ export default function SelectionQuestionView({
     ]);
 
     return (
-        <div className="flex flex-col gap-4 items-center">
+        <div ref={questionRef} className="flex flex-col gap-4 items-center">
             <div className="flex flex-col items-center">
                 <div
                     className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
