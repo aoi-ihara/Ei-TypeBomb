@@ -469,7 +469,7 @@ export const getMasteryProgress = (
 
     for (const itemId of uniqueItemIds) {
         const memory = memoryByItem[itemId];
-        if (getRetrievability(memory, now) < threshold) continue;
+        if (!(getRetrievability(memory, now) >= threshold)) continue;
         masteredNow++;
         if (
             getRetrievability(memory, now + MASTERY_FORECAST_HORIZON_MS) >=

@@ -1893,6 +1893,15 @@ test("mastery progress counts current and 24-hour delayed retrievability", () =>
     assert.equal(afterThreeDays.masteredNow, 0);
     assert.equal(afterThreeDays.masteredAfter24Hours, 0);
 
+    const invalid = { ...initial("invalid"), lastReviewedAt: "not-a-date" };
+    const invalidProgress = memory.getMasteryProgress(
+        ["invalid"],
+        { invalid },
+        stamp,
+    );
+    assert.equal(invalidProgress.masteredNow, 0);
+    assert.equal(invalidProgress.masteredAfter24Hours, 0);
+
     const empty = memory.getMasteryProgress([], records, stamp);
     assert.equal(empty.total, 0);
     assert.equal(empty.masteredNow, 0);
