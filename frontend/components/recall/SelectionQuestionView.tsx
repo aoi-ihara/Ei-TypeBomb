@@ -48,6 +48,7 @@ export default function SelectionQuestionView({
     const [hintUsed, setHintUsed] = useState(false);
     const lastKeyWasSpaceRef = useRef(false);
     const spaceKeyHandledRef = useRef(false);
+    const spaceKeyDownRef = useRef(false);
     const questionRef = useRef<HTMLDivElement>(null);
     const disabled = currentInput !== null || isPaused || completed;
     const responseClock = useRef(createActiveResponseClock());
@@ -74,7 +75,8 @@ export default function SelectionQuestionView({
     useEffect(() => {
         lastKeyWasSpaceRef.current = false;
         spaceKeyHandledRef.current = false;
-    }, [disabled]);
+        spaceKeyDownRef.current = false;
+    }, [disabled, allowHint]);
 
     const revealHint = useCallback(() => {
         if (!allowHint || disabled || hintUsed) return;
@@ -142,8 +144,10 @@ export default function SelectionQuestionView({
                 event.altKey ||
                 event.ctrlKey ||
                 event.metaKey
-            )
+            ) {
+                lastKeyWasSpaceRef.current = false;
                 return;
+            }
 
             const target = event.target;
             const isEditable =
@@ -184,7 +188,10 @@ export default function SelectionQuestionView({
                 // button. Its focus must not disable the double-Space hint.
                 event.preventDefault();
                 spaceKeyHandledRef.current = true;
-                if (event.repeat) return;
+                // Count physical down/up cycles, rather than trusting repeat
+                // alone (synthetic/accessibility events may omit that flag).
+                if (event.repeat || spaceKeyDownRef.current) return;
+                spaceKeyDownRef.current = true;
 
                 const { armed, reveal } = nextSelectionSpacePress(
                     lastKeyWasSpaceRef.current,
@@ -208,15 +215,34 @@ export default function SelectionQuestionView({
         const onKeyUp = (event: KeyboardEvent) => {
             // Some browsers activate a focused button on Space keyup, not
             // keydown. Suppress that click for consumed hint shortcuts only.
-            if (isSpaceKey(event) && spaceKeyHandledRef.current) {
+            if (!isSpaceKey(event)) return;
+            spaceKeyDownRef.current = false;
+            if (spaceKeyHandledRef.current) {
                 event.preventDefault();
                 spaceKeyHandledRef.current = false;
             }
         };
 
+        const resetSequence = () => {
+            lastKeyWasSpaceRef.current = false;
+        };
+        const onBlur = () => {
+            resetSequence();
+            spaceKeyDownRef.current = false;
+            spaceKeyHandledRef.current = false;
+        };
+
+        // A click/focus change starts a new interaction. In particular, do not
+        // carry half a shortcut through an editor, a dialog, or another tab.
+        window.addEventListener("blur", onBlur);
+        window.addEventListener("focusin", resetSequence);
+        window.addEventListener("pointerdown", resetSequence, true);
         window.addEventListener("keydown", onKeyDown, true);
         window.addEventListener("keyup", onKeyUp, true);
         return () => {
+            window.removeEventListener("blur", onBlur);
+            window.removeEventListener("focusin", resetSequence);
+            window.removeEventListener("pointerdown", resetSequence, true);
             window.removeEventListener("keydown", onKeyDown, true);
             window.removeEventListener("keyup", onKeyUp, true);
         };
