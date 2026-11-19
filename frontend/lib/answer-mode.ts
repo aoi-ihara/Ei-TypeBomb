@@ -34,6 +34,15 @@ const shuffle = <T,>(values: T[], random: () => number): T[] => {
     return result;
 };
 
+// All distractors disappear in offline "I don't know" hint mode.
+export const getDistractorIndices = (
+    options: string[],
+    correctAnswer: string,
+): number[] =>
+    options.flatMap((option, index) =>
+        option === correctAnswer ? [] : [index],
+    );
+
 export const createChoiceOptions = (
     item: Item,
     items: Item[],
