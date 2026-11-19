@@ -146,7 +146,10 @@ export default function GameView({
 
         // Rewind an in-flight shake so consecutive errors each give feedback.
         const animations = element.getAnimations();
-        if (animations.length > 0 && element.classList.contains("wrong-answer")) {
+        if (
+            animations.length > 0 &&
+            element.classList.contains("wrong-answer")
+        ) {
             animations.forEach((animation) => {
                 animation.currentTime = 0;
             });
@@ -159,7 +162,10 @@ export default function GameView({
     }, []);
 
     const failureKey = `${currentItem?.id ?? ""}:${currentTurn}:${itemPresentationKey}`;
-    const previousFailureRef = useRef({ count: failureCount ?? 0, key: failureKey });
+    const previousFailureRef = useRef({
+        count: failureCount ?? 0,
+        key: failureKey,
+    });
     useEffect(() => {
         const previous = previousFailureRef.current;
         // Remote wrong-answer notifications should shake the whole question
@@ -168,9 +174,19 @@ export default function GameView({
             previous.key === failureKey &&
             (failureCount ?? 0) > previous.count &&
             currentTurnUser?.id !== userId
-        ) triggerFailAnimation();
-        previousFailureRef.current = { count: failureCount ?? 0, key: failureKey };
-    }, [failureCount, failureKey, currentTurnUser?.id, userId, triggerFailAnimation]);
+        )
+            triggerFailAnimation();
+        previousFailureRef.current = {
+            count: failureCount ?? 0,
+            key: failureKey,
+        };
+    }, [
+        failureCount,
+        failureKey,
+        currentTurnUser?.id,
+        userId,
+        triggerFailAnimation,
+    ]);
 
     // A newly presented word should not inherit the previous word's shake.
     useEffect(() => {
@@ -194,9 +210,11 @@ export default function GameView({
                     if (
                         event.target === event.currentTarget &&
                         event.animationName === "wrongAnswer"
-                    ) event.currentTarget.classList.remove("wrong-answer");
+                    )
+                        event.currentTarget.classList.remove("wrong-answer");
                 }}
             >
+                {masteryProgress}
                 <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
                     {soloMode ? null : currentTurnUser?.id === userId ? (
                         <div
@@ -218,12 +236,21 @@ export default function GameView({
                         item={currentItem}
                         items={getRoomItems(room)}
                         answerMode={answerMode}
-                        masteryProgress={masteryProgress}
                         allowSelectionHint={soloMode}
-                        onSelectionAnswer={(correct, hadMistake, responseMs, usedHint) => {
+                        onSelectionAnswer={(
+                            correct,
+                            hadMistake,
+                            responseMs,
+                            usedHint,
+                        ) => {
                             if (userId !== currentTurnUser?.id) return;
                             if (!correct) triggerFailAnimation();
-                            onSelectionAnswer?.(correct, hadMistake, responseMs, usedHint);
+                            onSelectionAnswer?.(
+                                correct,
+                                hadMistake,
+                                responseMs,
+                                usedHint,
+                            );
                         }}
                         remoteHintLength={remoteHintLength}
                         onHintChange={onHintChange}
@@ -238,7 +265,8 @@ export default function GameView({
                         currentInput={
                             result !== null
                                 ? ""
-                                : userId === currentTurnUser?.id && !isReconnecting
+                                : userId === currentTurnUser?.id &&
+                                    !isReconnecting
                                   ? null
                                   : currentInput
                         }
@@ -340,7 +368,7 @@ export default function GameView({
                 >
                     {room && !serverError ? (
                         isParticipant ? (
-                            <div className="flex flex-col animate-appear h-full">
+                            <div className="flex flex-col animate-appear w-full h-full">
                                 <div className="flex h-full">
                                     <div className="w-full flex flex-col items-center justify-center gap-4">
                                         {isStarted ? (

@@ -1180,7 +1180,9 @@ export default function Client({
                 soloMode
                 isPaused={isPaused}
                 answerMode={answerMode}
-                masteryProgress={<OfflineMasteryProgress progress={masteryProgress} />}
+                masteryProgress={
+                    <OfflineMasteryProgress progress={masteryProgress} />
+                }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
