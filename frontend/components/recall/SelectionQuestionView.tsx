@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
@@ -23,6 +23,7 @@ type Props = {
     onSuccess: () => void;
     isPaused?: boolean;
     allowHint?: boolean;
+    masteryProgress?: ReactNode;
 };
 
 export default function SelectionQuestionView({
@@ -33,6 +34,7 @@ export default function SelectionQuestionView({
     onSuccess,
     isPaused = false,
     allowHint = false,
+    masteryProgress,
 }: Readonly<Props>) {
     // The component is keyed by the presented turn, so options remain stable
     // even when online room snapshots rerender the surrounding game.
@@ -189,6 +191,7 @@ export default function SelectionQuestionView({
                     {item.prompt}
                 </div>
             </div>
+            {masteryProgress}
             <div className="max-w-lg w-full flex flex-col gap-4">
                 {options.map((option, index) => (
                     <Button

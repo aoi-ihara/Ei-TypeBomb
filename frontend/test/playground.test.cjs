@@ -1849,3 +1849,52 @@ test("first independent recall increases stability without crediting recent expo
     assert.equal(apply(original, observation({ elapsedSincePresentationMs: 100 })).stability,
         original.stability);
 });
+
+
+test("mastery progress counts current and 24-hour delayed retrievability", () => {
+    const stamp = Date.parse("2026-11-20T00:00:00Z");
+    const lastReviewedAt = new Date(stamp).toISOString();
+    const stable = {
+        ...initial("stable"),
+        stability: 10,
+        lastReviewedAt,
+    };
+    const fragile = {
+        ...initial("fragile"),
+        stability: 0.5,
+        lastReviewedAt,
+    };
+    const unknown = memory.createInitialMemory("u", "r", "unknown");
+    const records = { stable, fragile, unknown };
+
+    assert.equal(memory.MASTERY_RETRIEVABILITY_THRESHOLD, 0.8);
+    const first = memory.getMasteryProgress(
+        ["stable", "fragile", "unknown", "missing", "stable"],
+        records,
+        stamp,
+    );
+    assert.equal(first.total, 4);
+    assert.equal(first.masteredNow, 2);
+    assert.equal(first.masteredAfter24Hours, 1);
+
+    const dayLater = memory.getMasteryProgress(
+        ["stable", "fragile", "unknown", "missing"],
+        records,
+        stamp + 24 * 60 * 60 * 1000,
+    );
+    assert.equal(dayLater.masteredNow, 1);
+    assert.equal(dayLater.masteredAfter24Hours, 1);
+
+    const afterThreeDays = memory.getMasteryProgress(
+        ["stable", "fragile"],
+        records,
+        stamp + 3 * 24 * 60 * 60 * 1000,
+    );
+    assert.equal(afterThreeDays.masteredNow, 0);
+    assert.equal(afterThreeDays.masteredAfter24Hours, 0);
+
+    const empty = memory.getMasteryProgress([], records, stamp);
+    assert.equal(empty.total, 0);
+    assert.equal(empty.masteredNow, 0);
+    assert.equal(empty.masteredAfter24Hours, 0);
+});

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import TypedRecallView from "@/components/recall/TypedRecallView";
 import SelectionQuestionView from "@/components/recall/SelectionQuestionView";
 import {
@@ -29,6 +30,7 @@ type Props = {
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
     allowSelectionHint?: boolean;
+    masteryProgress?: ReactNode;
     items: Item[];
     answerMode: AnswerMode;
     onSelectionAnswer?: (
@@ -59,6 +61,7 @@ export default function ItemView(props: Readonly<Props>) {
                         onSuccess={props.onSuccess}
                         isPaused={props.isPaused}
                         allowHint={props.allowSelectionHint}
+                        masteryProgress={props.masteryProgress}
                     />
                 );
             }
@@ -81,6 +84,7 @@ export default function ItemView(props: Readonly<Props>) {
                     onRecallProgress={props.onRecallProgress}
                     onRecallComplete={props.onRecallComplete}
                     isPaused={props.isPaused}
+                    masteryProgress={props.masteryProgress}
                 />
             );
         }

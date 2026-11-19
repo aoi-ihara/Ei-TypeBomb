@@ -2,7 +2,7 @@ import {
     correctPrefixLength,
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
 import {
     createAutomaticHintEvidence,
@@ -61,6 +61,7 @@ function TypingAttempt({
     onRecallProgress,
     onRecallComplete,
     isPaused = false,
+    masteryProgress,
     remoteHintLength,
     onHintChange,
 }: {
@@ -79,6 +80,7 @@ function TypingAttempt({
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    masteryProgress?: ReactNode;
     remoteHintLength?: number;
     onHintChange?: (length: number) => void;
 }) {
@@ -632,6 +634,7 @@ function TypingAttempt({
                     {japanese}
                 </div>
             </div>
+            {masteryProgress}
             <div className="w-full flex justify-center">
                 <div
                     className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start"

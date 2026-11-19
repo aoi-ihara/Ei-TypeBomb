@@ -43,6 +43,7 @@ type Props = {
     explosionLayer?: ReactNode;
     resultExtraActions?: ReactNode;
     preGameContent?: ReactNode;
+    masteryProgress?: ReactNode;
     onSuccess: () => void;
     onChangeInput: (input: string, failed?: boolean) => void;
     onPlayAgain: () => void;
@@ -99,6 +100,7 @@ export default function GameView({
     explosionLayer,
     resultExtraActions,
     preGameContent,
+    masteryProgress,
     onSuccess,
     onChangeInput,
     onPlayAgain,
@@ -216,6 +218,7 @@ export default function GameView({
                         item={currentItem}
                         items={getRoomItems(room)}
                         answerMode={answerMode}
+                        masteryProgress={masteryProgress}
                         allowSelectionHint={soloMode}
                         onSelectionAnswer={(correct, hadMistake, responseMs, usedHint) => {
                             if (userId !== currentTurnUser?.id) return;
