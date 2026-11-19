@@ -5,6 +5,7 @@ import {
     getDistractorIndices,
     getAnswerModeOptions,
     getTypingAnswer,
+    getEffectiveAnswerMode,
     normalizeAnswerMode,
 } from "../lib/answer-mode";
 import {
@@ -66,6 +67,73 @@ test("typing uses only the first valid kana candidate, then the original answer"
     assert.equal(normalizeAnswerMode("input", true), "input");
     assert.equal(normalizeAnswerMode("auto", true), "selection");
     assert.equal(normalizeAnswerMode("input", false), "selection");
+});
+
+test("effective answer mode follows ItemView's per-item typing fallback", () => {
+    const selectionOnly = { ...item, answer: "東京都🍎" };
+    assert.equal(getTypingAnswer(selectionOnly), null);
+    assert.equal(getEffectiveAnswerMode(selectionOnly, "input"), "selection");
+    assert.equal(getEffectiveAnswerMode(item, "input"), "input");
+    assert.equal(getEffectiveAnswerMode(item, "selection"), "selection");
+});
+
+test("mixed input rooms include selection-only mastery in current and 24h counts", () => {
+    const timestamp = Date.parse("2026-11-20T00:00:00.000Z");
+    const typedItem = { ...item, id: "typed" };
+    const choiceItem = { ...item, id: "choice", answer: "東京都🍎" };
+    const typedMemory = {
+        ...createInitialMemory("u", "r", typedItem.id),
+        stability: 10,
+        reviewCount: 1,
+        lastReviewedAt: new Date(timestamp).toISOString(),
+    };
+    const choiceMemory = recordAnswerModeResult({
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: choiceItem.id,
+        mode: "selection",
+        success: true,
+        now: new Date(timestamp),
+    });
+    const modes = Object.fromEntries(
+        [typedItem, choiceItem].map((entry) => [
+            entry.id, getEffectiveAnswerMode(entry, "input"),
+        ]),
+    );
+    const result = getMasteryProgress(
+        [typedItem.id, choiceItem.id],
+        { typed: typedMemory, choice: choiceMemory },
+        timestamp,
+        0.8,
+        "input",
+        modes,
+    );
+    assert.deepEqual(result, {
+        total: 2,
+        masteredNow: 2,
+        masteredAfter24Hours: 1,
+    });
+    const dayLater = getMasteryProgress(
+        [typedItem.id, choiceItem.id],
+        { typed: typedMemory, choice: choiceMemory },
+        timestamp + 24 * 60 * 60 * 1000,
+        0.8,
+        "input",
+        modes,
+    );
+    assert.equal(dayLater.masteredNow, 1);
+    // The original room-wide mode would incorrectly drop the selection item.
+    assert.equal(
+        getMasteryProgress(
+            [typedItem.id, choiceItem.id],
+            { typed: typedMemory, choice: choiceMemory },
+            timestamp,
+            0.8,
+            "input",
+        ).masteredNow,
+        1,
+    );
 });
 
 test("typing failures preserve the previous exposure timestamp", () => {

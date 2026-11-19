@@ -536,16 +536,17 @@ export const getMasteryProgress = (
     now = Date.now(),
     threshold = MASTERY_RETRIEVABILITY_THRESHOLD,
     mode: AnswerModeResult = "input",
+    modeByItem?: Readonly<Record<string, AnswerModeResult>>,
 ): MasteryProgress => {
     const uniqueItemIds = new Set(itemIds);
-    const predict = mode === "selection"
-        ? getRecognitionRetrievability
-        : getRetrievability;
     let masteredNow = 0;
     let masteredAfter24Hours = 0;
 
     for (const itemId of uniqueItemIds) {
         const memory = memoryByItem[itemId];
+        const predict = (modeByItem?.[itemId] ?? mode) === "selection"
+            ? getRecognitionRetrievability
+            : getRetrievability;
         if (!(predict(memory, now) >= threshold)) continue;
         masteredNow++;
         if (

@@ -42,7 +42,7 @@ import {
 } from "@/lib/playground/memory-client";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
-import { getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
+import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
@@ -1021,6 +1021,12 @@ export default function Client({
                 masteryNow,
                 MASTERY_RETRIEVABILITY_THRESHOLD,
                 answerMode,
+                Object.fromEntries(
+                    items.map((item) => [
+                        item.id,
+                        getEffectiveAnswerMode(item, answerMode),
+                    ]),
+                ),
             ),
         [items, memoryByItem, masteryNow, answerMode],
     );
