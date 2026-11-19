@@ -28,12 +28,14 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    allowSelectionHint?: boolean;
     items: Item[];
     answerMode: AnswerMode;
     onSelectionAnswer?: (
         correct: boolean,
         hadMistake: boolean,
         responseMs: number | null,
+        usedHint?: boolean,
     ) => void;
 };
 
@@ -49,11 +51,14 @@ export default function ItemView(props: Readonly<Props>) {
                         item={props.item}
                         items={props.items}
                         currentInput={props.currentInput}
-                        onAnswer={(correct, hadMistake, responseMs) =>
-                            props.onSelectionAnswer?.(correct, hadMistake, responseMs)
+                        onAnswer={(correct, hadMistake, responseMs, usedHint) =>
+                            props.onSelectionAnswer?.(
+                                correct, hadMistake, responseMs, usedHint,
+                            )
                         }
                         onSuccess={props.onSuccess}
                         isPaused={props.isPaused}
+                        allowHint={props.allowSelectionHint}
                     />
                 );
             }

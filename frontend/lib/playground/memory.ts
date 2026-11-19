@@ -23,6 +23,9 @@ const CHOICE_SPEED_FAST_MS = 2_000;
 const CHOICE_SPEED_FAST_BONUS = 0.30;
 const CHOICE_SPEED_SLOW_PENALTY = 0.18;
 const CHOICE_SPEED_EMA_ALPHA = 0.35;
+// A manual "I don't know" reveal is slightly stronger evidence of difficulty
+// than a wrong choice; the bonus affects selection ordering only.
+export const CHOICE_UNKNOWN_FAILURE_WEIGHT = 1.3;
 // Negative is a strong, quick first-try recognition (less priority); positive
 // is slower but still correct (slightly more priority). Neither speed alone
 // nor a single error determines whether a short-term retry is due.
@@ -115,7 +118,18 @@ export type AnswerModeTrack = {
     // Exponential average of active first-choice response times (only clean
     // correct turns). Optional for old saved recognition history.
     averageResponseMs?: number;
+    // Number of assisted selection turns, already counted among failures.
+    unknownCount?: number;
 };
+export const getRecognitionFailureRate = (track: AnswerModeTrack): number => {
+    const failures = Math.max(0, track.attempts - track.correct);
+    const unknown = Math.min(failures, Math.max(0, track.unknownCount ?? 0));
+    return (
+        (failures + (CHOICE_UNKNOWN_FAILURE_WEIGHT - 1) * unknown) /
+        (track.attempts + 1)
+    );
+};
+
 export type AnswerModeStats = {
     recognition: AnswerModeTrack;
     recall: AnswerModeTrack;
@@ -253,6 +267,12 @@ export const parseAnswerModeStats = (
             candidate.averageResponseMs < CHOICE_SPEED_IGNORE_AFTER_MS
                 ? { averageResponseMs: candidate.averageResponseMs }
                 : {}),
+            ...(Number.isSafeInteger(candidate.unknownCount) &&
+            (candidate.unknownCount ?? -1) >= 0 &&
+            (candidate.unknownCount ?? 0) <=
+                (candidate.attempts ?? 0) - (candidate.correct ?? 0)
+                ? { unknownCount: candidate.unknownCount }
+                : {}),
         };
     };
     const recognition = parseTrack(source.recognition);
@@ -312,6 +332,7 @@ const updateAnswerModeStats = (
     success: boolean,
     now: Date,
     responseMs: number | null = null,
+    usedHint = false,
 ): AnswerModeStats => {
     const emptyTrack = (): AnswerModeTrack => ({
         attempts: 0,
@@ -331,6 +352,9 @@ const updateAnswerModeStats = (
         correct: previous.correct + Number(success),
         correctStreak: success ? previous.correctStreak + 1 : 0,
         lastAttemptAt: now.toISOString(),
+        ...(mode === "selection" && !success && usedHint
+            ? { unknownCount: (previous.unknownCount ?? 0) + 1 }
+            : {}),
     };
     if (
         mode === "selection" &&
@@ -370,6 +394,7 @@ export const recordAnswerModeResult = ({
     success,
     now = new Date(),
     responseMs = null,
+    usedHint = false,
 }: {
     memory: ItemMemoryState | undefined;
     userId: string;
@@ -379,6 +404,7 @@ export const recordAnswerModeResult = ({
     success: boolean;
     now?: Date;
     responseMs?: number | null;
+    usedHint?: boolean;
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const iso = now.toISOString();
@@ -393,6 +419,7 @@ export const recordAnswerModeResult = ({
             success,
             now,
             responseMs,
+            usedHint,
         ),
         // A typing failure is an intermediate attempt within the current
         // presentation, not a new exposure. Preserve the previous timestamp

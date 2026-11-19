@@ -1,6 +1,7 @@
 import {
     getRetrievability,
     getRecognitionSpeedAdjustment,
+    getRecognitionFailureRate,
     type AttemptEvaluation,
     type ItemMemoryState,
     type SchedulerReason,
@@ -117,11 +118,10 @@ const compareMemoryPriority = (
         // Recognition is weaker evidence than recall: sort only within
         // selection mode, without modifying free-recall stability.
         // One missed question is noisy evidence. Use one virtual successful
-        // attempt as a prior, while repeated misses still raise priority.
-        const aErrorRate =
-            (aStats.attempts - aStats.correct) / (aStats.attempts + 1);
-        const bErrorRate =
-            (bStats.attempts - bStats.correct) / (bStats.attempts + 1);
+        // attempt as a prior. A revealed ("unknown") answer carries a
+        // modest additional miss weight without inflating attempt counts.
+        const aErrorRate = getRecognitionFailureRate(aStats);
+        const bErrorRate = getRecognitionFailureRate(bStats);
         // Never let an old fast response mask a more recent wrong turn.
         // Clean, rapid recognition lowers priority; slow recognition raises it.
         const aSpeed = getRecognitionSpeedAdjustment(

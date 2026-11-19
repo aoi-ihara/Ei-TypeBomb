@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
     createChoiceOptions,
+    getDistractorIndices,
     getAnswerModeOptions,
     getTypingAnswer,
     normalizeAnswerMode,
@@ -10,6 +11,8 @@ import {
     createInitialMemory,
     recordAnswerModeResult,
     getRecognitionSpeedAdjustment,
+    getRecognitionFailureRate,
+    CHOICE_UNKNOWN_FAILURE_WEIGHT,
     parseAnswerModeStats,
     CHOICE_SPEED_IGNORE_AFTER_MS,
 } from "../lib/playground/memory";
@@ -19,6 +22,7 @@ import {
     setResponseClockActive,
 } from "../lib/selection-timing";
 import { validateItems } from "../lib/auth/validator";
+import { createScheduler, chooseNextUserItem } from "../lib/playground/scheduler";
 import type { Item } from "../type";
 
 const item: Item = {
@@ -100,6 +104,74 @@ test("choice options are unique, include the answer, and use at most four room a
     assert.equal(options.length, 4);
     assert.ok(options.includes(item.answer));
     assert.equal(new Set(options).size, options.length);
+});
+
+test("manual selection reveal disables only distractors, even in a small room", () => {
+    assert.deepEqual(getDistractorIndices(["pear", "apple", "banana"], "apple"), [0, 2]);
+    assert.deepEqual(getDistractorIndices(["apple"], "apple"), []);
+});
+
+test("unknown selection is recorded once and receives more review priority than a miss", () => {
+    const now = new Date("2026-11-19T12:00:00Z");
+    const memory = (id: string, usedHint: boolean) =>
+        recordAnswerModeResult({
+            memory: undefined,
+            userId: "user",
+            roomId: "room",
+            itemId: id,
+            mode: "selection",
+            success: false,
+            usedHint,
+            now,
+        });
+    const missed = memory("missed", false);
+    const revealed = memory("revealed", true);
+    const wrongStats = missed.answerModeStats!.recognition;
+    const unknownStats = revealed.answerModeStats!.recognition;
+    assert.equal(CHOICE_UNKNOWN_FAILURE_WEIGHT, 1.3);
+    assert.equal(wrongStats.attempts, 1);
+    assert.equal(unknownStats.attempts, 1);
+    assert.equal(unknownStats.correct, 0);
+    assert.equal(unknownStats.unknownCount, 1);
+    assert.equal(wrongStats.unknownCount, undefined);
+    assert.ok(
+        getRecognitionFailureRate(unknownStats) >
+        getRecognitionFailureRate(wrongStats),
+    );
+    assert.equal(getRecognitionFailureRate(wrongStats), 0.5);
+    assert.ok(Math.abs(getRecognitionFailureRate(unknownStats) - 0.65) < 1e-10);
+    assert.equal(
+        parseAnswerModeStats(revealed.answerModeStats)?.recognition.unknownCount,
+        1,
+    );
+
+    const scheduler = createScheduler(["missed", "revealed"], () => 0.99);
+    const chosen = chooseNextUserItem(
+        scheduler,
+        { missed, revealed },
+        () => 0.99,
+        now.getTime(),
+        "selection",
+    );
+    assert.equal(chosen?.itemId, "revealed");
+
+    // Old records remain valid and a clean success does not add unknowns.
+    const followUp = recordAnswerModeResult({
+        memory: revealed,
+        userId: "user",
+        roomId: "room",
+        itemId: "revealed",
+        mode: "selection",
+        success: true,
+        now: new Date(now.getTime() + 60_000),
+    });
+    assert.equal(followUp.answerModeStats?.recognition.unknownCount, 1);
+    assert.equal(followUp.answerModeStats?.recognition.attempts, 2);
+    assert.equal(followUp.answerModeStats?.recognition.correct, 1);
+    assert.equal(
+        parseAnswerModeStats(missed.answerModeStats)?.recognition.unknownCount,
+        undefined,
+    );
 });
 
 test("unsupported and long answers can be saved and empty answers cannot", () => {

@@ -686,6 +686,7 @@ export default function Client({
             mode: "selection" | "input",
             success: boolean,
             responseMs: number | null = null,
+            usedHint = false,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -711,6 +712,7 @@ export default function Client({
                 mode,
                 success,
                 responseMs,
+                usedHint,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -872,7 +874,12 @@ export default function Client({
     );
 
     const handleSelectionAnswer = useCallback(
-        (correct: boolean, hadMistake: boolean, responseMs: number | null) => {
+        (
+            correct: boolean,
+            hadMistake: boolean,
+            responseMs: number | null,
+            usedHint = false,
+        ) => {
             const item = currentItemRef.current;
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
@@ -881,8 +888,7 @@ export default function Client({
                 if (!memoryPersistenceDisabledRef.current) {
                     saveSchedulerState(
                         "playground",
-                        authenticatedUserIdRef.current ??
-                            GUEST_MEMORY_USER_ID,
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
                         room.id,
                         scheduler,
                     );
@@ -891,7 +897,13 @@ export default function Client({
             recallProgressRef.current = null;
             // One completed question is one recognition attempt. A correct
             // answer reached after eliminating wrong options is not a clean hit.
-            updateAnswerModeMemory(item, "selection", !hadMistake, responseMs);
+            updateAnswerModeMemory(
+                item,
+                "selection",
+                !hadMistake,
+                responseMs,
+                usedHint,
+            );
         },
         [isPaused, room.id, updateAnswerModeMemory],
     );

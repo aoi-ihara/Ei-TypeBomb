@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
-import { createChoiceOptions } from "@/lib/answer-mode";
+import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
 import {
     createActiveResponseClock,
     readActiveResponseMs,
@@ -18,9 +18,11 @@ type Props = {
         correct: boolean,
         hadMistake: boolean,
         responseMs: number | null,
+        usedHint: boolean,
     ) => void;
     onSuccess: () => void;
     isPaused?: boolean;
+    allowHint?: boolean;
 };
 
 export default function SelectionQuestionView({
@@ -30,6 +32,7 @@ export default function SelectionQuestionView({
     onAnswer,
     onSuccess,
     isPaused = false,
+    allowHint = false,
 }: Readonly<Props>) {
     // The component is keyed by the presented turn, so options remain stable
     // even when online room snapshots rerender the surrounding game.
@@ -38,6 +41,8 @@ export default function SelectionQuestionView({
         () => new Set(),
     );
     const [completed, setCompleted] = useState(false);
+    const [hintUsed, setHintUsed] = useState(false);
+    const lastKeyWasSpaceRef = useRef(false);
     const disabled = currentInput !== null || isPaused || completed;
     const responseClock = useRef(createActiveResponseClock());
 
@@ -52,9 +57,30 @@ export default function SelectionQuestionView({
         document.addEventListener("visibilitychange", syncClock);
         return () => {
             document.removeEventListener("visibilitychange", syncClock);
-            setResponseClockActive(responseClock.current, false, performance.now());
+            setResponseClockActive(
+                responseClock.current,
+                false,
+                performance.now(),
+            );
         };
     }, [disabled]);
+
+    useEffect(() => {
+        lastKeyWasSpaceRef.current = false;
+    }, [disabled]);
+
+    const revealHint = useCallback(() => {
+        if (!allowHint || disabled || hintUsed) return;
+        // Preserve wrong choices while disabling every remaining distractor.
+        setWrongOptions((previous) => {
+            const next = new Set(previous);
+            for (const index of getDistractorIndices(options, item.answer))
+                next.add(index);
+            return next;
+        });
+        setHintUsed(true);
+        lastKeyWasSpaceRef.current = false;
+    }, [allowHint, disabled, hintUsed, options, item.answer]);
 
     const choose = useCallback(
         (index: number) => {
@@ -67,13 +93,17 @@ export default function SelectionQuestionView({
                 return;
 
             const correct = options[index] === item.answer;
-            // A first-try answer is timed. Wrong choices already require a
-            // retry, so their time must not exaggerate that failure.
+            // Revealed answers are not independent recognition, even if the
+            // learner clicked no wrong option before requesting the hint.
+            const assisted = hintUsed || wrongOptions.size > 0;
             const responseMs =
-                correct && wrongOptions.size === 0
-                    ? readActiveResponseMs(responseClock.current, performance.now())
+                correct && !assisted
+                    ? readActiveResponseMs(
+                          responseClock.current,
+                          performance.now(),
+                      )
                     : null;
-            onAnswer(correct, correct && wrongOptions.size > 0, responseMs);
+            onAnswer(correct, correct && assisted, responseMs, hintUsed);
             if (correct) {
                 setCompleted(true);
                 onSuccess();
@@ -82,7 +112,15 @@ export default function SelectionQuestionView({
                 setWrongOptions((previous) => new Set(previous).add(index));
             }
         },
-        [disabled, options, wrongOptions, item.answer, onAnswer, onSuccess],
+        [
+            disabled,
+            options,
+            wrongOptions,
+            hintUsed,
+            item.answer,
+            onAnswer,
+            onSuccess,
+        ],
     );
 
     useEffect(() => {
@@ -92,8 +130,7 @@ export default function SelectionQuestionView({
                 event.isComposing ||
                 event.altKey ||
                 event.ctrlKey ||
-                event.metaKey ||
-                !/^[1-4]$/.test(event.key)
+                event.metaKey
             )
                 return;
 
@@ -102,8 +139,26 @@ export default function SelectionQuestionView({
                 target instanceof HTMLElement &&
                 (target.isContentEditable ||
                     ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-            )
+            ) {
+                lastKeyWasSpaceRef.current = false;
                 return;
+            }
+
+            if (allowHint && (event.code === "Space" || event.key === " ")) {
+                // Keep native Space activation for a focused button.
+                if (target instanceof HTMLElement && target.closest("button")) {
+                    lastKeyWasSpaceRef.current = false;
+                    return;
+                }
+                if (disabled || hintUsed) return;
+                event.preventDefault();
+                if (lastKeyWasSpaceRef.current) revealHint();
+                else lastKeyWasSpaceRef.current = true;
+                return;
+            }
+
+            lastKeyWasSpaceRef.current = false;
+            if (!/^[1-4]$/.test(event.key)) return;
 
             const index = Number(event.key) - 1;
             if (disabled || index >= options.length || wrongOptions.has(index))
@@ -114,7 +169,15 @@ export default function SelectionQuestionView({
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [choose, disabled, options.length, wrongOptions]);
+    }, [
+        choose,
+        disabled,
+        options.length,
+        wrongOptions,
+        allowHint,
+        hintUsed,
+        revealHint,
+    ]);
 
     return (
         <div className="flex flex-col gap-4 items-center">
@@ -143,6 +206,16 @@ export default function SelectionQuestionView({
                         </span>
                     </Button>
                 ))}
+                {allowHint && (
+                    <Button
+                        type="button"
+                        className="w-full"
+                        disabled={disabled || hintUsed}
+                        onClick={revealHint}
+                    >
+                        分からない
+                    </Button>
+                )}
             </div>
         </div>
     );
