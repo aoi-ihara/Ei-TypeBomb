@@ -57,7 +57,11 @@ export default function SelectionQuestionView({
         document.addEventListener("visibilitychange", syncClock);
         return () => {
             document.removeEventListener("visibilitychange", syncClock);
-            setResponseClockActive(responseClock.current, false, performance.now());
+            setResponseClockActive(
+                responseClock.current,
+                false,
+                performance.now(),
+            );
         };
     }, [disabled]);
 
@@ -94,7 +98,10 @@ export default function SelectionQuestionView({
             const assisted = hintUsed || wrongOptions.size > 0;
             const responseMs =
                 correct && !assisted
-                    ? readActiveResponseMs(responseClock.current, performance.now())
+                    ? readActiveResponseMs(
+                          responseClock.current,
+                          performance.now(),
+                      )
                     : null;
             onAnswer(correct, correct && assisted, responseMs, hintUsed);
             if (correct) {
@@ -105,7 +112,15 @@ export default function SelectionQuestionView({
                 setWrongOptions((previous) => new Set(previous).add(index));
             }
         },
-        [disabled, options, wrongOptions, hintUsed, item.answer, onAnswer, onSuccess],
+        [
+            disabled,
+            options,
+            wrongOptions,
+            hintUsed,
+            item.answer,
+            onAnswer,
+            onSuccess,
+        ],
     );
 
     useEffect(() => {
@@ -154,7 +169,15 @@ export default function SelectionQuestionView({
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [choose, disabled, options.length, wrongOptions, allowHint, hintUsed, revealHint]);
+    }, [
+        choose,
+        disabled,
+        options.length,
+        wrongOptions,
+        allowHint,
+        hintUsed,
+        revealHint,
+    ]);
 
     return (
         <div className="flex flex-col gap-4 items-center">
@@ -186,8 +209,6 @@ export default function SelectionQuestionView({
                 {allowHint && (
                     <Button
                         type="button"
-                        variant="default"
-                        padding="middle"
                         className="w-full"
                         disabled={disabled || hintUsed}
                         onClick={revealHint}

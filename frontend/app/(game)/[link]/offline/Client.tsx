@@ -888,8 +888,7 @@ export default function Client({
                 if (!memoryPersistenceDisabledRef.current) {
                     saveSchedulerState(
                         "playground",
-                        authenticatedUserIdRef.current ??
-                            GUEST_MEMORY_USER_ID,
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
                         room.id,
                         scheduler,
                     );
@@ -899,7 +898,11 @@ export default function Client({
             // One completed question is one recognition attempt. A correct
             // answer reached after eliminating wrong options is not a clean hit.
             updateAnswerModeMemory(
-                item, "selection", !hadMistake, responseMs, usedHint,
+                item,
+                "selection",
+                !hadMistake,
+                responseMs,
+                usedHint,
             );
         },
         [isPaused, room.id, updateAnswerModeMemory],
