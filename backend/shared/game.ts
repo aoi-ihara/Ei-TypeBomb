@@ -38,6 +38,7 @@ export type ItemSelection = {
     itemIndex: number;
     previousIndex?: number;
     source: "recommendation" | "random";
+    rejectedRecommendedIndex?: number;
 };
 
 export type GameContext = {
@@ -108,6 +109,7 @@ export function applyGameEvent(
     const next: GameState = {
         ...state,
         revision: state.revision ?? 0,
+        recentItemIndices: state.recentItemIndices?.slice(),
         room: {
             ...state.room,
             users: state.room.users.map((user) => ({ ...user })),
@@ -177,39 +179,66 @@ export function applyGameEvent(
         const preferred = playerId
             ? context.chooseItemIndex?.(playerId, room, previousIndex)
             : undefined;
-        const reportSelection = (
-            itemIndex: number,
-            source: ItemSelection["source"],
-        ) => {
-            if (playerId)
-                context.onItemSelected?.(
-                    { playerId, itemIndex, previousIndex, source },
-                    room,
-                );
-            return itemIndex;
-        };
+        const count = room.items.length;
+        const indices = Array.from({ length: count }, (_, i) => i);
+        // Bound the room-wide exclusion window to the vocabulary size. With
+        // tiny rooms, a previously seen word is allowed once no alternative
+        // remains, so gameplay and spaced repetition never stall.
+        const historyLimit = Math.min(8, Math.max(1, Math.floor(count / 3)));
+        const recent = new Set(
+            (next.recentItemIndices ?? []).slice(-historyLimit),
+        );
+        const active = new Set(
+            (room.bombs ?? [])
+                .map((bomb) => bomb.wordIndex)
+                .filter((i): i is number => i !== undefined),
+        );
+        // Prefer words outside the recent window AND other active bombs.
+        // Relax the window first, then active-bomb exclusion when the room is
+        // too small. Avoid the previous word whenever at least two exist.
+        const fresh = indices.filter(
+            (i) => !recent.has(i) && !active.has(i) && i !== previousIndex,
+        );
+        const inactive = indices.filter(
+            (i) => !active.has(i) && i !== previousIndex,
+        );
+        const different = indices.filter((i) => i !== previousIndex);
+        const pool = fresh.length
+            ? fresh
+            : inactive.length
+              ? inactive
+              : different.length
+                ? different
+                : indices;
 
-        if (
+        const validPreferred =
             typeof preferred === "number" &&
             Number.isInteger(preferred) &&
             preferred >= 0 &&
-            preferred < room.items.length
-        ) return reportSelection(preferred, "recommendation");
-
-        // A missing/stale client recommendation should not immediately
-        // repeat the same word when the bomb passes to another player.
-        const count = room.items.length;
-        if (
-            count <= 1 ||
-            previousIndex === undefined ||
-            previousIndex < 0 ||
-            previousIndex >= count
-        ) return reportSelection(index(count), "random");
-        const choice = index(count - 1);
-        return reportSelection(
-            choice >= previousIndex ? choice + 1 : choice,
-            "random",
-        );
+            preferred < count;
+        const acceptedPreferred = validPreferred && pool.includes(preferred);
+        const choice = acceptedPreferred ? preferred : pool[index(pool.length)];
+        // This history is part of GameState, not Room: spectators do not need
+        // it, but replicated checkpoints must preserve it across failover.
+        next.recentItemIndices = [
+            ...(next.recentItemIndices ?? []),
+            choice,
+        ].slice(-historyLimit);
+        if (playerId) {
+            context.onItemSelected?.(
+                {
+                    playerId,
+                    itemIndex: choice,
+                    previousIndex,
+                    source: acceptedPreferred ? "recommendation" : "random",
+                    ...(validPreferred && !acceptedPreferred
+                        ? { rejectedRecommendedIndex: preferred }
+                        : {}),
+                },
+                room,
+            );
+        }
+        return choice;
     };
     const bombAt = () => {
         const duration = room.gameDuration;
@@ -241,6 +270,7 @@ export function applyGameEvent(
             typingFocusInput: undefined,
         });
         next.wordAt = next.bombAt = undefined;
+        next.recentItemIndices = undefined;
         if (context.rules.clearInputOnStop) clearInput();
     };
     const activeBomb = (playerId: string) =>
@@ -301,6 +331,7 @@ export function applyGameEvent(
             room.gameId = event.gameId;
             room.isStart = true;
             room.losers = [];
+            next.recentItemIndices = [];
             const count =
                 room.bombCount == null
                     ? bombsForPlayers(room.users.length)

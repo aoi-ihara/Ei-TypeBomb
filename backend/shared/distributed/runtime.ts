@@ -237,6 +237,10 @@ export class DistributedRoom {
                             ? null
                             : (room.items[selection.previousIndex]?.id ?? null),
                     assignedItemId: room.items[selection.itemIndex]?.id ?? null,
+                    rejectedRecommendedItemId:
+                        selection.rejectedRecommendedIndex === undefined
+                            ? null
+                            : (room.items[selection.rejectedRecommendedIndex]?.id ?? null),
                     itemIndex: selection.itemIndex,
                     source: selection.source,
                     trigger: event.type,

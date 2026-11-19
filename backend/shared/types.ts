@@ -43,6 +43,8 @@ export type Room = {
 // Serializable deadlines in epoch milliseconds. Transport IDs are opaque player IDs.
 export type GameState = {
     room: Room;
+    /** Recent room-wide question indices; authoritative and persisted across failover. */
+    recentItemIndices?: number[];
     wordAt?: number;
     bombAt?: number;
     revision: number;

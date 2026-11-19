@@ -344,6 +344,117 @@ test("recognition answers advance the scheduler without becoming free recall", (
     assert.notEqual(next.itemId, selected.itemId);
 });
 
+test("recognition mistakes reuse typing's short retry and confirmation schedule", () => {
+    const stamp = now.getTime();
+    const state = scheduler.createScheduler(["a", "b", "c", "d", "e"], () => 0.5);
+    const first = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp);
+    assert.ok(first);
+    assert.equal(scheduler.recordRecognitionAnswer(state, first.itemId, true, stamp), true);
+    assert.equal(state.userAnswered[first.itemId], 1);
+    assert.equal(state.retries[first.itemId].reason, "failed_recall");
+    assert.equal(state.retries[first.itemId].earliestTurn, 3);
+
+    const filler = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp + 1_000);
+    assert.notEqual(filler.itemId, first.itemId);
+    scheduler.recordRecognitionAnswer(state, filler.itemId, false, stamp + 1_000);
+
+    const retry = scheduler.chooseNextUserItem(state, {}, () => 0.5, stamp + 2_000);
+    assert.equal(retry.itemId, first.itemId);
+    assert.equal(retry.reason, "retry");
+    scheduler.recordRecognitionAnswer(state, retry.itemId, false, stamp + 2_000);
+    assert.equal(state.retries[first.itemId].reason, "uncertain_recall");
+    assert.equal(state.retries[first.itemId].successCount, 1);
+});
+
+test("selection-only recognition history prioritizes difficult questions without free recall", () => {
+    const stamp = now.getTime();
+    const failed = memory.recordAnswerModeResult({
+        userId: "u", roomId: "r", itemId: "hard", mode: "selection",
+        success: false, now,
+    });
+    const correct = memory.recordAnswerModeResult({
+        userId: "u", roomId: "r", itemId: "easy", mode: "selection",
+        success: true, now,
+    });
+    const memories = { hard: failed, easy: correct };
+    const state = scheduler.createScheduler(["new", "easy", "hard"], () => 0.5);
+    const picked = scheduler.chooseNextUserItem(
+        state, memories, () => 0.5, stamp, "selection",
+    );
+    assert.equal(picked.itemId, "hard");
+    assert.equal(failed.reviewCount, 0);
+    assert.equal(correct.reviewCount, 0);
+    assert.equal(memory.getRetrievability(failed, stamp), 0);
+});
+
+test("choice response speed breaks accuracy ties but cannot override a real failure", () => {
+    const timestamp = now.getTime();
+    const choice = (id, success, responseMs) =>
+        memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: id, mode: "selection",
+            success, responseMs, now,
+        });
+    const quick = choice("quick", true, 1_000);
+    const slow = choice("slow", true, 15_000);
+    const failed = choice("failed", false, 100);
+    const memories = { quick, slow, failed };
+    const state = scheduler.createScheduler(["quick", "slow", "failed"], () => 0.5);
+    const selected = scheduler.chooseNextUserItem(state, memories, () => 0.5, timestamp, "selection");
+    assert.equal(selected.itemId, "failed");
+
+    const tied = scheduler.createScheduler(["quick", "slow"], () => 0.5);
+    const slower = scheduler.chooseNextUserItem(tied, memories, () => 0.5, timestamp, "selection");
+    assert.equal(slower.itemId, "slow");
+    assert.equal(slow.reviewCount, 0);
+});
+
+test("a single wrong choice is softened; repeated mistakes and speed still influence ordering", () => {
+    const timestamp = now.getTime();
+    const observeChoice = (itemId, success, responseMs, previous) =>
+        memory.recordAnswerModeResult({
+            memory: previous,
+            userId: "u",
+            roomId: "r",
+            itemId,
+            mode: "selection",
+            success,
+            responseMs,
+            now,
+        });
+
+    const quick = observeChoice("quick", true, 1_000);
+    const slow = observeChoice("slow", true, 29_000);
+    const once = observeChoice("once", false);
+    const twice = observeChoice(
+        "twice", false, null,
+        observeChoice("twice", false),
+    );
+    const quickThenWrong = observeChoice(
+        "quickThenWrong", false, null,
+        observeChoice("quickThenWrong", true, 1_000),
+    );
+    const memories = { quick, slow, once, twice, quickThenWrong };
+    const state = scheduler.createScheduler(Object.keys(memories), () => 0.5);
+    const order = [];
+    for (let index = 0; index < 5; index++) {
+        const selected = scheduler.chooseNextUserItem(
+            state, memories, () => 0.5, timestamp, "selection",
+        );
+        order.push(selected.itemId);
+        scheduler.recordRecognitionAnswer(state, selected.itemId);
+    }
+
+    // A single error is no longer scored as a hard 100% failure, while
+    // multiple mistakes still matter. A later miss cannot be hidden by a
+    // previous fast answer. All other things equal, slower clean answers
+    // receive earlier review than fast clean answers.
+    assert.deepEqual(order, [
+        "twice", "once", "quickThenWrong", "slow", "quick",
+    ]);
+    assert.equal(twice.reviewCount, 0);
+    assert.equal(slow.reviewCount, 0);
+});
+
 test("the first cycle preserves its Fisher–Yates order when no recall history exists", () => {
     const state = scheduler.createScheduler(
         ["a", "b", "c", "d", "e"],
@@ -364,6 +475,92 @@ test("the first cycle preserves its Fisher–Yates order when no recall history 
     assert.deepEqual(order, shuffled);
 });
 
+
+
+test("cached queue is re-ranked on answer mode change while keeping current and retries", () => {
+    const timestamp = now.getTime();
+    const ids = ["recall-due", "recognition-hard", "retry", "current"];
+    const memories = {
+        "recall-due": {
+            ...initial("recall-due"), stability: 0.1,
+            lastReviewedAt: new Date(timestamp - 86_400_000).toISOString(),
+        },
+        "recognition-hard": memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: "recognition-hard",
+            mode: "selection", success: false, now,
+        }),
+    };
+    const state = scheduler.createScheduler(ids, () => 0.5);
+    state.cycleQueue = ["recognition-hard", "recall-due"];
+    state.initialPriorityApplied = true;
+    state.priorityAnswerMode = "selection";
+    state.turn = 4;
+    state.retries.retry = {
+        itemId: "retry", earliestTurn: 6, latestTurn: 8,
+        reason: "failed_recall", successCount: 0,
+    };
+    state.current = {
+        itemId: "current", turn: 4, cycle: 1,
+        reason: "cycle", advancesCycle: true,
+    };
+    scheduler.saveSchedulerState("playground", "switch-user", "room", state, timestamp);
+
+    const inputState = scheduler.loadSchedulerState(
+        "playground", "switch-user", "room", ids, memories,
+        timestamp + 1_000, "input",
+    );
+    assert.deepEqual(Array.from(inputState.cycleQueue), [
+        "recall-due", "recognition-hard",
+    ]);
+    assert.equal(inputState.current.itemId, "current");
+    assert.deepEqual({ ...inputState.retries.retry }, { ...state.retries.retry });
+    assert.equal(inputState.priorityAnswerMode, "input");
+    scheduler.recordRecognitionAnswer(inputState, "current");
+    assert.equal(scheduler.chooseNextUserItem(
+        inputState, memories, () => 0.5, timestamp + 1_000, "input",
+    ).itemId, "recall-due");
+
+    const selectionState = scheduler.loadSchedulerState(
+        "playground", "switch-user", "room", ids, memories,
+        timestamp + 1_000, "selection",
+    );
+    assert.deepEqual(Array.from(selectionState.cycleQueue), [
+        "recognition-hard", "recall-due",
+    ]);
+    assert.equal(selectionState.priorityAnswerMode, "selection");
+    scheduler.recordRecognitionAnswer(selectionState, "current");
+    assert.equal(scheduler.chooseNextUserItem(
+        selectionState, memories, () => 0.5, timestamp + 1_000, "selection",
+    ).itemId, "recognition-hard");
+});
+
+test("old caches without an answer mode re-rank on restore", () => {
+    const timestamp = now.getTime();
+    const ids = ["recall-due", "recognition-hard"];
+    const state = scheduler.createScheduler(ids, () => 0.5);
+    state.cycleQueue = [...ids].reverse();
+    state.initialPriorityApplied = true;
+    delete state.priorityAnswerMode;
+    const memories = {
+        "recall-due": {
+            ...initial("recall-due"), stability: 0.1,
+            lastReviewedAt: new Date(timestamp - 86_400_000).toISOString(),
+        },
+        "recognition-hard": memory.recordAnswerModeResult({
+            userId: "u", roomId: "r", itemId: "recognition-hard",
+            mode: "selection", success: false, now,
+        }),
+    };
+    scheduler.saveSchedulerState("playground", "legacy-mode", "room", state, timestamp);
+    const restored = scheduler.loadSchedulerState(
+        "playground", "legacy-mode", "room", ids, memories,
+        timestamp + 1_000, "input",
+    );
+    assert.deepEqual(Array.from(restored.cycleQueue), [
+        "recall-due", "recognition-hard",
+    ]);
+    assert.equal(restored.priorityAnswerMode, "input");
+});
 
 test("reload continues the exact pending cycle instead of reshuffling", () => {
     const ids = ["a", "b", "c", "d"];
@@ -1142,6 +1339,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             Date: Clock,
             items,
             room: { id: "r" },
+            answerMode: "input",
             isPaused: false,
             offlineVoiceReading: "none",
             soundEffects: false,

@@ -286,6 +286,8 @@ export default function Client({
                         room.id,
                         itemIds,
                         fallbackMemory,
+                        Date.now(),
+                        answerMode,
                     ) ?? createScheduler(itemIds);
             } else {
                 schedulerRef.current = createScheduler(itemIds);
@@ -352,6 +354,8 @@ export default function Client({
                         room.id,
                         itemIds,
                         saved,
+                        Date.now(),
+                        answerMode,
                     ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
@@ -377,6 +381,8 @@ export default function Client({
                     room.id,
                     itemIds,
                     loaded.memoryByItem,
+                    Date.now(),
+                    answerMode,
                 ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
@@ -387,7 +393,7 @@ export default function Client({
         return () => {
             cancelled = true;
         };
-    }, [room.id, items]);
+    }, [room.id, items, answerMode]);
 
     const setTrackedItem = useCallback((item: Item | null) => {
         currentItemRef.current = item;
@@ -420,6 +426,9 @@ export default function Client({
         const id = chooseNextUserItem(
             scheduler,
             memoryByItemRef.current,
+            Math.random,
+            Date.now(),
+            answerMode,
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -430,7 +439,7 @@ export default function Client({
             );
         }
         return items.find((item) => item.id === id) ?? null;
-    }, [items, room.id]);
+    }, [items, room.id, answerMode]);
 
     const resolveTurnWithItem = useCallback(() => {
         const item = chooseItemForTurn();
@@ -672,7 +681,12 @@ export default function Client({
     );
 
     const updateAnswerModeMemory = useCallback(
-        (item: Item, mode: "selection" | "input", success: boolean) => {
+        (
+            item: Item,
+            mode: "selection" | "input",
+            success: boolean,
+            responseMs: number | null = null,
+        ) => {
             const userId =
                 authenticatedUserIdRef.current ??
                 (memoryPersistenceDisabledRef.current
@@ -696,6 +710,7 @@ export default function Client({
                 itemId: item.id,
                 mode,
                 success,
+                responseMs,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -857,26 +872,26 @@ export default function Client({
     );
 
     const handleSelectionAnswer = useCallback(
-        (correct: boolean) => {
+        (correct: boolean, hadMistake: boolean, responseMs: number | null) => {
             const item = currentItemRef.current;
-            if (!item || isPaused) return;
-            if (correct) {
-                const scheduler = schedulerRef.current;
-                if (scheduler) {
-                    recordRecognitionAnswer(scheduler, item.id);
-                    if (!memoryPersistenceDisabledRef.current) {
-                        saveSchedulerState(
-                            "playground",
-                            authenticatedUserIdRef.current ??
-                                GUEST_MEMORY_USER_ID,
-                            room.id,
-                            scheduler,
-                        );
-                    }
+            if (!item || isPaused || !correct) return;
+            const scheduler = schedulerRef.current;
+            if (scheduler) {
+                recordRecognitionAnswer(scheduler, item.id, hadMistake);
+                if (!memoryPersistenceDisabledRef.current) {
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ??
+                            GUEST_MEMORY_USER_ID,
+                        room.id,
+                        scheduler,
+                    );
                 }
-                recallProgressRef.current = null;
             }
-            updateAnswerModeMemory(item, "selection", correct);
+            recallProgressRef.current = null;
+            // One completed question is one recognition attempt. A correct
+            // answer reached after eliminating wrong options is not a clean hit.
+            updateAnswerModeMemory(item, "selection", !hadMistake, responseMs);
         },
         [isPaused, room.id, updateAnswerModeMemory],
     );

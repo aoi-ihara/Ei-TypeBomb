@@ -1,5 +1,6 @@
 import {
     getRetrievability,
+    getRecognitionSpeedAdjustment,
     type AttemptEvaluation,
     type ItemMemoryState,
     type SchedulerReason,
@@ -66,6 +67,7 @@ export type SchedulerState = {
     lastBotItem: string | null;
     lastUserItem: string | null;
     initialPriorityApplied: boolean;
+    priorityAnswerMode?: SchedulerAnswerMode;
     current: Selection | null;
 };
 const shuffle = (ids: string[], random: () => number) => {
@@ -83,14 +85,58 @@ const hasRecallHistory = (memory: ItemMemoryState | undefined) =>
         memory.lastReviewedAt &&
         Number.isFinite(Date.parse(memory.lastReviewedAt)),
     );
+const hasRecognitionHistory = (memory: ItemMemoryState | undefined) => {
+    const recognition = memory?.answerModeStats?.recognition;
+    return Boolean(
+        recognition &&
+        recognition.attempts > 0 &&
+        recognition.lastAttemptAt &&
+        Number.isFinite(Date.parse(recognition.lastAttemptAt)),
+    );
+};
+type SchedulerAnswerMode = "input" | "selection";
 const compareMemoryPriority = (
     a: string,
     b: string,
     memories: Record<string, ItemMemoryState>,
     now: number,
+    mode: SchedulerAnswerMode = "input",
 ) => {
     const aMemory = memories[a];
     const bMemory = memories[b];
+
+    if (mode === "selection") {
+        const aHasHistory = hasRecognitionHistory(aMemory);
+        const bHasHistory = hasRecognitionHistory(bMemory);
+        if (aHasHistory !== bHasHistory) return aHasHistory ? -1 : 1;
+        if (!aHasHistory || !bHasHistory) return 0;
+
+        const aStats = aMemory?.answerModeStats?.recognition;
+        const bStats = bMemory?.answerModeStats?.recognition;
+        if (!aStats || !bStats) return 0;
+        // Recognition is weaker evidence than recall: sort only within
+        // selection mode, without modifying free-recall stability.
+        // One missed question is noisy evidence. Use one virtual successful
+        // attempt as a prior, while repeated misses still raise priority.
+        const aErrorRate =
+            (aStats.attempts - aStats.correct) / (aStats.attempts + 1);
+        const bErrorRate =
+            (bStats.attempts - bStats.correct) / (bStats.attempts + 1);
+        // Never let an old fast response mask a more recent wrong turn.
+        // Clean, rapid recognition lowers priority; slow recognition raises it.
+        const aSpeed = getRecognitionSpeedAdjustment(
+            aStats.correctStreak > 0 ? aStats.averageResponseMs : undefined,
+        );
+        const bSpeed = getRecognitionSpeedAdjustment(
+            bStats.correctStreak > 0 ? bStats.averageResponseMs : undefined,
+        );
+        const aPriority = aErrorRate + aSpeed;
+        const bPriority = bErrorRate + bSpeed;
+        if (aPriority !== bPriority) return bPriority - aPriority;
+        return Date.parse(aStats.lastAttemptAt ?? "") -
+            Date.parse(bStats.lastAttemptAt ?? "");
+    }
+
     const aHasHistory = hasRecallHistory(aMemory);
     const bHasHistory = hasRecallHistory(bMemory);
 
@@ -122,6 +168,7 @@ export const createScheduler = (
         lastBotItem: null,
         lastUserItem: null,
         initialPriorityApplied: false,
+        priorityAnswerMode: undefined,
         current: null,
     };
 };
@@ -162,6 +209,7 @@ const pickSpacedReview = (
     memories: Record<string, ItemMemoryState>,
     random: () => number,
     now: number,
+    mode: SchedulerAnswerMode,
 ): string | null => {
     if (state.turn < SPACED_REVIEW_MIN_TURNS) return null;
 
@@ -169,7 +217,7 @@ const pickSpacedReview = (
     const candidates = state.itemIds.filter((id) => {
         const memory = memories[id];
         if (
-            !hasRecallHistory(memory) ||
+            !(mode === "selection" ? hasRecognitionHistory(memory) : hasRecallHistory(memory)) ||
             (state.userAnswered[id] ?? 0) === 0 ||
             queued.has(id) ||
             state.retries[id] ||
@@ -193,7 +241,7 @@ const pickSpacedReview = (
     // Choose the least retrievable word; break equal priorities randomly.
     let best = [candidates[0]];
     for (const id of candidates.slice(1)) {
-        const comparison = compareMemoryPriority(id, best[0], memories, now);
+        const comparison = compareMemoryPriority(id, best[0], memories, now, mode);
         if (comparison < 0) best = [id];
         else if (comparison === 0) best.push(id);
     }
@@ -323,30 +371,27 @@ export const recordUserAnswer = (
     state.current = null;
 };
 
-// A correct choice proves recognition, not free recall. Advance the current
-// question without changing FSRS stability or clearing a struggle hold.
+// Share the retry/struggle scheduler with typing, but do not turn recognition
+// into free recall: only the mode-specific stats, not stability, are updated.
 export const recordRecognitionAnswer = (
     state: SchedulerState,
     itemId: string,
+    hadMistake = false,
+    now = Date.now(),
 ): boolean => {
     const selected = state.current;
     if (!selected || selected.itemId !== itemId) return false;
 
-    state.userAnswered[itemId] = (state.userAnswered[itemId] ?? 0) + 1;
-    if (selected.retry) {
-        delete state.retries[itemId];
-        const successes = selected.retry.successCount + 1;
-        if (successes < REQUIRED_RETRY_SUCCESSES) {
-            enqueueRetry(
-                state,
-                itemId,
-                "uncertain_recall",
-                successes,
-                CONFIRM_RETRY_GAP,
-            );
-        }
-    }
-    state.current = null;
+    recordUserAnswer(
+        state,
+        {
+            memoryEvidence: hadMistake ? "insufficient_evidence" : "recall",
+            retryNeed: hadMistake ? "short" : "none",
+            reason: hadMistake ? "failed_recall" : null,
+            independent: true,
+        },
+        now,
+    );
     return true;
 };
 
@@ -355,15 +400,17 @@ export const chooseNextUserItem = (
     memories: Record<string, ItemMemoryState> = {},
     random = Math.random,
     now = Date.now(),
+    mode: SchedulerAnswerMode = "input",
 ): Selection | null => {
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
 
-    if (!state.initialPriorityApplied) {
-        state.cycleQueue = state.cycleQueue.sort((a, b) =>
-            compareMemoryPriority(a, b, memories, now),
+    if (!state.initialPriorityApplied || state.priorityAnswerMode !== mode) {
+        state.cycleQueue.sort((a, b) =>
+            compareMemoryPriority(a, b, memories, now, mode),
         );
         state.initialPriorityApplied = true;
+        state.priorityAnswerMode = mode;
     }
 
     const turn = state.turn + 1;
@@ -402,8 +449,9 @@ export const chooseNextUserItem = (
         if (state.cycleQueue.length === 0) {
             state.cycle++;
             state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
-                compareMemoryPriority(a, b, memories, now),
+                compareMemoryPriority(a, b, memories, now, mode),
             );
+            state.priorityAnswerMode = mode;
         }
         return state.cycleQueue.find(
             (id) => !state.retries[id] && !isOnHold(state, id),
@@ -414,7 +462,7 @@ export const chooseNextUserItem = (
         !itemId &&
         pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
     ) {
-        const reviewId = pickSpacedReview(state, memories, random, now);
+        const reviewId = pickSpacedReview(state, memories, random, now, mode);
         if (reviewId) {
             itemId = reviewId;
             spacedReview = true;
@@ -487,7 +535,7 @@ export const chooseNextUserItem = (
               ? "retry"
               : spacedReview
                 ? "spaced_review"
-                : hasRecallHistory(memories[itemId]) &&
+                : mode === "input" && hasRecallHistory(memories[itemId]) &&
                     getRetrievability(memories[itemId], now) < 0.8
                   ? "long_term_due"
                   : "cycle",
@@ -641,6 +689,7 @@ export const loadSchedulerState = (
     itemIds: string[],
     memories: Record<string, ItemMemoryState> = {},
     now = Date.now(),
+    answerMode: SchedulerAnswerMode = "input",
 ): SchedulerState | null => {
     try {
         const raw: unknown = JSON.parse(
@@ -776,9 +825,16 @@ export const loadSchedulerState = (
         }
 
         const cycleQueue = [...queue];
-        if (age >= PRIORITY_REFRESH_MS) {
+        const savedPriorityMode =
+            saved.priorityAnswerMode === "input" ||
+            saved.priorityAnswerMode === "selection"
+                ? saved.priorityAnswerMode
+                : undefined;
+        const needsPriorityRefresh =
+            age >= PRIORITY_REFRESH_MS || savedPriorityMode !== answerMode;
+        if (needsPriorityRefresh) {
             cycleQueue.sort((a, b) =>
-                compareMemoryPriority(a, b, memories, now),
+                compareMemoryPriority(a, b, memories, now, answerMode),
             );
         }
 
@@ -803,9 +859,10 @@ export const loadSchedulerState = (
                     ? saved.lastUserItem
                     : null,
             initialPriorityApplied:
-                age >= PRIORITY_REFRESH_MS
-                    ? true
-                    : saved.initialPriorityApplied === true,
+                needsPriorityRefresh || saved.initialPriorityApplied === true,
+            priorityAnswerMode: needsPriorityRefresh
+                ? answerMode
+                : savedPriorityMode,
             current,
         };
     } catch {
