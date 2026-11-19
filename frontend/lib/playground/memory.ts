@@ -120,6 +120,11 @@ export type AnswerModeTrack = {
     averageResponseMs?: number;
     // Number of assisted selection turns, already counted among failures.
     unknownCount?: number;
+    // Recognition has its own time-decayed stability; it is weaker evidence
+    // than independent typed recall and must not overwrite recall stability.
+    stability?: number;
+    // Timestamp of the last clean recognition, not the last revealed answer.
+    lastReviewedAt?: string | null;
 };
 export const getRecognitionFailureRate = (track: AnswerModeTrack): number => {
     const failures = Math.max(0, track.attempts - track.correct);
@@ -273,6 +278,15 @@ export const parseAnswerModeStats = (
                 (candidate.attempts ?? 0) - (candidate.correct ?? 0)
                 ? { unknownCount: candidate.unknownCount }
                 : {}),
+            ...(typeof candidate.stability === "number" &&
+            Number.isFinite(candidate.stability) &&
+            candidate.stability > 0
+                ? { stability: candidate.stability }
+                : {}),
+            ...(typeof candidate.lastReviewedAt === "string" &&
+            Number.isFinite(Date.parse(candidate.lastReviewedAt))
+                ? { lastReviewedAt: candidate.lastReviewedAt }
+                : {}),
         };
     };
     const recognition = parseTrack(source.recognition);
@@ -356,6 +370,43 @@ const updateAnswerModeStats = (
             ? { unknownCount: (previous.unknownCount ?? 0) + 1 }
             : {}),
     };
+    if (mode === "selection") {
+        // Reuse the recall model's exponential decay and stability gain, but
+        // track recognition separately to avoid awarding free-recall mastery.
+        // A failed/revealed choice weakens stability without creating a new
+        // successful-review timestamp (which would falsely raise mastery).
+        const lastCleanAt =
+            previous.lastReviewedAt ??
+            (previous.correctStreak > 0 ? previous.lastAttemptAt : null);
+        const previousStability = Math.max(
+            0.12,
+            previous.stability ?? INITIAL_ENCODING_STABILITY,
+        );
+        const elapsedDays = lastCleanAt
+            ? Math.max(0, (now.getTime() - Date.parse(lastCleanAt)) / DAY_MS)
+            : 0;
+        const retrievability = lastCleanAt
+            ? clamp(Math.exp(-elapsedDays / previousStability), 0, 1)
+            : 0;
+
+        nextTrack.stability = success
+            ? lastCleanAt
+                ? Math.max(
+                      INITIAL_CLEAR_RECALL_STABILITY,
+                      previousStability *
+                          (1 + (1 - retrievability) * RETENTION_GAIN_FACTOR),
+                  )
+                : INITIAL_CLEAR_RECALL_STABILITY
+            : Math.max(
+                  0.12,
+                  previousStability * (usedHint ? 0.75 : 0.8),
+              );
+
+        // Older persisted tracks have no lastReviewedAt. A positive streak
+        // makes lastAttemptAt a safe last-clean fallback.
+        nextTrack.lastReviewedAt = success ? now.toISOString() : lastCleanAt;
+    }
+
     if (
         mode === "selection" &&
         success &&
@@ -447,7 +498,29 @@ export const getRetrievability = (
     return clamp(Math.exp(-elapsedDays / stability), 0, 1);
 };
 
-// Mastery counts words exceeding the existing time-decayed recall prediction.
+// Recognition prediction uses the same forgetting curve, but a separate
+// stability so choosing an answer never overwrites free-recall confidence.
+export const getRecognitionRetrievability = (
+    memory: ItemMemoryState | undefined,
+    now = Date.now(),
+): number => {
+    const track = memory?.answerModeStats?.recognition;
+    if (!track || track.attempts === 0) return 0;
+    const lastCleanAt =
+        track.lastReviewedAt ??
+        (track.correctStreak > 0 ? track.lastAttemptAt : null);
+    if (!lastCleanAt) return 0;
+    const lastReviewedMs = Date.parse(lastCleanAt);
+    if (!Number.isFinite(lastReviewedMs)) return 0;
+    const stability = Math.max(
+        0.12,
+        track.stability ?? INITIAL_CLEAR_RECALL_STABILITY,
+    );
+    const elapsedDays = Math.max(0, (now - lastReviewedMs) / DAY_MS);
+    return clamp(Math.exp(-elapsedDays / stability), 0, 1);
+};
+
+// Mastery counts words exceeding the current answer mode's time-decayed prediction.
 export const MASTERY_RETRIEVABILITY_THRESHOLD = 0.8;
 export const MASTERY_FORECAST_HORIZON_MS = DAY_MS;
 
@@ -462,17 +535,21 @@ export const getMasteryProgress = (
     memoryByItem: Readonly<Record<string, ItemMemoryState>>,
     now = Date.now(),
     threshold = MASTERY_RETRIEVABILITY_THRESHOLD,
+    mode: AnswerModeResult = "input",
 ): MasteryProgress => {
     const uniqueItemIds = new Set(itemIds);
+    const predict = mode === "selection"
+        ? getRecognitionRetrievability
+        : getRetrievability;
     let masteredNow = 0;
     let masteredAfter24Hours = 0;
 
     for (const itemId of uniqueItemIds) {
         const memory = memoryByItem[itemId];
-        if (!(getRetrievability(memory, now) >= threshold)) continue;
+        if (!(predict(memory, now) >= threshold)) continue;
         masteredNow++;
         if (
-            getRetrievability(memory, now + MASTERY_FORECAST_HORIZON_MS) >=
+            predict(memory, now + MASTERY_FORECAST_HORIZON_MS) >=
             threshold
         ) masteredAfter24Hours++;
     }

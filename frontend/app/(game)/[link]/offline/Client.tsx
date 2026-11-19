@@ -20,6 +20,7 @@ import {
     evaluateRecall,
     getRetrievability,
     getMasteryProgress,
+    MASTERY_RETRIEVABILITY_THRESHOLD,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -1018,8 +1019,10 @@ export default function Client({
                 items.map((item) => item.id),
                 memoryByItem,
                 masteryNow,
+                MASTERY_RETRIEVABILITY_THRESHOLD,
+                answerMode,
             ),
-        [items, memoryByItem, masteryNow],
+        [items, memoryByItem, masteryNow, answerMode],
     );
 
     const currentTurnPlan = useMemo(
