@@ -1368,6 +1368,7 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             "setCurrentItem",
             "setItemPresentationKey",
             "setMemoryByItem",
+            "setMasteryNow",
             "setCurrentInput",
             "setNextReviewAt",
             "setIsStarted",
@@ -1444,6 +1445,7 @@ test("fallback answer-mode observations never enter authenticated sync queue", a
         memoryByItemRef: memory,
         pendingMemoryRef: pending,
         setMemoryByItem: () => {},
+        setMasteryNow: () => {},
         syncPlaygroundMemory: async () => {
             syncCalls++;
             return null;
