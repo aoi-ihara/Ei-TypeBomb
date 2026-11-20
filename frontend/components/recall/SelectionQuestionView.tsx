@@ -6,6 +6,9 @@ import Button from "@/components/ui/Button";
 import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
 import {
     canHandleSelectionSpace,
+    canCountSelectionSpaceKeyDown,
+    isGameSpaceKeyDown,
+    isSpaceKey,
     nextSelectionSpacePress,
 } from "@/lib/selection-shortcut";
 import {
@@ -51,6 +54,7 @@ export default function SelectionQuestionView({
     const lastKeyWasSpaceRef = useRef(false);
     const spaceKeyHandledRef = useRef(false);
     const spaceKeyDownRef = useRef(false);
+    const lastSpaceKeyDownAtRef = useRef(0);
     const questionRef = useRef<HTMLDivElement>(null);
     const disabled = currentInput !== null || isPaused || completed;
     const responseClock = useRef(createActiveResponseClock());
@@ -78,6 +82,7 @@ export default function SelectionQuestionView({
         lastKeyWasSpaceRef.current = false;
         spaceKeyHandledRef.current = false;
         spaceKeyDownRef.current = false;
+        lastSpaceKeyDownAtRef.current = 0;
     }, [disabled, allowHint]);
 
     const revealHint = useCallback(() => {
@@ -135,11 +140,6 @@ export default function SelectionQuestionView({
     );
 
     useEffect(() => {
-        const isSpaceKey = (event: KeyboardEvent) =>
-            event.code === "Space" ||
-            event.key === " " ||
-            event.key === "Spacebar";
-
         const onKeyDown = (event: KeyboardEvent) => {
             if (
                 event.isComposing ||
@@ -192,8 +192,20 @@ export default function SelectionQuestionView({
                 spaceKeyHandledRef.current = true;
                 // Count physical down/up cycles, rather than trusting repeat
                 // alone (synthetic/accessibility events may omit that flag).
-                if (event.repeat || spaceKeyDownRef.current) return;
+                // A short Space tap from a dual-role Space/Shift keyboard may
+                // have no matching Space keyup. Rely on the same keydown
+                // signal as game start, and recover from missing releases.
+                const now = performance.now();
+                if (
+                    !isGameSpaceKeyDown(event) ||
+                    !canCountSelectionSpaceKeyDown(
+                        event.repeat,
+                        spaceKeyDownRef.current,
+                        now - lastSpaceKeyDownAtRef.current,
+                    )
+                ) return;
                 spaceKeyDownRef.current = true;
+                lastSpaceKeyDownAtRef.current = now;
 
                 const { armed, reveal } = nextSelectionSpacePress(
                     lastKeyWasSpaceRef.current,
