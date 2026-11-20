@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
@@ -259,10 +265,13 @@ export default function SelectionQuestionView({
     ]);
 
     return (
-        <div ref={questionRef} className="flex flex-col gap-4 items-center">
+        <div
+            ref={questionRef}
+            className="flex flex-col w-full gap-4 items-center"
+        >
             <div className="flex flex-col items-center">
                 <div
-                    className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    className="leading-loose text-xl text-center w-fit border border-(--color-border) px-3 rounded-lg py-1 font-serif"
                     data-cursor="text"
                 >
                     {item.prompt}
@@ -281,8 +290,10 @@ export default function SelectionQuestionView({
                         disabled={disabled || wrongOptions.has(index)}
                         onClick={() => choose(index)}
                     >
-                        <span className="font-bold font-mono">
-                            {index + 1}. {option}
+                        <span className="font-mono">{index + 1}. </span>
+                        <span className="font-normal font-serif">
+                            {" "}
+                            {option}
                         </span>
                     </Button>
                 ))}
@@ -290,6 +301,7 @@ export default function SelectionQuestionView({
                     <Button
                         type="button"
                         className="w-full"
+                        font="mono"
                         disabled={disabled || hintUsed}
                         onClick={revealHint}
                     >
