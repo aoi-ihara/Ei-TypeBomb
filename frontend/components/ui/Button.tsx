@@ -33,7 +33,7 @@ type ButtonProps = Pick<
 };
 
 const baseStyles =
-    "font-bold whitespace-nowrap transition-all duration-(--duration-etb) ease-etb cursor-pointer";
+    "font-bold transition-all duration-(--duration-etb) ease-etb cursor-pointer";
 
 const variantStyles = (
     variant: ButtonVariant,
