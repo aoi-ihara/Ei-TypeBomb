@@ -1,6 +1,7 @@
 import {
     applyRecallObservation,
     evaluateRecall,
+    getExposureGap,
     recordAnswerModeResult,
     isValidAnswerModeStats,
     type AnswerModeResult,
@@ -301,6 +302,7 @@ export const recordOnlineAnswerModeResult = (
     onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
     hadMistake = false,
     responseMs: number | null = null,
+    presentedAt = Date.now(),
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const selectedBefore = session.scheduler.current?.itemId ?? null;
@@ -311,6 +313,8 @@ export const recordOnlineAnswerModeResult = (
         saveSchedulerState("online", session.userId ?? guestUserId, session.roomId, session.scheduler);
         return session.memory[itemId] ?? null;
     }
+    const now = Date.now();
+    const exposureGapMs = getExposureGap(session.memory[itemId], mode, presentedAt);
     const updated = recordAnswerModeResult({
         memory: session.memory[itemId],
         userId: session.userId ?? guestUserId,
@@ -320,10 +324,12 @@ export const recordOnlineAnswerModeResult = (
         success: success && !(mode === "selection" && hadMistake),
         responseMs,
         choiceCount: session.choiceCount,
+        now: new Date(now),
+        exposureGapMs,
     });
     if (mode === "selection" && success) {
         reconcileOnlineSchedulerItem(session.scheduler, itemId);
-        recordRecognitionAnswer(session.scheduler, itemId, hadMistake);
+        recordRecognitionAnswer(session.scheduler, itemId, hadMistake, now, exposureGapMs);
     }
     session.memory = { ...session.memory, [itemId]: updated };
     if (session.userId) session.pending.set(itemId, updated);
@@ -349,6 +355,7 @@ export const recordOnlineRecall = (
     itemId: string,
     observation: RecallObservation,
     onDiagnostic?: (diagnostic: OnlineLearningDiagnostic) => void,
+    presentedAt = Date.now(),
 ): ItemMemoryState | null => {
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const scheduler = session.scheduler;
@@ -359,10 +366,6 @@ export const recordOnlineRecall = (
     const schedulerReason = scheduler.current?.reason ?? null;
 
     const previous = session.memory[itemId];
-    const exposureAt = previous?.lastPresentedAt;
-    const elapsedSincePresentationMs = exposureAt
-        ? Math.max(0, Date.now() - Date.parse(exposureAt))
-        : null;
     const evidence: RecallObservation = {
         ...observation,
         incorrectInputCount:
@@ -378,7 +381,7 @@ export const recordOnlineRecall = (
         answerWasFullyRevealed:
             observation.answerWasFullyRevealed ??
             observation.revealedHintChars >= observation.answerLength,
-        elapsedSincePresentationMs,
+        elapsedSincePresentationMs: getExposureGap(previous, "input", presentedAt),
         expectedTypingMs: observation.answerLength * 220,
         schedulerReason: scheduler.current?.reason ?? "cycle",
     };

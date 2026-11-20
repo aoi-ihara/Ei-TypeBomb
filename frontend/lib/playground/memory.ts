@@ -1,13 +1,16 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v8-spaced-recall";
+export const MEMORY_MODEL_VERSION = "playground-v9-prompt-spacing";
 const INITIAL_ENCODING_STABILITY = 0.15;
 // Uncalibrated hypotheses, measured in days.
 export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
 export const RETENTION_GAIN_FACTOR = 0.5;
 // Product hypotheses, not calibrated measures of human memory.
 export const RECENT_EXPOSURE_MS = 3_000;
+export const isIndependentExposure = (gapMs: number | null | undefined) =>
+    gapMs == null || gapMs >= RECENT_EXPOSURE_MS;
+
 export const HEAVY_CUE_RATIO = 0.4;
 export const FAST_RECALL_LATENCY_MS = 2_500;
 export const FAST_READING_ALLOWANCE_MS = 2_000;
@@ -179,8 +182,7 @@ export const evaluateRecall = (
     );
     const full = observation.answerWasFullyRevealed || cue >= 1;
     const independent =
-        observation.elapsedSincePresentationMs == null ||
-        observation.elapsedSincePresentationMs >= RECENT_EXPOSURE_MS;
+        isIndependentExposure(observation.elapsedSincePresentationMs);
     if (!observation.success || full)
         return {
             memoryEvidence: "insufficient_evidence",
@@ -341,8 +343,20 @@ export const createInitialMemory = (
 
 // A successful independent review provides evidence over the interval since
 // the last exposure. Cap extrapolation from a single observation.
-function spacedStability(stability: number, lastExposure: string, now: Date) {
-    const days = Math.max(0, (now.getTime() - Date.parse(lastExposure)) / DAY_MS);
+export function getExposureGap(
+    memory: ItemMemoryState | undefined,
+    mode: AnswerModeResult,
+    presentedAt: number,
+): number | null {
+    const previous = memory?.lastPresentedAt ??
+        (mode === "selection"
+            ? memory?.answerModeStats?.recognition.lastAttemptAt
+            : memory?.lastReviewedAt);
+    return previous ? Math.max(0, presentedAt - Date.parse(previous)) : null;
+}
+
+function spacedStability(stability: number, gapMs: number) {
+    const days = gapMs / DAY_MS;
     if (!Number.isFinite(days)) return stability;
     const gain = stability * (1 - Math.exp(-days / stability)) * RETENTION_GAIN_FACTOR;
     const demonstrated = 1.25 * days / -Math.log(MASTERY_RETRIEVABILITY_THRESHOLD);
@@ -356,7 +370,7 @@ const updateAnswerModeStats = (
     now: Date,
     responseMs: number | null = null,
     usedHint = false,
-    lastPresentedAt?: string | null,
+    exposureGapMs: number | null = null,
     choiceCount = 4,
 ): AnswerModeStats => {
     const emptyTrack = (): AnswerModeTrack => ({
@@ -393,15 +407,14 @@ const updateAnswerModeStats = (
             0.12,
             previous.stability ?? INITIAL_ENCODING_STABILITY,
         );
-        const lastExposure = lastPresentedAt ?? previous.lastAttemptAt ?? lastCleanAt;
-        const independent = !lastExposure || now.getTime() - Date.parse(lastExposure) >= RECENT_EXPOSURE_MS;
+        const independent = isIndependentExposure(exposureGapMs);
         if (!success) {
             nextTrack.stability = Math.max(0.12, previousStability * (usedHint ? 0.75 : 0.8));
         } else if (independent) {
             // Discount successful guesses when fewer distractors were available.
             const weight = (1 - 1 / Math.max(2, Math.min(4, choiceCount))) / 0.75;
-            nextTrack.stability = lastCleanAt && lastExposure
-                ? previousStability + weight * (spacedStability(previousStability, lastExposure, now) - previousStability)
+            nextTrack.stability = lastCleanAt && exposureGapMs !== null
+                ? previousStability + weight * (spacedStability(previousStability, exposureGapMs) - previousStability)
                 : INITIAL_CLEAR_RECALL_STABILITY * weight;
         } else {
             nextTrack.stability = previousStability;
@@ -449,6 +462,7 @@ export const recordAnswerModeResult = ({
     responseMs = null,
     usedHint = false,
     choiceCount = 4,
+    exposureGapMs,
 }: {
     memory: ItemMemoryState | undefined;
     userId: string;
@@ -460,6 +474,7 @@ export const recordAnswerModeResult = ({
     responseMs?: number | null;
     usedHint?: boolean;
     choiceCount?: number;
+    exposureGapMs?: number | null;
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const iso = now.toISOString();
@@ -475,7 +490,7 @@ export const recordAnswerModeResult = ({
             now,
             responseMs,
             usedHint,
-            current.lastPresentedAt,
+            exposureGapMs === undefined ? getExposureGap(current, mode, now.getTime()) : exposureGapMs,
             choiceCount,
         ),
         // A typing failure is an intermediate attempt within the current
@@ -620,7 +635,9 @@ export const applyRecallObservation = ({
         const weak = evaluation.memoryEvidence === "weak_recall";
         if (independentInputSuccess) {
             stability = current.lastReviewedAt
-                ? spacedStability(stability, current.lastPresentedAt ?? current.lastReviewedAt, now)
+                ? spacedStability(stability, observation.elapsedSincePresentationMs === undefined
+                      ? (getExposureGap(current, "input", now.getTime()) ?? 0)
+                      : (observation.elapsedSincePresentationMs ?? 0))
                 : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY);
             lastReviewedAt = iso;
         }

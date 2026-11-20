@@ -1,5 +1,6 @@
 import {
     MASTERY_RETRIEVABILITY_THRESHOLD,
+    isIndependentExposure,
     getRetrievability,
     getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
@@ -292,7 +293,13 @@ export const recordUserAnswer = (
         state.current = null;
         return;
     }
-    if (evaluation.retryNeed === "short") {
+    if (!selected.retry && evaluation.retryNeed !== "none" &&
+        Object.keys(state.retries).length >= MAX_ACTIVE_RELEARNING) {
+        // Keep an unsuccessful filler available for ordinary review once a
+        // slot opens, without displacing any of the active retries.
+        if (!state.cycleQueue.includes(selected.itemId))
+            state.cycleQueue.push(selected.itemId);
+    } else if (evaluation.retryNeed === "short") {
         enqueueRetry(
             state,
             selected.itemId,
@@ -314,6 +321,10 @@ export const recordUserAnswer = (
                 successes,
                 CONFIRM_RETRY_GAP,
             );
+    } else if (selected.retry && !evaluation.independent &&
+        evaluation.retryNeed === "none") {
+        enqueueRetry(state, selected.itemId, selected.retry.reason,
+            selected.retry.successCount, SHORT_RETRY_GAP);
     } else if (evaluation.retryNeed === "confirm") {
         enqueueRetry(
             state,
@@ -333,6 +344,7 @@ export const recordRecognitionAnswer = (
     itemId: string,
     hadMistake = false,
     now = Date.now(),
+    exposureGapMs?: number | null,
 ): boolean => {
     const selected = state.current;
     if (!selected || selected.itemId !== itemId) return false;
@@ -343,7 +355,7 @@ export const recordRecognitionAnswer = (
             memoryEvidence: hadMistake ? "insufficient_evidence" : "recall",
             retryNeed: hadMistake ? "short" : "none",
             reason: hadMistake ? "failed_recall" : null,
-            independent: true,
+            independent: isIndependentExposure(exposureGapMs),
         },
         now,
     );
@@ -425,16 +437,6 @@ export const chooseNextUserItem = (
         // answered filler instead of breaking the earliest-retry boundary.
     }
 
-    // When the active pool is full, any unanswered filler can fail and add
-    // a fifth pending retry. Stay inside the pool until a slot clears.
-    if (
-        !itemId &&
-        pending.length >= Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
-    ) {
-        itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0]
-            ?.itemId;
-    }
-
     if (!itemId) {
         const fillers = state.itemIds.filter(
             (id) =>
@@ -455,8 +457,7 @@ export const chooseNextUserItem = (
         }
     }
 
-    // Tiny rooms can have every word protected. Reuse the earliest pending
-    // word instead of failing to schedule a question.
+    // Reuse the earliest pending word only when no filler can bridge the gap.
     if (!itemId && pending.length) {
         itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0]
             ?.itemId;

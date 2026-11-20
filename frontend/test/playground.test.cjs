@@ -1033,7 +1033,8 @@ test("slow unaided correctness and typing errors do not become recall failures",
     assert.equal(evaluation.memoryEvidence, "recall");
     assert.equal(evaluation.retryNeed, "none");
     assert.equal(evaluation.independent, true);
-    assert.equal(apply({ ...initial(), stability: 5 }, slow).stability, 5);
+    assert.equal(apply({ ...initial(), stability: 5 }, slow).stability,
+        apply({ ...initial(), stability: 5 }, observation()).stability);
 });
 
 test("recent BOT exposure supplies no independent recall or long-term gain", () => {
@@ -1990,4 +1991,62 @@ test("a mixed room prioritizes a due selection over a freshly recalled typing wo
         () => 0.9, now.getTime(), "input", { choice: "selection" });
     assert.equal(next.itemId, "choice");
     assert.equal(next.reason, "long_term_due");
+});
+
+test("waiting with the prompt open does not increase spacing credit", () => {
+    const stamp = now.getTime();
+    const threeHours = 3 * 3_600_000;
+    const previous = {
+        ...initial(),
+        lastReviewedAt: new Date(stamp - threeHours).toISOString(),
+    };
+    const typed = apply(previous, observation({ elapsedSincePresentationMs: 1000 }));
+    assert.equal(typed.stability, previous.stability);
+    assert.equal(typed.lastReviewedAt, previous.lastReviewedAt);
+
+    const choose = (base, time, exposureGapMs) => memory.recordAnswerModeResult({
+        memory: base, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: true, now: new Date(time), exposureGapMs,
+    });
+    const first = choose(undefined, stamp - threeHours);
+    const immediatePrompt = choose(first, stamp, 1000);
+    assert.equal(immediatePrompt.answerModeStats.recognition.lastReviewedAt,
+        first.answerModeStats.recognition.lastReviewedAt);
+    assert.equal(immediatePrompt.answerModeStats.recognition.stability,
+        first.answerModeStats.recognition.stability);
+    assert.ok(choose(first, stamp, threeHours).answerModeStats.recognition.stability >
+        first.answerModeStats.recognition.stability);
+});
+
+test("an immediate selection does not clear the pending independent confirmation", () => {
+    const state = scheduler.createScheduler(["review", "other"]);
+    state.retries.review = {
+        itemId: "review", earliestTurn: 1, latestTurn: 2,
+        reason: "uncertain_recall", successCount: 1,
+    };
+    const stamp = now.getTime();
+    assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "review");
+    scheduler.recordRecognitionAnswer(state, "review", false, stamp, 1000);
+    assert.equal(state.retries.review.successCount, 1);
+    assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "other");
+    scheduler.recordRecognitionAnswer(state, "other", false, stamp);
+    assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "review");
+    scheduler.recordRecognitionAnswer(state, "review", false, stamp, 5000);
+    assert.equal(state.retries.review, undefined);
+});
+
+test("a full retry pool uses an answered filler before a retry becomes due", () => {
+    const state = scheduler.createScheduler(["a", "b", "c", "d", "filler", "new"]);
+    for (const itemId of ["a", "b", "c", "d"]) {
+        state.retries[itemId] = {
+            itemId, earliestTurn: 2, latestTurn: 4, reason: "failed_recall", successCount: 0,
+        };
+    }
+    state.userAnswered.filler = 1;
+    state.cycleQueue = ["new"];
+    assert.equal(scheduler.chooseNextUserItem(state).itemId, "filler");
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation({ success: false })));
+    assert.equal(Object.keys(state.retries).length, 4);
+    assert.ok(state.cycleQueue.includes("filler"));
+    assert.equal(scheduler.chooseNextUserItem(state).retry?.earliestTurn, 2);
 });
