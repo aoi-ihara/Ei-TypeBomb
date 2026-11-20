@@ -3,7 +3,9 @@
 @theme inline {
     --font-sans: var(--font-line-seed-jp), sans-serif;
     --font-mono: var(--jetbrains-mono), var(--font-line-seed-jp), monospace;
-    --font-serif: "New York", "Hiragino Mincho ProN", "Hiragino Mincho Pro", var(--font-noto-serif), var(--font-noto-serif-jp), serif;
+    --font-serif:
+        "Hiragino Mincho ProN", "Hiragino Mincho Pro", var(--font-noto-serif),
+        var(--font-noto-serif-jp), serif;
 }
 
 :root {
