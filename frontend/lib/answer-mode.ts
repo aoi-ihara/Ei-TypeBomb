@@ -1,7 +1,18 @@
 import type { Item } from "@/type";
-export { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
+import { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
+export { getTypingAnswer };
 
 export type AnswerMode = "selection" | "input";
+
+// ItemView falls back to selection for answers that cannot be typed.
+// Keep progress calculations in sync with the mode actually rendered.
+export const getEffectiveAnswerMode = (
+    item: Item,
+    requestedMode: AnswerMode,
+): AnswerMode =>
+    requestedMode === "input" && getTypingAnswer(item) !== null
+        ? "input"
+        : "selection";
 
 export const ANSWER_MODE_OPTIONS: {
     value: AnswerMode;
@@ -33,6 +44,15 @@ const shuffle = <T,>(values: T[], random: () => number): T[] => {
     }
     return result;
 };
+
+// All distractors disappear in offline "I don't know" hint mode.
+export const getDistractorIndices = (
+    options: string[],
+    correctAnswer: string,
+): number[] =>
+    options.flatMap((option, index) =>
+        option === correctAnswer ? [] : [index],
+    );
 
 export const createChoiceOptions = (
     item: Item,

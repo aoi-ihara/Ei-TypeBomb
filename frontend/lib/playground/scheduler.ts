@@ -1,6 +1,8 @@
 import {
     getRetrievability,
+    getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
+    getRecognitionFailureRate,
     type AttemptEvaluation,
     type ItemMemoryState,
     type SchedulerReason,
@@ -114,14 +116,14 @@ const compareMemoryPriority = (
         const aStats = aMemory?.answerModeStats?.recognition;
         const bStats = bMemory?.answerModeStats?.recognition;
         if (!aStats || !bStats) return 0;
-        // Recognition is weaker evidence than recall: sort only within
-        // selection mode, without modifying free-recall stability.
+        // Recognition stability decays independently of free recall.
+        // Combine it with the existing error and response-time priorities,
+        // so a late review matters without erasing the speed bias.
         // One missed question is noisy evidence. Use one virtual successful
-        // attempt as a prior, while repeated misses still raise priority.
-        const aErrorRate =
-            (aStats.attempts - aStats.correct) / (aStats.attempts + 1);
-        const bErrorRate =
-            (bStats.attempts - bStats.correct) / (bStats.attempts + 1);
+        // attempt as a prior. A revealed ("unknown") answer carries a
+        // modest additional miss weight without inflating attempt counts.
+        const aErrorRate = getRecognitionFailureRate(aStats);
+        const bErrorRate = getRecognitionFailureRate(bStats);
         // Never let an old fast response mask a more recent wrong turn.
         // Clean, rapid recognition lowers priority; slow recognition raises it.
         const aSpeed = getRecognitionSpeedAdjustment(
@@ -130,8 +132,10 @@ const compareMemoryPriority = (
         const bSpeed = getRecognitionSpeedAdjustment(
             bStats.correctStreak > 0 ? bStats.averageResponseMs : undefined,
         );
-        const aPriority = aErrorRate + aSpeed;
-        const bPriority = bErrorRate + bSpeed;
+        const aForgettingRisk = 1 - getRecognitionRetrievability(aMemory, now);
+        const bForgettingRisk = 1 - getRecognitionRetrievability(bMemory, now);
+        const aPriority = aErrorRate + aSpeed + 0.75 * aForgettingRisk;
+        const bPriority = bErrorRate + bSpeed + 0.75 * bForgettingRisk;
         if (aPriority !== bPriority) return bPriority - aPriority;
         return Date.parse(aStats.lastAttemptAt ?? "") -
             Date.parse(bStats.lastAttemptAt ?? "");
@@ -371,8 +375,8 @@ export const recordUserAnswer = (
     state.current = null;
 };
 
-// Share the retry/struggle scheduler with typing, but do not turn recognition
-// into free recall: only the mode-specific stats, not stability, are updated.
+// Share the retry/struggle scheduler with typing; recognition updates its
+// own stability within answer-mode stats, not free-recall stability.
 export const recordRecognitionAnswer = (
     state: SchedulerState,
     itemId: string,

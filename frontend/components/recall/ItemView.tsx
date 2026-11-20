@@ -1,9 +1,6 @@
 import TypedRecallView from "@/components/recall/TypedRecallView";
 import SelectionQuestionView from "@/components/recall/SelectionQuestionView";
-import {
-    getTypingAnswer,
-    type AnswerMode,
-} from "@/lib/answer-mode";
+import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 import type { Item } from "@/type";
 import type {
     LearningMode,
@@ -28,32 +25,41 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    allowSelectionHint?: boolean;
     items: Item[];
     answerMode: AnswerMode;
     onSelectionAnswer?: (
         correct: boolean,
         hadMistake: boolean,
         responseMs: number | null,
+        usedHint?: boolean,
     ) => void;
 };
 
 export default function ItemView(props: Readonly<Props>) {
     switch (props.item.type) {
         case "typed_recall": {
-            const typingAnswer = props.answerMode === "input"
-                ? getTypingAnswer(props.item)
-                : null;
+            const typingAnswer =
+                getEffectiveAnswerMode(props.item, props.answerMode) === "input"
+                    ? getTypingAnswer(props.item)
+                    : null;
             if (typingAnswer === null) {
                 return (
                     <SelectionQuestionView
                         item={props.item}
                         items={props.items}
                         currentInput={props.currentInput}
-                        onAnswer={(correct, hadMistake, responseMs) =>
-                            props.onSelectionAnswer?.(correct, hadMistake, responseMs)
+                        onAnswer={(correct, hadMistake, responseMs, usedHint) =>
+                            props.onSelectionAnswer?.(
+                                correct,
+                                hadMistake,
+                                responseMs,
+                                usedHint,
+                            )
                         }
                         onSuccess={props.onSuccess}
                         isPaused={props.isPaused}
+                        allowHint={props.allowSelectionHint}
                     />
                 );
             }

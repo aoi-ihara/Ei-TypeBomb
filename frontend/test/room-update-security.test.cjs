@@ -79,12 +79,13 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         }) },
         "../auth/validator": validators,
     });
-    const route = load("app/api/mcp/route.ts", {
+    const route = load("app/(api)/api/mcp/route.ts", {
         "@posthog/mcp": { PostHogMCP: class {
             captureToolCall(event) { telemetry.push(event); }
             captureToolsList() {}
             async flush() {}
         } },
+        "@/lib/beta-access": { canAccessBeta: async () => true },
         "@/lib/mcp/descriptions": { getMcpPresentation: async (tools, instructions) => ({ tools, instructions }) },
         "@/lib/room/item-limits.mjs": require("../lib/room/item-limits.mjs"),
         "@/lib/config/base-url": { getEtbUrl: (p) => "https://ei-typebomb.com" + p },

@@ -16,7 +16,12 @@ function load(overrides = {}) {
             name,
             async (...args) => {
                 calls.push([name, ...args]);
-                return { error: null };
+                return {
+                    error:
+                        name === "signInWithPassword"
+                            ? (overrides.signInError ?? null)
+                            : null,
+                };
             },
         ]),
     );
@@ -61,6 +66,39 @@ test("ETB password sign-in uses Supabase Auth even without legacy OAuth", async 
     assert.equal(calls[0][0], "signInWithPassword");
     assert.equal(calls[0][1].options.captchaToken, "captcha");
 });
+test("invalid sign-in credentials use the same neutral message", async () => {
+    for (const signInError of [
+        { code: "invalid_credentials" },
+        { message: "Invalid login credentials" },
+    ]) {
+        const { submit } = load({ signInError });
+        assert.equal(
+            await submit("sign-in", "a@example.com", "wrongpass123", "captcha"),
+            "入力内容が不正確です。",
+        );
+    }
+    const { submit } = load({ signInError: { code: "email_not_confirmed" } });
+    assert.notEqual(
+        await submit("sign-in", "a@example.com", "password123", "captcha"),
+        "入力内容が不正確です。",
+    );
+});
+
+test("signup success has a dedicated screen with no remaining form", () => {
+    const form = readFileSync(
+        new URL("../components/account/AuthForm.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    const page = readFileSync(
+        new URL("../app/(auth)/sign-up/check-email/page.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(form, /else if \(mode === "sign-up"\)\s+router\.replace\("\/sign-up\/check-email"\)/);
+    assert.match(form, /setError\("入力内容が不正確です。"\)/);
+    assert.match(page, /<Shell title="メールをご確認ください">/);
+    assert.doesNotMatch(page, /AuthForm|<Button/);
+});
+
 test("public operations require CAPTCHA before calling Auth", async () => {
     for (const mode of ["sign-in", "sign-up", "recovery"]) {
         const { submit, calls } = load();

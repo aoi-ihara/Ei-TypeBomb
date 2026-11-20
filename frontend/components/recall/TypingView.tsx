@@ -2,7 +2,13 @@ import {
     correctPrefixLength,
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
 import {
     createAutomaticHintEvidence,
@@ -61,6 +67,7 @@ function TypingAttempt({
     onRecallProgress,
     onRecallComplete,
     isPaused = false,
+    masteryProgress,
     remoteHintLength,
     onHintChange,
 }: {
@@ -79,6 +86,7 @@ function TypingAttempt({
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    masteryProgress?: ReactNode;
     remoteHintLength?: number;
     onHintChange?: (length: number) => void;
 }) {
@@ -573,9 +581,6 @@ function TypingAttempt({
                 }
             } else {
                 if (isKanaAnswer) {
-                    // Every cell is filled and the final kana is incorrect:
-                    // this is a completed failed attempt, so clear *all*
-                    // boxes and begin at the first one.
                     resetInput();
                     return;
                 }
@@ -626,15 +631,16 @@ function TypingAttempt({
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
                 <div
-                    className="font-bold font-mono text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
+                    className="font-bold font-serif text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
                     data-cursor="text"
                 >
                     {japanese}
                 </div>
             </div>
+            {masteryProgress}
             <div className="w-full flex justify-center">
                 <div
-                    className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap flex justify-start"
+                    className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap font-serif flex justify-start"
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();
                     }}
@@ -729,7 +735,7 @@ function TypingAttempt({
                                 return (
                                     <button
                                         key={index}
-                                        className={`relative cursor-text z-20 font-bold w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
+                                        className={`relative cursor-text z-20 font-bold font-serif w-4 h-16 active:scale-95 rounded-sm text-2xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             if (currentInput === null)
@@ -743,7 +749,7 @@ function TypingAttempt({
                             return (
                                 <button
                                     key={index}
-                                    className={`relative cursor-text z-20 font-bold font-mono w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
+                                    className={`relative cursor-text z-20 font-bold font-serif w-8 h-16 rounded-sm text-3xl transition-all p-1 duration-150 ease-etb ${isSelected ? "bg-(--color-border)" : ""} ${currentInput == null ? "active:scale-95" : ""}`}
                                     data-cursor="button"
                                     data-cursor-shape={
                                         currentInput === null ? "1" : "2"

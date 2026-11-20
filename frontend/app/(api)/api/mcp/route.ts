@@ -5,6 +5,7 @@ import {
     MAX_ANSWER_LENGTH,
 } from "@/lib/room/item-limits.mjs";
 import { getEtbUrl } from "@/lib/config/base-url";
+import { canAccessBeta } from "@/lib/beta-access";
 import {
     authenticateMcpRequest,
     unauthorizedMcpResponse,
@@ -662,6 +663,18 @@ async function callTool(
 export async function POST(request: NextRequest) {
     const principal = await authenticateMcpRequest(request);
     if (!principal) return unauthorizedMcpResponse(request);
+    if (!(await canAccessBeta(principal.userId))) {
+        return NextResponse.json(
+            { error: "Beta tester access required" },
+            {
+                status: 403,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-store",
+                },
+            },
+        );
+    }
 
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("application/json")) {
@@ -793,6 +806,18 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
     const principal = await authenticateMcpRequest(request);
     if (!principal) return unauthorizedMcpResponse(request);
+    if (!(await canAccessBeta(principal.userId))) {
+        return NextResponse.json(
+            { error: "Beta tester access required" },
+            {
+                status: 403,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-store",
+                },
+            },
+        );
+    }
 
     return new NextResponse(null, {
         status: 405,
@@ -803,6 +828,18 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     const principal = await authenticateMcpRequest(request);
     if (!principal) return unauthorizedMcpResponse(request);
+    if (!(await canAccessBeta(principal.userId))) {
+        return NextResponse.json(
+            { error: "Beta tester access required" },
+            {
+                status: 403,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "no-store",
+                },
+            },
+        );
+    }
 
     return new NextResponse(null, {
         status: 405,

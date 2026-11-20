@@ -5,7 +5,12 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
 import NavigationProgress from "@/components/layout/NavigationProgress";
-import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
+import {
+    LINE_Seed_JP,
+    JetBrains_Mono,
+    Noto_Serif,
+    Noto_Serif_JP,
+} from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
 import PopUp from "./PopUp";
@@ -23,8 +28,20 @@ const jetbrainsMono = JetBrains_Mono({
     variable: "--jetbrains-mono",
 });
 
+const notoSerif = Noto_Serif({
+    subsets: ["latin"],
+    variable: "--font-noto-serif",
+    display: "swap",
+});
+
+const notoSerifJp = Noto_Serif_JP({
+    subsets: ["latin"],
+    variable: "--font-noto-serif-jp",
+    display: "swap",
+});
+
 export const metadata: Metadata = {
-    ...(process.env.BETA_ENVIRONMENT === "true"
+    ...(process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true"
         ? { robots: { index: false, follow: false } }
         : {}),
     metadataBase: new URL(getEtbBaseUrl()),
@@ -67,7 +84,7 @@ export default function RootLayout({
     return (
         <html lang="ja">
             <body
-                className={`${lineSeedJp.variable} ${jetbrainsMono.variable} min-h-full flex flex-col`}
+                className={`${lineSeedJp.variable} ${jetbrainsMono.variable} ${notoSerif.variable} ${notoSerifJp.variable} min-h-full flex flex-col`}
             >
                 <PostHogProvider>
                     <Suspense fallback={null}>

@@ -4,8 +4,10 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
+import { isGameSpaceKeyDown } from "@/lib/selection-shortcut";
 import type { Item, Room, User } from "@/type";
 import GameView from "@/components/game/GameView";
+import OfflineMasteryProgress from "@/components/game/OfflineMasteryProgress";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
@@ -18,6 +20,8 @@ import {
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
+    getMasteryProgress,
+    MASTERY_RETRIEVABILITY_THRESHOLD,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -39,7 +43,7 @@ import {
 } from "@/lib/playground/memory-client";
 import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
-import { getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
+import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
@@ -180,6 +184,7 @@ export default function Client({
         Record<string, ItemMemoryState>
     >({});
     const memoryByItemRef = useRef<Record<string, ItemMemoryState>>({});
+    const [masteryNow, setMasteryNow] = useState(() => Date.now());
     const pendingMemoryRef = useRef(new Map<string, ItemMemoryState>());
     const syncInFlightRef = useRef<Promise<void> | null>(null);
     const schedulerRef = useRef<SchedulerState | null>(null);
@@ -504,9 +509,7 @@ export default function Client({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (
                 initialGameStartedRef.current ||
-                (event.code !== "Space" && event.key !== " ") ||
-                event.repeat ||
-                event.isComposing
+                !isGameSpaceKeyDown(event)
             ) {
                 return;
             }
@@ -626,6 +629,7 @@ export default function Client({
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
+            setMasteryNow(Date.now());
             if (scheduler && !memoryPersistenceDisabledRef.current)
                 saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
@@ -686,6 +690,7 @@ export default function Client({
             mode: "selection" | "input",
             success: boolean,
             responseMs: number | null = null,
+            usedHint = false,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -711,6 +716,7 @@ export default function Client({
                 mode,
                 success,
                 responseMs,
+                usedHint,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -737,6 +743,7 @@ export default function Client({
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
+            setMasteryNow(Date.now());
             return updated;
         },
         [room.id, items],
@@ -872,7 +879,12 @@ export default function Client({
     );
 
     const handleSelectionAnswer = useCallback(
-        (correct: boolean, hadMistake: boolean, responseMs: number | null) => {
+        (
+            correct: boolean,
+            hadMistake: boolean,
+            responseMs: number | null,
+            usedHint = false,
+        ) => {
             const item = currentItemRef.current;
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
@@ -881,8 +893,7 @@ export default function Client({
                 if (!memoryPersistenceDisabledRef.current) {
                     saveSchedulerState(
                         "playground",
-                        authenticatedUserIdRef.current ??
-                            GUEST_MEMORY_USER_ID,
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
                         room.id,
                         scheduler,
                     );
@@ -891,7 +902,13 @@ export default function Client({
             recallProgressRef.current = null;
             // One completed question is one recognition attempt. A correct
             // answer reached after eliminating wrong options is not a clean hit.
-            updateAnswerModeMemory(item, "selection", !hadMistake, responseMs);
+            updateAnswerModeMemory(
+                item,
+                "selection",
+                !hadMistake,
+                responseMs,
+                usedHint,
+            );
         },
         [isPaused, room.id, updateAnswerModeMemory],
     );
@@ -979,6 +996,39 @@ export default function Client({
         offlineVoiceReading,
         isPaused,
     ]);
+
+    // Recompute time-decayed predictions without answers; refresh on tab return.
+    useEffect(() => {
+        if (!memoryReady || !isStarted) return;
+        const refresh = () => setMasteryNow(Date.now());
+        refresh();
+        const timer = window.setInterval(refresh, 30_000);
+        window.addEventListener("focus", refresh);
+        document.addEventListener("visibilitychange", refresh);
+        return () => {
+            window.clearInterval(timer);
+            window.removeEventListener("focus", refresh);
+            document.removeEventListener("visibilitychange", refresh);
+        };
+    }, [memoryReady, isStarted]);
+
+    const masteryProgress = useMemo(
+        () =>
+            getMasteryProgress(
+                items.map((item) => item.id),
+                memoryByItem,
+                masteryNow,
+                MASTERY_RETRIEVABILITY_THRESHOLD,
+                answerMode,
+                Object.fromEntries(
+                    items.map((item) => [
+                        item.id,
+                        getEffectiveAnswerMode(item, answerMode),
+                    ]),
+                ),
+            ),
+        [items, memoryByItem, masteryNow, answerMode],
+    );
 
     const currentTurnPlan = useMemo(
         () =>
@@ -1135,6 +1185,9 @@ export default function Client({
                 soloMode
                 isPaused={isPaused}
                 answerMode={answerMode}
+                masteryProgress={
+                    <OfflineMasteryProgress progress={masteryProgress} />
+                }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}

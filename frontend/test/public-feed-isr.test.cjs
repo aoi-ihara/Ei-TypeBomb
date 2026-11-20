@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const source = readFileSync(
-    path.join(__dirname, "../app/api/room-list-viewer/route.ts"),
+    path.join(__dirname, "../app/(api)/api/room-list-viewer/route.ts"),
     "utf8",
 );
 
@@ -190,7 +190,10 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     assert.match(source, /className="invisible pointer-events-none"/);
     assert.match(source, /<Button variant="text">サインイン<\/Button>/);
     assert.doesNotMatch(source, /className="h-(?:9|10) w-28"/);
-    assert.match(header, /className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4"/);
+    // Keep the header dimensions stable without requiring an exact class order.
+    assert.match(header, /<header className="[^"]*\bw-full\b[^"]*\bshrink-0\b[^"]*\bjustify-between\b[^"]*\bpx-4\b[^"]*\bpy-4\b/);
+    assert.match(header, /className="flex min-w-0 flex-1 gap-4"/);
+    assert.match(header, /className="min-w-0 truncate font-extrabold"/);
     assert.doesNotMatch(header, /min-h-\[|absolute right-4/);
     assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
     assert.match(button, /opacity-50 pointer-events-none/);
