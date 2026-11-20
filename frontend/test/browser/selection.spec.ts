@@ -2,6 +2,13 @@ import { test, expect, type Page } from "@playwright/test";
 
 const hint = (page: Page) => page.getByRole("button", { name: "分からない" });
 const choices = (page: Page) => page.getByRole("button", { name: /^[1-4]\. / });
+async function choiceForAnswer(page: Page, answer: string) {
+  for (const choice of await choices(page).all()) {
+    if ((await choice.innerText()).trim().endsWith(`. ${answer}`))
+      return choice;
+  }
+  throw new Error(`No choice for expected answer: ${answer}`);
+}
 async function start(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "ゲームを開始", exact: true }).click();
@@ -37,9 +44,7 @@ test("offline double Space reveals distractors and records assisted history once
   await page.getByText(`question: ${answer}`, { exact: true }).click();
   await reveal(page);
   await expectRevealed(page, answer);
-  await choices(page)
-    .filter({ hasText: new RegExp(`\\. ${answer}$`) })
-    .click();
+  await (await choiceForAnswer(page, answer)).click();
   await expect
     .poll(() =>
       page.evaluate((id) => {
@@ -78,14 +83,54 @@ test("focused enabled choice does not receive a native Space click", async ({
   page,
 }) => {
   const answer = await start(page);
-  const correct = choices(page).filter({
-    hasText: new RegExp(`\\. ${answer}$`),
-  });
+  const correct = await choiceForAnswer(page, answer);
   await correct.focus();
   await reveal(page);
   await expect(
     page.getByText(`question: ${answer}`, { exact: true }),
   ).toBeVisible();
+  await expectRevealed(page, answer);
+});
+
+test("dual-role Space/Shift tap works without a matching Space keyup", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  // Focused answers must not receive a native click from the shortcut.
+  await choices(page).first().focus();
+  const remappedTap = () =>
+    page.evaluate(() => {
+      const target = document.activeElement ?? document.body;
+      target.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+      // Some dual-role mappers emit Shift keyup instead of Space keyup.
+      target.dispatchEvent(new KeyboardEvent("keyup", {
+        key: "Shift", code: "ShiftLeft", bubbles: true, cancelable: true,
+      }));
+    });
+  await remappedTap();
+  await expect(hint(page)).toBeEnabled();
+  await page.waitForTimeout(90);
+  await remappedTap();
+  await expectRevealed(page, answer);
+  await expect(page.getByText(`question: ${answer}`, { exact: true })).toBeVisible();
+});
+
+test("very short Space down/up pairs reveal without a hold-time requirement", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  await page.evaluate(() => {
+    for (let i = 0; i < 2; i++) {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+      document.body.dispatchEvent(new KeyboardEvent("keyup", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+    }
+  });
   await expectRevealed(page, answer);
 });
 
@@ -116,6 +161,37 @@ test("holding Space and repeated keydowns without repeat never count twice", asy
   await page.keyboard.up("Space");
   await page.keyboard.press("Space");
   await expect(hint(page)).toBeDisabled();
+});
+
+test("delayed hold keydowns without repeat flags never count as a second tap", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  const fakeKeydown = () =>
+    page.evaluate(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", repeat: false,
+        bubbles: true, cancelable: true,
+      }));
+    });
+
+  await fakeKeydown();
+  await page.waitForTimeout(150);
+  await fakeKeydown();
+  await page.waitForTimeout(150);
+  await fakeKeydown();
+  await expect(hint(page)).toBeEnabled();
+  for (const choice of await choices(page).all())
+    await expect(choice).toBeEnabled();
+
+  // A true release, not elapsed time, allows a second press to reveal.
+  await page.evaluate(() => {
+    document.body.dispatchEvent(new KeyboardEvent("keyup", {
+      key: " ", code: "Space", bubbles: true, cancelable: true,
+    }));
+  });
+  await fakeKeydown();
+  await expectRevealed(page, answer);
 });
 
 test("pause blocks hints and resets the previous press", async ({ page }) => {

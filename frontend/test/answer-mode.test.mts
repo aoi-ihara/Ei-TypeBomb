@@ -28,6 +28,9 @@ import { validateItems } from "../lib/auth/validator";
 import { createScheduler, chooseNextUserItem } from "../lib/playground/scheduler";
 import {
     canHandleSelectionSpace,
+    canCountSelectionSpaceKeyDown,
+    isGameSpaceKeyDown,
+    isDualRoleSpaceRelease,
     nextSelectionSpacePress,
 } from "../lib/selection-shortcut";
 import type { Item } from "../type";
@@ -178,6 +181,27 @@ test("choice options are unique, include the answer, and use at most four room a
     assert.equal(options.length, 4);
     assert.ok(options.includes(item.answer));
     assert.equal(new Set(options).size, options.length);
+});
+
+test("game start and selection share the same Space keydown detection", () => {
+    const space = { key: " ", code: "Space", repeat: false, isComposing: false };
+    assert.equal(isGameSpaceKeyDown(space), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, key: "Shift" }), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, code: "", key: "Spacebar" }), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, repeat: true }), false);
+    assert.equal(isGameSpaceKeyDown({ ...space, isComposing: true }), false);
+    assert.equal(isGameSpaceKeyDown({ ...space, key: "Shift", code: "ShiftLeft" }), false);
+});
+
+test("Space keydowns require a release even after delayed repeat-flag-free events", () => {
+    assert.equal(canCountSelectionSpaceKeyDown(false, false), true);
+    assert.equal(canCountSelectionSpaceKeyDown(false, true), false);
+    assert.equal(canCountSelectionSpaceKeyDown(true, true), false);
+    assert.equal(canCountSelectionSpaceKeyDown(false, false), true);
+    assert.equal(isDualRoleSpaceRelease({ key: "Shift", code: "ShiftLeft" }), true);
+    assert.equal(isDualRoleSpaceRelease({ key: "Shift", code: "ShiftRight" }), true);
+    assert.equal(isDualRoleSpaceRelease({ key: " ", code: "Space" }), false);
+    assert.equal(isDualRoleSpaceRelease({ key: "Control", code: "ControlLeft" }), false);
 });
 
 test("double-Space hint works when an answer button has focus", () => {

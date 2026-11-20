@@ -12,6 +12,10 @@ import Button from "@/components/ui/Button";
 import { createChoiceOptions, getDistractorIndices } from "@/lib/answer-mode";
 import {
     canHandleSelectionSpace,
+    canCountSelectionSpaceKeyDown,
+    isGameSpaceKeyDown,
+    isSpaceKey,
+    isDualRoleSpaceRelease,
     nextSelectionSpacePress,
 } from "@/lib/selection-shortcut";
 import {
@@ -141,11 +145,6 @@ export default function SelectionQuestionView({
     );
 
     useEffect(() => {
-        const isSpaceKey = (event: KeyboardEvent) =>
-            event.code === "Space" ||
-            event.key === " " ||
-            event.key === "Spacebar";
-
         const onKeyDown = (event: KeyboardEvent) => {
             if (
                 event.isComposing ||
@@ -198,7 +197,15 @@ export default function SelectionQuestionView({
                 spaceKeyHandledRef.current = true;
                 // Count physical down/up cycles, rather than trusting repeat
                 // alone (synthetic/accessibility events may omit that flag).
-                if (event.repeat || spaceKeyDownRef.current) return;
+                // Only an actual release can separate two presses. Some
+                // Space/Shift remappers release Shift instead of Space.
+                if (
+                    !isGameSpaceKeyDown(event) ||
+                    !canCountSelectionSpaceKeyDown(
+                        event.repeat,
+                        spaceKeyDownRef.current,
+                    )
+                ) return;
                 spaceKeyDownRef.current = true;
 
                 const { armed, reveal } = nextSelectionSpacePress(
@@ -221,9 +228,22 @@ export default function SelectionQuestionView({
             choose(index);
         };
         const onKeyUp = (event: KeyboardEvent) => {
+            if (!isSpaceKey(event)) {
+                // A dual-role Space/Shift mapper can emit Shift keyup after
+                // a short Space keydown. Do not mistake unrelated Shift use
+                // for a release if another keydown broke the Space sequence.
+                if (
+                    spaceKeyDownRef.current &&
+                    lastKeyWasSpaceRef.current &&
+                    isDualRoleSpaceRelease(event)
+                ) {
+                    spaceKeyDownRef.current = false;
+                    spaceKeyHandledRef.current = false;
+                }
+                return;
+            }
             // Some browsers activate a focused button on Space keyup, not
             // keydown. Suppress that click for consumed hint shortcuts only.
-            if (!isSpaceKey(event)) return;
             spaceKeyDownRef.current = false;
             if (spaceKeyHandledRef.current) {
                 event.preventDefault();

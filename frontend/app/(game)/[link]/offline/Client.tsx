@@ -4,6 +4,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
+import { isGameSpaceKeyDown } from "@/lib/selection-shortcut";
 import type { Item, Room, User } from "@/type";
 import GameView from "@/components/game/GameView";
 import OfflineMasteryProgress from "@/components/game/OfflineMasteryProgress";
@@ -508,9 +509,7 @@ export default function Client({
         const handleKeyDown = (event: KeyboardEvent) => {
             if (
                 initialGameStartedRef.current ||
-                (event.code !== "Space" && event.key !== " ") ||
-                event.repeat ||
-                event.isComposing
+                !isGameSpaceKeyDown(event)
             ) {
                 return;
             }
