@@ -60,7 +60,7 @@ export const getGeminiUsage = async () => {
 
 export const consumeGeminiGeneration = async () => {
     const userId = await getUser();
-    if (!userId) throw new GenerationUsageError("ログインしてください。");
+    if (!userId) throw new GenerationUsageError("サインインしてください。");
 
     const limit = getGeminiDailyLimit();
     const supabase = await createAdminClient();
