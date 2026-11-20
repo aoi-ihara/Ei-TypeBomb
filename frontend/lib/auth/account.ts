@@ -24,7 +24,7 @@ export async function submitAccountForm(
     const client = await createClient();
     if (!publicOperation) {
         const { data, error } = await client.auth.getUser();
-        if (error || !data.user) return "ログインし直してください。";
+        if (error || !data.user) return "サインインし直してください。";
     }
     const callback = () => getEtbUrl("/auth/confirm");
     const result =
