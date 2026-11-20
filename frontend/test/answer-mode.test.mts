@@ -28,6 +28,8 @@ import { validateItems } from "../lib/auth/validator";
 import { createScheduler, chooseNextUserItem } from "../lib/playground/scheduler";
 import {
     canHandleSelectionSpace,
+    canCountSelectionSpaceKeyDown,
+    isGameSpaceKeyDown,
     nextSelectionSpacePress,
 } from "../lib/selection-shortcut";
 import type { Item } from "../type";
@@ -178,6 +180,25 @@ test("choice options are unique, include the answer, and use at most four room a
     assert.equal(options.length, 4);
     assert.ok(options.includes(item.answer));
     assert.equal(new Set(options).size, options.length);
+});
+
+test("game start and selection share the same Space keydown detection", () => {
+    const space = { key: " ", code: "Space", repeat: false, isComposing: false };
+    assert.equal(isGameSpaceKeyDown(space), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, key: "Shift" }), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, code: "", key: "Spacebar" }), true);
+    assert.equal(isGameSpaceKeyDown({ ...space, repeat: true }), false);
+    assert.equal(isGameSpaceKeyDown({ ...space, isComposing: true }), false);
+    assert.equal(isGameSpaceKeyDown({ ...space, key: "Shift", code: "ShiftLeft" }), false);
+});
+
+test("dual-role Space taps recover from missing keyup without counting bursts", () => {
+    assert.equal(canCountSelectionSpaceKeyDown(false, false, 0), true);
+    assert.equal(canCountSelectionSpaceKeyDown(false, true, 5), false);
+    assert.equal(canCountSelectionSpaceKeyDown(false, true, 59), false);
+    assert.equal(canCountSelectionSpaceKeyDown(false, true, 90), true);
+    assert.equal(canCountSelectionSpaceKeyDown(true, true, 500), false);
+    assert.equal(canCountSelectionSpaceKeyDown(false, false, 0), true);
 });
 
 test("double-Space hint works when an answer button has focus", () => {
