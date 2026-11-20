@@ -51,7 +51,15 @@ export async function submitAccountForm(
                       mode === "email" ? { email: email.trim() } : { password },
                       { emailRedirectTo: callback() },
                   );
-    return result.error
-        ? "操作に失敗しました。入力内容や認証、有効期限を確認して再度お試しください。"
-        : null;
+    if (result.error) {
+        if (
+            mode === "sign-in" &&
+            (result.error.code === "invalid_credentials" ||
+                result.error.message === "Invalid login credentials")
+        ) {
+            return "入力内容が不正確です。";
+        }
+        return "操作に失敗しました。入力内容や認証、有効期限を確認して再度お試しください。";
+    }
+    return null;
 }
