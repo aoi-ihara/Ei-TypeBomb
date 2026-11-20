@@ -11,6 +11,7 @@ import { getSignInUrl } from "@/lib/auth/sign-in-url";
 import { signOut } from "@/lib/auth/sign-out";
 import { toggleSavedRoom } from "@/lib/room/save";
 import posthog from "posthog-js";
+import { identifyPostHogUser } from "@/lib/analytics/posthog-identity";
 import Menu from "@/components/ui/Menu";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
@@ -170,7 +171,7 @@ export default function RoomList({
 
     useEffect(() => {
         if (!currentUser) return;
-        posthog.identify(currentUser.id);
+        identifyPostHogUser(currentUser);
     }, [currentUser]);
 
     const addRoom = async () => {
@@ -229,7 +230,7 @@ export default function RoomList({
                 setLocalSavedRoomIds(previousViewer.savedRoomIds);
             }
             if (previousViewer.currentUser) {
-                posthog.identify(previousViewer.currentUser.id);
+                identifyPostHogUser(previousViewer.currentUser);
             }
             console.error("Failed to sign out", error);
         }
