@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 export default function BetaAccessDeniedPage() {
     return (
         <Shell title="認証が必要です" size="small">
+            有効なアカウントでサインインしてください。
             <Button
                 href="/sign-in"
                 variant="primary"
