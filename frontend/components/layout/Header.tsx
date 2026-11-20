@@ -6,21 +6,21 @@ import Link from "next/link";
 
 export default function Header({ children }: { children?: React.ReactNode }) {
     return (
-        <header className="flex shrink-0 top-0 left-0 w-full justify-between px-4 py-4">
-            <div className="flex gap-4 w-full">
-                <div className="rounded-lg" data-cursor="button">
+        <header className="flex w-full shrink-0 items-center justify-between gap-4 px-4 py-4">
+            <div className="flex min-w-0 flex-1 gap-4">
+                <div className="min-w-0 rounded-lg" data-cursor="button">
                     <Link
-                        className="items-center shrink-0 rounded-lg gap-2 flex pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
+                        className="flex min-w-0 items-center gap-2 rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                         href="/"
                     >
                         <Image
                             src="/favicon.svg"
                             alt="page-logo"
-                            className="rounded-lg"
+                            className="shrink-0 rounded-lg"
                             width={36}
                             height={36}
                         />
-                        <span className="font-extrabold overflow-clip flex">
+                        <span className="min-w-0 truncate font-extrabold">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
                                 ? "Ei-TypeBomb Beta"

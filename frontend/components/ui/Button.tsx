@@ -102,8 +102,8 @@ export default function Button({
                             }
                             className={
                                 loading && !children
-                                    ? "animate-spin"
-                                    : undefined
+                                    ? "animate-spin shrink-0"
+                                    : "shrink-0"
                             }
                             size={24}
                         />
@@ -144,7 +144,7 @@ export default function Button({
                     <Icon
                         name={loading && !children ? "loaderCircle" : iconName}
                         className={
-                            loading && !children ? "animate-spin" : undefined
+                            loading && !children ? "animate-spin shrink-0" : "shrink-0"
                         }
                         size={24}
                     />
