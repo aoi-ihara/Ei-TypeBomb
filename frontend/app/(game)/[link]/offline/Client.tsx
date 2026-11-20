@@ -20,6 +20,7 @@ import {
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
+    getExposureGap,
     getMasteryProgress,
     MASTERY_RETRIEVABILITY_THRESHOLD,
     MEMORY_MODEL_VERSION,
@@ -179,6 +180,10 @@ export default function Client({
         [sourceRoom],
     );
     const items = useMemo(() => room.items ?? [], [room.items]);
+    const itemModes = useMemo(() => Object.fromEntries(items.map(item =>
+        [item.id, getEffectiveAnswerMode(item, answerMode)])), [items, answerMode]);
+    const choiceCount = useMemo(() => new Set(items.map(item => item.answer).filter(Boolean)).size, [items]);
+
 
     const [memoryByItem, setMemoryByItem] = useState<
         Record<string, ItemMemoryState>
@@ -413,14 +418,15 @@ export default function Client({
             memory && memory.reviewCount > 0 && memory.lastReviewedAt
                 ? getRetrievability(memory)
                 : null;
-        const exposure = memory?.lastPresentedAt ?? memory?.lastReviewedAt;
-        exposureGapAtStartRef.current = exposure
-            ? Math.max(0, Date.now() - Date.parse(exposure))
-            : null;
+        exposureGapAtStartRef.current = getExposureGap(
+            memory,
+            itemModes[item.id] ?? answerMode,
+            Date.now(),
+        );
         expectedTypingAtStartRef.current =
             (getTypingAnswer(item)?.length ?? item.answer.length) *
             userTypingDelayRef.current;
-    }, []);
+    }, [answerMode, itemModes]);
 
     const chooseItemForTurn = useCallback(() => {
         const scheduler =
@@ -434,6 +440,7 @@ export default function Client({
             Math.random,
             Date.now(),
             answerMode,
+            itemModes,
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -444,7 +451,7 @@ export default function Client({
             );
         }
         return items.find((item) => item.id === id) ?? null;
-    }, [items, room.id, answerMode]);
+    }, [items, room.id, answerMode, itemModes]);
 
     const resolveTurnWithItem = useCallback(() => {
         const item = chooseItemForTurn();
@@ -691,6 +698,7 @@ export default function Client({
             success: boolean,
             responseMs: number | null = null,
             usedHint = false,
+            exposureGapMs?: number | null,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -717,6 +725,8 @@ export default function Client({
                 success,
                 responseMs,
                 usedHint,
+                choiceCount,
+                exposureGapMs,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -746,7 +756,7 @@ export default function Client({
             setMasteryNow(Date.now());
             return updated;
         },
-        [room.id, items],
+        [room.id, items, choiceCount],
     );
 
     const cachePendingMemory = useCallback(() => {
@@ -888,8 +898,14 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
+            if (choiceCount < 2) {
+                if (scheduler) scheduler.current = null;
+                return;
+            }
             if (scheduler) {
-                recordRecognitionAnswer(scheduler, item.id, hadMistake);
+                recordRecognitionAnswer(
+                    scheduler, item.id, hadMistake, Date.now(), exposureGapAtStartRef.current,
+                );
                 if (!memoryPersistenceDisabledRef.current) {
                     saveSchedulerState(
                         "playground",
@@ -908,9 +924,10 @@ export default function Client({
                 !hadMistake,
                 responseMs,
                 usedHint,
+                exposureGapAtStartRef.current,
             );
         },
-        [isPaused, room.id, updateAnswerModeMemory],
+        [isPaused, room.id, updateAnswerModeMemory, choiceCount],
     );
 
     const handleSuccess = useCallback(() => {
@@ -1020,14 +1037,9 @@ export default function Client({
                 masteryNow,
                 MASTERY_RETRIEVABILITY_THRESHOLD,
                 answerMode,
-                Object.fromEntries(
-                    items.map((item) => [
-                        item.id,
-                        getEffectiveAnswerMode(item, answerMode),
-                    ]),
-                ),
+                itemModes,
             ),
-        [items, memoryByItem, masteryNow, answerMode],
+        [items, memoryByItem, masteryNow, answerMode, itemModes],
     );
 
     const currentTurnPlan = useMemo(

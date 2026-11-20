@@ -1,9 +1,9 @@
 "use client";
 
-import { getTypingAnswer } from "@/lib/answer-mode";
+import { getTypingAnswer, getEffectiveAnswerMode } from "@/lib/answer-mode";
 
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { startNavigationProgress } from "@/lib/navigation-progress";
 import { io } from "@/lib/room/socket";
@@ -205,6 +205,8 @@ export default function Clinet({
                 itemIds,
                 result.userId,
                 memory,
+                Object.fromEntries((room.items ?? []).map(item => [item.id, getEffectiveAnswerMode(item, "input")])),
+                new Set((room.items ?? []).map(item => item.answer).filter(Boolean)).size,
             );
             if (result.userId) {
                 // Playground and online play share the same unsent-write queue.
@@ -1175,6 +1177,15 @@ export default function Clinet({
             : (room?.items?.[focusedBomb.wordIndex] ?? null)
         : currentItem;
 
+    const promptPresentedAt = useRef<number | undefined>(undefined);
+    const promptKey = room?.gameId && focusedBomb && focusedItem && userId &&
+        users[focusedBomb.holder]?.id === userId
+        ? recallAttemptKey(room.gameId, focusedBomb)
+        : null;
+    useLayoutEffect(() => {
+        promptPresentedAt.current = promptKey ? Date.now() : undefined;
+    }, [promptKey]);
+
     return (
         <>
             <GameView
@@ -1213,8 +1224,9 @@ export default function Clinet({
                             ),
                         hadMistake,
                         responseMs,
+                        promptPresentedAt.current,
                     );
-                    if (!updated) return;
+                    if (!updated && (session.choiceCount ?? 4) >= 2) return;
                     cacheOnlinePendingMemory(session);
                     setOnlineMemoryReady((revision) => revision + 1);
                     if (correct) publishOnlineRecommendation();
@@ -1293,6 +1305,7 @@ export default function Clinet({
                                 ...diagnostic,
                                 attemptKey,
                             }),
+                        promptPresentedAt.current,
                     );
                     if (!updated) return;
                     cacheOnlinePendingMemory(session);

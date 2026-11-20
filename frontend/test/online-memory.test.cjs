@@ -179,3 +179,13 @@ test("online recommendations and retries survive a new session after reload", ()
         0,
     );
 });
+
+test("a forced single choice advances online play without recording recognition", () => {
+    const session = online.createOnlineMemorySession("forced-choice", ["one"], "user", {}, { one: "selection" }, 1);
+    assert.equal(online.nextOnlineRecommendation(session), "one");
+    online.recordOnlineAnswerModeResult(session, "one", "selection", true);
+    assert.equal(session.scheduler.current, null);
+    assert.equal(session.memory.one, undefined);
+    assert.equal(session.pending.size, 0);
+    assert.equal(online.nextOnlineRecommendation(session), "one");
+});
