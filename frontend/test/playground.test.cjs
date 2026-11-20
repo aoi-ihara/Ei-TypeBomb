@@ -242,6 +242,46 @@ test("the first cycle reviews due words before untouched words", () => {
     assert.equal(state.initialPriorityApplied, true);
 });
 
+for (const mode of ["input", "selection"]) {
+    test(`${mode}: remaining words follow current priority within a cycle`, () => {
+        const timestamp = now.getTime();
+        const hour = 60 * 60_000;
+        const review = (itemId, elapsed, stability) => {
+            const reviewedAt = new Date(timestamp - elapsed);
+            const result = memory.recordAnswerModeResult({
+                userId: "u", roomId: "r", itemId, mode: "selection",
+                success: true, now: reviewedAt,
+            });
+            return {
+                ...result,
+                reviewCount: 1,
+                lastReviewedAt: reviewedAt.toISOString(),
+                stability,
+                answerModeStats: {
+                    ...result.answerModeStats,
+                    recognition: { ...result.answerModeStats.recognition, stability },
+                },
+            };
+        };
+        const memories = {
+            stable: review("stable", hour, 1),
+            fragile: review("fragile", 0, 0.2),
+            overdue: review("overdue", 24 * hour, 1),
+        };
+        const state = scheduler.createScheduler(Object.keys(memories), () => 0.5);
+        const choose = (at) =>
+            scheduler.chooseNextUserItem(state, memories, () => 0.5, at, mode);
+
+        const first = choose(timestamp);
+        assert.equal(first.itemId, "overdue");
+        assert.deepEqual(Array.from(state.cycleQueue), ["stable", "fragile"]);
+        assert.equal(choose(timestamp + hour), first);
+        scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()), timestamp);
+        assert.equal(choose(timestamp + hour).itemId, "fragile");
+        assert.equal(state.cycle, 1);
+    });
+}
+
 test("interleaved review targets the weakest previously answered word without consuming the cycle", () => {
     const timestamp = now.getTime();
     const oldReview = new Date(timestamp - 2 * 60 * 60_000).toISOString();
