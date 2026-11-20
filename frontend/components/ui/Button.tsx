@@ -30,6 +30,7 @@ type ButtonProps = Pick<
     cursor?: "0" | "1" | "2";
     href?: string;
     prefetch?: boolean;
+    font?: "default" | "mono" | "serif";
 };
 
 const baseStyles =
@@ -43,10 +44,10 @@ const variantStyles = (
     return variant === "text"
         ? `w-full flex rounded-md active:scale-95`
         : variant === "default" || loading
-          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
+          ? `w-full bg-(--color-background-secondary) text-(--color-foreground) flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all`
           : variant === "danger"
-            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`
-            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all font-bold`;
+            ? `w-full bg-red-500/25 text-red-500 flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all`
+            : `w-full bg-cyan-600 text-white flex justify-center transform ${!(loading || disabled) && "active:scale-95"} transition-all`;
 };
 
 export default function Button({
@@ -69,6 +70,7 @@ export default function Button({
     cursor = disabled || loading ? "2" : variant === "text" ? "1" : "0",
     href,
     prefetch,
+    font,
     ...ariaProps
 }: ButtonProps) {
     const currentVariantStyle = variantStyles(variant, loading, disabled);
@@ -80,6 +82,8 @@ export default function Button({
               : padding === "middle"
                 ? `rounded-lg ${iconName && !loading ? "pl-3" : "pl-4"} ${children ? "pr-4" : "pr-3"} py-3 gap-2`
                 : `rounded-lg ${iconName && !loading ? "pl-4.5" : "pl-5"} ${children ? "pr-5" : "pr-4.5"} py-4.5 gap-2`;
+    const fontStyle =
+        font === "mono" ? "font-mono" : font === "serif" ? "font-serif" : "";
 
     if (href) {
         return (
@@ -93,7 +97,7 @@ export default function Button({
                     prefetch={prefetch}
                     {...ariaProps}
                     type={type}
-                    className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
+                    className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${fontStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
                 >
                     {iconName && (!loading || !children) && (
                         <Icon
@@ -138,13 +142,15 @@ export default function Button({
                 disabled={disabled}
                 value={value}
                 name={name}
-                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
+                className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${fontStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
             >
                 {iconName && (!loading || !children) && (
                     <Icon
                         name={loading && !children ? "loaderCircle" : iconName}
                         className={
-                            loading && !children ? "animate-spin shrink-0" : "shrink-0"
+                            loading && !children
+                                ? "animate-spin shrink-0"
+                                : "shrink-0"
                         }
                         size={24}
                     />
