@@ -1,0 +1,32 @@
+import { type MasteryProgress } from "@/lib/playground/memory";
+
+export default function OfflineMasteryProgress({
+    progress,
+}: Readonly<{ progress: MasteryProgress }>) {
+    const { total, masteredNow, masteredAfter24Hours } = progress;
+    const currentPercent = total ? (masteredNow / total) * 100 : 0;
+    const retainedPercent = total ? (masteredAfter24Hours / total) * 100 : 0;
+
+    return (
+        <div
+            className="flex w-full h-2.5 overflow-hidden rounded-full bg-(--color-background-secondary)"
+            role="progressbar"
+            aria-label="記憶率が閾値以上の単語の割合"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(currentPercent)}
+            aria-valuetext={`${masteredNow} / ${total} 語を習得。うち ${masteredAfter24Hours} 語は24時間後も維持する予測`}
+        >
+            <div
+                className="bg-cyan-600 h-full transition-[width] duration-300"
+                style={{ width: `${retainedPercent}%` }}
+            />
+            <div
+                className="bg-(--color-border) h-full transition-[width] duration-300"
+                style={{
+                    width: `${Math.max(0, currentPercent - retainedPercent)}%`,
+                }}
+            />
+        </div>
+    );
+}

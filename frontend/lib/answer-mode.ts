@@ -1,7 +1,18 @@
 import type { Item } from "@/type";
-export { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
+import { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
+export { getTypingAnswer };
 
 export type AnswerMode = "selection" | "input";
+
+// ItemView falls back to selection for answers that cannot be typed.
+// Keep progress calculations in sync with the mode actually rendered.
+export const getEffectiveAnswerMode = (
+    item: Item,
+    requestedMode: AnswerMode,
+): AnswerMode =>
+    requestedMode === "input" && getTypingAnswer(item) !== null
+        ? "input"
+        : "selection";
 
 export const ANSWER_MODE_OPTIONS: {
     value: AnswerMode;

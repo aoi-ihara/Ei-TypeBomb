@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import TypingView from "@/components/recall/TypingView";
 import type { TypedRecallItem } from "@/type";
 import type {
@@ -24,6 +25,7 @@ type Props = {
     onRecallProgress?: (progress: RecallProgress) => void;
     onRecallComplete?: (observation: RecallObservation) => void;
     isPaused?: boolean;
+    masteryProgress?: ReactNode;
 };
 
 export default function TypedRecallView({
@@ -44,6 +46,7 @@ export default function TypedRecallView({
     onRecallProgress,
     onRecallComplete,
     isPaused = false,
+    masteryProgress,
 }: Readonly<Props>) {
     return (
         <TypingView
@@ -64,6 +67,7 @@ export default function TypedRecallView({
             onRecallProgress={onRecallProgress}
             onRecallComplete={onRecallComplete}
             isPaused={isPaused}
+            masteryProgress={masteryProgress}
         />
     );
 }

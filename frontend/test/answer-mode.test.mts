@@ -5,6 +5,7 @@ import {
     getDistractorIndices,
     getAnswerModeOptions,
     getTypingAnswer,
+    getEffectiveAnswerMode,
     normalizeAnswerMode,
 } from "../lib/answer-mode";
 import {
@@ -12,6 +13,8 @@ import {
     recordAnswerModeResult,
     getRecognitionSpeedAdjustment,
     getRecognitionFailureRate,
+    getRecognitionRetrievability,
+    getMasteryProgress,
     CHOICE_UNKNOWN_FAILURE_WEIGHT,
     parseAnswerModeStats,
     CHOICE_SPEED_IGNORE_AFTER_MS,
@@ -64,6 +67,73 @@ test("typing uses only the first valid kana candidate, then the original answer"
     assert.equal(normalizeAnswerMode("input", true), "input");
     assert.equal(normalizeAnswerMode("auto", true), "selection");
     assert.equal(normalizeAnswerMode("input", false), "selection");
+});
+
+test("effective answer mode follows ItemView's per-item typing fallback", () => {
+    const selectionOnly = { ...item, answer: "東京都🍎" };
+    assert.equal(getTypingAnswer(selectionOnly), null);
+    assert.equal(getEffectiveAnswerMode(selectionOnly, "input"), "selection");
+    assert.equal(getEffectiveAnswerMode(item, "input"), "input");
+    assert.equal(getEffectiveAnswerMode(item, "selection"), "selection");
+});
+
+test("mixed input rooms include selection-only mastery in current and 24h counts", () => {
+    const timestamp = Date.parse("2026-11-20T00:00:00.000Z");
+    const typedItem = { ...item, id: "typed" };
+    const choiceItem = { ...item, id: "choice", answer: "東京都🍎" };
+    const typedMemory = {
+        ...createInitialMemory("u", "r", typedItem.id),
+        stability: 10,
+        reviewCount: 1,
+        lastReviewedAt: new Date(timestamp).toISOString(),
+    };
+    const choiceMemory = recordAnswerModeResult({
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: choiceItem.id,
+        mode: "selection",
+        success: true,
+        now: new Date(timestamp),
+    });
+    const modes = Object.fromEntries(
+        [typedItem, choiceItem].map((entry) => [
+            entry.id, getEffectiveAnswerMode(entry, "input"),
+        ]),
+    );
+    const result = getMasteryProgress(
+        [typedItem.id, choiceItem.id],
+        { typed: typedMemory, choice: choiceMemory },
+        timestamp,
+        0.8,
+        "input",
+        modes,
+    );
+    assert.deepEqual(result, {
+        total: 2,
+        masteredNow: 2,
+        masteredAfter24Hours: 1,
+    });
+    const dayLater = getMasteryProgress(
+        [typedItem.id, choiceItem.id],
+        { typed: typedMemory, choice: choiceMemory },
+        timestamp + 24 * 60 * 60 * 1000,
+        0.8,
+        "input",
+        modes,
+    );
+    assert.equal(dayLater.masteredNow, 1);
+    // The original room-wide mode would incorrectly drop the selection item.
+    assert.equal(
+        getMasteryProgress(
+            [typedItem.id, choiceItem.id],
+            { typed: typedMemory, choice: choiceMemory },
+            timestamp,
+            0.8,
+            "input",
+        ).masteredNow,
+        1,
+    );
 });
 
 test("typing failures preserve the previous exposure timestamp", () => {
@@ -234,7 +304,9 @@ test("selection speed has a bounded, stronger bias and ignores idle responses", 
     assert.equal(exactlyThirty.answerModeStats?.recognition.averageResponseMs, 13_985);
     const failed = save(exactlyThirty, 200, false);
     assert.equal(failed.answerModeStats?.recognition.averageResponseMs, 13_985);
+    // Recognition tracks its own stability; typing free recall is unchanged.
     assert.equal(failed.reviewCount, 0);
+    assert.ok(failed.answerModeStats?.recognition.stability);
 
     const parsed = parseAnswerModeStats({
         recognition: {
@@ -254,4 +326,130 @@ test("selection speed has a bounded, stronger bias and ignores idle responses", 
         },
         recall: parsed.recall,
     }));
+});
+
+
+test("clean choice recall grows recognition stability with spaced practice", () => {
+    const day = 24 * 60 * 60 * 1000;
+    const firstTime = new Date("2026-11-20T00:00:00.000Z");
+    const first = recordAnswerModeResult({
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: "apple",
+        mode: "selection",
+        success: true,
+        responseMs: 1800,
+        now: firstTime,
+    });
+    const firstStability = first.answerModeStats!.recognition.stability!;
+    assert.ok(firstStability > 0);
+    assert.equal(getRecognitionRetrievability(first, firstTime.getTime()), 1);
+    assert.ok(getRecognitionRetrievability(first, firstTime.getTime() + day) < 0.8);
+    assert.equal(first.lastReviewedAt, null);
+    assert.equal(first.reviewCount, 0);
+
+    const secondTime = new Date(firstTime.getTime() + day);
+    const second = recordAnswerModeResult({
+        memory: first,
+        userId: "u",
+        roomId: "r",
+        itemId: "apple",
+        mode: "selection",
+        success: true,
+        now: secondTime,
+    });
+    assert.ok(second.answerModeStats!.recognition.stability! > firstStability);
+    assert.equal(second.answerModeStats!.recognition.lastReviewedAt, secondTime.toISOString());
+    assert.equal(getRecognitionRetrievability(second, secondTime.getTime()), 1);
+    assert.equal(second.stability, first.stability);
+    assert.equal(second.lastReviewedAt, first.lastReviewedAt);
+    assert.equal(
+        parseAnswerModeStats(second.answerModeStats)?.recognition.stability,
+        second.answerModeStats!.recognition.stability,
+    );
+});
+
+test("wrong and revealed selections reduce stability without crediting a recall", () => {
+    const start = new Date("2026-11-20T00:00:00.000Z");
+    const reviewed = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: true, now: start,
+    });
+    const afterHour = new Date(start.getTime() + 60 * 60 * 1000);
+    const wrong = recordAnswerModeResult({
+        memory: reviewed, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: false, now: afterHour,
+    });
+    const revealed = recordAnswerModeResult({
+        memory: reviewed, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: false, usedHint: true, now: afterHour,
+    });
+    assert.ok(wrong.answerModeStats!.recognition.stability! < reviewed.answerModeStats!.recognition.stability!);
+    assert.ok(revealed.answerModeStats!.recognition.stability! <= wrong.answerModeStats!.recognition.stability!);
+    assert.equal(wrong.answerModeStats!.recognition.lastReviewedAt, start.toISOString());
+    assert.equal(revealed.answerModeStats!.recognition.lastReviewedAt, start.toISOString());
+    assert.ok(getRecognitionRetrievability(wrong, afterHour.getTime()) <=
+        getRecognitionRetrievability(reviewed, afterHour.getTime()));
+    assert.equal(getRecognitionRetrievability(recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: false, usedHint: true, now: start,
+    }), start.getTime()), 0);
+    assert.equal(revealed.answerModeStats!.recognition.unknownCount, 1);
+});
+
+test("selection mastery bar counts recognition instead of free recall", () => {
+    const timestamp = Date.parse("2026-11-20T00:00:00.000Z");
+    const mastered = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: true, now: new Date(timestamp),
+    });
+    assert.deepEqual(
+        getMasteryProgress(["a", "b"], { a: mastered }, timestamp, 0.8, "selection"),
+        { total: 2, masteredNow: 1, masteredAfter24Hours: 0 },
+    );
+    assert.deepEqual(
+        getMasteryProgress(["a", "b"], { a: mastered }, timestamp, 0.8, "input"),
+        { total: 2, masteredNow: 0, masteredAfter24Hours: 0 },
+    );
+    assert.equal(
+        getMasteryProgress(["a", "b"], { a: mastered }, timestamp + 24 * 60 * 60 * 1000, 0.8, "selection").masteredNow,
+        0,
+    );
+});
+
+test("selection scheduler prioritizes decayed recognition even at equal accuracy and speed", () => {
+    const timestamp = Date.parse("2026-11-20T00:00:00.000Z");
+    const records = Object.fromEntries(
+        [["stable", 10], ["fragile", 0.3]].map(([id, stability]) => {
+            const memory = recordAnswerModeResult({
+                memory: undefined, userId: "u", roomId: "r",
+                itemId: String(id), mode: "selection",
+                success: true, now: new Date(timestamp),
+            });
+            memory.answerModeStats!.recognition.stability = Number(stability);
+            return [String(id), memory];
+        }),
+    );
+    const now = timestamp + 24 * 60 * 60 * 1000;
+    const scheduler = createScheduler(["stable", "fragile"], () => 0.99);
+    const first = chooseNextUserItem(scheduler, records, () => 0.99, now, "selection");
+    assert.equal(first?.itemId, "fragile");
+});
+
+test("legacy recognition history without stability remains readable", () => {
+    const stamp = "2026-11-20T00:00:00.000Z";
+    const old = parseAnswerModeStats({
+        recognition: { attempts: 1, correct: 1, correctStreak: 1, lastAttemptAt: stamp },
+        recall: { attempts: 0, correct: 0, correctStreak: 0, lastAttemptAt: null },
+    });
+    assert.ok(old);
+    const state = { ...createInitialMemory("u", "r", "a"), answerModeStats: old };
+    assert.equal(getRecognitionRetrievability(state, Date.parse(stamp)), 1);
+    const updated = recordAnswerModeResult({
+        memory: state, userId: "u", roomId: "r", itemId: "a",
+        mode: "selection", success: true, now: new Date(Date.parse(stamp) + 86_400_000),
+    });
+    assert.ok(updated.answerModeStats!.recognition.stability! > 0);
+    assert.equal(updated.answerModeStats!.recognition.lastReviewedAt, new Date(Date.parse(stamp) + 86_400_000).toISOString());
 });

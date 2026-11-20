@@ -174,3 +174,25 @@ the room offers selection only. Answer text is no longer restricted to the
 typing character set or the old 32-character limit; empty answers remain
 invalid. Recognition and typed recall statistics are stored separately in
 `ei_typebomb_item_memory.answer_mode_stats`.
+
+## Offline recognition mastery and retention forecast
+
+Offline selection (multiple-choice) responses now update their own recognition
+stability inside `answer_mode_stats.recognition`, alongside the existing
+accuracy and response-time statistics. The recognition stability is updated
+using the same exponential forgetting model as typed recall, but the two modes
+remain separate: recognizing an option never claims the learner can type the
+answer unaided. A clean selection initializes/strengthens recognition memory;
+a mistaken or manually revealed choice reduces its stability without resetting
+the successful-recall timestamp, avoiding an artificial mastery increase.
+
+The offline bar uses the active answer mode's predicted retrievability. It
+counts words at or above the 80% threshold now (light cyan), and forecasts
+which of those remain at or above 80% after 24 hours (dark cyan). Review order
+also considers recognition retrievability, along with choice error rate and
+active response speed, while retaining retries and suspension priorities.
+
+Older answer-mode JSON without recognition stability is still readable; a
+positive clean-recognition streak provides an initial prediction until the
+next completed choice updates the new stability field. No schema migration is
+needed.
