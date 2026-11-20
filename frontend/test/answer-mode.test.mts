@@ -119,6 +119,7 @@ test("mixed input rooms include selection-only mastery in current and 24h counts
     assert.deepEqual(result, {
         total: 2,
         masteredNow: 2,
+        masteredAfter1Hour: 2,
         masteredAfter24Hours: 1,
     });
     const dayLater = getMasteryProgress(
@@ -463,11 +464,11 @@ test("selection mastery bar counts recognition instead of free recall", () => {
     });
     assert.deepEqual(
         getMasteryProgress(["a", "b"], { a: mastered }, timestamp, 0.8, "selection"),
-        { total: 2, masteredNow: 1, masteredAfter24Hours: 0 },
+        { total: 2, masteredNow: 1, masteredAfter1Hour: 1, masteredAfter24Hours: 0 },
     );
     assert.deepEqual(
         getMasteryProgress(["a", "b"], { a: mastered }, timestamp, 0.8, "input"),
-        { total: 2, masteredNow: 0, masteredAfter24Hours: 0 },
+        { total: 2, masteredNow: 0, masteredAfter1Hour: 0, masteredAfter24Hours: 0 },
     );
     assert.equal(
         getMasteryProgress(["a", "b"], { a: mastered }, timestamp + 24 * 60 * 60 * 1000, 0.8, "selection").masteredNow,

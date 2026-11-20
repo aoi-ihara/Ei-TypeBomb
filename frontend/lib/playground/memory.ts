@@ -523,10 +523,12 @@ export const getRecognitionRetrievability = (
 // Mastery counts words exceeding the current answer mode's time-decayed prediction.
 export const MASTERY_RETRIEVABILITY_THRESHOLD = 0.8;
 export const MASTERY_FORECAST_HORIZON_MS = DAY_MS;
+export const MASTERY_ONE_HOUR_HORIZON_MS = 60 * 60 * 1000;
 
 export type MasteryProgress = {
     total: number;
     masteredNow: number;
+    masteredAfter1Hour: number;
     masteredAfter24Hours: number;
 };
 
@@ -540,6 +542,7 @@ export const getMasteryProgress = (
 ): MasteryProgress => {
     const uniqueItemIds = new Set(itemIds);
     let masteredNow = 0;
+    let masteredAfter1Hour = 0;
     let masteredAfter24Hours = 0;
 
     for (const itemId of uniqueItemIds) {
@@ -550,12 +553,20 @@ export const getMasteryProgress = (
         if (!(predict(memory, now) >= threshold)) continue;
         masteredNow++;
         if (
+            predict(memory, now + MASTERY_ONE_HOUR_HORIZON_MS) >= threshold
+        ) masteredAfter1Hour++;
+        if (
             predict(memory, now + MASTERY_FORECAST_HORIZON_MS) >=
             threshold
         ) masteredAfter24Hours++;
     }
 
-    return { total: uniqueItemIds.size, masteredNow, masteredAfter24Hours };
+    return {
+        total: uniqueItemIds.size,
+        masteredNow,
+        masteredAfter1Hour,
+        masteredAfter24Hours,
+    };
 };
 
 export const applyRecallObservation = ({
