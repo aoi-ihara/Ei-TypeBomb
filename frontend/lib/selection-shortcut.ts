@@ -17,3 +17,20 @@ export const nextSelectionSpacePress = (
     armed: isSpace && !previousWasSpace,
     reveal: isSpace && previousWasSpace,
 });
+
+/** Use the same keydown detection for starting a game and revealing a choice. */
+export const isSpaceKey = (event: Pick<KeyboardEvent, "code" | "key">): boolean =>
+    event.code === "Space" || event.key === " " || event.key === "Spacebar";
+
+export const isGameSpaceKeyDown = (
+    event: Pick<KeyboardEvent, "code" | "key" | "repeat" | "isComposing">,
+): boolean => isSpaceKey(event) && !event.repeat && !event.isComposing;
+
+// A dual-role Space/Shift remapper can dispatch a Space keydown without a
+// matching Space keyup. Allow a distinct non-repeat keydown in that case,
+// while ignoring duplicate keydowns generated in the same short burst.
+export const canCountSelectionSpaceKeyDown = (
+    repeat: boolean,
+    spaceStillDown: boolean,
+    elapsedSinceLastDownMs: number,
+): boolean => !repeat && (!spaceStillDown || elapsedSinceLastDownMs >= 60);
