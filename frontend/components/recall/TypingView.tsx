@@ -2,7 +2,13 @@ import {
     correctPrefixLength,
     getInitialCueLength,
 } from "@/lib/playground/recall-input";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { getActiveElapsedMs as calculateActiveElapsedMs } from "@/lib/playground/active-clock";
 import {
     createAutomaticHintEvidence,
