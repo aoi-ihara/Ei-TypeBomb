@@ -68,6 +68,9 @@ export default function AuthForm({
                                 ? "パスワードを変更しました。"
                                 : "メールをご確認ください。対象のアカウントがある場合は確認メールが届きます。",
                         );
+                        // Refresh the verified session if email changes immediately.
+                        // Pending changes stay unchanged until /auth/confirm redirects to /account.
+                        if (mode === "email") router.refresh();
                     }
                 } catch {
                     setError("通信に失敗しました。再度お試しください。");
