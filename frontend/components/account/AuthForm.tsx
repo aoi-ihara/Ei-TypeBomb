@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Turnstile } from "@marsidev/react-turnstile";
@@ -14,6 +15,7 @@ export default function AuthForm({
     mode: Mode;
     next?: string;
 }) {
+    const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmation, setConfirmation] = useState("");
@@ -39,7 +41,7 @@ export default function AuthForm({
                     needsPassword &&
                     password !== confirmation
                 ) {
-                    setError("パスワードが一致しません。");
+                    setError("入力内容が不正確です。");
                     return;
                 }
                 lock.current = true;
@@ -56,6 +58,8 @@ export default function AuthForm({
                         window.location.assign(
                             next ? safeReturnPath(next) : "/mine",
                         );
+                    else if (mode === "sign-up")
+                        router.replace("/sign-up/check-email");
                     else {
                         setPassword("");
                         setConfirmation("");
