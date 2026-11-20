@@ -6,6 +6,7 @@ export default async function Page() {
     if (!user) redirect("/sign-in");
     return (
         <AccountDetails
+            user={user}
             mcpEnabled={process.env.ETB_MCP_OAUTH_ENABLED === "true"}
         />
     );

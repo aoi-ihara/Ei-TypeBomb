@@ -4,16 +4,20 @@ import Apps from "@/components/account/Apps";
 import AuthForm from "@/components/account/AuthForm";
 import Button from "@/components/ui/Button";
 import { signOut } from "@/lib/auth/sign-out";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import posthog from "posthog-js";
+import { identifyPostHogUser, type PostHogIdentityUser } from "@/lib/analytics/posthog-identity";
+import { unstable_rethrow, useRouter } from "next/navigation";
 
 import { IconName } from "@/components/ui/Icon";
 import Shell from "../layout/Shell";
 
 export default function AccountDetails({
     mcpEnabled,
+    user,
 }: {
     mcpEnabled: boolean;
+    user: PostHogIdentityUser;
 }) {
     const buttonNames = mcpEnabled
         ? ["接続", "メールアドレス", "パスワード"]
@@ -24,6 +28,11 @@ export default function AccountDetails({
     const [navigation, setNavigation] = useState(0);
 
     const router = useRouter();
+
+    // Confirmation links return here with the verified Supabase email.
+    useEffect(() => {
+        identifyPostHogUser(user);
+    }, [user]);
 
     return (
         <Shell
@@ -47,8 +56,17 @@ export default function AccountDetails({
                     <Button
                         variant="danger"
                         onClick={async () => {
-                            await signOut();
-                            router.refresh();
+                            // The server action redirects on success, so reset before it.
+                            posthog.reset();
+                            try {
+                                await signOut();
+                                router.refresh();
+                            } catch (error) {
+                                unstable_rethrow(error);
+                                // Restore the identity if sign-out actually failed.
+                                identifyPostHogUser(user);
+                                throw error;
+                            }
                         }}
                         className="w-fit shrink-0 sm:w-full"
                         iconName="logOut"
