@@ -8,16 +8,29 @@ const ts = require("typescript");
 const root = path.join(__dirname, "..");
 const compile = (source) =>
     ts.transpileModule(source, {
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+        compilerOptions: {
+            module: ts.ModuleKind.CommonJS,
+            target: ts.ScriptTarget.ES2022,
+        },
     }).outputText;
 
-function policy({ beta = "true", enabled = true, throws = false, token = "project" } = {}) {
+function policy({
+    beta = "true",
+    enabled = true,
+    throws = false,
+    token = "project",
+} = {}) {
     const calls = [];
     const exports = {};
     const source = readFileSync(path.join(root, "lib/beta-access.ts"), "utf8");
     vm.runInNewContext(compile(source), {
         exports,
-        process: { env: { BETA_ENVIRONMENT: beta, NEXT_PUBLIC_POSTHOG_KEY: token } },
+        process: {
+            env: {
+                NEXT_PUBLIC_BETA_ENVIRONMENT: beta,
+                NEXT_PUBLIC_POSTHOG_KEY: token,
+            },
+        },
         console: { error: () => {} },
         require(name) {
             if (name !== "@/lib/posthog-server") throw Error(name);
@@ -60,26 +73,49 @@ test("beta access requires a verified user and an enabled flag on that user ID",
 test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the beta gate", () => {
     const { isPublicBetaPath } = policy();
     for (const allowed of [
-        "/beta-access-denied", "/sign-in", "/sign-in/reset-password",
-        "/sign-up", "/auth/confirm", "/oauth/consent",
-        "/api/oauth/authorize", "/api/oauth/token", "/api/oauth/interaction/x",
+        "/beta-access-denied",
+        "/sign-in",
+        "/sign-in/reset-password",
+        "/sign-up",
+        "/auth/confirm",
+        "/oauth/consent",
+        "/api/oauth/authorize",
+        "/api/oauth/token",
+        "/api/oauth/interaction/x",
         "/.well-known/oauth-authorization-server",
         "/.well-known/oauth-protected-resource/api/mcp",
-        "/ingest/array/", "/favicon.ico",
-    ]) assert.equal(isPublicBetaPath(allowed), true, allowed);
+        "/ingest/array/",
+        "/favicon.ico",
+    ])
+        assert.equal(isPublicBetaPath(allowed), true, allowed);
     for (const protectedPath of [
-        "/", "/mine", "/saved", "/account", "/api/room-list-viewer",
-        "/api/mcp", "/some-room/edit", "/server-health",
+        "/",
+        "/mine",
+        "/saved",
+        "/account",
+        "/api/room-list-viewer",
+        "/api/mcp",
+        "/some-room/edit",
+        "/server-health",
         "/api/oauth-not-real",
-    ]) assert.equal(isPublicBetaPath(protectedPath), false, protectedPath);
+    ])
+        assert.equal(isPublicBetaPath(protectedPath), false, protectedPath);
 });
 
-function proxyFixture({ beta = "true", userId = null, allowed = false, pathname = "/" } = {}) {
+function proxyFixture({
+    beta = "true",
+    userId = null,
+    allowed = false,
+    pathname = "/",
+} = {}) {
     const exports = {};
     const calls = [];
     const cookies = [];
     const response = (kind, destination, status = 200) => ({
-        kind, destination, status, cookies: {
+        kind,
+        destination,
+        status,
+        cookies: {
             getAll: () => cookies,
             set: (cookie) => cookies.push(cookie),
         },
@@ -88,45 +124,76 @@ function proxyFixture({ beta = "true", userId = null, allowed = false, pathname 
     vm.runInNewContext(compile(source), {
         exports,
         URL,
-        process: { env: { BETA_ENVIRONMENT: beta, NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example", NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon" } },
+        process: {
+            env: {
+                NEXT_PUBLIC_BETA_ENVIRONMENT: beta,
+                NEXT_PUBLIC_SUPABASE_URL: "https://supabase.example",
+                NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon",
+            },
+        },
         require(name) {
-            if (name === "next/server") return {
-                NextResponse: {
-                    next: () => response("next"),
-                    rewrite: (url, options) => response("rewrite", url.pathname, options?.status),
-                    json: (body, options) => ({ ...response("json", undefined, options?.status), body }),
-                },
-            };
-            if (name === "@supabase/ssr") return {
-                createServerClient: () => ({
-                    auth: {
-                        getClaims: async () => { calls.push("claims"); return {}; },
-                        getUser: async () => {
-                            calls.push("getUser");
-                            return { data: { user: userId ? { id: userId } : null }, error: null };
-                        },
+            if (name === "next/server")
+                return {
+                    NextResponse: {
+                        next: () => response("next"),
+                        rewrite: (url, options) =>
+                            response("rewrite", url.pathname, options?.status),
+                        json: (body, options) => ({
+                            ...response("json", undefined, options?.status),
+                            body,
+                        }),
                     },
-                }),
-            };
-            if (name === "@/lib/db/cookie-options") return { cookieOptions: {} };
-            if (name === "@/lib/beta-access") return {
-                isBetaEnvironment: () => beta === "true",
-                isPublicBetaPath: policy().isPublicBetaPath,
-                canAccessBeta: async (id) => { calls.push("flag:" + id); return allowed; },
-            };
+                };
+            if (name === "@supabase/ssr")
+                return {
+                    createServerClient: () => ({
+                        auth: {
+                            getClaims: async () => {
+                                calls.push("claims");
+                                return {};
+                            },
+                            getUser: async () => {
+                                calls.push("getUser");
+                                return {
+                                    data: {
+                                        user: userId ? { id: userId } : null,
+                                    },
+                                    error: null,
+                                };
+                            },
+                        },
+                    }),
+                };
+            if (name === "@/lib/db/cookie-options")
+                return { cookieOptions: {} };
+            if (name === "@/lib/beta-access")
+                return {
+                    isBetaEnvironment: () => beta === "true",
+                    isPublicBetaPath: policy().isPublicBetaPath,
+                    canAccessBeta: async (id) => {
+                        calls.push("flag:" + id);
+                        return allowed;
+                    },
+                };
             throw Error(name);
         },
     });
     const request = {
         nextUrl: { pathname, clone: () => ({ pathname }) },
         url: "https://beta.example" + pathname,
-        cookies: { getAll: () => userId ? [{ name: "sb-example-auth-token", value: "x" }] : [] },
+        cookies: {
+            getAll: () =>
+                userId ? [{ name: "sb-example-auth-token", value: "x" }] : [],
+        },
     };
     return { proxy: exports.proxy, request, calls };
 }
 
 test("beta pages are rewritten to the access error, never redirected", async () => {
-    const { proxy, request, calls } = proxyFixture({ pathname: "/mine", userId: "person" });
+    const { proxy, request, calls } = proxyFixture({
+        pathname: "/mine",
+        userId: "person",
+    });
     const result = await proxy(request);
     assert.equal(result.kind, "rewrite");
     assert.equal(result.destination, "/beta-access-denied");
@@ -136,7 +203,10 @@ test("beta pages are rewritten to the access error, never redirected", async () 
 
 test("beta API denies guest with 401 and unapproved user with 403", async () => {
     for (const userId of [null, "person"]) {
-        const { proxy, request } = proxyFixture({ pathname: "/api/room-list-viewer", userId });
+        const { proxy, request } = proxyFixture({
+            pathname: "/api/room-list-viewer",
+            userId,
+        });
         const result = await proxy(request);
         assert.equal(result.kind, "json");
         assert.equal(result.status, userId ? 403 : 401);
@@ -144,14 +214,22 @@ test("beta API denies guest with 401 and unapproved user with 403", async () => 
 });
 
 test("authorized beta user proceeds to the existing personalized feed rewrite", async () => {
-    const { proxy, request } = proxyFixture({ userId: "person", allowed: true });
+    const { proxy, request } = proxyFixture({
+        userId: "person",
+        allowed: true,
+    });
     const result = await proxy(request);
     assert.equal(result.kind, "rewrite");
     assert.equal(result.destination, "/viewer-feed-internal");
 });
 
 test("auth and MCP protocol requests bypass browser-cookie restrictions", async () => {
-    for (const pathname of ["/sign-in", "/auth/confirm", "/api/oauth/token", "/api/mcp"]) {
+    for (const pathname of [
+        "/sign-in",
+        "/auth/confirm",
+        "/api/oauth/token",
+        "/api/mcp",
+    ]) {
         const { proxy, request, calls } = proxyFixture({ pathname });
         const result = await proxy(request);
         assert.equal(result.kind, "next");
@@ -168,17 +246,31 @@ test("normal production guest feed keeps its no-Supabase fast path", async () =>
 
 test("route groups preserve URLs and MCP resource protection follows OAuth verification", () => {
     for (const file of [
-        "app/(auth)/sign-in/page.tsx", "app/(auth)/sign-up/page.tsx",
-        "app/(auth)/auth/confirm/route.ts", "app/(auth)/oauth/consent/page.tsx",
-        "app/(api)/api/mcp/route.ts", "app/(api)/api/room-list-viewer/route.ts",
+        "app/(auth)/sign-in/page.tsx",
+        "app/(auth)/sign-up/page.tsx",
+        "app/(auth)/auth/confirm/route.ts",
+        "app/(auth)/oauth/consent/page.tsx",
+        "app/(api)/api/mcp/route.ts",
+        "app/(api)/api/room-list-viewer/route.ts",
         "app/(api)/.well-known/oauth-authorization-server/route.ts",
         "app/(api)/.well-known/oauth-protected-resource/api/mcp/route.ts",
         "app/(auth)/beta-access-denied/page.tsx",
-    ]) assert.equal(existsSync(path.join(root, file)), true, file);
+    ])
+        assert.equal(existsSync(path.join(root, file)), true, file);
     assert.equal(existsSync(path.join(root, "app/api/mcp/route.ts")), false);
-    const mcp = readFileSync(path.join(root, "app/(api)/api/mcp/route.ts"), "utf8");
-    const tokenAuth = mcp.indexOf("const principal = await authenticateMcpRequest(request);");
-    const betaCheck = mcp.indexOf("if (!(await canAccessBeta(principal.userId)))");
+    const mcp = readFileSync(
+        path.join(root, "app/(api)/api/mcp/route.ts"),
+        "utf8",
+    );
+    const tokenAuth = mcp.indexOf(
+        "const principal = await authenticateMcpRequest(request);",
+    );
+    const betaCheck = mcp.indexOf(
+        "if (!(await canAccessBeta(principal.userId)))",
+    );
     assert.ok(tokenAuth >= 0 && betaCheck > tokenAuth);
-    assert.equal(mcp.split("if (!(await canAccessBeta(principal.userId)))").length - 1, 3);
+    assert.equal(
+        mcp.split("if (!(await canAccessBeta(principal.userId)))").length - 1,
+        3,
+    );
 });

@@ -111,7 +111,7 @@ export default function TypingSyncOverlay({
                         [...typingAnswer].map((char, index) => (
                             <div
                                 key={`${char}-${index}`}
-                                className={`${char === " " ? "w-4" : "w-8"} h-16 p-1 font-mono text-3xl font-bold`}
+                                className={`${char === " " ? "w-4" : "w-8"} h-16 p-1 font-serif text-3xl font-bold`}
                             >
                                 <div className="flex h-full w-full items-center justify-center border-b border-(--color-border)">
                                     {currentInput[index] ?? ""}

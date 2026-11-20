@@ -5,7 +5,12 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
 import NavigationProgress from "@/components/layout/NavigationProgress";
-import { LINE_Seed_JP, JetBrains_Mono, Noto_Serif, Noto_Serif_JP } from "next/font/google";
+import {
+    LINE_Seed_JP,
+    JetBrains_Mono,
+    Noto_Serif,
+    Noto_Serif_JP,
+} from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
 import PopUp from "./PopUp";
@@ -36,7 +41,7 @@ const notoSerifJp = Noto_Serif_JP({
 });
 
 export const metadata: Metadata = {
-    ...(process.env.BETA_ENVIRONMENT === "true"
+    ...(process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true"
         ? { robots: { index: false, follow: false } }
         : {}),
     metadataBase: new URL(getEtbBaseUrl()),

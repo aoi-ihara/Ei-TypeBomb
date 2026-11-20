@@ -749,14 +749,17 @@ export default function EditorClient({
                 一般
             </div>
 
-            <div className="grid w-full grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-start">
-                <div className="min-w-0 min-[360px]:col-span-2 lg:col-span-1">
-                    <Input
-                        onChange={(e) => setRoomExplanation(e.target.value)}
-                        label="説明"
-                        value={roomExplanation}
-                    />
-                </div>
+            <div className="min-w-0 min-[360px]:col-span-2 lg:col-span-1">
+                <Input
+                    onChange={(e) => setRoomExplanation(e.target.value)}
+                    label="説明"
+                    variant="textarea"
+                    inputClassName="resize-none h-24"
+                    value={roomExplanation}
+                />
+            </div>
+
+            <div className="grid w-full grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-3 lg:items-start">
                 <Picker
                     name="最大プレイヤー数"
                     labelPrefix="上限"
@@ -1162,13 +1165,11 @@ export default function EditorClient({
                                 {generatedWords.map((word, index) => (
                                     <div
                                         data-cursor="text"
-                                        className="truncate rounded-lg bg-(--color-background-secondary) py-1 px-2"
+                                        className="truncate font-serif rounded-lg bg-(--color-background-secondary) py-1 px-2"
                                         key={index}
                                     >
                                         {word.jp}
-                                        <div className="w-full font-mono">
-                                            {word.en}
-                                        </div>
+                                        <div className="w-full">{word.en}</div>
                                     </div>
                                 ))}
                             </div>
@@ -1280,7 +1281,7 @@ export default function EditorClient({
                                                 <div className="flex flex-col gap-4">
                                                     <Input
                                                         label="問題"
-                                                        font="mono"
+                                                        font="serif"
                                                         value={item.prompt}
                                                         onChange={(e) => {
                                                             const newItems =
@@ -1326,7 +1327,7 @@ export default function EditorClient({
                                                 <div className="flex flex-col gap-4">
                                                     <Input
                                                         label="回答"
-                                                        font="mono"
+                                                        font="serif"
                                                         value={item.answer}
                                                         onChange={(e) => {
                                                             const newItems =

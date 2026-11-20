@@ -17,12 +17,18 @@ export function isPublicBetaPath(pathname: string): boolean {
         pathname === "/.well-known/oauth-protected-resource/api/mcp" ||
         pathname === "/ingest" ||
         pathname.startsWith("/ingest/") ||
-        ["/favicon.ico", "/favicon.svg", "/favicon-2.svg", "/apple-icon.png", "/hero.png"].includes(pathname)
+        [
+            "/favicon.ico",
+            "/favicon.svg",
+            "/favicon-2.svg",
+            "/apple-icon.png",
+            "/hero.png",
+        ].includes(pathname)
     );
 }
 
 export const isBetaEnvironment = () =>
-    process.env.BETA_ENVIRONMENT === "true";
+    process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true";
 
 let posthog: ReturnType<typeof getPostHogClient> | undefined;
 
@@ -35,7 +41,10 @@ export async function canAccessBeta(userId: string | null): Promise<boolean> {
     if (!isBetaEnvironment()) return true;
     if (
         !userId ||
-        !(process.env.NEXT_PUBLIC_POSTHOG_KEY || process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN)
+        !(
+            process.env.NEXT_PUBLIC_POSTHOG_KEY ||
+            process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
+        )
     ) {
         return false;
     }
