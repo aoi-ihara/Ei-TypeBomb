@@ -5,7 +5,7 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
 import NavigationProgress from "@/components/layout/NavigationProgress";
-import { LINE_Seed_JP, JetBrains_Mono } from "next/font/google";
+import { LINE_Seed_JP, JetBrains_Mono, Noto_Serif, Noto_Serif_JP } from "next/font/google";
 import { PostHogProvider } from "./providers";
 import { Analytics } from "@vercel/analytics/next";
 import PopUp from "./PopUp";
@@ -21,6 +21,18 @@ const jetbrainsMono = JetBrains_Mono({
     subsets: ["latin"],
     weight: ["400", "700"],
     variable: "--jetbrains-mono",
+});
+
+const notoSerif = Noto_Serif({
+    subsets: ["latin"],
+    variable: "--font-noto-serif",
+    display: "swap",
+});
+
+const notoSerifJp = Noto_Serif_JP({
+    subsets: ["latin"],
+    variable: "--font-noto-serif-jp",
+    display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -67,7 +79,7 @@ export default function RootLayout({
     return (
         <html lang="ja">
             <body
-                className={`${lineSeedJp.variable} ${jetbrainsMono.variable} min-h-full flex flex-col`}
+                className={`${lineSeedJp.variable} ${jetbrainsMono.variable} ${notoSerif.variable} ${notoSerifJp.variable} min-h-full flex flex-col`}
             >
                 <PostHogProvider>
                     <Suspense fallback={null}>
