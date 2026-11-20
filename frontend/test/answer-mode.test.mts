@@ -30,6 +30,7 @@ import {
     canHandleSelectionSpace,
     canCountSelectionSpaceKeyDown,
     isGameSpaceKeyDown,
+    isDualRoleSpaceRelease,
     nextSelectionSpacePress,
 } from "../lib/selection-shortcut";
 import type { Item } from "../type";
@@ -192,13 +193,15 @@ test("game start and selection share the same Space keydown detection", () => {
     assert.equal(isGameSpaceKeyDown({ ...space, key: "Shift", code: "ShiftLeft" }), false);
 });
 
-test("dual-role Space taps recover from missing keyup without counting bursts", () => {
-    assert.equal(canCountSelectionSpaceKeyDown(false, false, 0), true);
-    assert.equal(canCountSelectionSpaceKeyDown(false, true, 5), false);
-    assert.equal(canCountSelectionSpaceKeyDown(false, true, 59), false);
-    assert.equal(canCountSelectionSpaceKeyDown(false, true, 90), true);
-    assert.equal(canCountSelectionSpaceKeyDown(true, true, 500), false);
-    assert.equal(canCountSelectionSpaceKeyDown(false, false, 0), true);
+test("Space keydowns require a release even after delayed repeat-flag-free events", () => {
+    assert.equal(canCountSelectionSpaceKeyDown(false, false), true);
+    assert.equal(canCountSelectionSpaceKeyDown(false, true), false);
+    assert.equal(canCountSelectionSpaceKeyDown(true, true), false);
+    assert.equal(canCountSelectionSpaceKeyDown(false, false), true);
+    assert.equal(isDualRoleSpaceRelease({ key: "Shift", code: "ShiftLeft" }), true);
+    assert.equal(isDualRoleSpaceRelease({ key: "Shift", code: "ShiftRight" }), true);
+    assert.equal(isDualRoleSpaceRelease({ key: " ", code: "Space" }), false);
+    assert.equal(isDualRoleSpaceRelease({ key: "Control", code: "ControlLeft" }), false);
 });
 
 test("double-Space hint works when an answer button has focus", () => {
