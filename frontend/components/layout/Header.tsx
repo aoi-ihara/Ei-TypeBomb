@@ -8,9 +8,9 @@ export default function Header({ children }: { children?: React.ReactNode }) {
     return (
         <header className="flex w-full shrink-0 items-center justify-between gap-4 px-4 py-4">
             <div className="flex min-w-0 flex-1 gap-4">
-                <div className="shrink-0 rounded-lg" data-cursor="button">
+                <div className="min-w-0 rounded-lg" data-cursor="button">
                     <Link
-                        className="flex w-max shrink-0 items-center gap-2 whitespace-nowrap rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
+                        className="flex min-w-0 items-center gap-2 rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                         href="/"
                     >
                         <Image
@@ -20,7 +20,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                             width={36}
                             height={36}
                         />
-                        <span className="whitespace-nowrap font-extrabold">
+                        <span className="min-w-0 truncate font-extrabold">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
                                 ? "Ei-TypeBomb Beta"
