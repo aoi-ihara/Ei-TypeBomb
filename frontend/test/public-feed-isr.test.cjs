@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const ts = require("typescript");
 
 const source = readFileSync(
-    path.join(__dirname, "../app/api/room-list-viewer/route.ts"),
+    path.join(__dirname, "../app/(api)/api/room-list-viewer/route.ts"),
     "utf8",
 );
 
