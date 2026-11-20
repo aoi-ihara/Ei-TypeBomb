@@ -1853,7 +1853,7 @@ test("first independent recall increases stability without crediting recent expo
 });
 
 
-test("mastery progress counts current and 24-hour delayed retrievability", () => {
+test("mastery progress counts current, one-hour and 24-hour retrievability", () => {
     const stamp = Date.parse("2026-11-20T00:00:00Z");
     const lastReviewedAt = new Date(stamp).toISOString();
     const stable = {
@@ -1877,6 +1877,7 @@ test("mastery progress counts current and 24-hour delayed retrievability", () =>
     );
     assert.equal(first.total, 4);
     assert.equal(first.masteredNow, 2);
+    assert.equal(first.masteredAfter1Hour, 2);
     assert.equal(first.masteredAfter24Hours, 1);
 
     const dayLater = memory.getMasteryProgress(
@@ -1885,6 +1886,7 @@ test("mastery progress counts current and 24-hour delayed retrievability", () =>
         stamp + 24 * 60 * 60 * 1000,
     );
     assert.equal(dayLater.masteredNow, 1);
+    assert.equal(dayLater.masteredAfter1Hour, 1);
     assert.equal(dayLater.masteredAfter24Hours, 1);
 
     const afterThreeDays = memory.getMasteryProgress(
@@ -1893,6 +1895,7 @@ test("mastery progress counts current and 24-hour delayed retrievability", () =>
         stamp + 3 * 24 * 60 * 60 * 1000,
     );
     assert.equal(afterThreeDays.masteredNow, 0);
+    assert.equal(afterThreeDays.masteredAfter1Hour, 0);
     assert.equal(afterThreeDays.masteredAfter24Hours, 0);
 
     const invalid = { ...initial("invalid"), lastReviewedAt: "not-a-date" };
@@ -1902,10 +1905,12 @@ test("mastery progress counts current and 24-hour delayed retrievability", () =>
         stamp,
     );
     assert.equal(invalidProgress.masteredNow, 0);
+    assert.equal(invalidProgress.masteredAfter1Hour, 0);
     assert.equal(invalidProgress.masteredAfter24Hours, 0);
 
     const empty = memory.getMasteryProgress([], records, stamp);
     assert.equal(empty.total, 0);
     assert.equal(empty.masteredNow, 0);
+    assert.equal(empty.masteredAfter1Hour, 0);
     assert.equal(empty.masteredAfter24Hours, 0);
 });
