@@ -2,6 +2,13 @@ import { test, expect, type Page } from "@playwright/test";
 
 const hint = (page: Page) => page.getByRole("button", { name: "分からない" });
 const choices = (page: Page) => page.getByRole("button", { name: /^[1-4]\. / });
+async function choiceForAnswer(page: Page, answer: string) {
+  for (const choice of await choices(page).all()) {
+    if ((await choice.innerText()).trim().endsWith(`. ${answer}`))
+      return choice;
+  }
+  throw new Error(`No choice for expected answer: ${answer}`);
+}
 async function start(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "ゲームを開始", exact: true }).click();
@@ -37,9 +44,7 @@ test("offline double Space reveals distractors and records assisted history once
   await page.getByText(`question: ${answer}`, { exact: true }).click();
   await reveal(page);
   await expectRevealed(page, answer);
-  await choices(page)
-    .filter({ hasText: new RegExp(`\\. ${answer}$`) })
-    .click();
+  await (await choiceForAnswer(page, answer)).click();
   await expect
     .poll(() =>
       page.evaluate((id) => {
@@ -78,9 +83,7 @@ test("focused enabled choice does not receive a native Space click", async ({
   page,
 }) => {
   const answer = await start(page);
-  const correct = choices(page).filter({
-    hasText: new RegExp(`\\. ${answer}$`),
-  });
+  const correct = await choiceForAnswer(page, answer);
   await correct.focus();
   await reveal(page);
   await expect(
