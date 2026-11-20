@@ -89,6 +89,48 @@ test("focused enabled choice does not receive a native Space click", async ({
   await expectRevealed(page, answer);
 });
 
+test("dual-role Space/Shift tap works without a matching Space keyup", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  // Focused answers must not receive a native click from the shortcut.
+  await choices(page).first().focus();
+  const remappedTap = () =>
+    page.evaluate(() => {
+      const target = document.activeElement ?? document.body;
+      target.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+      // Some dual-role mappers emit Shift keyup instead of Space keyup.
+      target.dispatchEvent(new KeyboardEvent("keyup", {
+        key: "Shift", code: "ShiftLeft", bubbles: true, cancelable: true,
+      }));
+    });
+  await remappedTap();
+  await expect(hint(page)).toBeEnabled();
+  await page.waitForTimeout(90);
+  await remappedTap();
+  await expectRevealed(page, answer);
+  await expect(page.getByText(`question: ${answer}`, { exact: true })).toBeVisible();
+});
+
+test("very short Space down/up pairs reveal without a hold-time requirement", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  await page.evaluate(() => {
+    for (let i = 0; i < 2; i++) {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+      document.body.dispatchEvent(new KeyboardEvent("keyup", {
+        key: " ", code: "Space", bubbles: true, cancelable: true,
+      }));
+    }
+  });
+  await expectRevealed(page, answer);
+});
+
 test("holding Space and repeated keydowns without repeat never count twice", async ({
   page,
 }) => {
