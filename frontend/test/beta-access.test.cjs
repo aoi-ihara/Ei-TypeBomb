@@ -77,6 +77,7 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/sign-in",
         "/sign-in/reset-password",
         "/sign-up",
+        "/sign-up/check-email",
         "/auth/confirm",
         "/oauth/consent",
         "/api/oauth/authorize",
@@ -226,6 +227,7 @@ test("authorized beta user proceeds to the existing personalized feed rewrite", 
 test("auth and MCP protocol requests bypass browser-cookie restrictions", async () => {
     for (const pathname of [
         "/sign-in",
+        "/sign-up/check-email",
         "/auth/confirm",
         "/api/oauth/token",
         "/api/mcp",
@@ -248,6 +250,7 @@ test("route groups preserve URLs and MCP resource protection follows OAuth verif
     for (const file of [
         "app/(auth)/sign-in/page.tsx",
         "app/(auth)/sign-up/page.tsx",
+        "app/(auth)/sign-up/check-email/page.tsx",
         "app/(auth)/auth/confirm/route.ts",
         "app/(auth)/oauth/consent/page.tsx",
         "app/(api)/api/mcp/route.ts",

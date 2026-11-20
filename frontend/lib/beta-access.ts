@@ -9,6 +9,7 @@ export function isPublicBetaPath(pathname: string): boolean {
         pathname === "/sign-in" ||
         pathname.startsWith("/sign-in/") ||
         pathname === "/sign-up" ||
+        pathname === "/sign-up/check-email" ||
         pathname === "/auth/confirm" ||
         pathname === "/oauth/consent" ||
         pathname === "/api/oauth" ||
