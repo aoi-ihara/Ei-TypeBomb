@@ -108,7 +108,7 @@ export default function AuthForm({
             )}
             {needsPassword && mode !== "sign-in" && (
                 <Input
-                    label="パスワード（確認）"
+                    label="パスワードの確認"
                     value={confirmation}
                     type="password"
                     autoComplete="new-password"
