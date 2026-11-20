@@ -117,6 +117,59 @@ test("dual-role Space/Shift tap works without a matching Space keyup", async ({
   await expect(page.getByText(`question: ${answer}`, { exact: true })).toBeVisible();
 });
 
+test("dual-role Space with intervening Shift down/up still reveals", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  await choices(page).first().focus();
+  await page.evaluate(() => {
+    const target = document.activeElement ?? document.body;
+    const dispatch = (type: string, key: string, code: string) =>
+      target.dispatchEvent(new KeyboardEvent(type, {
+        key, code, bubbles: true, cancelable: true,
+      }));
+    // A dual-role remapper may send a Shift down/up pair between
+    // consecutive Space keydowns instead of a matching Space keyup.
+    dispatch("keydown", " ", "Space");
+    dispatch("keydown", "Shift", "ShiftLeft");
+    dispatch("keyup", "Shift", "ShiftLeft");
+    dispatch("keydown", " ", "Space");
+  });
+  await expectRevealed(page, answer);
+  await expect(page.getByText(`question: ${answer}`, { exact: true }))
+    .toBeVisible();
+});
+
+test("focus within a question does not reset an armed Space shortcut", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  await page.keyboard.press("Space");
+  // Internal focus updates should not invalidate the first press.
+  await choices(page).first().focus();
+  await page.keyboard.press("Space");
+  await expectRevealed(page, answer);
+});
+
+test("Space then non-Shift keys still cancel the shortcut", async ({ page }) => {
+  await controls(page);
+  const send = (key: string, code: string) =>
+    page.evaluate(({ key, code }) => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        key, code, bubbles: true, cancelable: true,
+      }));
+      document.body.dispatchEvent(new KeyboardEvent("keyup", {
+        key, code, bubbles: true, cancelable: true,
+      }));
+    }, { key, code });
+  await send(" ", "Space");
+  await send("a", "KeyA");
+  await send(" ", "Space");
+  await expect(hint(page)).toBeEnabled();
+  await send(" ", "Space");
+  await expect(hint(page)).toBeDisabled();
+});
+
 test("very short Space down/up pairs reveal without a hold-time requirement", async ({
   page,
 }) => {
