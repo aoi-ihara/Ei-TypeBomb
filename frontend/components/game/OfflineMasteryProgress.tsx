@@ -3,9 +3,9 @@ import { type MasteryProgress } from "@/lib/playground/memory";
 export default function OfflineMasteryProgress({
     progress,
 }: Readonly<{ progress: MasteryProgress }>) {
-    const { total, masteredNow, masteredAfter1Hour, masteredAfter24Hours } = progress;
+    const { total, masteredNow, masteredAfter3Hours, masteredAfter24Hours } = progress;
     const currentPercent = total ? (masteredNow / total) * 100 : 0;
-    const oneHourPercent = total ? (masteredAfter1Hour / total) * 100 : 0;
+    const threeHourPercent = total ? (masteredAfter3Hours / total) * 100 : 0;
     const retainedPercent = total ? (masteredAfter24Hours / total) * 100 : 0;
 
     return (
@@ -16,7 +16,7 @@ export default function OfflineMasteryProgress({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(currentPercent)}
-            aria-valuetext={`${masteredNow} / ${total} 語を現在習得。1時間後も ${masteredAfter1Hour} 語、24時間後も ${masteredAfter24Hours} 語は維持する予測`}
+            aria-valuetext={`${masteredNow} / ${total} 語を現在習得。3時間後も ${masteredAfter3Hours} 語、24時間後も ${masteredAfter24Hours} 語は維持する予測`}
         >
             <div
                 className="bg-cyan-600 h-full transition-[width] duration-300"
@@ -25,13 +25,13 @@ export default function OfflineMasteryProgress({
             <div
                 className="bg-(--color-foreground) h-full transition-[width] duration-300"
                 style={{
-                    width: `${Math.max(0, oneHourPercent - retainedPercent)}%`,
+                    width: `${Math.max(0, threeHourPercent - retainedPercent)}%`,
                 }}
             />
             <div
                 className="bg-(--color-border) h-full transition-[width] duration-300"
                 style={{
-                    width: `${Math.max(0, currentPercent - oneHourPercent)}%`,
+                    width: `${Math.max(0, currentPercent - threeHourPercent)}%`,
                 }}
             />
         </div>
