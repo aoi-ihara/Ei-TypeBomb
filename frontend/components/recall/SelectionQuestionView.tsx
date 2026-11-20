@@ -166,6 +166,10 @@ export default function SelectionQuestionView({
                 return;
             }
 
+            // Dual-role Space/Shift keyboards may send Shift keydown between
+            // two short Space taps. It must not cancel an armed shortcut.
+            if (isDualRoleSpaceRelease(event)) return;
+
             if (allowHint && isSpaceKey(event)) {
                 const isInteractive =
                     target instanceof Element &&
@@ -254,6 +258,18 @@ export default function SelectionQuestionView({
         const resetSequence = () => {
             lastKeyWasSpaceRef.current = false;
         };
+        const onFocusIn = (event: FocusEvent) => {
+            // Focus moving between controls within the active question is
+            // still the same interaction; entering an editor or a control
+            // outside the question cancels a partially armed shortcut.
+            if (
+                event.target instanceof Node &&
+                questionRef.current?.contains(event.target)
+            ) return;
+            resetSequence();
+            spaceKeyDownRef.current = false;
+            spaceKeyHandledRef.current = false;
+        };
         const onBlur = () => {
             resetSequence();
             spaceKeyDownRef.current = false;
@@ -263,13 +279,13 @@ export default function SelectionQuestionView({
         // A click/focus change starts a new interaction. In particular, do not
         // carry half a shortcut through an editor, a dialog, or another tab.
         window.addEventListener("blur", onBlur);
-        window.addEventListener("focusin", resetSequence);
+        window.addEventListener("focusin", onFocusIn);
         window.addEventListener("pointerdown", resetSequence, true);
         window.addEventListener("keydown", onKeyDown, true);
         window.addEventListener("keyup", onKeyUp, true);
         return () => {
             window.removeEventListener("blur", onBlur);
-            window.removeEventListener("focusin", resetSequence);
+            window.removeEventListener("focusin", onFocusIn);
             window.removeEventListener("pointerdown", resetSequence, true);
             window.removeEventListener("keydown", onKeyDown, true);
             window.removeEventListener("keyup", onKeyUp, true);
