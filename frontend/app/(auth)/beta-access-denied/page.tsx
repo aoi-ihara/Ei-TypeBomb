@@ -13,7 +13,7 @@ export default function BetaAccessDeniedPage() {
                 href="/sign-in"
                 variant="primary"
                 iconName="logIn"
-                className="w-full max-w-xs"
+                className="w-full max-w-xs whitespace-nowrap"
             >
                 サインイン
             </Button>
