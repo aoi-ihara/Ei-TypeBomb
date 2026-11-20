@@ -409,14 +409,6 @@ export const chooseNextUserItem = (
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
 
-    if (!state.initialPriorityApplied || state.priorityAnswerMode !== mode) {
-        state.cycleQueue.sort((a, b) =>
-            compareMemoryPriority(a, b, memories, now, mode),
-        );
-        state.initialPriorityApplied = true;
-        state.priorityAnswerMode = mode;
-    }
-
     const turn = state.turn + 1;
     const activeIds = state.itemIds.filter((id) => !isOnHold(state, id));
     const pending = Object.values(state.retries).filter(
@@ -452,11 +444,14 @@ export const chooseNextUserItem = (
     const pickFromCycle = () => {
         if (state.cycleQueue.length === 0) {
             state.cycle++;
-            state.cycleQueue = shuffle(state.itemIds, random).sort((a, b) =>
-                compareMemoryPriority(a, b, memories, now, mode),
-            );
-            state.priorityAnswerMode = mode;
+            state.cycleQueue = shuffle(state.itemIds, random);
         }
+        // Forgetting risk can change the order even within the same cycle.
+        state.cycleQueue.sort((a, b) =>
+            compareMemoryPriority(a, b, memories, now, mode),
+        );
+        state.initialPriorityApplied = true;
+        state.priorityAnswerMode = mode;
         return state.cycleQueue.find(
             (id) => !state.retries[id] && !isOnHold(state, id),
         );
@@ -681,7 +676,7 @@ export const saveSchedulerState = (
 };
 
 /**
- * Restore the exact upcoming order and retry windows. After a long break,
+ * Restore the remaining cycle and retry windows. After a long break,
  * release an unfinished prompt (without crediting it) and re-rank remaining
  * cycle items by current retrievability. New room words join the queue while
  * deleted words and invalid cached entries are discarded.
