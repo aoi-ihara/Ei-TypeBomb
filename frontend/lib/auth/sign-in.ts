@@ -27,7 +27,7 @@ export const signIn = async (
 
     if (error) {
         console.error(error);
-        return "ログインできませんでした。メールアドレス、パスワード、認証を確認して再度お試しください。";
+        return "サインインできませんでした。メールアドレス、パスワード、認証を確認して再度お試しください。";
     }
 
     redirect("/mine");
