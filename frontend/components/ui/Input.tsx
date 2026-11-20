@@ -13,7 +13,7 @@ type BaseProps = {
     name?: string;
     id?: string;
     autoComplete?: string;
-    font?: "default" | "mono";
+    font?: "default" | "mono" | "serif";
     disableLabelAnimation?: boolean;
     max?: number;
     min?: number;
@@ -77,7 +77,7 @@ export default function Input(props: InputProps) {
                     autoComplete={autoComplete}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : font === "serif" ? "font-serif" : ""} ${inputClassName}`}
                 />
             ) : (
                 <input
@@ -94,7 +94,7 @@ export default function Input(props: InputProps) {
                     autoComplete={autoComplete}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
-                    className={`w-full appearance-none rounded-lg px-5 py-4 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : ""} ${inputClassName}`}
+                    className={`w-full appearance-none rounded-lg px-5 h-15 outline-none shadow-[inset_0_0_0_1px_var(--color-border)] transition-shadow duration-(--duration-etb) ease-etb focus:shadow-[inset_0_0_0_2px_var(--color-foreground)] ${font === "mono" ? "font-mono" : font === "serif" ? "font-serif" : ""} ${inputClassName}`}
                 />
             )}
 
