@@ -160,6 +160,37 @@ test("holding Space and repeated keydowns without repeat never count twice", asy
   await expect(hint(page)).toBeDisabled();
 });
 
+test("delayed hold keydowns without repeat flags never count as a second tap", async ({
+  page,
+}) => {
+  const answer = await start(page);
+  const fakeKeydown = () =>
+    page.evaluate(() => {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", {
+        key: " ", code: "Space", repeat: false,
+        bubbles: true, cancelable: true,
+      }));
+    });
+
+  await fakeKeydown();
+  await page.waitForTimeout(150);
+  await fakeKeydown();
+  await page.waitForTimeout(150);
+  await fakeKeydown();
+  await expect(hint(page)).toBeEnabled();
+  for (const choice of await choices(page).all())
+    await expect(choice).toBeEnabled();
+
+  // A true release, not elapsed time, allows a second press to reveal.
+  await page.evaluate(() => {
+    document.body.dispatchEvent(new KeyboardEvent("keyup", {
+      key: " ", code: "Space", bubbles: true, cancelable: true,
+    }));
+  });
+  await fakeKeydown();
+  await expectRevealed(page, answer);
+});
+
 test("pause blocks hints and resets the previous press", async ({ page }) => {
   const answer = await start(page);
   await page.keyboard.press("Space");
