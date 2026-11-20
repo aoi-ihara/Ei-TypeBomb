@@ -30,6 +30,12 @@ jobs:
             - name: Test kana and hyphen input
               run: npm run test:kana
               working-directory: frontend
+            - name: Install selection test browsers
+              run: npx playwright install --with-deps chromium webkit
+              working-directory: frontend
+            - name: Test selection keyboard interactions in browsers
+              run: npm run test:selection-browser
+              working-directory: frontend
             - name: Typecheck
               run: npx tsc --noEmit
               working-directory: frontend
