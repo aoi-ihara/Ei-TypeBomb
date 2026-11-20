@@ -55,23 +55,7 @@ whether the feature actually improves retention.
 
 ## Interleaved reviews of previously learned words
 
-After at least five user questions, each normal (non-retry) selection gets a
-15% chance to revisit an earlier answered word when a suitable candidate exists.
-This does not override a due retry, a returning suspension, or the four-word
-active relearning limit. Candidates must have a valid recall history, have
-already been answered during the session and removed from the current cycle,
-and have had no answer/BOT exposure in the last two minutes. The last user
-question is excluded. Among eligible candidates the lowest predicted
-retrievability wins (with difficulty as a tie-breaker, then random ties).
-The interleaved review does not advance or remove items from the main cycle.
-When no candidate exists or the random check fails, normal cycle selection
-continues. The same scheduler is shared by Playground and online play.
-
-The 15% probability and two-minute exposure cooldown are **uncalibrated
-hypotheses**, not validated retention thresholds. Compare delayed recall,
-repetitions per session, and time to first complete room coverage. No new
-Supabase columns or migration are needed; existing per-item memory and the
-local scheduler snapshot are sufficient.
+Eligible retries and returning holds take priority. Ordinary selection compares due words across the remaining cycle and previously answered words. A word outside the cycle can return after two minutes without exposure. Among cycle words, predictions below 80% precede unseen items, followed by retained items. Each item uses the mode actually shown. Recognition error rate and active response time refine priority within five-percentage-point retention bands.
 
 ## Historical context
 
@@ -96,7 +80,7 @@ Observations retain final correctness, first-attempt correctness, incorrect-char
 
 The fast label uses first key within 2.5 seconds and total time ≤ 2 seconds + 1.5 × expected typing time. A correct, independent, unaided answer remains recall even when it takes longer or includes self-corrected input errors; latency and incorrect-input count are performance signals, not standalone reasons for a forced retry. Expected typing time uses answer length and the user's sampled character interval (220 ms initially). Learning probes start without letter hints. After a 6-second stall, a suggestion appears without revealing any answer. Learners can request one unresolved non-space character at a time; the last unresolved character is never automatically revealed. Solo play has no bomb countdown or win/loss state. Full reveal shows the answer and meaning, with a confirmation button instead of mandatory copying. These thresholds and cue ratios are product hypotheses.
 
-The long-term model is **not FSRS**. First independent clear recall seeds stability at 0.30 days (weak recall: 0.18 days) instead of leaving it at 0.15; recent-exposure successes receive no gain. These values and the existing 0.5 retention-gain coefficient are uncalibrated hypotheses requiring delayed-recall experiments.  `R = exp(-elapsedDays / S)` makes S the days until predicted retrievability is approximately 36.8%. Fast and ordinary clear recalls use the same conservative stability gain. Retrieval latency and incorrect-input counts are retained for analysis but do not independently reduce stability or schedule a forced retry. A corrected typo receives no failure penalty. An unsuccessful final answer or full reveal uses `S × 0.8`, bounded below by 0.12. Recent-exposure successes do not increase S or shift the last independently evaluated review date. Coefficients are not fitted to human retention data.
+A first independent typed recall seeds stability at 0.30 days. Later independent successes use the elapsed interval since exposure as evidence: the target stability places 80% retention at 1.25 times that interval, with a conservative decay-based gain and a threefold cap per success. Failure or full reveal weakens stability and records exposure while preserving the previous independent review date. Selection uses separate recognition history and discounts successful choices with fewer distractors. These coefficients are hypotheses for validation against delayed independent answers.
 
 ## Solo practice and saving
 
@@ -187,8 +171,7 @@ a mistaken or manually revealed choice reduces its stability without resetting
 the successful-recall timestamp, avoiding an artificial mastery increase.
 
 The offline bar uses the active answer mode's predicted retrievability. It
-counts words at or above the 80% threshold now (light cyan), and forecasts
-which of those remain at or above 80% after 24 hours (dark cyan). Review order
+counts words at or above 80% now, after three hours, and after 24 hours. Review order
 also considers recognition retrievability, along with choice error rate and
 active response speed, while retaining retries and suspension priorities.
 

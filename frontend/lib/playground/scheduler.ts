@@ -1,4 +1,5 @@
 import {
+    MASTERY_RETRIEVABILITY_THRESHOLD,
     getRetrievability,
     getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
@@ -17,10 +18,6 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
-// Optional reviews never displace due retries or held words returning from a hold.
-// Both the probability and spacing threshold are uncalibrated product hypotheses.
-export const SPACED_REVIEW_CHANCE = 0.15;
-export const SPACED_REVIEW_MIN_TURNS = 5;
 export const SPACED_REVIEW_MIN_EXPOSURE_MS = 2 * 60_000;
 
 // Product hypotheses to calibrate with retention outcomes.
@@ -80,13 +77,6 @@ const shuffle = (ids: string[], random: () => number) => {
     }
     return result;
 };
-const hasRecallHistory = (memory: ItemMemoryState | undefined) =>
-    Boolean(
-        memory &&
-        memory.reviewCount > 0 &&
-        memory.lastReviewedAt &&
-        Number.isFinite(Date.parse(memory.lastReviewedAt)),
-    );
 const hasRecognitionHistory = (memory: ItemMemoryState | undefined) => {
     const recognition = memory?.answerModeStats?.recognition;
     return Boolean(
@@ -97,63 +87,30 @@ const hasRecognitionHistory = (memory: ItemMemoryState | undefined) => {
     );
 };
 type SchedulerAnswerMode = "input" | "selection";
-const compareMemoryPriority = (
-    a: string,
-    b: string,
-    memories: Record<string, ItemMemoryState>,
-    now: number,
-    mode: SchedulerAnswerMode = "input",
-) => {
-    const aMemory = memories[a];
-    const bMemory = memories[b];
-
-    if (mode === "selection") {
-        const aHasHistory = hasRecognitionHistory(aMemory);
-        const bHasHistory = hasRecognitionHistory(bMemory);
-        if (aHasHistory !== bHasHistory) return aHasHistory ? -1 : 1;
-        if (!aHasHistory || !bHasHistory) return 0;
-
-        const aStats = aMemory?.answerModeStats?.recognition;
-        const bStats = bMemory?.answerModeStats?.recognition;
-        if (!aStats || !bStats) return 0;
-        // Recognition stability decays independently of free recall.
-        // Combine it with the existing error and response-time priorities,
-        // so a late review matters without erasing the speed bias.
-        // One missed question is noisy evidence. Use one virtual successful
-        // attempt as a prior. A revealed ("unknown") answer carries a
-        // modest additional miss weight without inflating attempt counts.
-        const aErrorRate = getRecognitionFailureRate(aStats);
-        const bErrorRate = getRecognitionFailureRate(bStats);
-        // Never let an old fast response mask a more recent wrong turn.
-        // Clean, rapid recognition lowers priority; slow recognition raises it.
-        const aSpeed = getRecognitionSpeedAdjustment(
-            aStats.correctStreak > 0 ? aStats.averageResponseMs : undefined,
-        );
-        const bSpeed = getRecognitionSpeedAdjustment(
-            bStats.correctStreak > 0 ? bStats.averageResponseMs : undefined,
-        );
-        const aForgettingRisk = 1 - getRecognitionRetrievability(aMemory, now);
-        const bForgettingRisk = 1 - getRecognitionRetrievability(bMemory, now);
-        const aPriority = aErrorRate + aSpeed + 0.75 * aForgettingRisk;
-        const bPriority = bErrorRate + bSpeed + 0.75 * bForgettingRisk;
-        if (aPriority !== bPriority) return bPriority - aPriority;
-        return Date.parse(aStats.lastAttemptAt ?? "") -
-            Date.parse(bStats.lastAttemptAt ?? "");
-    }
-
-    const aHasHistory = hasRecallHistory(aMemory);
-    const bHasHistory = hasRecallHistory(bMemory);
-
-    // A never-reviewed word has no meaningful retrievability prediction.
-    // Review known words first, then introduce untouched words in shuffled order.
-    if (aHasHistory !== bHasHistory) return aHasHistory ? -1 : 1;
-    if (!aHasHistory || !bHasHistory) return 0;
-
-    const retrievabilityDifference =
-        getRetrievability(aMemory, now) - getRetrievability(bMemory, now);
-    if (retrievabilityDifference !== 0) return retrievabilityDifference;
-    return (bMemory?.difficulty ?? 5) - (aMemory?.difficulty ?? 5);
-};
+type ItemModes = Readonly<Record<string, SchedulerAnswerMode>>;
+function reviewPriority(memory: ItemMemoryState | undefined, now: number, mode: SchedulerAnswerMode) {
+    const choice = mode === "selection";
+    const known = choice ? hasRecognitionHistory(memory) : Boolean(memory?.reviewCount);
+    if (!known) return { group: 1, risk: 0, detail: 0, time: 0 };
+    const retention = choice ? getRecognitionRetrievability(memory, now) : getRetrievability(memory, now);
+    const stats = memory?.answerModeStats?.recognition;
+    // Within five percentage points of recognition probability, use choice
+    // accuracy and active response time to distinguish similarly urgent words.
+    return {
+        group: retention < MASTERY_RETRIEVABILITY_THRESHOLD ? 0 : 2,
+        risk: Math.floor(retention * 20),
+        detail: choice && stats ? -(getRecognitionFailureRate(stats) +
+            getRecognitionSpeedAdjustment(stats.correctStreak ? stats.averageResponseMs : undefined)) : retention,
+        time: choice && stats?.lastAttemptAt ? Date.parse(stats.lastAttemptAt) : -(memory?.difficulty ?? 5),
+    };
+}
+function compareMemoryPriority(a: string, b: string, memories: Record<string, ItemMemoryState>,
+    now: number, mode: SchedulerAnswerMode, modes?: ItemModes) {
+    const left = reviewPriority(memories[a], now, modes?.[a] ?? mode);
+    const right = reviewPriority(memories[b], now, modes?.[b] ?? mode);
+    return left.group - right.group || left.risk - right.risk ||
+        left.detail - right.detail || left.time - right.time;
+}
 export const createScheduler = (
     ids: string[],
     random = Math.random,
@@ -211,17 +168,15 @@ const isOnHold = (state: SchedulerState, itemId: string) =>
 const pickSpacedReview = (
     state: SchedulerState,
     memories: Record<string, ItemMemoryState>,
-    random: () => number,
     now: number,
     mode: SchedulerAnswerMode,
+    modes?: ItemModes,
 ): string | null => {
-    if (state.turn < SPACED_REVIEW_MIN_TURNS) return null;
-
     const queued = new Set(state.cycleQueue);
     const candidates = state.itemIds.filter((id) => {
         const memory = memories[id];
         if (
-            !(mode === "selection" ? hasRecognitionHistory(memory) : hasRecallHistory(memory)) ||
+            !memory ||
             (state.userAnswered[id] ?? 0) === 0 ||
             queued.has(id) ||
             state.retries[id] ||
@@ -236,20 +191,16 @@ const pickSpacedReview = (
         );
         return (
             Number.isFinite(lastExposure) &&
-            now - lastExposure >= SPACED_REVIEW_MIN_EXPOSURE_MS
+            now - lastExposure >= SPACED_REVIEW_MIN_EXPOSURE_MS &&
+            reviewPriority(memory, now, modes?.[id] ?? mode).group === 0
         );
     });
-    if (candidates.length === 0 || random() >= SPACED_REVIEW_CHANCE)
-        return null;
-
-    // Choose the least retrievable word; break equal priorities randomly.
-    let best = [candidates[0]];
-    for (const id of candidates.slice(1)) {
-        const comparison = compareMemoryPriority(id, best[0], memories, now, mode);
-        if (comparison < 0) best = [id];
-        else if (comparison === 0) best.push(id);
+    let best: string | null = null;
+    for (const id of candidates) {
+        if (best === null || compareMemoryPriority(id, best, memories, now, mode, modes) < 0)
+            best = id;
     }
-    return best[Math.floor(random() * best.length)];
+    return best;
 };
 
 /** Return a deadline only when every room word is on hold. */
@@ -405,6 +356,7 @@ export const chooseNextUserItem = (
     random = Math.random,
     now = Date.now(),
     mode: SchedulerAnswerMode = "input",
+    modes?: ItemModes,
 ): Selection | null => {
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
@@ -448,7 +400,7 @@ export const chooseNextUserItem = (
         }
         // Forgetting risk can change the order even within the same cycle.
         state.cycleQueue.sort((a, b) =>
-            compareMemoryPriority(a, b, memories, now, mode),
+            compareMemoryPriority(a, b, memories, now, mode, modes),
         );
         state.initialPriorityApplied = true;
         state.priorityAnswerMode = mode;
@@ -461,12 +413,13 @@ export const chooseNextUserItem = (
         !itemId &&
         pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
     ) {
-        const reviewId = pickSpacedReview(state, memories, random, now, mode);
-        if (reviewId) {
+        const cycleId = pickFromCycle();
+        const reviewId = pickSpacedReview(state, memories, now, mode, modes);
+        if (reviewId && (!cycleId || compareMemoryPriority(reviewId, cycleId, memories, now, mode, modes) < 0)) {
             itemId = reviewId;
             spacedReview = true;
         } else {
-            itemId = pickFromCycle();
+            itemId = cycleId;
         }
         // If the new cycle contains only pending words, choose a previously
         // answered filler instead of breaking the earliest-retry boundary.
@@ -534,8 +487,7 @@ export const chooseNextUserItem = (
               ? "retry"
               : spacedReview
                 ? "spaced_review"
-                : mode === "input" && hasRecallHistory(memories[itemId]) &&
-                    getRetrievability(memories[itemId], now) < 0.8
+                : reviewPriority(memories[itemId], now, modes?.[itemId] ?? mode).group === 0
                   ? "long_term_due"
                   : "cycle",
     };

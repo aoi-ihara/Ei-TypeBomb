@@ -235,10 +235,11 @@ test("the first cycle reviews due words before untouched words", () => {
             now.getTime(),
         );
         order.push(selected.itemId);
+        if (memories[selected.itemId]) memories[selected.itemId].lastPresentedAt = now.toISOString();
         if (i === 0) assert.equal(selected.reason, "long_term_due");
         scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
     }
-    assert.deepEqual(order, ["hard-due", "due", "recent", "untouched"]);
+    assert.deepEqual(order, ["hard-due", "due", "untouched", "recent"]);
     assert.equal(state.initialPriorityApplied, true);
 });
 
@@ -293,10 +294,10 @@ test("interleaved review targets the weakest previously answered word without co
     state.lastUserItem = "next";
     const memories = {
         old: { ...initial("old"), stability: 3, lastReviewedAt: oldReview },
-        older: { ...initial("older"), stability: 0.4, lastReviewedAt: oldReview },
+        older: { ...initial("older"), stability: 0.2, lastReviewedAt: oldReview },
     };
     const queueBefore = [...state.cycleQueue];
-    const chosen = scheduler.chooseNextUserItem(state, memories, () => 0, timestamp);
+    const chosen = scheduler.chooseNextUserItem(state, memories, () => 0.99, timestamp);
     assert.equal(chosen.itemId, "older");
     assert.equal(chosen.reason, "spaced_review");
     assert.equal(chosen.advancesCycle, false);
@@ -314,7 +315,7 @@ test("interleaved review targets the weakest previously answered word without co
     assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
 });
 
-test("interleaved review is optional and respects exposure cooldowns", () => {
+test("retained words and recent exposures cannot interrupt the cycle", () => {
     const timestamp = now.getTime();
     const oldReview = new Date(timestamp - 10 * 60_000).toISOString();
     const state = scheduler.createScheduler(["old", "new", "next"], () => 0.5);
@@ -1380,6 +1381,8 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             items,
             room: { id: "r" },
             answerMode: "input",
+            itemModes: {},
+            choiceCount: 4,
             isPaused: false,
             offlineVoiceReading: "none",
             soundEffects: false,
@@ -1480,6 +1483,7 @@ test("fallback answer-mode observations never enter authenticated sync queue", a
         ...m,
         room: { id: "r" },
         items: [item],
+        choiceCount: 1,
         authenticatedUserIdRef: ref("u"),
         memoryPersistenceDisabledRef: ref(true),
         memoryByItemRef: memory,
@@ -1879,6 +1883,7 @@ test("second cycle prioritizes lower retrievability even within the old <0.8 buc
     for (let i = 0; i < 3; i++) {
         const next = scheduler.chooseNextUserItem(state, histories, () => 0.5, now.getTime());
         actual.push(next.itemId);
+        histories[next.itemId].lastPresentedAt = now.toISOString();
         scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
     }
     assert.deepEqual(actual, ["low", "mid", "high"]);
@@ -1887,7 +1892,7 @@ test("first independent recall increases stability without crediting recent expo
     const original = memory.createInitialMemory("u", "r", "w");
     assert.equal(apply(original, observation()).stability, memory.INITIAL_CLEAR_RECALL_STABILITY);
     assert.equal(apply(original, observation({ additionalHintCount: 1 })).stability,
-        memory.INITIAL_WEAK_RECALL_STABILITY);
+        original.stability);
     assert.equal(apply(original, observation({ elapsedSincePresentationMs: 100 })).stability,
         original.stability);
 });
@@ -1953,4 +1958,36 @@ test("mastery progress counts current, three-hour and 24-hour retrievability", (
     assert.equal(empty.masteredNow, 0);
     assert.equal(empty.masteredAfter3Hours, 0);
     assert.equal(empty.masteredAfter24Hours, 0);
+});
+
+test("failed and fully revealed typing never reset the independent review date", () => {
+    for (const event of [{ success: false }, { answerWasFullyRevealed: true }, { finalCueRatio: 0.5 }]) {
+        const first = apply(undefined, observation(event));
+        assert.equal(memory.getRetrievability(first, now.getTime()), 0);
+        assert.equal(first.lastPresentedAt, now.toISOString());
+        const previous = { ...initial(), lastReviewedAt: new Date(now.getTime() - 86_400_000).toISOString() };
+        assert.equal(apply(previous, observation(event)).lastReviewedAt, previous.lastReviewedAt);
+    }
+});
+
+test("demonstrated spacing extends the forecast while immediate recognition gives no new anchor", () => {
+    const choose = (previous, hours, choiceCount = 4) => memory.recordAnswerModeResult({
+        memory: previous, userId: "u", roomId: "r", itemId: "a", mode: "selection", success: true,
+        choiceCount, now: new Date(now.getTime() + hours * 3_600_000),
+    });
+    const first = choose(undefined, 0);
+    assert.ok(choose(undefined, 0, 2).answerModeStats.recognition.stability < first.answerModeStats.recognition.stability);
+    const immediate = choose(first, 1 / 3600);
+    assert.equal(immediate.answerModeStats.recognition.lastReviewedAt, first.answerModeStats.recognition.lastReviewedAt);
+    const spaced = choose(first, 3);
+    assert.ok(memory.getRecognitionRetrievability(spaced, now.getTime() + 6 * 3_600_000) >= 0.8);
+});
+
+test("a mixed room prioritizes a due selection over a freshly recalled typing word", () => {
+    const state = scheduler.createScheduler(["typing", "choice"]);
+    const failedChoice = memory.recordAnswerModeResult({ userId: "u", roomId: "r", itemId: "choice", mode: "selection", success: false, now });
+    const next = scheduler.chooseNextUserItem(state, { typing: initial("typing"), choice: failedChoice },
+        () => 0.9, now.getTime(), "input", { choice: "selection" });
+    assert.equal(next.itemId, "choice");
+    assert.equal(next.reason, "long_term_due");
 });

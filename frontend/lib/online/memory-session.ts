@@ -99,6 +99,8 @@ export type OnlineMemorySession = {
     roomId: string;
     userId: string | null;
     memory: Record<string, ItemMemoryState>;
+    modes?: Record<string, AnswerModeResult>;
+    choiceCount?: number;
     scheduler: SchedulerState;
     pending: Map<string, ItemMemoryState>;
 };
@@ -213,7 +215,11 @@ export const createOnlineMemorySession = (
     itemIds: string[],
     userId: string | null,
     memory: Record<string, ItemMemoryState>,
+    modes?: Record<string, AnswerModeResult>,
+    choiceCount = 4,
 ): OnlineMemorySession => ({
+    modes,
+    choiceCount,
     roomId,
     userId,
     memory,
@@ -229,7 +235,7 @@ export const createOnlineMemorySession = (
 });
 
 export const nextOnlineRecommendation = (session: OnlineMemorySession) => {
-    const selected = chooseNextUserItem(session.scheduler, session.memory);
+    const selected = chooseNextUserItem(session.scheduler, session.memory, Math.random, Date.now(), "input", session.modes);
     saveSchedulerState(
         "online",
         session.userId ?? guestUserId,
@@ -299,6 +305,12 @@ export const recordOnlineAnswerModeResult = (
     if (!session.scheduler.itemIds.includes(itemId)) return null;
     const selectedBefore = session.scheduler.current?.itemId ?? null;
     const retryCountBefore = Object.keys(session.scheduler.retries).length;
+    if (mode === "selection" && (session.choiceCount ?? 4) < 2) {
+        reconcileOnlineSchedulerItem(session.scheduler, itemId);
+        session.scheduler.current = null;
+        saveSchedulerState("online", session.userId ?? guestUserId, session.roomId, session.scheduler);
+        return session.memory[itemId] ?? null;
+    }
     const updated = recordAnswerModeResult({
         memory: session.memory[itemId],
         userId: session.userId ?? guestUserId,
@@ -307,6 +319,7 @@ export const recordOnlineAnswerModeResult = (
         mode,
         success: success && !(mode === "selection" && hadMistake),
         responseMs,
+        choiceCount: session.choiceCount,
     });
     if (mode === "selection" && success) {
         reconcileOnlineSchedulerItem(session.scheduler, itemId);
