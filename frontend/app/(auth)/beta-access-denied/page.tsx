@@ -5,15 +5,15 @@ export const dynamic = "force-dynamic";
 
 export default function BetaAccessDeniedPage() {
     return (
-        <Shell title="認証が必要です" size="small">
-            <p role="status" data-cursor="text">
+        <Shell title="認証が必要です" size="medium">
+            <p role="status" data-cursor="text" className="text-center">
                 有効なアカウントでサインインしてください。
             </p>
             <Button
                 href="/sign-in"
                 variant="primary"
                 iconName="logIn"
-                className="w-full"
+                className="w-full max-w-xs"
             >
                 サインイン
             </Button>
