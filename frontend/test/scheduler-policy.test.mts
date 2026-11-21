@@ -646,13 +646,14 @@ test("recall evidence is continuous and answer-length independent", () => {
     assert(fast > hinted && hinted > 0);
 });
 
-test("new cards remain available when a full retry queue is not yet eligible", () => {
+test("a saturated retry queue reserves a periodic new-word slot", () => {
     const state = createScheduler(["a", "b", "c", "d", "new"], () => 0.5);
-    state.turn = 1;
+    state.turn = 5;
     for (const id of ["a", "b", "c", "d"])
-        state.retries[id] = { itemId: id, earliestTurn: 5, latestTurn: 8,
+        state.retries[id] = { itemId: id, earliestTurn: 6, latestTurn: 8,
             reason: "failed_recall", successCount: 0 };
     assert.equal(choose(state)?.itemId, "new");
+    assert.equal(Object.keys(state.retries).length, 4);
 });
 
 test("due suspension is not displaced by an introduction slot", () => {
