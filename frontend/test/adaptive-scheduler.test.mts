@@ -30,7 +30,7 @@ function reviewed(id: string, stability: number, ageHours: number): ItemMemorySt
         stability,
         reviewCount: 2,
         lastReviewedAt,
-        lastPresentedAt,
+        lastPresentedAt: lastReviewedAt,
     };
 }
 
