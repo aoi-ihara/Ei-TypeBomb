@@ -52,6 +52,8 @@ const analytics = projectToken
           requestTimeout: 2000,
           fetchRetryCount: 0,
           disableGeoip: true,
+          captureModel: false,
+          enableConversationId: false,
       })
     : null;
 
@@ -273,6 +275,23 @@ const tools = [
         },
     },
 ];
+
+// Deterministic fallback for the custom dispatcher (instrument().intentFallback equivalent).
+// Never include room content, identifiers, passwords, or other raw arguments.
+function inferToolIntent(name: string): string {
+    switch (name) {
+        case "list_rooms":
+            return "The user is discovering available Ei-TypeBomb rooms to choose a learning activity.";
+        case "create_room":
+            return "The user is creating an Ei-TypeBomb room to prepare a learning activity.";
+        case "get_room":
+            return "The user is reviewing an owned Ei-TypeBomb room before using or editing it.";
+        case "update_room":
+            return "The user is updating an owned Ei-TypeBomb room to adjust a learning activity.";
+        default:
+            return "The user is requesting an unsupported Ei-TypeBomb operation.";
+    }
+}
 
 const fallbackInstructions =
     "Ei-TypeBombのMCPサーバーです。OAuthで認証されたユーザー本人のルームを作成・取得・編集でき、おすすめの公開ルームや保存済みの閲覧可能なルームも一覧取得できます。";
@@ -759,7 +778,11 @@ export async function POST(request: NextRequest) {
             toolNames: tools.map((tool) => tool.name),
         });
         await flushAnalytics();
-        return jsonRpc(id, { tools: presentation.tools });
+        return jsonRpc(id, {
+            tools: analytics
+                ? analytics.prepareToolList(presentation.tools, { context: true })
+                : presentation.tools,
+        });
     }
 
     if (body.method !== "tools/call") {
@@ -772,10 +795,13 @@ export async function POST(request: NextRequest) {
     }
 
     const args = isRecord(params.arguments) ? params.arguments : {};
+    const preparedCall = analytics?.prepareToolCall(params.name, args, {
+        originalTool: tools.find((tool) => tool.name === params.name),
+    });
     const started = performance.now();
     let result: ToolResult;
     try {
-        result = await callTool(params.name, args, principal.userId);
+        result = await callTool(params.name, preparedCall?.args ?? args, principal.userId);
     } catch (error) {
         console.error("MCP tool execution failed", error);
         result = toolError("処理中にエラーが発生しました。", "INTERNAL_ERROR", true);
@@ -794,6 +820,8 @@ export async function POST(request: NextRequest) {
         toolName: tools.some((tool) => tool.name === params.name)
             ? params.name
             : "unknown",
+        intent: preparedCall?.intent ?? inferToolIntent(params.name),
+        intentSource: preparedCall?.intent ? "context_parameter" : "inferred",
         durationMs: Math.round(performance.now() - started),
         // PostHog's MCP SDK creates Error Tracking issues for isError=true.
         // Expected validation/not-found results are not server exceptions.
