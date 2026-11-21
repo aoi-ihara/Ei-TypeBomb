@@ -384,8 +384,16 @@ export const chooseNextUserItem = (
     const awaitingFirstReview = (id: string) => {
         if (!known(id)) return false;
         const memory = memories[id];
-        return (modes?.[id] ?? mode) === "selection"
-            ? !recognitionMemory(memory?.answerModeStats?.recognition).anchor
+        const effectiveMode = modes?.[id] ?? mode;
+        const track = effectiveMode === "selection"
+            ? memory?.answerModeStats?.recognition
+            : memory?.answerModeStats?.recall;
+        // A currently failed, not-yet-recovered word still needs ordinary
+        // short-term relearning priority. Successful rehearsal without enough
+        // spacing is the case we must protect from repeated cycle exposures.
+        if (track?.attempts && track.correctStreak === 0) return false;
+        return effectiveMode === "selection"
+            ? !recognitionMemory(track).anchor
             : !memory?.lastReviewedAt;
     };
     const readyForRound = (id: string) =>
