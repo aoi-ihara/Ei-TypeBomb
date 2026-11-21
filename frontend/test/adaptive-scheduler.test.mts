@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     createInitialMemory,
+    recordAnswerModeResult,
     evaluateRecall,
     type ItemMemoryState,
 } from "../lib/playground/memory";
@@ -116,6 +117,35 @@ test("mode-specific recognition history does not count as typed recall", () => {
     const state = createScheduler(["known", "unseen"], () => 0.5);
     const typed = reviewed("known", 0.2, 24);
     const selected = choose(state, { known: typed }, time, "selection");
+    assert.equal(selected?.reason, "cycle");
+});
+
+test("a recognized word stays eligible when switching to typed recall", () => {
+    const selectedMemory = recordAnswerModeResult({
+        userId: "u",
+        roomId: "r",
+        itemId: "switched",
+        mode: "selection",
+        success: true,
+        now: new Date(time - hour),
+        exposureGapMs: hour,
+    });
+    const state = createScheduler(["switched"], () => 0.5);
+    state.userAnswered.switched = 1; // Shared with the other answer mode.
+    state.cycleQueue = []; // A prior session already consumed this word.
+    const selected = choose(state, { switched: selectedMemory }, time, "input");
+    assert.equal(selected?.itemId, "switched");
+    assert.equal(selected?.reason, "cycle");
+});
+
+test("a recalled word stays eligible when switching to recognition", () => {
+    const state = createScheduler(["switched"], () => 0.5);
+    state.userAnswered.switched = 2;
+    state.cycleQueue = [];
+    const selected = choose(
+        state, { switched: reviewed("switched", 3, 1) }, time, "selection",
+    );
+    assert.equal(selected?.itemId, "switched");
     assert.equal(selected?.reason, "cycle");
 });
 
