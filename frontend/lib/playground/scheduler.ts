@@ -1,8 +1,6 @@
-import { chooseAdaptiveUserItem } from "./adaptive-scheduler";
-export { nextAdaptiveReviewAt } from "./adaptive-scheduler";
-
 import {
     MASTERY_RETRIEVABILITY_THRESHOLD,
+    getNextMemoryReviewAt,
     isIndependentExposure,
     getRetrievability,
     getRecognitionRetrievability,
@@ -22,7 +20,6 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
-export const SPACED_REVIEW_MIN_EXPOSURE_MS = 2 * 60_000;
 
 // Product hypotheses to calibrate with retention outcomes.
 export const INITIAL_SUSPENSION_FAILURES = 4;
@@ -66,13 +63,9 @@ export type SchedulerState = {
     retries: Record<string, RetryEntry>;
     struggles: Record<string, StruggleEntry>;
     userAnswered: Record<string, number>;
-    // Words first introduced during this offline learning session.
-    introduced: string[];
     botShown: Record<string, number>;
     lastBotItem: string | null;
     lastUserItem: string | null;
-    initialPriorityApplied: boolean;
-    priorityAnswerMode?: SchedulerAnswerMode;
     current: Selection | null;
 };
 const shuffle = (ids: string[], random: () => number) => {
@@ -131,12 +124,9 @@ export const createScheduler = (
         retries: {},
         struggles: {},
         userAnswered: {},
-        introduced: [],
         botShown: {},
         lastBotItem: null,
         lastUserItem: null,
-        initialPriorityApplied: false,
-        priorityAnswerMode: undefined,
         current: null,
     };
 };
@@ -169,47 +159,6 @@ const enqueueRetry = (
 const isOnHold = (state: SchedulerState, itemId: string) =>
     state.struggles[itemId]?.suspendedUntil != null;
 
-// Revisit previously answered words without waiting for the whole room cycle.
-// Only completed cycle entries are eligible, so an upcoming regular question
-// never gets duplicated or removed from the queue by an optional review.
-const pickSpacedReview = (
-    state: SchedulerState,
-    memories: Record<string, ItemMemoryState>,
-    now: number,
-    mode: SchedulerAnswerMode,
-    modes?: ItemModes,
-): string | null => {
-    const queued = new Set(state.cycleQueue);
-    const candidates = state.itemIds.filter((id) => {
-        const memory = memories[id];
-        if (
-            !memory ||
-            (state.userAnswered[id] ?? 0) === 0 ||
-            queued.has(id) ||
-            state.retries[id] ||
-            isOnHold(state, id) ||
-            id === state.lastUserItem
-        )
-            return false;
-
-        // lastPresentedAt includes BOT exposure, which is not independent recall.
-        const lastExposure = Date.parse(
-            memory.lastPresentedAt ?? memory.lastReviewedAt ?? "",
-        );
-        return (
-            Number.isFinite(lastExposure) &&
-            now - lastExposure >= SPACED_REVIEW_MIN_EXPOSURE_MS &&
-            reviewPriority(memory, now, modes?.[id] ?? mode).group === 0
-        );
-    });
-    let best: string | null = null;
-    for (const id of candidates) {
-        if (best === null || compareMemoryPriority(id, best, memories, now, mode, modes) < 0)
-            best = id;
-    }
-    return best;
-};
-
 /** Return a deadline only when every room word is on hold. */
 export const nextSuspendedReviewAt = (state: SchedulerState): number | null => {
     if (
@@ -237,7 +186,7 @@ const trackStruggle = (
         suspensionLevel: 0,
         suspendedUntil: null,
     };
-    if (evaluation.retryNeed === "none" && evaluation.independent) {
+    if (evaluation.retryNeed === "none") {
         // One unaided recall unblocks the word, but repeated failures still
         // matter. Several successes are needed to fully erase its hold level.
         const level = Math.max(0, previous.suspensionLevel - 1);
@@ -251,8 +200,7 @@ const trackStruggle = (
             };
         return false;
     }
-    if (!evaluation.independent || evaluation.retryNeed === "none")
-        return false;
+    if (!evaluation.independent) return false;
 
     const firstFailureAt = previous.firstFailureAt ?? now;
     const consecutiveFailures = previous.consecutiveFailures + 1;
@@ -295,13 +243,12 @@ export const recordUserAnswer = (
     if (!selected) return;
     state.userAnswered[selected.itemId] =
         (state.userAnswered[selected.itemId] ?? 0) + 1;
-    // Extra practice can improve fluency, but success cannot confirm a
-    // spaced recall or clear a retained struggle history before its deadline.
-    // A deliberately held item is kept on hold regardless of its result.
+    // Holds protect repeatedly struggling words even when the room is too
+    // small to supply other practice. Otherwise every answer updates the same
+    // short-term retry state, independently of long-term memory evidence.
     if (
         selected.reason === "early_practice" &&
-        (state.struggles[selected.itemId]?.suspendedUntil != null ||
-            evaluation.retryNeed === "none")
+        state.struggles[selected.itemId]?.suspendedUntil != null
     ) {
         state.current = null;
         return;
@@ -310,8 +257,11 @@ export const recordUserAnswer = (
         state.current = null;
         return;
     }
-    if (!selected.retry && evaluation.retryNeed !== "none" &&
-        Object.keys(state.retries).length >= MAX_ACTIVE_RELEARNING) {
+    if (
+        !selected.retry &&
+        evaluation.retryNeed !== "none" &&
+        Object.keys(state.retries).length >= MAX_ACTIVE_RELEARNING
+    ) {
         // Keep an unsuccessful filler available for ordinary review once a
         // slot opens, without displacing any of the active retries.
         if (!state.cycleQueue.includes(selected.itemId))
@@ -324,11 +274,7 @@ export const recordUserAnswer = (
             0,
             SHORT_RETRY_GAP,
         );
-    } else if (
-        selected.retry &&
-        evaluation.retryNeed === "none" &&
-        evaluation.independent
-    ) {
+    } else if (selected.retry && evaluation.retryNeed === "none") {
         const successes = selected.retry.successCount + 1;
         if (successes < REQUIRED_RETRY_SUCCESSES)
             enqueueRetry(
@@ -338,10 +284,6 @@ export const recordUserAnswer = (
                 successes,
                 CONFIRM_RETRY_GAP,
             );
-    } else if (selected.retry && !evaluation.independent &&
-        evaluation.retryNeed === "none") {
-        enqueueRetry(state, selected.itemId, selected.retry.reason,
-            selected.retry.successCount, SHORT_RETRY_GAP);
     } else if (evaluation.retryNeed === "confirm") {
         enqueueRetry(
             state,
@@ -379,6 +321,10 @@ export const recordRecognitionAnswer = (
     return true;
 };
 
+/** One selection policy for offline practice and online learning prompts.
+ * Retries are finite short-term tasks; ordinary turns consume a fair round.
+ * Low predicted retention alone never inserts extra practice into that round.
+ */
 export const chooseNextUserItem = (
     state: SchedulerState,
     memories: Record<string, ItemMemoryState> = {},
@@ -386,112 +332,118 @@ export const chooseNextUserItem = (
     now = Date.now(),
     mode: SchedulerAnswerMode = "input",
     modes?: ItemModes,
-    strategy: "legacy" | "adaptive" = "legacy",
 ): Selection | null => {
-    if (strategy === "adaptive")
-        return chooseAdaptiveUserItem(state, memories, random, now, mode, modes);
-    if (state.itemIds.length === 0) return null;
+    if (!state.itemIds.length) return null;
     if (state.current) return state.current;
-
     const turn = state.turn + 1;
-    const activeIds = state.itemIds.filter((id) => !isOnHold(state, id));
-    const pending = Object.values(state.retries).filter(
-        (entry) => !isOnHold(state, entry.itemId),
-    );
+    const pending = Object.values(state.retries);
     const eligible = pending
-        .filter((entry) => entry.earliestTurn <= turn)
-        .sort((a, b) => a.latestTurn - b.latestTurn);
-
-    // A due relearning item always beats an unseen item. The old alternating
-    // cycle/retry schedule introduced new words even when learners struggled.
-    let itemId: string | undefined = eligible[0]?.itemId;
-    const dueHolds = Object.entries(state.struggles)
         .filter(
-            ([id, entry]) =>
-                state.itemIds.includes(id) &&
-                entry.suspendedUntil != null &&
-                entry.suspendedUntil <= now,
+            (entry) =>
+                !isOnHold(state, entry.itemId) && entry.earliestTurn <= turn,
         )
-        .sort(
-            (a, b) =>
-                (a[1].suspendedUntil as number) -
-                (b[1].suspendedUntil as number),
-        );
-    // Returning words get priority over brand-new words once a retry slot is free.
-    const resumedFromHold =
-        !itemId &&
-        pending.length < MAX_ACTIVE_RELEARNING &&
-        dueHolds.length > 0;
-    if (resumedFromHold) itemId = dueHolds[0][0];
-    let spacedReview = false;
-
-    const pickFromCycle = () => {
-        if (state.cycleQueue.length === 0) {
+        .sort((a, b) => a.latestTurn - b.latestTurn);
+    let itemId = eligible[0]?.itemId;
+    let reason: SchedulerReason = "retry";
+    if (!itemId && pending.length < MAX_ACTIVE_RELEARNING) {
+        const held = Object.entries(state.struggles)
+            .filter(
+                ([, entry]) =>
+                    entry.suspendedUntil !== null &&
+                    entry.suspendedUntil <= now,
+            )
+            .sort((a, b) => a[1].suspendedUntil! - b[1].suspendedUntil!)[0];
+        if (held) {
+            itemId = held[0];
+            state.struggles[itemId].suspendedUntil = null;
+            reason = "suspension_due";
+        }
+    }
+    const known = (id: string) =>
+        modes?.[id] === "selection" || (!modes?.[id] && mode === "selection")
+            ? hasRecognitionHistory(memories[id])
+            : Boolean(memories[id]?.reviewCount);
+    const due = (id: string) => {
+        const at = getNextMemoryReviewAt(memories[id], modes?.[id] ?? mode);
+        return known(id) && at !== null && at <= now;
+    };
+    if (!itemId) {
+        if (!state.cycleQueue.length) {
             state.cycle++;
             state.cycleQueue = shuffle(state.itemIds, random);
         }
-        // Forgetting risk can change the order even within the same cycle.
-        state.cycleQueue.sort((a, b) =>
-            compareMemoryPriority(a, b, memories, now, mode, modes),
+        const candidates = state.cycleQueue.filter(
+            (id) =>
+                !state.retries[id] &&
+                !isOnHold(state, id) &&
+                (pending.length < MAX_ACTIVE_RELEARNING ||
+                    known(id) ||
+                    (state.userAnswered[id] ?? 0) > 0),
         );
-        state.initialPriorityApplied = true;
-        state.priorityAnswerMode = mode;
-        return state.cycleQueue.find(
-            (id) => !state.retries[id] && !isOnHold(state, id),
+        // Only useful spaced reviews precede new learning. Remaining practice
+        // follows the saved round; ties never depend on a page reload.
+        const group = (id: string) => (due(id) ? 0 : known(id) ? 2 : 1);
+        const exposure = (id: string) =>
+            Date.parse(
+                memories[id]?.lastPresentedAt ??
+                    memories[id]?.lastReviewedAt ??
+                    "",
+            ) || 0;
+        candidates.sort(
+            (a, b) =>
+                group(a) - group(b) ||
+                (group(a) === 2 ? exposure(a) - exposure(b) : 0) ||
+                compareMemoryPriority(a, b, memories, now, mode, modes),
         );
-    };
-
-    if (
-        !itemId &&
-        pending.length < Math.min(MAX_ACTIVE_RELEARNING, activeIds.length)
-    ) {
-        const cycleId = pickFromCycle();
-        const reviewId = pickSpacedReview(state, memories, now, mode, modes);
-        if (reviewId && (!cycleId || compareMemoryPriority(reviewId, cycleId, memories, now, mode, modes) < 0)) {
-            itemId = reviewId;
-            spacedReview = true;
-        } else {
-            itemId = cycleId;
-        }
-        // If the new cycle contains only pending words, choose a previously
-        // answered filler instead of breaking the earliest-retry boundary.
+        itemId = candidates[0];
+        if (itemId === state.lastUserItem)
+            itemId =
+                candidates.find(
+                    (id) =>
+                        id !== state.lastUserItem &&
+                        group(id) === group(itemId!),
+                ) ?? itemId;
+        if (itemId)
+            reason = due(itemId)
+                ? "long_term_due"
+                : known(itemId)
+                  ? "early_practice"
+                  : "cycle";
     }
-
     if (!itemId) {
+        // Bridge retry gaps without introducing more work. Least-practiced
+        // fillers keep small rooms playable without a retention boost.
         const fillers = state.itemIds.filter(
             (id) =>
-                (state.userAnswered[id] ?? 0) > 0 &&
                 !state.retries[id] &&
-                !isOnHold(state, id),
+                !isOnHold(state, id) &&
+                (known(id) || (state.userAnswered[id] ?? 0) > 0),
         );
-        const varied = fillers.filter((id) => id !== state.lastUserItem);
-        const pool = varied.length ? varied : fillers;
-        if (pool.length) {
-            const least = Math.min(
-                ...pool.map((id) => state.userAnswered[id] ?? 0),
-            );
-            const ties = pool.filter(
-                (id) => (state.userAnswered[id] ?? 0) === least,
-            );
-            itemId = ties[Math.floor(random() * ties.length)];
-        }
+        fillers.sort(
+            (a, b) =>
+                (state.userAnswered[a] ?? 0) - (state.userAnswered[b] ?? 0),
+        );
+        itemId = fillers.find((id) => id !== state.lastUserItem) ?? fillers[0];
+        reason = "early_practice";
     }
-
-    // Reuse the earliest pending word only when no filler can bridge the gap.
     if (!itemId && pending.length) {
         itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0]
-            ?.itemId;
+            .itemId;
+        reason = "retry";
     }
-    if (!itemId) itemId = pickFromCycle();
-    // Every word may legitimately be paused until a later session.
-    if (!itemId) return null;
-
-    if (resumedFromHold) state.struggles[itemId].suspendedUntil = null;
-    const entry = state.retries[itemId];
+    if (!itemId) {
+        // All words are held: ordinary rehearsal remains possible without
+        // lifting a hold. Memory independently decides retention evidence.
+        itemId =
+            state.itemIds.find((id) => id !== state.lastUserItem) ??
+            state.itemIds[0];
+        reason = "early_practice";
+    }
+    const retry = state.retries[itemId];
     const advancesCycle = state.cycleQueue.includes(itemId);
     if (advancesCycle) {
         state.cycleQueue = state.cycleQueue.filter((id) => id !== itemId);
-        if (state.cycleQueue.length === 0) state.completedCycles++;
+        if (!state.cycleQueue.length) state.completedCycles++;
     }
     delete state.retries[itemId];
     state.turn = turn;
@@ -500,19 +452,29 @@ export const chooseNextUserItem = (
         itemId,
         turn,
         cycle: state.cycle,
+        reason,
         advancesCycle,
-        retry: entry,
-        reason: resumedFromHold
-            ? "suspension_due"
-            : entry
-              ? "retry"
-              : spacedReview
-                ? "spaced_review"
-                : reviewPriority(memories[itemId], now, modes?.[itemId] ?? mode).group === 0
-                  ? "long_term_due"
-                  : "cycle",
+        ...(retry ? { retry } : {}),
     };
     return state.current;
+};
+
+/** Informational only; a future review never stops an active game. */
+export const nextMemoryReviewAt = (
+    state: SchedulerState,
+    memories: Record<string, ItemMemoryState>,
+    now: number,
+    mode: SchedulerAnswerMode,
+    modes?: ItemModes,
+): number | null => {
+    const times = state.itemIds
+        .map(
+            (id) =>
+                state.struggles[id]?.suspendedUntil ??
+                getNextMemoryReviewAt(memories[id], modes?.[id] ?? mode),
+        )
+        .filter((at): at is number => at !== null && at > now);
+    return times.length ? Math.min(...times) : null;
 };
 export const chooseBotItem = (
     state: SchedulerState,
@@ -578,7 +540,7 @@ export const recordBotPresentation = (
 // pending reviews across reloads; memory rows remain the source of recall scores.
 export type SchedulerMode = "playground" | "online";
 const SCHEDULER_CACHE_VERSION = 1;
-const PRIORITY_REFRESH_MS = 6 * 60 * 60 * 1000;
+const INTERRUPTED_PROMPT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const SCHEDULER_CACHE_MAX_AGE_MS = 30 * 86_400_000;
 
 const schedulerKey = (mode: SchedulerMode, userId: string, roomId: string) =>
@@ -650,18 +612,16 @@ export const saveSchedulerState = (
 
 /**
  * Restore the remaining cycle and retry windows. After a long break,
- * release an unfinished prompt (without crediting it) and re-rank remaining
- * cycle items by current retrievability. New room words join the queue while
- * deleted words and invalid cached entries are discarded.
+ * release an unfinished prompt without crediting it. Selection re-evaluates
+ * the remaining round against current memory without changing its saved order.
+ * New room words join the queue; deleted words and invalid entries are discarded.
  */
 export const loadSchedulerState = (
     mode: SchedulerMode,
     userId: string,
     roomId: string,
     itemIds: string[],
-    memories: Record<string, ItemMemoryState> = {},
     now = Date.now(),
-    answerMode: SchedulerAnswerMode = "input",
 ): SchedulerState | null => {
     try {
         const raw: unknown = JSON.parse(
@@ -765,8 +725,10 @@ export const loadSchedulerState = (
                 "long_term_due",
                 "suspension_due",
                 "spaced_review",
+                "early_practice",
             ].includes(selected.reason) &&
-            struggles[selected.itemId]?.suspendedUntil == null
+            (struggles[selected.itemId]?.suspendedUntil == null ||
+                selected.reason === "early_practice")
         ) {
             const retry = selected.retry
                 ? validRetry(selected.retry, selected.itemId)
@@ -787,7 +749,7 @@ export const loadSchedulerState = (
         }
 
         const age = Math.max(0, now - cache.updatedAt);
-        if (age >= PRIORITY_REFRESH_MS) {
+        if (age >= INTERRUPTED_PROMPT_MAX_AGE_MS) {
             // A prompt interrupted hours ago is not a completed recall.
             if (current) {
                 if (current.retry) retries[current.itemId] = current.retry;
@@ -797,19 +759,6 @@ export const loadSchedulerState = (
         }
 
         const cycleQueue = [...queue];
-        const savedPriorityMode =
-            saved.priorityAnswerMode === "input" ||
-            saved.priorityAnswerMode === "selection"
-                ? saved.priorityAnswerMode
-                : undefined;
-        const needsPriorityRefresh =
-            age >= PRIORITY_REFRESH_MS || savedPriorityMode !== answerMode;
-        if (needsPriorityRefresh) {
-            cycleQueue.sort((a, b) =>
-                compareMemoryPriority(a, b, memories, now, answerMode),
-            );
-        }
-
         return {
             itemIds: ids,
             cycleQueue,
@@ -819,11 +768,6 @@ export const loadSchedulerState = (
             retries,
             struggles,
             userAnswered: readCounters(saved.userAnswered),
-            introduced: Array.isArray(saved.introduced)
-                ? [...new Set(saved.introduced.filter(
-                      (id): id is string => typeof id === "string" && allowed.has(id),
-                  ))].slice(0, ids.length)
-                : [],
             botShown: readCounters(saved.botShown),
             lastBotItem:
                 typeof saved.lastBotItem === "string" &&
@@ -835,11 +779,6 @@ export const loadSchedulerState = (
                 allowed.has(saved.lastUserItem)
                     ? saved.lastUserItem
                     : null,
-            initialPriorityApplied:
-                needsPriorityRefresh || saved.initialPriorityApplied === true,
-            priorityAnswerMode: needsPriorityRefresh
-                ? answerMode
-                : savedPriorityMode,
             current,
         };
     } catch {

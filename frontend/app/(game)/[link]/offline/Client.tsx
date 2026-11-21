@@ -33,7 +33,7 @@ import {
     loadSchedulerState,
     saveSchedulerState,
     nextSuspendedReviewAt,
-    nextAdaptiveReviewAt,
+    nextMemoryReviewAt,
     chooseNextUserItem,
     recordUserAnswer,
     recordRecognitionAnswer,
@@ -296,9 +296,7 @@ export default function Client({
                         userId,
                         room.id,
                         itemIds,
-                        fallbackMemory,
                         Date.now(),
-                        answerMode,
                     ) ?? createScheduler(itemIds);
             } else {
                 schedulerRef.current = createScheduler(itemIds);
@@ -364,9 +362,7 @@ export default function Client({
                         GUEST_MEMORY_USER_ID,
                         room.id,
                         itemIds,
-                        saved,
                         Date.now(),
-                        answerMode,
                     ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
@@ -391,9 +387,7 @@ export default function Client({
                     loaded.userId,
                     room.id,
                     itemIds,
-                    loaded.memoryByItem,
                     Date.now(),
-                    answerMode,
                 ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
@@ -442,7 +436,6 @@ export default function Client({
             Date.now(),
             answerMode,
             itemModes,
-            "adaptive",
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -460,7 +453,7 @@ export default function Client({
         if (!item) {
             setNextReviewAt(
                 schedulerRef.current
-                    ? nextAdaptiveReviewAt(
+                    ? nextMemoryReviewAt(
                           schedulerRef.current,
                           memoryByItemRef.current,
                           Date.now(),
@@ -476,10 +469,6 @@ export default function Client({
 
     const startGame = useCallback(() => {
         if (!memoryReady || items.length === 0) return;
-
-        // A new user-initiated session may introduce another small batch.
-        // The saved memory and pending review queue are preserved.
-        if (schedulerRef.current) schedulerRef.current.introduced = [];
 
         setIsStarted(true);
         setIsPaused(false);
@@ -711,7 +700,6 @@ export default function Client({
             responseMs: number | null = null,
             usedHint = false,
             exposureGapMs?: number | null,
-            practiceOnly = false,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -740,7 +728,6 @@ export default function Client({
                 usedHint,
                 choiceCount,
                 exposureGapMs,
-                practiceOnly,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -912,13 +899,9 @@ export default function Client({
             const item = currentItemRef.current;
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
-            if (choiceCount < 2) {
-                if (scheduler) scheduler.current = null;
-                return;
-            }
-            const practiceOnly = scheduler?.current?.reason === "early_practice";
             if (scheduler) {
-                recordRecognitionAnswer(
+                if (choiceCount < 2) scheduler.current = null;
+                else recordRecognitionAnswer(
                     scheduler, item.id, hadMistake, Date.now(), exposureGapAtStartRef.current,
                 );
                 if (!memoryPersistenceDisabledRef.current) {
@@ -940,7 +923,6 @@ export default function Client({
                 responseMs,
                 usedHint,
                 exposureGapAtStartRef.current,
-                practiceOnly,
             );
         },
         [isPaused, room.id, updateAnswerModeMemory, choiceCount],
