@@ -808,7 +808,7 @@ export const applyRecallObservation = ({
         if (unaidedInputSuccess && spacedEvidence) {
             stability = current.lastReviewedAt
                 ? spacedStability(stability, gapMs ?? 0, evaluation.quality ?? 1)
-                : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY * (0.7 + 0.3 * (evaluation.quality ?? 1)));
+                : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY);
             lastReviewedAt = iso;
         } else if (unaidedInputSuccess && current.lastReviewedAt) {
             stability = earlyPracticeStability(stability, gapMs);
