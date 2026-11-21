@@ -122,6 +122,7 @@ test("mode-specific recognition history does not count as typed recall", () => {
 
 test("a recognized word stays eligible when switching to typed recall", () => {
     const selectedMemory = recordAnswerModeResult({
+        memory: undefined,
         userId: "u",
         roomId: "r",
         itemId: "switched",
