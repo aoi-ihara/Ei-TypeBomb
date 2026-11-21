@@ -47,7 +47,13 @@ for (const mode of ["input", "selection"] as const) {
                     ? { ...createInitialMemory("u", "r", id), reviewCount: 4,
                         stability: 0.12, lastPresentedAt }
                     : recordAnswerModeResult({
-                        memory: undefined, mode, success: false,
+                        memory: recordAnswerModeResult({
+                            memory: undefined, mode, success: false,
+                            userId: "u", roomId: "r", itemId: id,
+                            now: new Date(Date.parse(lastPresentedAt) - 1_000),
+                        }),
+                        // A short recovered success has no valid spaced anchor.
+                        mode, success: true, exposureGapMs: 1_000,
                         userId: "u", roomId: "r", itemId: id,
                         now: new Date(lastPresentedAt),
                     });
