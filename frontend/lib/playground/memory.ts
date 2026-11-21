@@ -412,11 +412,18 @@ const updateAnswerModeStats = (
             previous.stability ?? INITIAL_ENCODING_STABILITY,
         );
         const independent = isIndependentExposure(exposureGapMs);
+        const requiredGapMs = lastCleanAt
+            ? Math.max(
+                  MIN_SPACED_EVIDENCE_MS,
+                  -previousStability *
+                      Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * DAY_MS,
+              )
+            : MIN_SPACED_EVIDENCE_MS;
         const sufficientlySpaced =
             exposureGapMs === null
                 ? previous.attempts === 0
                 : Number.isFinite(exposureGapMs) &&
-                  exposureGapMs >= MIN_SPACED_EVIDENCE_MS;
+                  exposureGapMs >= requiredGapMs;
         const dueForRecognition =
             !lastCleanAt ||
             getRecognitionRetrievability(
@@ -644,11 +651,21 @@ export const applyRecallObservation = ({
     const gapMs = observation.elapsedSincePresentationMs === undefined
         ? getExposureGap(current, "input", now.getTime())
         : observation.elapsedSincePresentationMs;
+    // A successful answer after an early presentation is not an
+    // independent spaced review. Compare the *last exposure* gap against
+    // the memory's own target retention interval, not just a fixed 2 minutes.
+    const requiredGapMs = current.lastReviewedAt
+        ? Math.max(
+              MIN_SPACED_EVIDENCE_MS,
+              -Math.max(0.12, current.stability) *
+                  Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * DAY_MS,
+          )
+        : MIN_SPACED_EVIDENCE_MS;
     const spacedEvidence =
         observation.schedulerReason !== "early_practice" &&
         (gapMs === null
             ? current.reviewCount === 0 && !current.lastPresentedAt
-            : Number.isFinite(gapMs) && gapMs >= MIN_SPACED_EVIDENCE_MS) &&
+            : Number.isFinite(gapMs) && gapMs >= requiredGapMs) &&
         (!current.lastReviewedAt ||
             getRetrievability(current, now.getTime()) <=
                 MASTERY_RETRIEVABILITY_THRESHOLD);
