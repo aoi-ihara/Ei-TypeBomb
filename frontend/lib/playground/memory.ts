@@ -1,7 +1,7 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v9-prompt-spacing";
+export const MEMORY_MODEL_VERSION = "playground-v10-spaced-evidence";
 const INITIAL_ENCODING_STABILITY = 0.15;
 // Uncalibrated hypotheses, measured in days.
 export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
