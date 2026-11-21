@@ -661,11 +661,16 @@ export const applyRecallObservation = ({
                   Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * DAY_MS,
           )
         : MIN_SPACED_EVIDENCE_MS;
+    const previouslyExposed =
+        current.reviewCount > 0 ||
+        Boolean(current.lastPresentedAt) ||
+        (current.answerModeStats?.recognition.attempts ?? 0) > 0;
     const spacedEvidence =
         observation.schedulerReason !== "early_practice" &&
-        (gapMs === null
-            ? current.reviewCount === 0 && !current.lastPresentedAt
-            : Number.isFinite(gapMs) && gapMs >= requiredGapMs) &&
+        (!previouslyExposed ||
+            (gapMs !== null &&
+                Number.isFinite(gapMs) &&
+                gapMs >= requiredGapMs)) &&
         (!current.lastReviewedAt ||
             getRetrievability(current, now.getTime()) <=
                 MASTERY_RETRIEVABILITY_THRESHOLD);
