@@ -12,12 +12,14 @@ early-practice fillers during retry gaps; pending retry fallback; a nonempty roo
 held-word practice as a last resort. The queue is fair and bounded, not an unbounded repetition loop.
 Low predicted retention alone does not create extra retries.
 
-A previously exposed word with no confirmed clean-recall timestamp is held out of
-ordinary cycle/filler selection until its first genuinely spaced review is due.
-Otherwise every quick rehearsal resets the required interval and two difficult
-words can indefinitely keep the mastery graph below completion. Due unconfirmed
-items return with the normal high-priority review group; if all cards are
-waiting, a fair fallback keeps play available but never claims spaced evidence.
+A previously exposed word with a corrected/clean rehearsal but no confirmed
+spaced-review timestamp is held out of ordinary cycle/filler selection until
+its first genuinely spaced review is due. Otherwise every quick rehearsal resets
+the required interval and difficult words can indefinitely remain unconfirmed.
+Words that are still in an unresolved failure streak keep their normal
+short-term relearning priority. Due unconfirmed items return with the usual
+high-priority review group; if all cards are waiting, a fair fallback keeps play
+available but never claims spaced evidence.
 
 Corrected typing errors (without a hint) still count as successful unaided
 retrieval for memory estimation, but explicitly schedule bounded short-term
