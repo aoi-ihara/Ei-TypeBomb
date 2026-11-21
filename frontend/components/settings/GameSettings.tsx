@@ -101,13 +101,6 @@ export default function GameSettings({
                             >
                                 出題診断をコピー
                             </Button>
-                            <span role="status" aria-live="polite" className="text-sm px-3">
-                                {diagnosticStatus === true
-                                    ? "出題診断をコピーしました。"
-                                    : diagnosticStatus === false
-                                      ? "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"
-                                      : ""}
-                            </span>
                         </>
                     )}
                 <Button
