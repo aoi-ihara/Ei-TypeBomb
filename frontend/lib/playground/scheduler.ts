@@ -23,6 +23,8 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
+// A soft introduction quota: keep learning new cards without missing retry deadlines.
+export const INTRODUCTION_STRIDE = 2;
 
 // Product hypotheses to calibrate with retention outcomes.
 export const INITIAL_SUSPENSION_FAILURES = 4;
@@ -373,6 +375,16 @@ export const chooseNextUserItem = (
         modes?.[id] === "selection" || (!modes?.[id] && mode === "selection")
             ? hasRecognitionHistory(memories[id])
             : Boolean(memories[id]?.reviewCount);
+    // Reserve alternating turns for unseen cards, even with a full retry queue.
+    // Hard retry deadlines take precedence. No new persisted state is required.
+    const nextUnseen = state.cycleQueue.find(id =>
+        !known(id) && !state.retries[id] && !isOnHold(state, id));
+    if (nextUnseen && turn % INTRODUCTION_STRIDE === 0 &&
+        (!eligible.length || eligible[0].latestTurn > turn)) {
+        itemId = nextUnseen;
+        reason = "cycle";
+        if (observe) candidateOrder = [nextUnseen, ...candidateOrder];
+    }
     const due = (id: string) => {
         const at = getNextMemoryReviewAt(memories[id], modes?.[id] ?? mode);
         return known(id) && at !== null && at <= now;
