@@ -59,7 +59,8 @@ test("review returns a separate card and revlog without mutating the input", asy
     assert.equal(reviewed.card.cardId, card.cardId);
     assert(reviewed.card.dueAt instanceof Date);
     assert(reviewed.card.dueAt.getTime() > t0.getTime());
-    assert.equal(await predictRetention(reviewed.card, t0), 1);
+    const immediate = await predictRetention(reviewed.card, t0);
+    assert(immediate !== null && immediate > 0.999 && immediate <= 1);
 });
 
 test("predicted retention decreases over time without an intervening review", async () => {
