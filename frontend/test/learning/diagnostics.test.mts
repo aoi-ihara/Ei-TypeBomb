@@ -55,3 +55,37 @@ test("inclusive 0.8 boundary and mixed mode use the same production prediction",
     const later = getMasteryGraph(["a"], { a: base }, now + 1, "input");
     assert.equal(later.totals.masteredNow, 0);
 });
+
+test("Supabase timezone-offset memory timestamps are valid in snapshots and copied diagnostics", () => {
+    const offset = "2026-11-21T10:00:00+00:00";
+    const offsetWithMinutes = "2026-11-21T19:00:00+09:00";
+    const id = "private-word-offset";
+    const memory = {
+        ...createInitialMemory("secret-user", "secret-room", id),
+        reviewCount: 1, lastReviewedAt: offset, lastPresentedAt: offsetWithMinutes,
+        createdAt: offset, updatedAt: offsetWithMinutes,
+        answerModeStats: {
+            recall: { attempts: 1, correct: 1, correctStreak: 1, lastAttemptAt: offset },
+            recognition: { attempts: 1, correct: 1, correctStreak: 1,
+                lastAttemptAt: offsetWithMinutes, lastReviewedAt: offset },
+        },
+    };
+    const state = createScheduler([id], () => .5);
+    const memories = { [id]: memory };
+    const modes = { [id]: "input" as const };
+    let captured: CapturedDecision | null = null;
+    const selected = chooseNextUserItem(state, memories, () => .5, now, "input", modes,
+        trace => { captured = captureDecision(trace, memories, modes); });
+    assert.equal(selected?.itemId, id);
+    assert(captured, "diagnostics must be available for authenticated learners");
+    const json = diagnosticJSON(captured, getMasteryGraph([id], memories, now, "input", modes, true), [id]);
+    assert(json, "diagnostics must serialize");
+    assert(!json.includes(id));
+    assert(!json.includes("secret-user"));
+    assert(!json.includes("secret-room"));
+    const parsed = JSON.parse(json);
+    assert.equal(parsed.replay.memories["item-1"].lastReviewedAt, offset);
+    assert.equal(parsed.replay.memories["item-1"].lastPresentedAt, offsetWithMinutes);
+    assert.equal(parsed.replay.memories["item-1"].updatedAt, offsetWithMinutes);
+    assert.equal(parsed.replay.memories["item-1"].answerModeStats.recognition.lastAttemptAt, offsetWithMinutes);
+});

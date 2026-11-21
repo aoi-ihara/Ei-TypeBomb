@@ -4,7 +4,9 @@ import { SCHEDULER_VERSION } from "./decision-trace";
 import type { SchedulerState } from "./scheduler";
 
 const count = z.number().int().nonnegative();
-const stamp = z.string().datetime().nullable();
+// Supabase may return RFC 3339 timestamps with a timezone offset (e.g. +00:00).
+// Keep the original value for replay while validating its timestamp format.
+const stamp = z.string().datetime({ offset: true }).nullable();
 const timestamp = z.number().int().nonnegative().nullable();
 const id = z.string().min(1).max(128).refine(value => !["__proto__", "constructor", "prototype"].includes(value));
 const track = z.object({ attempts: count, correct: count, correctStreak: count, lastAttemptAt: stamp,

@@ -1344,7 +1344,7 @@ function clientCallbacks(names, globals) {
                     ";",
             )
             .join("\n"),
-        globals,
+        { LEARNING_DIAGNOSTICS_ENABLED: false, ...globals },
     );
 }
 test("actual solo Client callbacks cover all words and keep practicing without a budget reset", () => {
