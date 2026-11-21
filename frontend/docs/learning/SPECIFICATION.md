@@ -12,6 +12,20 @@ early-practice fillers during retry gaps; pending retry fallback; a nonempty roo
 held-word practice as a last resort. The queue is fair and bounded, not an unbounded repetition loop.
 Low predicted retention alone does not create extra retries.
 
+A previously exposed word with a corrected/clean rehearsal but no confirmed
+spaced-review timestamp is held out of ordinary cycle/filler selection until
+its first genuinely spaced review is due. Otherwise every quick rehearsal resets
+the required interval and difficult words can indefinitely remain unconfirmed.
+Words that are still in an unresolved failure streak keep their normal
+short-term relearning priority. Due unconfirmed items return with the usual
+high-priority review group; if all cards are waiting, a fair fallback keeps play
+available but never claims spaced evidence.
+
+Corrected typing errors (without a hint) still count as successful unaided
+retrieval for memory estimation, but explicitly schedule bounded short-term
+confirmation. They do not count as failed recalls for suspension/difficulty.
+Multiple consecutive clean confirmations clear that retry queue.
+
 Retry turns, suspensions and long-term recall evidence are **independent**. A clean,
 unaided early answer now gives a small continuous stability gain proportional to
 the answer-free interval (0.25 days of stability per full day of elapsed intervals).

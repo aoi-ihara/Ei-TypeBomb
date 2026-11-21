@@ -8,6 +8,7 @@ import {
     getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
     getRecognitionFailureRate,
+    recognitionMemory,
     type AttemptEvaluation,
     type ItemMemoryState,
     type SchedulerReason,
@@ -188,7 +189,13 @@ const trackStruggle = (
         suspensionLevel: 0,
         suspendedUntil: null,
     };
-    if (evaluation.retryNeed === "none") {
+    if (
+        evaluation.retryNeed === "none" ||
+        evaluation.memoryEvidence === "recall" ||
+        evaluation.memoryEvidence === "strong_recall"
+    ) {
+        // A corrected typing error is still unaided recall. Confirm it again
+        // in the short-term queue, but never count it as another failure.
         // One unaided recall unblocks the word, but repeated failures still
         // matter. Several successes are needed to fully erase its hold level.
         const level = Math.max(0, previous.suspensionLevel - 1);
@@ -370,6 +377,27 @@ export const chooseNextUserItem = (
         const at = getNextMemoryReviewAt(memories[id], modes?.[id] ?? mode);
         return known(id) && at !== null && at <= now;
     };
+    // A word that has never demonstrated independent recall needs its first
+    // *spaced* confirmation. Cycling it before that time repeatedly resets
+    // the exposure interval, preventing its first anchor and keeping the
+    // mastery graph below 100% even after many correct rehearsals.
+    const awaitingFirstReview = (id: string) => {
+        if (!known(id)) return false;
+        const memory = memories[id];
+        const effectiveMode = modes?.[id] ?? mode;
+        const track = effectiveMode === "selection"
+            ? memory?.answerModeStats?.recognition
+            : memory?.answerModeStats?.recall;
+        // A currently failed, not-yet-recovered word still needs ordinary
+        // short-term relearning priority. Successful rehearsal without enough
+        // spacing is the case we must protect from repeated cycle exposures.
+        if (track?.attempts && track.correctStreak === 0) return false;
+        return effectiveMode === "selection"
+            ? !recognitionMemory(track).anchor
+            : !memory?.lastReviewedAt;
+    };
+    const readyForRound = (id: string) =>
+        !awaitingFirstReview(id) || due(id);
     if (!itemId) {
         if (!state.cycleQueue.length) {
             state.cycle++;
@@ -386,6 +414,7 @@ export const chooseNextUserItem = (
             (id) =>
                 !state.retries[id] &&
                 !isOnHold(state, id) &&
+                readyForRound(id) &&
                 (pending.length < MAX_ACTIVE_RELEARNING ||
                     known(id) ||
                     (state.userAnswered[id] ?? 0) > 0),
@@ -428,6 +457,7 @@ export const chooseNextUserItem = (
             (id) =>
                 !state.retries[id] &&
                 !isOnHold(state, id) &&
+                readyForRound(id) &&
                 (known(id) || (state.userAnswered[id] ?? 0) > 0),
         );
         fillers.sort(
@@ -443,11 +473,23 @@ export const chooseNextUserItem = (
         reason = "retry";
     }
     if (!itemId) {
-        // All words are held: ordinary rehearsal remains possible without
-        // lifting a hold. Memory independently decides retention evidence.
+        // No eligible spaced review or other filler exists (for example a
+        // one-word room). Keep the session playable, without claiming that
+        // the repeated exposure proves long-term retention. When multiple
+        // waiting cards exist, rotate fairly rather than always taking the
+        // first room item; prefer non-held and non-retry words if possible.
+        const available = state.itemIds.filter(
+            (id) => !state.retries[id] && !isOnHold(state, id),
+        );
+        const fallback = available.length ? available : [...state.itemIds];
+        fallback.sort((a, b) =>
+            (state.userAnswered[a] ?? 0) - (state.userAnswered[b] ?? 0) ||
+            (Date.parse(memories[a]?.lastPresentedAt ?? "") || 0) -
+                (Date.parse(memories[b]?.lastPresentedAt ?? "") || 0),
+        );
         itemId =
-            state.itemIds.find((id) => id !== state.lastUserItem) ??
-            state.itemIds[0];
+            fallback.find((id) => id !== state.lastUserItem) ??
+            fallback[0];
         reason = "early_practice";
     }
     const retry = state.retries[itemId];
