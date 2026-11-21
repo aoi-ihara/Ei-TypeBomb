@@ -248,6 +248,58 @@ test("an actually due typing recall can strengthen memory when spaced", () => {
     assert.equal(updated.lastReviewedAt, new Date(time).toISOString());
 });
 
+test("an overdue card cannot gain stability after very recent extra practice", () => {
+    const previous = {
+        ...reviewed("overdue", 0.3, 72),
+        lastPresentedAt: new Date(time - 5 * 60_000).toISOString(),
+    };
+    const updated = applyRecallObservation({
+        memory: previous,
+        observation: {
+            success: true,
+            answerLength: 4,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 4,
+            recallLatencyMs: 600,
+            elapsedMs: 1100,
+            elapsedSincePresentationMs: 5 * 60_000,
+            schedulerReason: "long_term_due",
+        },
+        userId: "u", roomId: "r", itemId: "overdue", now: new Date(time),
+    });
+    assert.equal(updated.stability, previous.stability);
+    assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
+});
+
+test("overdue recognition does not gain stability from a recent exposure", () => {
+    const first = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true,
+        now: new Date(time - 72 * hour),
+    });
+    const practiced = recordAnswerModeResult({
+        memory: first, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, practiceOnly: true,
+        exposureGapMs: 72 * hour, now: new Date(time - 5 * 60_000),
+    });
+    const updated = recordAnswerModeResult({
+        memory: practiced, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true,
+        exposureGapMs: 5 * 60_000, now: new Date(time),
+    });
+    assert.equal(
+        updated.answerModeStats?.recognition.lastReviewedAt,
+        first.answerModeStats?.recognition.lastReviewedAt,
+    );
+    assert.equal(
+        updated.answerModeStats?.recognition.stability,
+        first.answerModeStats?.recognition.stability,
+    );
+});
+
 test("switching modes immediately never creates a new recall memory anchor", () => {
     const recognized = recordAnswerModeResult({
         memory: undefined, userId: "u", roomId: "r", itemId: "switch",
