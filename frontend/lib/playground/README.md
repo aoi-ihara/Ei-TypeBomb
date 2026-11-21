@@ -119,3 +119,15 @@ fallbacks, holds, failed writes, actual Client callbacks and memory evidence.
 `npm run test:selection-browser --prefix frontend` exercises real selection UI
 interactions; these component fixtures do not constitute authenticated production
 end-to-end testing. Also run the frontend typecheck, relevant lint and Next build.
+
+
+## Continuous early practice (v12)
+
+Clean, unaided answers now receive a small continuous stability increase even
+before the next full spaced review. The increment is linear in the interval
+since the last exposure and bounded by elapsed time, so many rapid rehearsals
+cannot multiply long-term retention. Recognition and free recall are still
+separate tracks, and a sub-due rehearsal never moves the spaced-review anchor.
+Incorrect or hinted answers do not receive this extra credit. The coefficient
+is an uncalibrated product hypothesis; validate it against real longitudinal
+retention before treating the predicted days as calibrated.

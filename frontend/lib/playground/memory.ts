@@ -1,7 +1,7 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v11-separated-practice";
+export const MEMORY_MODEL_VERSION = "playground-v12-continuous-practice";
 const INITIAL_ENCODING_STABILITY = 0.15;
 // Uncalibrated hypotheses, measured in days.
 export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
@@ -429,6 +429,17 @@ export function getNextMemoryReviewAt(
     );
 }
 
+// Short rehearsals carry a small, continuous amount of evidence. The gain is
+// bounded by actual answer-free time (rather than attempt count), so answering
+// every few seconds cannot manufacture days of retention. We deliberately do
+// not move the long-term review anchor for this weaker evidence.
+const EARLY_PRACTICE_GAIN_DAYS_PER_DAY = 0.25;
+function earlyPracticeStability(stability: number, gapMs: number | null) {
+    if (gapMs === null || !Number.isFinite(gapMs) || gapMs < RECENT_EXPOSURE_MS)
+        return stability;
+    return stability + Math.max(0, gapMs) / DAY_MS * EARLY_PRACTICE_GAIN_DAYS_PER_DAY;
+}
+
 function spacedStability(stability: number, gapMs: number) {
     const days = gapMs / DAY_MS;
     if (!Number.isFinite(days)) return stability;
@@ -515,6 +526,12 @@ const updateAnswerModeStats = (
                           (spacedStability(previousStability, exposureGapMs) -
                               previousStability)
                     : INITIAL_CLEAR_RECALL_STABILITY * weight;
+        } else if (success && lastCleanAt) {
+            // Sub-due successful recognition is useful practice, but does not
+            // reset the clean spaced-review anchor.
+            nextTrack.stability = earlyPracticeStability(
+                previousStability, exposureGapMs,
+            );
         } else {
             nextTrack.stability = previousStability;
         }
@@ -761,6 +778,8 @@ export const applyRecallObservation = ({
                 ? spacedStability(stability, gapMs ?? 0)
                 : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY);
             lastReviewedAt = iso;
+        } else if (unaidedInputSuccess && current.lastReviewedAt) {
+            stability = earlyPracticeStability(stability, gapMs);
         }
         // Early practice is useful for fluency, but not independent evidence
         // that the card survives the intended spaced interval.

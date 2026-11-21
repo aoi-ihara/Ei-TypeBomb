@@ -21,8 +21,17 @@ for (const size of sizes) for (const seed of seeds) for (const result of ["corre
             assert(Math.abs(Object.values(turn.masteryGraph.percentages).reduce((a, b) => a + b, 0) - 100) < 1e-9);
             assert(Object.keys(turn.schedulerAfter!.retries).length <= 4);
             if (turn.selection?.reason === "early_practice" && result === "correct" && turn.before) {
-                assert.equal(turn.after!.stability, turn.before.stability);
+                // An early clean answer can earn weak time-weighted stability,
+                // but never moves the long-term spaced-review reference.
                 assert.equal(turn.after!.lastReviewedAt, turn.before.lastReviewedAt);
+                if (turn.before.lastReviewedAt) {
+                    const gain = turn.after!.stability - turn.before.stability;
+                    assert(gain >= 0, `early practice unexpectedly reduced stability: ${gain}`);
+                    const elapsedMs = Math.max(0, turn.presentedAt -
+                        Date.parse(turn.before.lastPresentedAt ?? turn.before.lastReviewedAt));
+                    assert(gain <= elapsedMs / 86_400_000 * 0.25 + 1e-10,
+                        `early practice over-credited retention: ${gain}`);
+                }
             }
         }
     });
