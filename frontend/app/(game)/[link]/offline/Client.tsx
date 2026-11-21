@@ -1223,7 +1223,13 @@ export default function Client({
                 isPaused={isPaused}
                 answerMode={answerMode}
                 masteryProgress={
-                    <OfflineMasteryProgress progress={masteryGraph.totals} />
+                    <OfflineMasteryProgress
+                        progress={masteryGraph.totals}
+                        itemIds={items.map(item => item.id)}
+                        memories={memoryByItem}
+                        answerMode={answerMode}
+                        modes={itemModes}
+                    />
                 }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
