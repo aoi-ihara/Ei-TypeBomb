@@ -375,7 +375,14 @@ export const chooseNextUserItem = (
             state.cycle++;
             state.cycleQueue = shuffle(state.itemIds, trackedRandom);
         }
-        const candidates = state.cycleQueue.filter(
+        // A review that becomes genuinely due must remain eligible even if
+        // its round entry was already consumed. The memory model uses the
+        // latest exposure, so an immediate repeat cannot count as spaced.
+        const pool = [...new Set([
+            ...state.cycleQueue,
+            ...state.itemIds.filter(due),
+        ])];
+        const candidates = pool.filter(
             (id) =>
                 !state.retries[id] &&
                 !isOnHold(state, id) &&
