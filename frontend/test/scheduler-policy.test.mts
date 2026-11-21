@@ -573,3 +573,53 @@ test("legacy recognition stability is interpreted consistently on the first new 
         dueBefore! + 60_000,
     );
 });
+
+test("overdue reviews outside the remaining round outrank new introductions", () => {
+    const state = createScheduler(["due", "new"], () => 0.5);
+    state.cycleQueue = ["new"];
+    state.userAnswered.due = 1;
+    const memory = reviewed("due", 0.2, 2);
+    const chosen = choose(state, { due: memory });
+    assert.equal(chosen?.itemId, "due");
+    assert.equal(chosen?.reason, "long_term_due");
+    assert.equal(chosen?.advancesCycle, false);
+    assert.deepEqual(state.cycleQueue, ["new"]);
+
+    // Recording an exposure prevents the same overdue word from taking over
+    // every subsequent turn, even when its memory stability is unchanged.
+    const practiced = recordAnswerExposure(memory, new Date(time));
+    recordUserAnswer(state, success, time);
+    assert.equal(choose(state, { due: practiced })?.itemId, "new");
+});
+
+test("recovered selection mistakes earn stability at the first genuine spaced review", () => {
+    const state = createScheduler(["relearn", "new"], () => 0.5);
+    state.cycleQueue = ["new"];
+    state.userAnswered.relearn = 3;
+    const starting = new Date(time - 90_000);
+    const failed = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "relearn",
+        mode: "selection", success: false, usedHint: true, now: starting,
+    });
+    const first = recordAnswerModeResult({
+        memory: failed, userId: "u", roomId: "r", itemId: "relearn",
+        mode: "selection", success: true, now: new Date(time - 60_000),
+    });
+    const second = recordAnswerModeResult({
+        memory: first, userId: "u", roomId: "r", itemId: "relearn",
+        mode: "selection", success: true, now: new Date(time - 30_000),
+    });
+    assert.equal(second.answerModeStats?.recognition.correctStreak, 2);
+    assert.equal(second.answerModeStats?.recognition.lastReviewedAt, null);
+    assert.equal(second.answerModeStats?.recognition.stability, 0.15);
+    const reviewAt = time + 90_000;
+    const selected = choose(state, { relearn: second }, reviewAt, "selection");
+    assert.equal(selected?.itemId, "relearn");
+    assert.equal(selected?.reason, "long_term_due");
+    const reviewedMemory = recordAnswerModeResult({
+        memory: second, userId: "u", roomId: "r", itemId: "relearn",
+        mode: "selection", success: true, now: new Date(reviewAt),
+    });
+    assert.equal(reviewedMemory.answerModeStats?.recognition.lastReviewedAt, new Date(reviewAt).toISOString());
+    assert.ok(reviewedMemory.answerModeStats!.recognition.stability! > 0.15);
+});
