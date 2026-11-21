@@ -1354,7 +1354,7 @@ function clientCallbacks(names, globals) {
         globals,
     );
 }
-test("actual solo Client callbacks cover 20/100 words without BOT turns", () => {
+test("actual solo Client callbacks keep practicing after the eight-new-word budget", () => {
     for (const size of [20, 100]) {
         let time = now.getTime();
         class Clock extends Date {
@@ -1438,21 +1438,17 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
         actual.setTrackedItem(actual.resolveTurnWithItem());
         const seen = new Set();
         for (let turn = 0; turn < size; turn++) {
-            if (!globals.currentItemRef.current) {
-                // A user-initiated new session unlocks the next eight unseen
-                // words while keeping recall history and pending reviews.
-                globals.schedulerRef.current.introduced = [];
-                actual.setTrackedItem(actual.resolveTurnWithItem());
-            }
             const item = globals.currentItemRef.current;
-            assert(item, "the solo learner receives a question immediately");
-            assert(!seen.has(item.id));
+            assert(item, "solo play does not pause while reviews are not yet due");
+            if (turn < 8) assert(!seen.has(item.id));
+            else assert(seen.has(item.id), "the new-word budget remains enforced");
             seen.add(item.id);
             time += 1200;
             actual.handleRecallComplete(observation());
             actual.handleSuccess();
         }
-        assert.equal(seen.size, size);
+        assert.equal(seen.size, 8);
+        assert.equal(globals.schedulerRef.current.introduced.length, 8);
         assert.equal(globals.userReviewCountRef.current, size);
         const recallEvents = events.filter(
             (x) => x.event === "playground_item_recalled",
@@ -1460,11 +1456,18 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
         assert.equal(recallEvents.length, size);
         assert(
             recallEvents.every(
-                (x) =>
-                    x.scheduler_reason === "cycle" &&
+                (x, i) =>
+                    x.scheduler_reason === (i < 8 ? "cycle" : "early_practice") &&
                     x.memory_evidence === "strong_recall" &&
                     x.retry_need === "none",
             ),
+        );
+        assert(
+            recallEvents.slice(8).every((x) =>
+                x.stability_after ===
+                recallEvents.find((prior) => prior.item_id === x.item_id)?.stability_after,
+            ),
+            "repeated practice must not imply fresh long-term recall",
         );
         assert(
             recallEvents.every(
@@ -1484,6 +1487,29 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             "fallback recall observations must stay out of the authenticated sync queue",
         );
     }
+});
+
+test("selection callbacks mark early practice before clearing the scheduler turn", () => {
+    const schedulerState = {
+        current: { itemId: "a", reason: "early_practice" },
+    };
+    const calls = [];
+    const callback = getCallback("handleSelectionAnswer", {
+        currentItemRef: { current: { id: "a" } },
+        isPaused: false,
+        schedulerRef: { current: schedulerState },
+        choiceCount: 4,
+        recordRecognitionAnswer: (state) => { state.current = null; },
+        memoryPersistenceDisabledRef: { current: true },
+        recallProgressRef: { current: {} },
+        updateAnswerModeMemory: (...args) => calls.push(args),
+        exposureGapAtStartRef: { current: 30_000 },
+        room: { id: "r" },
+    });
+    callback(true, false, 1_000, false);
+    assert.equal(schedulerState.current, null);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][6], true, "practice-only evidence must survive turn completion");
 });
 
 test("fallback answer-mode observations never enter authenticated sync queue", async () => {

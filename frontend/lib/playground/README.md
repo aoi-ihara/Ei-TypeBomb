@@ -10,8 +10,16 @@ The selection policy is isolated in `adaptive-scheduler.ts`:
 - Among long-term due words, prefer the lowest predicted retrievability.
 - Introduce no more than eight unseen words per user-initiated session and
   no new words while four retries are pending.
-- Do not force a learned word back early just to fill an otherwise idle cycle.
-  Return a future review timestamp so the UI can offer a later session.
+- When no review is due and the eight-new-word budget is exhausted, keep
+  playing with the lowest-retrievability previously practiced word; prefer
+  words that have not appeared in the past two minutes. If all remaining words
+  are held, practice one without lifting its hold.
+- Early practice is tagged `early_practice`: unaided success does not increase
+  stability, move `lastReviewedAt`, improve difficulty, or clear a held word.
+  Even ordinary early successful reviews need a spaced interval and a due
+  memory before they can move the long-term anchor.
+- `nextAdaptiveReviewAt` remains informative only: a future due time never
+  forces the active solo session to stop.
 - Preserve an unfinished question, pending retries, and the introduced set
   across reloads. Explicitly starting a new session resets only the introduction
   budget, not the learner's memory.

@@ -711,6 +711,7 @@ export default function Client({
             responseMs: number | null = null,
             usedHint = false,
             exposureGapMs?: number | null,
+            practiceOnly = false,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -739,6 +740,7 @@ export default function Client({
                 usedHint,
                 choiceCount,
                 exposureGapMs,
+                practiceOnly,
             });
             let nextMemoryByItem = {
                 ...freshestMemory,
@@ -914,6 +916,7 @@ export default function Client({
                 if (scheduler) scheduler.current = null;
                 return;
             }
+            const practiceOnly = scheduler?.current?.reason === "early_practice";
             if (scheduler) {
                 recordRecognitionAnswer(
                     scheduler, item.id, hadMistake, Date.now(), exposureGapAtStartRef.current,
@@ -937,6 +940,7 @@ export default function Client({
                 responseMs,
                 usedHint,
                 exposureGapAtStartRef.current,
+                practiceOnly,
             );
         },
         [isPaused, room.id, updateAnswerModeMemory, choiceCount],

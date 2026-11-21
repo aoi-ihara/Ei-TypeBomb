@@ -27,6 +27,63 @@ const retention = (memory: ItemMemoryState | undefined, mode: AnswerMode, now: n
         : getRetrievability(memory, now);
 
 type Due = { id: string; retention: number; dueAt: number };
+type Practice = Due & { lastExposure: number; heldUntil: number | null };
+
+const RECENT_EXPOSURE_MS = 120_000;
+
+/**
+ * Outside the due window, practice the weakest available memory rather than
+ * stopping the game. Recent exposures are deprioritized when alternatives
+ * exist; these selections never count as spaced-memory evidence.
+ */
+function selectEarlyPractice(
+    state: SchedulerState,
+    memories: Readonly<Record<string, ItemMemoryState>>,
+    now: number,
+    mode: AnswerMode,
+    modes?: Modes,
+): string | null {
+    const candidates: Practice[] = [];
+    for (const id of state.itemIds) {
+        if (state.retries[id]) continue;
+        const memory = memories[id];
+        const itemMode = modeFor(id, mode, modes);
+        // Respect the eight-new-words budget: only previously practiced words
+        // are candidates after normal due/new selection is exhausted.
+        if (
+            !history(memory, itemMode) &&
+            (state.userAnswered[id] ?? 0) === 0 &&
+            !state.introduced?.includes(id)
+        ) continue;
+
+        const exposure = Date.parse(memory?.lastPresentedAt ?? "");
+        candidates.push({
+            id,
+            retention: retention(memory, itemMode, now),
+            dueAt: forecastDue(memory, itemMode) ?? Infinity,
+            lastExposure: Number.isFinite(exposure) ? exposure : -Infinity,
+            heldUntil: state.struggles[id]?.suspendedUntil ?? null,
+        });
+    }
+
+    if (!candidates.length) return null;
+
+    // Held words stay protected unless every otherwise available word is held.
+    const unheld = candidates.filter((entry) => entry.heldUntil === null);
+    const pool = unheld.length ? unheld : candidates;
+    pool.sort((a, b) => {
+        const recentA = now - a.lastExposure < RECENT_EXPOSURE_MS;
+        const recentB = now - b.lastExposure < RECENT_EXPOSURE_MS;
+        if (recentA !== recentB) return Number(recentA) - Number(recentB);
+        // When all candidates are recently exposed, distribute practice by
+        // least recent exposure rather than drilling one difficult word.
+        if (recentA) return a.lastExposure - b.lastExposure;
+        return a.retention - b.retention ||
+            a.dueAt - b.dueAt ||
+            a.lastExposure - b.lastExposure;
+    });
+    return (pool.find((entry) => entry.id !== state.lastUserItem) ?? pool[0]).id;
+}
 
 function forecastDue(memory: ItemMemoryState | undefined, mode: AnswerMode): number | null {
     if (!memory) return null;
@@ -63,8 +120,8 @@ export function nextAdaptiveReviewAt(
                     retention(memory, itemMode, now) <
                         MASTERY_RETRIEVABILITY_THRESHOLD &&
                     Number.isFinite(exposedAt) &&
-                    now - exposedAt < 120_000
-                ) return exposedAt + 120_000;
+                    now - exposedAt < RECENT_EXPOSURE_MS
+                ) return exposedAt + RECENT_EXPOSURE_MS;
                 return forecastDue(memory, itemMode);
             })
             .filter((time): time is number => time !== null && time > now),
@@ -128,7 +185,7 @@ export function chooseAdaptiveUserItem(
             // A completed turn already creates its own retry. Don't immediately
             // reshow the same word just because its prediction is still low.
             const lastExposure = Date.parse(memory?.lastPresentedAt ?? "");
-            if (Number.isFinite(lastExposure) && now - lastExposure < 120_000)
+            if (Number.isFinite(lastExposure) && now - lastExposure < RECENT_EXPOSURE_MS)
                 continue;
             due.push({
                 id,
@@ -156,14 +213,24 @@ export function chooseAdaptiveUserItem(
         }
     }
 
-    // Legacy retries are measured in turns rather than timestamps. In a room
-    // too small to supply filler questions, choose the oldest pending retry
-    // instead of leaving the learner in a permanent deadlock.
+    // Prefer a real filler over a premature retry. If no other practice
+    // exists (e.g. a one-word room), allow the earliest retry to continue.
+    if (!itemId) {
+        itemId = selectEarlyPractice(state, memories, now, mode, modes) ?? undefined;
+        if (itemId) reason = "early_practice";
+    }
     if (!itemId && pending.length) {
         itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0].itemId;
         reason = "retry";
     }
-    if (!itemId) return null;
+    // Keep a nonempty game playable even if an old/corrupted cache has no
+    // usable history or introduced words. This is an uncredited rehearsal,
+    // never a new learning anchor.
+    if (!itemId) {
+        itemId = state.itemIds.find((id) => id !== state.lastUserItem) ??
+            state.itemIds[0];
+        reason = "early_practice";
+    }
 
     const retry: RetryEntry | undefined = state.retries[itemId];
     const advancesCycle = state.cycleQueue.includes(itemId);

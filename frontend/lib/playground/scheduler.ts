@@ -295,6 +295,17 @@ export const recordUserAnswer = (
     if (!selected) return;
     state.userAnswered[selected.itemId] =
         (state.userAnswered[selected.itemId] ?? 0) + 1;
+    // Extra practice can improve fluency, but success cannot confirm a
+    // spaced recall or clear a retained struggle history before its deadline.
+    // A deliberately held item is kept on hold regardless of its result.
+    if (
+        selected.reason === "early_practice" &&
+        (state.struggles[selected.itemId]?.suspendedUntil != null ||
+            evaluation.retryNeed === "none")
+    ) {
+        state.current = null;
+        return;
+    }
     if (trackStruggle(state, selected.itemId, evaluation, now)) {
         state.current = null;
         return;

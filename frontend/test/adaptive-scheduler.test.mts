@@ -3,6 +3,7 @@ import test from "node:test";
 import {
     createInitialMemory,
     recordAnswerModeResult,
+    applyRecallObservation,
     evaluateRecall,
     type ItemMemoryState,
 } from "../lib/playground/memory";
@@ -87,14 +88,21 @@ test("at most eight unseen words are introduced in one offline session", () => {
     }
     assert.equal(seen.size, 8);
     assert.equal(state.introduced.length, 8);
-    assert.equal(choose(state), null);
+    const practice = choose(state);
+    assert.equal(practice?.reason, "early_practice");
+    assert(practice?.itemId && seen.has(practice.itemId));
+    assert.equal(state.introduced.length, 8, "fallback must not introduce a ninth new word");
 });
 
-test("no review is scheduled early merely to fill the session", () => {
-    const state = createScheduler(["known"], () => 0.5);
-    const memory = reviewed("known", 8, 1);
-    const memories = { known: memory };
-    assert.equal(choose(state, memories), null);
+test("early practice chooses the weakest not-yet-due word without pausing", () => {
+    const state = createScheduler(["strong", "weak"], () => 0.5);
+    const memories = {
+        strong: reviewed("strong", 8, 1),
+        weak: reviewed("weak", 8, 2),
+    };
+    const selection = choose(state, memories);
+    assert.equal(selection?.itemId, "weak");
+    assert.equal(selection?.reason, "early_practice");
     const next = nextAdaptiveReviewAt(state, memories, time, "input");
     assert(next !== null && next > time);
 });
@@ -106,11 +114,234 @@ test("a recently shown overdue word supplies a future cooldown deadline", () => 
         lastPresentedAt: new Date(time - 30_000).toISOString(),
     };
     const memories = { recent: memory };
-    assert.equal(choose(state, memories), null);
+    assert.equal(choose(state, memories)?.reason, "early_practice");
     assert.equal(
         nextAdaptiveReviewAt(state, memories, time, "input"),
         time + 90_000,
     );
+});
+
+test("recent exposures are deprioritized when older alternatives exist", () => {
+    const state = createScheduler(["older", "recent"], () => 0.5);
+    const memories = {
+        older: reviewed("older", 8, 1),
+        recent: { ...reviewed("recent", 8, 2), lastPresentedAt: new Date(time - 5_000).toISOString() },
+    };
+    assert.equal(choose(state, memories)?.itemId, "older");
+});
+
+test("a held word is practiced only as last resort without clearing its hold", () => {
+    const state = createScheduler(["held"], () => 0.5);
+    state.struggles.held = {
+        consecutiveFailures: 0,
+        firstFailureAt: null,
+        suspensionLevel: 2,
+        suspendedUntil: time + hour,
+    };
+    const memory = reviewed("held", 8, 1);
+    const selection = choose(state, { held: memory });
+    assert.equal(selection?.reason, "early_practice");
+    assert.equal(selection?.itemId, "held");
+    recordUserAnswer(state, success, time);
+    assert.equal(state.struggles.held.suspendedUntil, time + hour);
+    assert.equal(state.struggles.held.suspensionLevel, 2);
+});
+
+test("early recalled typing never resets the spaced memory anchor", () => {
+    const previous = reviewed("typed", 8, 1);
+    const updated = applyRecallObservation({
+        memory: previous,
+        observation: {
+            success: true,
+            answerLength: 5,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 5,
+            recallLatencyMs: 700,
+            elapsedMs: 1200,
+            elapsedSincePresentationMs: hour,
+            schedulerReason: "early_practice",
+        },
+        userId: "u", roomId: "r", itemId: "typed", now: new Date(time),
+    });
+    assert.equal(updated.stability, previous.stability);
+    assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
+    assert.equal(updated.difficulty, previous.difficulty);
+    assert.equal(updated.reviewCount, previous.reviewCount + 1);
+});
+
+test("even normal correct recalls cannot strengthen an unduly recent anchor", () => {
+    const previous = reviewed("typed", 8, 1);
+    const updated = applyRecallObservation({
+        memory: previous,
+        observation: {
+            success: true,
+            answerLength: 5,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 5,
+            recallLatencyMs: 700,
+            elapsedMs: 1200,
+            elapsedSincePresentationMs: hour,
+            schedulerReason: "long_term_due",
+        },
+        userId: "u", roomId: "r", itemId: "typed", now: new Date(time),
+    });
+    assert.equal(updated.stability, previous.stability);
+    assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
+});
+
+test("early recognition success does not move the long-term reference date", () => {
+    const first = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, now: new Date(time - 4 * hour),
+    });
+    const early = recordAnswerModeResult({
+        memory: first, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, practiceOnly: true,
+        exposureGapMs: 4 * hour, now: new Date(time),
+    });
+    const previous = first.answerModeStats!.recognition;
+    const after = early.answerModeStats!.recognition;
+    assert.equal(after.stability, previous.stability);
+    assert.equal(after.lastReviewedAt, previous.lastReviewedAt);
+    assert.equal(after.attempts, previous.attempts + 1);
+    const younger = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, now: new Date(time - hour),
+    });
+    const undue = recordAnswerModeResult({
+        memory: younger, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, exposureGapMs: hour,
+        now: new Date(time),
+    });
+    assert.equal(
+        undue.answerModeStats!.recognition.lastReviewedAt,
+        younger.answerModeStats!.recognition.lastReviewedAt,
+    );
+});
+
+test("an actually due typing recall can strengthen memory when spaced", () => {
+    const previous = reviewed("due", 0.3, 4);
+    const updated = applyRecallObservation({
+        memory: previous,
+        observation: {
+            success: true,
+            answerLength: 3,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 3,
+            recallLatencyMs: 700,
+            elapsedMs: 1300,
+            elapsedSincePresentationMs: 4 * hour,
+            schedulerReason: "long_term_due",
+        },
+        userId: "u", roomId: "r", itemId: "due", now: new Date(time),
+    });
+    assert(updated.stability > previous.stability);
+    assert.equal(updated.lastReviewedAt, new Date(time).toISOString());
+});
+
+test("an overdue card cannot gain stability after very recent extra practice", () => {
+    const previous = {
+        ...reviewed("overdue", 0.3, 72),
+        lastPresentedAt: new Date(time - 5 * 60_000).toISOString(),
+    };
+    const updated = applyRecallObservation({
+        memory: previous,
+        observation: {
+            success: true,
+            answerLength: 4,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 4,
+            recallLatencyMs: 600,
+            elapsedMs: 1100,
+            elapsedSincePresentationMs: 5 * 60_000,
+            schedulerReason: "long_term_due",
+        },
+        userId: "u", roomId: "r", itemId: "overdue", now: new Date(time),
+    });
+    assert.equal(updated.stability, previous.stability);
+    assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
+});
+
+test("overdue recognition does not gain stability from a recent exposure", () => {
+    const first = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true,
+        now: new Date(time - 72 * hour),
+    });
+    const practiced = recordAnswerModeResult({
+        memory: first, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true, practiceOnly: true,
+        exposureGapMs: 72 * hour, now: new Date(time - 5 * 60_000),
+    });
+    const updated = recordAnswerModeResult({
+        memory: practiced, userId: "u", roomId: "r", itemId: "choice",
+        mode: "selection", success: true,
+        exposureGapMs: 5 * 60_000, now: new Date(time),
+    });
+    assert.equal(
+        updated.answerModeStats?.recognition.lastReviewedAt,
+        first.answerModeStats?.recognition.lastReviewedAt,
+    );
+    assert.equal(
+        updated.answerModeStats?.recognition.stability,
+        first.answerModeStats?.recognition.stability,
+    );
+});
+
+test("switching modes immediately never creates a new recall memory anchor", () => {
+    const recognized = recordAnswerModeResult({
+        memory: undefined, userId: "u", roomId: "r", itemId: "switch",
+        mode: "selection", success: true,
+        now: new Date(time - 5_000),
+    });
+    const typed = applyRecallObservation({
+        memory: recognized,
+        observation: {
+            success: true,
+            answerLength: 3,
+            firstAttemptCorrect: true,
+            attemptCount: 1,
+            hintCount: 0,
+            revealedHintChars: 0,
+            maxCorrectPrefixLength: 3,
+            recallLatencyMs: 700,
+            elapsedMs: 1300,
+            elapsedSincePresentationMs: 5_000,
+            schedulerReason: "cycle",
+        },
+        userId: "u", roomId: "r", itemId: "switch", now: new Date(time),
+    });
+    assert.equal(typed.lastReviewedAt, null);
+    assert.equal(typed.stability, recognized.stability);
+
+    const initial = applyRecallObservation({
+        memory: undefined,
+        observation: {
+            success: true, answerLength: 3, firstAttemptCorrect: true,
+            attemptCount: 1, hintCount: 0, revealedHintChars: 0,
+            maxCorrectPrefixLength: 3, recallLatencyMs: 700,
+            elapsedMs: 1300, schedulerReason: "cycle",
+        },
+        userId: "u", roomId: "r", itemId: "typed", now: new Date(time - 5_000),
+    });
+    const chosen = recordAnswerModeResult({
+        memory: initial, userId: "u", roomId: "r", itemId: "typed",
+        mode: "selection", success: true, now: new Date(time),
+        exposureGapMs: 5_000,
+    });
+    assert.equal(chosen.answerModeStats?.recognition.lastReviewedAt, null);
 });
 
 test("mode-specific recognition history does not count as typed recall", () => {
