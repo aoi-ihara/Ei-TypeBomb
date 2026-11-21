@@ -22,7 +22,9 @@ export default function GameSettings({
     placement = "inline",
     getLearningDiagnostic,
 }: Readonly<Props>) {
-    const [diagnosticStatus, setDiagnosticStatus] = useState("");
+    const [diagnosticStatus, setDiagnosticStatus] = useState<boolean | null>(
+        null,
+    );
     const [showSettings, setShowSettings] = useState(false);
 
     return (
@@ -63,19 +65,44 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
-                {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" && getLearningDiagnostic && (
-                    <>
-                        <Button className="w-full" onClick={async () => {
-                            try {
-                                const json = getLearningDiagnostic();
-                                if (!json) { setDiagnosticStatus("まだ出題診断がありません。"); return; }
-                                await navigator.clipboard.writeText(json);
-                                setDiagnosticStatus("出題診断をコピーしました。");
-                            } catch { setDiagnosticStatus("コピーできませんでした。ブラウザーの権限や診断サイズを確認してください。"); }
-                        }}>出題診断をコピー</Button>
-                        <p role="status">{diagnosticStatus}</p>
-                    </>
-                )}
+                {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
+                    getLearningDiagnostic && (
+                        <>
+                            <Button
+                                className="w-full"
+                                onClick={async () => {
+                                    try {
+                                        const json = getLearningDiagnostic();
+
+                                        if (!json) {
+                                            setDiagnosticStatus(false);
+                                            return;
+                                        }
+
+                                        await navigator.clipboard.writeText(
+                                            json,
+                                        );
+                                        setDiagnosticStatus(true);
+                                    } catch {
+                                        setDiagnosticStatus(false);
+                                    } finally {
+                                        setTimeout(() => {
+                                            setDiagnosticStatus(null);
+                                        }, 3000);
+                                    }
+                                }}
+                                iconName={
+                                    diagnosticStatus
+                                        ? "check"
+                                        : diagnosticStatus === false
+                                          ? "x"
+                                          : "clipboardPen"
+                                }
+                            >
+                                出題診断をコピー
+                            </Button>
+                        </>
+                    )}
                 <Button
                     className="w-full"
                     variant="primary"
