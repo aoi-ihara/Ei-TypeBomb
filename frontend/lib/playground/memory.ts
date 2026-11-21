@@ -217,19 +217,20 @@ export const evaluateRecall = (
             reason: "uncertain_recall",
             independent,
         };
+    const errors =
+        observation.incorrectInputCount ??
+        Math.max(0, observation.attemptCount - 1);
+    const correctedMistake = errors > 0 || !observation.firstAttemptCorrect;
     if (!independent)
         return {
             memoryEvidence: "insufficient_evidence",
-            retryNeed: "none",
-            reason: null,
+            retryNeed: correctedMistake ? "confirm" : "none",
+            reason: correctedMistake ? "uncertain_recall" : null,
             independent,
         };
     const expected =
         observation.expectedTypingMs ??
         observation.answerLength * DEFAULT_EXPECTED_CHAR_MS;
-    const errors =
-        observation.incorrectInputCount ??
-        Math.max(0, observation.attemptCount - 1);
     const fast =
         observation.recallLatencyMs !== null &&
         observation.recallLatencyMs <= FAST_RECALL_LATENCY_MS &&
@@ -242,13 +243,14 @@ export const evaluateRecall = (
             independent,
         };
 
-    // A final unaided correct answer is still successful retrieval. Latency
-    // and input errors describe typing performance; they must not turn a
-    // successful recall into a forced retry or reduce its memory gain.
+    // A corrected typing error is still unaided recall, so it should not
+    // reduce long-term memory stability or count as a failed retrieval. It
+    // does warrant a bounded short-term confirmation, however; otherwise the
+    // learner may never see the troublesome spelling again in this session.
     return {
         memoryEvidence: "recall",
-        retryNeed: "none",
-        reason: null,
+        retryNeed: correctedMistake ? "confirm" : "none",
+        reason: correctedMistake ? "uncertain_recall" : null,
         independent,
     };
 };
@@ -733,7 +735,8 @@ export const applyRecallObservation = ({
     const evaluation = evaluateRecall(observation);
     const unaidedInputSuccess =
         observation.success &&
-        evaluation.retryNeed === "none" &&
+        (evaluation.memoryEvidence === "recall" ||
+            evaluation.memoryEvidence === "strong_recall") &&
         !observation.answerWasFullyRevealed &&
         (observation.initialCueRatio ?? 0) === 0 &&
         (observation.finalCueRatio ?? 0) === 0 &&
