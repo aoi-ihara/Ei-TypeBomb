@@ -28,8 +28,11 @@ const schedulerStorage = {
     getItem: (key) => schedulerCache.get(key) ?? null,
     setItem: (key, value) => schedulerCache.set(key, value),
 };
-const scheduler = load("lib/playground/scheduler.ts", {
+const adaptive = load("lib/playground/adaptive-scheduler.ts", {
     require: () => memory,
+});
+const scheduler = load("lib/playground/scheduler.ts", {
+    require: (id) => id === "./adaptive-scheduler" ? adaptive : memory,
     localStorage: schedulerStorage,
 });
 const input = load("lib/playground/recall-input.ts");
@@ -1363,9 +1366,13 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
             }
         }
         const m = load("lib/playground/memory.ts", { Date: Clock });
-        const sch = load("lib/playground/scheduler.ts", {
+        const adaptive = load("lib/playground/adaptive-scheduler.ts", {
             Date: Clock,
             require: () => m,
+        });
+        const sch = load("lib/playground/scheduler.ts", {
+            Date: Clock,
+            require: (id) => id === "./adaptive-scheduler" ? adaptive : m,
         });
         const ref = (current) => ({ current }),
             noop = () => {};
@@ -1431,6 +1438,12 @@ test("actual solo Client callbacks cover 20/100 words without BOT turns", () => 
         actual.setTrackedItem(actual.resolveTurnWithItem());
         const seen = new Set();
         for (let turn = 0; turn < size; turn++) {
+            if (!globals.currentItemRef.current) {
+                // A user-initiated new session unlocks the next eight unseen
+                // words while keeping recall history and pending reviews.
+                globals.schedulerRef.current.introduced = [];
+                actual.setTrackedItem(actual.resolveTurnWithItem());
+            }
             const item = globals.currentItemRef.current;
             assert(item, "the solo learner receives a question immediately");
             assert(!seen.has(item.id));

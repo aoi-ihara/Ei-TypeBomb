@@ -1,3 +1,6 @@
+import { chooseAdaptiveUserItem } from "./adaptive-scheduler";
+export { nextAdaptiveReviewAt } from "./adaptive-scheduler";
+
 import {
     MASTERY_RETRIEVABILITY_THRESHOLD,
     isIndependentExposure,
@@ -63,6 +66,8 @@ export type SchedulerState = {
     retries: Record<string, RetryEntry>;
     struggles: Record<string, StruggleEntry>;
     userAnswered: Record<string, number>;
+    // Words first introduced during this offline learning session.
+    introduced: string[];
     botShown: Record<string, number>;
     lastBotItem: string | null;
     lastUserItem: string | null;
@@ -126,6 +131,7 @@ export const createScheduler = (
         retries: {},
         struggles: {},
         userAnswered: {},
+        introduced: [],
         botShown: {},
         lastBotItem: null,
         lastUserItem: null,
@@ -369,7 +375,10 @@ export const chooseNextUserItem = (
     now = Date.now(),
     mode: SchedulerAnswerMode = "input",
     modes?: ItemModes,
+    strategy: "legacy" | "adaptive" = "legacy",
 ): Selection | null => {
+    if (strategy === "adaptive")
+        return chooseAdaptiveUserItem(state, memories, random, now, mode, modes);
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
 
@@ -799,6 +808,11 @@ export const loadSchedulerState = (
             retries,
             struggles,
             userAnswered: readCounters(saved.userAnswered),
+            introduced: Array.isArray(saved.introduced)
+                ? [...new Set(saved.introduced.filter(
+                      (id): id is string => typeof id === "string" && allowed.has(id),
+                  ))].slice(0, ids.length)
+                : [],
             botShown: readCounters(saved.botShown),
             lastBotItem:
                 typeof saved.lastBotItem === "string" &&
