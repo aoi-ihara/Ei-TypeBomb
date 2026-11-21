@@ -1489,6 +1489,29 @@ test("actual solo Client callbacks keep practicing after the eight-new-word budg
     }
 });
 
+test("selection callbacks mark early practice before clearing the scheduler turn", () => {
+    const schedulerState = {
+        current: { itemId: "a", reason: "early_practice" },
+    };
+    const calls = [];
+    const callback = getCallback("handleSelectionAnswer", {
+        currentItemRef: { current: { id: "a" } },
+        isPaused: false,
+        schedulerRef: { current: schedulerState },
+        choiceCount: 4,
+        recordRecognitionAnswer: (state) => { state.current = null; },
+        memoryPersistenceDisabledRef: { current: true },
+        recallProgressRef: { current: {} },
+        updateAnswerModeMemory: (...args) => calls.push(args),
+        exposureGapAtStartRef: { current: 30_000 },
+        room: { id: "r" },
+    });
+    callback(true, false, 1_000, false);
+    assert.equal(schedulerState.current, null);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][6], true, "practice-only evidence must survive turn completion");
+});
+
 test("fallback answer-mode observations never enter authenticated sync queue", async () => {
     const m = load("lib/playground/memory.ts");
     const ref = (current) => ({ current });
