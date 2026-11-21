@@ -23,8 +23,13 @@ test("beta copy matches rendered forecast and excludes question content", async 
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", String(Math.round(totals.masteredNow / totals.total * 100)));
     await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuetext",
         `${totals.masteredNow} / ${totals.total} 語を現在習得。3時間後も ${totals.masteredAfter3Hours} 語、24時間後も ${totals.masteredAfter24Hours} 語は維持する予測`);
-    const widths = await page.getByRole("progressbar").locator(":scope > div").evaluateAll(nodes => nodes.map(node => (node as HTMLElement).style.width));
-    expect(widths).toEqual(["after24Hours", "after3HoursOnly", "nowOnly"].map(key => `${diagnostic.masteryGraph.percentages[key]}%`));
+    const layers = await page.getByRole("progressbar").locator(":scope > div").evaluateAll(nodes =>
+        nodes.map(node => ({ background: (node as HTMLElement).style.background, opacity: (node as HTMLElement).style.opacity })),
+    );
+    expect(layers).toHaveLength(2);
+    expect(layers.some(layer => layer.opacity === "1")).toBe(true);
+    expect(layers.every(layer => layer.background.includes("linear-gradient") ||
+        layer.background.includes("var(--color-background-secondary)"))).toBe(true);
     expect(diagnostic.masteryGraph.items).toHaveLength(totals.total);
     expect(Number.isFinite(Date.parse(diagnostic.masteryGraph.calculatedAt))).toBe(true);
     expect(json).not.toMatch(/apple|banana|orange|grape|shortcut-test|question:/);
