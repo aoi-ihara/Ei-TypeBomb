@@ -209,7 +209,8 @@ export default function SelectionQuestionView({
                         event.repeat,
                         spaceKeyDownRef.current,
                     )
-                ) return;
+                )
+                    return;
                 spaceKeyDownRef.current = true;
 
                 const { armed, reveal } = nextSelectionSpacePress(
@@ -265,7 +266,8 @@ export default function SelectionQuestionView({
             if (
                 event.target instanceof Node &&
                 questionRef.current?.contains(event.target)
-            ) return;
+            )
+                return;
             resetSequence();
             spaceKeyDownRef.current = false;
             spaceKeyHandledRef.current = false;
@@ -326,11 +328,8 @@ export default function SelectionQuestionView({
                         disabled={disabled || wrongOptions.has(index)}
                         onClick={() => choose(index)}
                     >
-                        <span className="font-mono">{index + 1}. </span>
-                        <span className="font-normal font-serif">
-                            {" "}
-                            {option}
-                        </span>
+                        <span className="font-mono text-xl">{index + 1}. </span>
+                        <span className="font-serif text-xl"> {option}</span>
                     </Button>
                 ))}
                 {allowHint && (

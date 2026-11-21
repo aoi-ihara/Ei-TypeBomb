@@ -99,16 +99,6 @@ export default function GameSettings({
                             出題診断をコピー
                         </Button>
                     )}
-                {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
-                    getLearningDiagnostic && (
-                        <p role="status" aria-live="polite" className="min-h-5 px-3 text-sm">
-                            {diagnosticStatus === true
-                                ? "出題診断をコピーしました。"
-                                : diagnosticStatus === false
-                                  ? "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"
-                                  : ""}
-                        </p>
-                    )}
                 <Button
                     className="w-full"
                     variant="primary"
