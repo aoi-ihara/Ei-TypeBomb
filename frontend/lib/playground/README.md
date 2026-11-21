@@ -34,10 +34,13 @@ reproduced 33 presentations of the failed word versus 8–9 of each other word i
 ## One selection policy
 
 1. Serve eligible short-term retries, then expired holds when a retry slot opens.
-2. Consume the remaining round: genuinely spaced reviews precede new words,
-   followed by rehearsal. Memory risk orders due reviews; last exposure orders
-   rehearsal. Each ordinary word appears once per round, even if its long-term
-   estimate is still low. Retry presentations also consume their round entry.
+2. Genuinely spaced reviews are eligible across the entire room, including
+   words already consumed in the current round. They precede new words, then
+   remaining-round rehearsal. Memory risk orders due reviews; last exposure
+   orders rehearsal. A due review outside the round does not consume another
+   round entry. Recent exposures postpone its next eligible long-term review,
+   so repeatedly practicing the same word cannot inflate retention or starve
+   other words indefinitely. Retry presentations consume their round entry.
 3. While four retries are active, stop introducing new words. Previously answered
    words fill retry gaps. Resume introductions as retries are resolved; there is
    no fixed eight-word session ceiling or reset button required to keep learning.
