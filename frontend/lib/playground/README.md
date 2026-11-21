@@ -1,5 +1,27 @@
 # Playground: mastery-first scheduling
 
+## Adaptive offline selection (incremental migration)
+
+Offline practice now uses `chooseNextUserItem(..., "adaptive")`; online
+play intentionally continues to use the existing cycle/retry policy.
+
+The selection policy is isolated in `adaptive-scheduler.ts`:
+- Respect due short retries and expired holds first.
+- Among long-term due words, prefer the lowest predicted retrievability.
+- Introduce no more than eight unseen words per user-initiated session and
+  no new words while four retries are pending.
+- Do not force a learned word back early just to fill an otherwise idle cycle.
+  Return a future review timestamp so the UI can offer a later session.
+- Preserve an unfinished question, pending retries, and the introduced set
+  across reloads. Explicitly starting a new session resets only the introduction
+  budget, not the learner's memory.
+
+**Limitations:** The underlying memory model is still ETB's exponential
+forgetting curve and retry gaps are still measured in turns. If no filler is
+available, an early retry is allowed to avoid deadlock. This is an isolated
+scheduler step toward FSRS-7, **not** an FSRS-7 migration or a validated
+learning-outcome improvement. The old model and online policy are unchanged.
+
 `memory.ts` evaluates recall observations. `scheduler.ts` now prioritizes
 relearning instead of maximizing new-word coverage.
 
