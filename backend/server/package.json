@@ -17,25 +17,25 @@
     "type": "commonjs",
     "engines": { "node": ">=22.13.0" },
     "dependencies": {
-        "@supabase/supabase-js": "^2.110.8",
+        "@supabase/supabase-js": "^2.119.2",
         "dotenv": "^17.4.2",
-        "express": "^5.2.1",
-        "jose": "^6.2.12",
+        "express": "^5.3.0",
+        "jose": "^6.2.18",
         "js-cookie": "^3.0.8",
         "jsonwebtoken": "^9.0.3",
-        "pg": "^8.16.3",
-        "posthog-node": "^5.51.6",
-        "socket.io": "^4.8.3",
-        "ws": "8.21.3"
+        "pg": "^8.23.1",
+        "posthog-node": "^5.74.0",
+        "socket.io": "^4.8.4",
+        "ws": "8.23.0"
     },
     "devDependencies": {
         "@types/express": "^5.0.6",
         "@types/js-cookie": "^3.0.6",
         "@types/jsonwebtoken": "^9.0.10",
-        "@types/node": "^26.6.5",
+        "@types/node": "^26.6.6",
         "@types/ws": "8.18.2",
         "socket.io-client": "^4.8.4",
-        "tsx": "^4.21.0",
+        "tsx": "^4.23.15",
         "typescript": "^5.9.3"
     }
 }
