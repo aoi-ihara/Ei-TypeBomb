@@ -182,6 +182,7 @@ export default function Client({
         [sourceRoom],
     );
     const items = useMemo(() => room.items ?? [], [room.items]);
+    const masteryItemIds = useMemo(() => items.map(item => item.id), [items]);
     const itemModes = useMemo(() => Object.fromEntries(items.map(item =>
         [item.id, getEffectiveAnswerMode(item, answerMode)])), [items, answerMode]);
     const choiceCount = useMemo(() => new Set(items.map(item => item.answer).filter(Boolean)).size, [items]);
@@ -1057,14 +1058,14 @@ export default function Client({
     const masteryGraph = useMemo(
         () =>
             getMasteryGraph(
-                items.map((item) => item.id),
+                masteryItemIds,
                 memoryByItem,
                 masteryNow,
                 answerMode,
                 itemModes,
                 LEARNING_DIAGNOSTICS_ENABLED,
             ),
-        [items, memoryByItem, masteryNow, answerMode, itemModes],
+        [masteryItemIds, memoryByItem, masteryNow, answerMode, itemModes],
     );
 
     const currentTurnPlan = useMemo(
@@ -1225,7 +1226,7 @@ export default function Client({
                 masteryProgress={
                     <OfflineMasteryProgress
                         progress={masteryGraph.totals}
-                        itemIds={items.map(item => item.id)}
+                        itemIds={masteryItemIds}
                         memories={memoryByItem}
                         answerMode={answerMode}
                         modes={itemModes}
