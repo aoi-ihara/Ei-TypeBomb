@@ -33,6 +33,7 @@ import {
     loadSchedulerState,
     saveSchedulerState,
     nextSuspendedReviewAt,
+    nextAdaptiveReviewAt,
     chooseNextUserItem,
     recordUserAnswer,
     recordRecognitionAnswer,
@@ -441,6 +442,7 @@ export default function Client({
             Date.now(),
             answerMode,
             itemModes,
+            "adaptive",
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -458,16 +460,26 @@ export default function Client({
         if (!item) {
             setNextReviewAt(
                 schedulerRef.current
-                    ? nextSuspendedReviewAt(schedulerRef.current)
+                    ? nextAdaptiveReviewAt(
+                          schedulerRef.current,
+                          memoryByItemRef.current,
+                          Date.now(),
+                          answerMode,
+                          itemModes,
+                      ) ?? nextSuspendedReviewAt(schedulerRef.current)
                     : null,
             );
             setIsStarted(false);
         }
         return item;
-    }, [chooseItemForTurn]);
+    }, [chooseItemForTurn, answerMode, itemModes]);
 
     const startGame = useCallback(() => {
         if (!memoryReady || items.length === 0) return;
+
+        // A new user-initiated session may introduce another small batch.
+        // The saved memory and pending review queue are preserved.
+        if (schedulerRef.current) schedulerRef.current.introduced = [];
 
         setIsStarted(true);
         setIsPaused(false);
@@ -1104,7 +1116,7 @@ export default function Client({
                                 すべての単語が復習待ちです
                             </p>
                             <p>
-                                難しい単語はいったん保留しました。 次の復習は
+                                新しい単語の導入を止め、復習期限を待っています。 次の復習は
                                 {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
                                     {
