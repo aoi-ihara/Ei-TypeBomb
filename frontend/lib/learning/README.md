@@ -32,3 +32,6 @@ needs a separate storage schema and complete, trustworthy review history
 or an explicitly new FSRS-7 learning state. Keep all old rows intact.
 
 Run `npm run test:fsrs` from `frontend` to verify the standalone engine.
+
+Production integration and migration policy: [architecture](../../docs/learning/ARCHITECTURE.md).
+Experimental tests stay in the separate `test:fsrs` group.

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "seed": 42,
+  "startAt": "2026-11-21T10:00:00.000Z",
+  "items": [
+    {
+      "id": "A",
+      "mode": "input"
+    },
+    {
+      "id": "B",
+      "mode": "input"
+    },
+    {
+      "id": "C",
+      "mode": "selection"
+    }
+  ],
+  "steps": [
+    {
+      "advanceMs": 0,
+      "result": "wrong"
+    },
+    {
+      "advanceMs": 15000,
+      "result": "correct"
+    },
+    {
+      "advanceMs": 60000,
+      "result": "hint"
+    },
+    {
+      "advanceMs": 3600000,
+      "result": "correct",
+      "reload": true
+    },
+    {
+      "advanceMs": 86400000,
+      "result": "correct"
+    },
+    {
+      "advanceMs": 604800000,
+      "result": "reveal"
+    }
+  ]
+}

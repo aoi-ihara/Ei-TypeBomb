@@ -1,7 +1,9 @@
+import { SCHEDULER_VERSION, type DecisionObserver } from "./decision-trace";
 import {
     MASTERY_RETRIEVABILITY_THRESHOLD,
     getNextMemoryReviewAt,
-    isIndependentExposure,
+    evaluateRecognition,
+    getExposureGap,
     getRetrievability,
     getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
@@ -310,12 +312,7 @@ export const recordRecognitionAnswer = (
 
     recordUserAnswer(
         state,
-        {
-            memoryEvidence: hadMistake ? "insufficient_evidence" : "recall",
-            retryNeed: hadMistake ? "short" : "none",
-            reason: hadMistake ? "failed_recall" : null,
-            independent: isIndependentExposure(exposureGapMs),
-        },
+        evaluateRecognition(hadMistake, exposureGapMs),
         now,
     );
     return true;
@@ -332,9 +329,14 @@ export const chooseNextUserItem = (
     now = Date.now(),
     mode: SchedulerAnswerMode = "input",
     modes?: ItemModes,
+    observe?: DecisionObserver,
 ): Selection | null => {
     if (!state.itemIds.length) return null;
     if (state.current) return state.current;
+    const schedulerBefore = observe ? structuredClone(state) : null;
+    const randomDraws: number[] = [];
+    const trackedRandom = observe ? () => { const value = random(); randomDraws.push(value); return value; } : random;
+    let candidateOrder: string[] = [];
     const turn = state.turn + 1;
     const pending = Object.values(state.retries);
     const eligible = pending
@@ -343,6 +345,7 @@ export const chooseNextUserItem = (
                 !isOnHold(state, entry.itemId) && entry.earliestTurn <= turn,
         )
         .sort((a, b) => a.latestTurn - b.latestTurn);
+    if (observe) candidateOrder = eligible.map(entry => entry.itemId);
     let itemId = eligible[0]?.itemId;
     let reason: SchedulerReason = "retry";
     if (!itemId && pending.length < MAX_ACTIVE_RELEARNING) {
@@ -370,7 +373,7 @@ export const chooseNextUserItem = (
     if (!itemId) {
         if (!state.cycleQueue.length) {
             state.cycle++;
-            state.cycleQueue = shuffle(state.itemIds, random);
+            state.cycleQueue = shuffle(state.itemIds, trackedRandom);
         }
         const candidates = state.cycleQueue.filter(
             (id) =>
@@ -395,6 +398,7 @@ export const chooseNextUserItem = (
                 (group(a) === 2 ? exposure(a) - exposure(b) : 0) ||
                 compareMemoryPriority(a, b, memories, now, mode, modes),
         );
+        if (observe) candidateOrder = [...candidates];
         itemId = candidates[0];
         if (itemId === state.lastUserItem)
             itemId =
@@ -456,6 +460,31 @@ export const chooseNextUserItem = (
         advancesCycle,
         ...(retry ? { retry } : {}),
     };
+    if (observe && schedulerBefore) {
+        try {
+            const candidates = schedulerBefore.itemIds.map(id => {
+                const effectiveMode = modes?.[id] ?? mode;
+                const heldUntil = schedulerBefore.struggles[id]?.suspendedUntil ?? null;
+                const pendingRetry = schedulerBefore.retries[id];
+                const rank = candidateOrder.indexOf(id);
+                const probability = effectiveMode === "selection"
+                    ? getRecognitionRetrievability(memories[id], now)
+                    : getRetrievability(memories[id], now);
+                return { itemId: id, mode: effectiveMode,
+                    introduced: (schedulerBefore.userAnswered[id] ?? 0) > 0,
+                    stage: reason,
+                    status: pendingRetry ? "pending_retry" : heldUntil !== null && heldUntil > now ? "held" :
+                        candidateOrder.includes(id) ? "candidate" : "not_in_pool",
+                    score: Number.isFinite(probability) ? probability : null,
+                    ...(rank >= 0 ? { rank } : {}),
+                    dueAt: getNextMemoryReviewAt(memories[id], effectiveMode),
+                    exposureGapMs: getExposureGap(memories[id], effectiveMode, now) };
+            });
+            observe({ schemaVersion: 1, algorithmVersion: SCHEDULER_VERSION,
+                selectedAt: now, schedulerBefore, candidates, randomDraws,
+                selection: structuredClone(state.current) });
+        } catch { /* Diagnostic failure must never change learning selection. */ }
+    }
     return state.current;
 };
 

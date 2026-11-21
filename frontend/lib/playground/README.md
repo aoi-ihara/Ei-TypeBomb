@@ -1,5 +1,8 @@
 # Practice, retention and session scheduling
 
+
+See [specification](../../docs/learning/SPECIFICATION.md), [architecture](../../docs/learning/ARCHITECTURE.md), and [testing](../../docs/learning/TESTING.md). The unified scheduler from #648 is the production policy for offline and online prompts. The beta diagnostic observer is read-only and optional.
+
 ## Responsibilities
 
 - `memory.ts` evaluates answers, stores separate typed-recall and recognition
