@@ -295,11 +295,13 @@ export const recordUserAnswer = (
     if (!selected) return;
     state.userAnswered[selected.itemId] =
         (state.userAnswered[selected.itemId] ?? 0) + 1;
-    // Practice during a deliberate hold must not cancel/escalate that hold.
-    // It is rehearsal, not the overdue confirmation that restores the word.
+    // Extra practice can improve fluency, but success cannot confirm a
+    // spaced recall or clear a retained struggle history before its deadline.
+    // A deliberately held item is kept on hold regardless of its result.
     if (
         selected.reason === "early_practice" &&
-        state.struggles[selected.itemId]?.suspendedUntil != null
+        (state.struggles[selected.itemId]?.suspendedUntil != null ||
+            evaluation.retryNeed === "none")
     ) {
         state.current = null;
         return;
