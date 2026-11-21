@@ -12,10 +12,14 @@ early-practice fillers during retry gaps; pending retry fallback; a nonempty roo
 held-word practice as a last resort. The queue is fair and bounded, not an unbounded repetition loop.
 Low predicted retention alone does not create extra retries.
 
-Retry turns, suspensions and long-term recall evidence are **independent**. A short-term confirmation
-cannot falsely increase long-term stability; a correct early answer without sufficient elapsed time
-does not advance the long-term memory anchor. For implementation details and current constants,
-see `scheduler.ts` and `memory.ts`.
+Retry turns, suspensions and long-term recall evidence are **independent**. A clean,
+unaided early answer now gives a small continuous stability gain proportional to
+the answer-free interval (0.25 days of stability per full day of elapsed intervals).
+This contribution is deliberately bounded by elapsed time, not number of answers;
+assisted or incorrect answers do not receive it. An early answer **never advances
+the long-term memory anchor**: only properly spaced independent evidence can do that.
+These coefficients are uncalibrated product hypotheses, not empirical retention guarantees.
+For implementation details and current constants, see `scheduler.ts` and `memory.ts`.
 
 ## Diagnostics and mastery
 
@@ -28,8 +32,10 @@ Simulation uses the same production modules, never a separate selection policy.
 
 Each unique item contributes to the mastery chart once. Its effective input or selection
 mode determines prediction at now / +3h / +24h against an inclusive threshold of 0.8.
-The UI and export call `getMasteryGraph` and `masterySegments`. Graph segments are
-24h (cyan), 3h-only (foreground), now-only (border), and below threshold (background).
+The UI and export call `getMasteryGraph` and `masterySegments`.
+The stability bar uses a continuous 96-sample gradient from background-secondary to
+cyan-600, ordered by each item's recall or recognition stability; the separate
+forecast totals are based on 0 / +3h / +24h retrievability.
 Forecasts are estimates, not measured human memory performance.
 
 ## Scope
