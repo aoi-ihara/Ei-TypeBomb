@@ -321,15 +321,17 @@ export default function SelectionQuestionView({
                     <Button
                         key={option + ":" + index}
                         type="button"
-                        variant="primary"
                         padding="large"
                         alignment="left"
                         className="w-full"
                         disabled={disabled || wrongOptions.has(index)}
                         onClick={() => choose(index)}
                     >
-                        <span className="font-mono text-xl">{index + 1}. </span>
-                        <span className="font-serif text-xl"> {option}</span>
+                        <span className="font-mono">{index + 1}. </span>
+                        <span className="font-serif text-xl font-normal">
+                            {" "}
+                            {option}
+                        </span>
                     </Button>
                 ))}
                 {allowHint && (
