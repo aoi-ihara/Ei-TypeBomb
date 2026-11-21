@@ -223,8 +223,14 @@ export function chooseAdaptiveUserItem(
         itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0].itemId;
         reason = "retry";
     }
-    // Nonempty sessions with a previously answered word can always continue.
-    if (!itemId) return null;
+    // Keep a nonempty game playable even if an old/corrupted cache has no
+    // usable history or introduced words. This is an uncredited rehearsal,
+    // never a new learning anchor.
+    if (!itemId) {
+        itemId = state.itemIds.find((id) => id !== state.lastUserItem) ??
+            state.itemIds[0];
+        reason = "early_practice";
+    }
 
     const retry: RetryEntry | undefined = state.retries[itemId];
     const advancesCycle = state.cycleQueue.includes(itemId);
