@@ -24,9 +24,8 @@ const schedulerSchema = z.object({ itemIds: z.array(id), cycleQueue: z.array(id)
     completedCycles: count, turn: count, retries: z.record(id, retry),
     struggles: z.record(id, z.object({ consecutiveFailures: count, firstFailureAt: timestamp,
         suspensionLevel: count, suspendedUntil: timestamp })),
-    userAnswered: z.record(id, count), introduced: z.array(id), botShown: z.record(id, count),
-    lastBotItem: id.nullable(), lastUserItem: id.nullable(), initialPriorityApplied: z.boolean(),
-    priorityAnswerMode: z.enum(["input", "selection"]).optional(), current: selection.nullable() });
+    userAnswered: z.record(id, count), botShown: z.record(id, count),
+    lastBotItem: id.nullable(), lastUserItem: id.nullable(), current: selection.nullable() });
 export const replaySchema = z.object({ schemaVersion: z.literal(1),
     algorithmVersion: z.literal(SCHEDULER_VERSION), memoryVersion: z.literal(MEMORY_MODEL_VERSION),
     now: z.number().int().nonnegative(), rngState: z.number().int().min(0).max(0xffffffff),
@@ -52,7 +51,7 @@ export function anonymizeReplay(value: ReplaySnapshot) {
         Object.fromEntries(Object.entries(record).map(([id, entry]) => [map(id), transform(entry)]));
     const current = clean.scheduler.current;
     clean.scheduler = { ...clean.scheduler, itemIds: clean.scheduler.itemIds.map(map),
-        cycleQueue: clean.scheduler.cycleQueue.map(map), introduced: clean.scheduler.introduced.map(map),
+        cycleQueue: clean.scheduler.cycleQueue.map(map),
         retries: dict(clean.scheduler.retries, entry => ({ ...entry, itemId: map(entry.itemId) })),
         struggles: dict(clean.scheduler.struggles), userAnswered: dict(clean.scheduler.userAnswered),
         botShown: dict(clean.scheduler.botShown), lastBotItem: clean.scheduler.lastBotItem ? map(clean.scheduler.lastBotItem) : null,

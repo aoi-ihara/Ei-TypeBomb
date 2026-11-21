@@ -1,6 +1,6 @@
 import type { SchedulerState, Selection } from "./scheduler";
 
-export const SCHEDULER_VERSION = "adaptive-v1";
+export const SCHEDULER_VERSION = "unified-v2";
 export type CandidateDecision = {
     itemId: string;
     mode?: "input" | "selection";

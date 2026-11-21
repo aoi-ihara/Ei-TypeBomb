@@ -89,7 +89,7 @@ spec explicitly removes its guarantee or another test proves the same behavior.
 | Existing suite | Class / responsibility | Decision |
 | --- | --- | --- |
 | playground.test.cjs | Unit + scenario + extracted Client/Input callbacks; legacy selection, memory, holds, storage, save failure | Maintain; mixed historical suite explicitly in game group; inject disabled diagnostic flag into its VM |
-| adaptive-scheduler.test.mts | Unit / current offline priorities and early-practice credit | Maintain in learning |
+| scheduler-policy.test.mts / practice-policy.test.mts | Unit / current offline priorities and early-practice credit | Maintain in learning |
 | answer-mode.test.mts | Unit / mode resolution, recognition, mixed mastery | Maintain in learning |
 | online-memory.test.cjs | Integration / online timing, sync, history | Maintain in game |
 | retry-gap.test.cjs | Unit / shared retry spacing | Maintain in game; guards online compatibility |
@@ -157,3 +157,10 @@ update function separately. The mixed six-step fixture initially showed zero
 selection, input-update and graph differences from the starting HEAD.
 
 Final executed results and remaining evidence gates: [validation record](VALIDATION.md).
+
+
+## Merge note (#648 → #650)
+
+The unified scheduler supersedes the separate adaptive module. `test:learning`
+uses `scheduler-policy.test.mts` and `practice-policy.test.mts` along with
+new diagnostics/reload tests. For the current selection contract, see [SPECIFICATION.md](SPECIFICATION.md).

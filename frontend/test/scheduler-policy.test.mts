@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     createInitialMemory,
+    getReviewIntervalMs,
+    recordAnswerExposure,
     recordAnswerModeResult,
     applyRecallObservation,
     evaluateRecall,
@@ -13,7 +15,7 @@ import {
     recordUserAnswer,
     saveSchedulerState,
     loadSchedulerState,
-    nextAdaptiveReviewAt,
+    nextMemoryReviewAt,
 } from "../lib/playground/scheduler";
 
 const time = Date.parse("2026-11-21T00:00:00.000Z");
@@ -23,9 +25,13 @@ const choose = (
     memories: Record<string, ItemMemoryState> = {},
     at = time,
     mode: "input" | "selection" = "input",
-) => chooseNextUserItem(state, memories, () => 0.5, at, mode, undefined, "adaptive");
+) => chooseNextUserItem(state, memories, () => 0.5, at, mode);
 
-function reviewed(id: string, stability: number, ageHours: number): ItemMemoryState {
+function reviewed(
+    id: string,
+    stability: number,
+    ageHours: number,
+): ItemMemoryState {
     const lastReviewedAt = new Date(time - ageHours * hour).toISOString();
     return {
         ...createInitialMemory("u", "r", id),
@@ -76,25 +82,26 @@ test("due short retry has priority over due reviews and new words", () => {
     assert.equal(selected?.reason, "retry");
 });
 
-test("at most eight unseen words are introduced in one offline session", () => {
-    const state = createScheduler(Array.from({ length: 20 }, (_, i) => `w-${i}`), () => 0.5);
+test("successful new learning continues beyond eight words without restarting", () => {
+    const state = createScheduler(
+        Array.from({ length: 20 }, (_, i) => `w-${i}`),
+        () => 0.5,
+    );
     const seen = new Set<string>();
-    for (let index = 0; index < 8; index++) {
+    for (let index = 0; index < 20; index++) {
         const selected = choose(state);
         assert.equal(selected?.reason, "cycle");
         assert(selected?.itemId);
+        assert(!seen.has(selected.itemId));
         seen.add(selected.itemId);
         recordUserAnswer(state, success, time);
     }
-    assert.equal(seen.size, 8);
-    assert.equal(state.introduced.length, 8);
-    const practice = choose(state);
-    assert.equal(practice?.reason, "early_practice");
-    assert(practice?.itemId && seen.has(practice.itemId));
-    assert.equal(state.introduced.length, 8, "fallback must not introduce a ninth new word");
+    assert.equal(seen.size, 20);
+    assert.equal(state.completedCycles, 1);
+    assert(choose(state));
 });
 
-test("early practice chooses the weakest not-yet-due word without pausing", () => {
+test("early practice chooses the least recently exposed word without pausing", () => {
     const state = createScheduler(["strong", "weak"], () => 0.5);
     const memories = {
         strong: reviewed("strong", 8, 1),
@@ -103,7 +110,7 @@ test("early practice chooses the weakest not-yet-due word without pausing", () =
     const selection = choose(state, memories);
     assert.equal(selection?.itemId, "weak");
     assert.equal(selection?.reason, "early_practice");
-    const next = nextAdaptiveReviewAt(state, memories, time, "input");
+    const next = nextMemoryReviewAt(state, memories, time, "input");
     assert(next !== null && next > time);
 });
 
@@ -116,8 +123,8 @@ test("a recently shown overdue word supplies a future cooldown deadline", () => 
     const memories = { recent: memory };
     assert.equal(choose(state, memories)?.reason, "early_practice");
     assert.equal(
-        nextAdaptiveReviewAt(state, memories, time, "input"),
-        time + 90_000,
+        nextMemoryReviewAt(state, memories, time, "input"),
+        time - 30_000 + getReviewIntervalMs(memory.stability, true),
     );
 });
 
@@ -125,7 +132,10 @@ test("recent exposures are deprioritized when older alternatives exist", () => {
     const state = createScheduler(["older", "recent"], () => 0.5);
     const memories = {
         older: reviewed("older", 8, 1),
-        recent: { ...reviewed("recent", 8, 2), lastPresentedAt: new Date(time - 5_000).toISOString() },
+        recent: {
+            ...reviewed("recent", 8, 2),
+            lastPresentedAt: new Date(time - 5_000).toISOString(),
+        },
     };
     assert.equal(choose(state, memories)?.itemId, "older");
 });
@@ -197,13 +207,23 @@ test("even normal correct recalls cannot strengthen an unduly recent anchor", ()
 
 test("early recognition success does not move the long-term reference date", () => {
     const first = recordAnswerModeResult({
-        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true, now: new Date(time - 4 * hour),
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
+        now: new Date(time - hour),
     });
     const early = recordAnswerModeResult({
-        memory: first, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true, practiceOnly: true,
-        exposureGapMs: 4 * hour, now: new Date(time),
+        memory: first,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
+        exposureGapMs: hour,
+        now: new Date(time),
     });
     const previous = first.answerModeStats!.recognition;
     const after = early.answerModeStats!.recognition;
@@ -211,12 +231,22 @@ test("early recognition success does not move the long-term reference date", () 
     assert.equal(after.lastReviewedAt, previous.lastReviewedAt);
     assert.equal(after.attempts, previous.attempts + 1);
     const younger = recordAnswerModeResult({
-        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true, now: new Date(time - hour),
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
+        now: new Date(time - hour),
     });
     const undue = recordAnswerModeResult({
-        memory: younger, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true, exposureGapMs: hour,
+        memory: younger,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
+        exposureGapMs: hour,
         now: new Date(time),
     });
     assert.equal(
@@ -276,19 +306,24 @@ test("an overdue card cannot gain stability after very recent extra practice", (
 
 test("overdue recognition does not gain stability from a recent exposure", () => {
     const first = recordAnswerModeResult({
-        memory: undefined, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true,
+        memory: undefined,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
         now: new Date(time - 72 * hour),
     });
-    const practiced = recordAnswerModeResult({
-        memory: first, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true, practiceOnly: true,
-        exposureGapMs: 72 * hour, now: new Date(time - 5 * 60_000),
-    });
+    const practiced = recordAnswerExposure(first, new Date(time - 5 * 60_000));
     const updated = recordAnswerModeResult({
-        memory: practiced, userId: "u", roomId: "r", itemId: "choice",
-        mode: "selection", success: true,
-        exposureGapMs: 5 * 60_000, now: new Date(time),
+        memory: practiced,
+        userId: "u",
+        roomId: "r",
+        itemId: "choice",
+        mode: "selection",
+        success: true,
+        exposureGapMs: 5 * 60_000,
+        now: new Date(time),
     });
     assert.equal(
         updated.answerModeStats?.recognition.lastReviewedAt,
@@ -405,28 +440,136 @@ test("a previously selected unfinished question remains stable", () => {
     assert.deepEqual(second, first);
 });
 
-test("introduced-word count survives a reload", () => {
+test("legacy introduction budget is discarded while queue and progress survive a reload", () => {
     const data = new Map<string, string>();
-    const previousStorage = globalThis.localStorage;
+    const previousStorage = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "localStorage",
+    );
     Object.defineProperty(globalThis, "localStorage", {
         configurable: true,
         value: {
             getItem: (key: string) => data.get(key) ?? null,
-            setItem: (key: string, value: string) => { data.set(key, value); },
+            setItem: (key: string, value: string) => {
+                data.set(key, value);
+            },
         },
     });
     try {
         const state = createScheduler(["a", "b"], () => 0.5);
-        state.introduced = ["a"];
+        Object.assign(state, { introduced: ["a"] });
+        state.userAnswered.a = 2;
+        state.cycleQueue = ["b"];
         saveSchedulerState("playground", "u", "r", state, time);
         const restored = loadSchedulerState(
-            "playground", "u", "r", ["a", "b"], {}, time + 1000,
+            "playground",
+            "u",
+            "r",
+            ["a", "b"],
+            time + 1000,
         );
-        assert.deepEqual(restored?.introduced, ["a"]);
+        assert.deepEqual(restored?.cycleQueue, ["b"]);
+        assert.equal(restored?.userAnswered.a, 2);
+        assert.equal("introduced" in restored!, false);
     } finally {
-        Object.defineProperty(globalThis, "localStorage", {
-            configurable: true,
-            value: previousStorage,
-        });
+        if (previousStorage)
+            Object.defineProperty(globalThis, "localStorage", previousStorage);
+        else Reflect.deleteProperty(globalThis, "localStorage");
     }
+});
+
+test("unfinished early rehearsal survives legacy cache migration, including held words", () => {
+    const data = new Map<string, string>();
+    const descriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "localStorage",
+    );
+    Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: {
+            getItem: (key: string) => data.get(key) ?? null,
+            setItem: (key: string, value: string) => data.set(key, value),
+        },
+    });
+    try {
+        const state = createScheduler(["held"], () => 0.5);
+        state.struggles.held = {
+            consecutiveFailures: 0,
+            firstFailureAt: null,
+            suspensionLevel: 2,
+            suspendedUntil: time + hour,
+        };
+        const current = choose(state, { held: reviewed("held", 8, 1) })!;
+        assert.equal(current.reason, "early_practice");
+        Object.assign(state, {
+            introduced: ["held"],
+            initialPriorityApplied: true,
+            priorityAnswerMode: "input",
+        });
+        saveSchedulerState("playground", "u", "r", state, time);
+        const restored = loadSchedulerState(
+            "playground",
+            "u",
+            "r",
+            ["held"],
+            time + 1000,
+        )!;
+        assert.deepEqual(restored.current, current);
+        assert.deepEqual(restored.struggles, state.struggles);
+        assert.equal(choose(restored), restored.current);
+        recordUserAnswer(restored, success, time + 1000);
+        assert.equal(restored.struggles.held.suspendedUntil, time + hour);
+    } finally {
+        if (descriptor)
+            Object.defineProperty(globalThis, "localStorage", descriptor);
+        else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+});
+
+test("legacy recognition stability is interpreted consistently on the first new write", () => {
+    const memory = createInitialMemory("u", "r", "legacy");
+    const at = new Date(time - 60_000).toISOString();
+    memory.lastPresentedAt = at;
+    memory.answerModeStats = {
+        recognition: {
+            attempts: 5,
+            correct: 4,
+            correctStreak: 2,
+            lastAttemptAt: at,
+        },
+        recall: {
+            attempts: 0,
+            correct: 0,
+            correctStreak: 0,
+            lastAttemptAt: null,
+        },
+    };
+    const dueBefore = nextMemoryReviewAt(
+        createScheduler(["legacy"]),
+        { legacy: memory },
+        time,
+        "selection",
+    );
+    const updated = recordAnswerModeResult({
+        memory,
+        userId: "u",
+        roomId: "r",
+        itemId: "legacy",
+        mode: "selection",
+        success: true,
+        now: new Date(time),
+    });
+    assert.equal(updated.answerModeStats!.recognition.stability, 0.3);
+    assert.equal(updated.answerModeStats!.recognition.lastReviewedAt, at);
+    assert.equal(updated.answerModeStats!.recognition.attempts, 6);
+    assert.equal(updated.answerModeStats!.recognition.correct, 5);
+    assert.equal(
+        nextMemoryReviewAt(
+            createScheduler(["legacy"]),
+            { legacy: updated },
+            time,
+            "selection",
+        ),
+        dueBefore! + 60_000,
+    );
 });

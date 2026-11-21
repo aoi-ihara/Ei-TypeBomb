@@ -60,8 +60,8 @@ test("snapshot continuation is equivalent at 1 hour, 1 day and 7 days", () => {
 test("diagnostic observer neither draws random values nor changes selection or memory", () => {
     const a = createScheduler(["a", "b"], () => .3), b = structuredClone(a);
     let firstDraws = 0, secondDraws = 0;
-    const left = chooseNextUserItem(a, {}, () => { firstDraws++; return .7; }, Date.parse(startAt), "input", undefined, "adaptive");
-    const right = chooseNextUserItem(b, {}, () => { secondDraws++; return .7; }, Date.parse(startAt), "input", undefined, "adaptive", () => {});
+    const left = chooseNextUserItem(a, {}, () => { firstDraws++; return .7; }, Date.parse(startAt), "input", undefined);
+    const right = chooseNextUserItem(b, {}, () => { secondDraws++; return .7; }, Date.parse(startAt), "input", undefined, () => {});
     assert.deepEqual(left, right); assert.deepEqual(a, b); assert.equal(firstDraws, secondDraws);
 });
 test("invalid schemas and unsafe record identifiers are rejected", () => {

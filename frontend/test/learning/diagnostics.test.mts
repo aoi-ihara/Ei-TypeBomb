@@ -13,7 +13,7 @@ test("copied JSON anonymizes identifiers, uses current graph, and replays the ac
         reviewCount: 1, lastReviewedAt: new Date(now - 86400000).toISOString() } };
     const modes = Object.fromEntries(ids.map(id => [id, "input" as const]));
     let captured: CapturedDecision | null = null;
-    chooseNextUserItem(state, memories, () => .5, now, "input", modes, "adaptive", trace => { captured = captureDecision(trace, memories, modes); });
+    chooseNextUserItem(state, memories, () => .5, now, "input", modes, trace => { captured = captureDecision(trace, memories, modes); });
     const graph = getMasteryGraph(ids, memories, now + 3600000, "input", modes, true);
     const json = diagnosticJSON(captured, graph, ids)!;
     for (const secret of [...ids, "secret-user", "secret-room"]) assert(!json.includes(secret));

@@ -39,7 +39,7 @@ export function simulate(input: unknown) {
         now += step.advanceMs;
         const beforeSelection = snapshot(scheduler, memories, modes, now, rngState);
         let decision: DecisionTrace | undefined;
-        const selected = chooseNextUserItem(scheduler, memories, draw, now, "input", modes, "adaptive", trace => { decision = trace; });
+        const selected = chooseNextUserItem(scheduler, memories, draw, now, "input", modes, trace => { decision = trace; });
         if (!selected) { timeline.push({ index, at: now, decision, masteryGraph: getMasteryGraph(scheduler.itemIds, memories, now, "input", modes, true) }); continue; }
         const itemId = selected.itemId;
         const mode = modes[itemId] ?? "input";
@@ -69,7 +69,7 @@ export function simulate(input: unknown) {
             memories[itemId] = recordAnswerModeResult({ ...identity, mode, success,
                 usedHint: Boolean(observation.hintCount || observation.answerWasFullyRevealed),
                 responseMs: step.responseMs === undefined ? observation.elapsedMs : step.responseMs,
-                choiceCount: step.choiceCount, exposureGapMs, practiceOnly: selected.reason === "early_practice" });
+                choiceCount: step.choiceCount, exposureGapMs });
             evaluation = evaluateRecognition(!success, exposureGapMs);
         } else {
             evaluation = evaluateRecall(observation);
@@ -84,12 +84,12 @@ export function simulate(input: unknown) {
     const finalSnapshot = snapshot(scheduler, memories, modes, now, rngState);
     const nextState = structuredClone(scheduler);
     let nextDecision: DecisionTrace | undefined;
-    chooseNextUserItem(nextState, memories, draw, now, "input", modes, "adaptive", trace => { nextDecision = trace; });
+    chooseNextUserItem(nextState, memories, draw, now, "input", modes, trace => { nextDecision = trace; });
     const selections = timeline.flatMap(turn => turn.selection ? [turn.selection] : []);
     const frequency: Record<string, number> = {};
     for (const selected of selections) frequency[selected.itemId] = (frequency[selected.itemId] ?? 0) + 1;
     return { schemaVersion: 1, seed: scenario.seed, timeline, nextDecision, finalSnapshot,
         metrics: { frequency, consecutiveRepeats: selections.filter((entry, i) => i > 0 && entry.itemId === selections[i - 1].itemId).length,
             earlyPractice: selections.filter(entry => entry.reason === "early_practice").length,
-            introduced: scheduler.introduced.length } };
+            introduced: Object.keys(scheduler.userAnswered).length } };
 }

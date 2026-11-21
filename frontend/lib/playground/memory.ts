@@ -1,7 +1,7 @@
 const DAY_MS = 86_400_000;
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));
-export const MEMORY_MODEL_VERSION = "playground-v10-spaced-evidence";
+export const MEMORY_MODEL_VERSION = "playground-v11-separated-practice";
 const INITIAL_ENCODING_STABILITY = 0.15;
 // Uncalibrated hypotheses, measured in days.
 export const INITIAL_CLEAR_RECALL_STABILITY = 0.3;
@@ -116,7 +116,6 @@ export function evaluateRecognition(hadMistake: boolean, exposureGapMs?: number 
         independent: isIndependentExposure(exposureGapMs),
     };
 }
-
 // Read-only compatibility with existing JSON rows. Never used by the scheduler.
 export type PersistedLearningState = {
     phase: "encoding" | "supported_recall" | "free_recall" | "graduated";
@@ -194,8 +193,9 @@ export const evaluateRecall = (
                 Math.max(1, observation.answerLength),
     );
     const full = observation.answerWasFullyRevealed || cue >= 1;
-    const independent =
-        isIndependentExposure(observation.elapsedSincePresentationMs);
+    const independent = isIndependentExposure(
+        observation.elapsedSincePresentationMs,
+    );
     if (!observation.success || full)
         return {
             memoryEvidence: "insufficient_evidence",
@@ -210,18 +210,18 @@ export const evaluateRecall = (
             reason: "heavy_hint",
             independent,
         };
-    if (!independent)
-        return {
-            memoryEvidence: "insufficient_evidence",
-            retryNeed: "confirm",
-            reason: "uncertain_recall",
-            independent,
-        };
     if (cue > 0 || (observation.additionalHintCount ?? 0) > 0)
         return {
             memoryEvidence: "weak_recall",
             retryNeed: "confirm",
             reason: "uncertain_recall",
+            independent,
+        };
+    if (!independent)
+        return {
+            memoryEvidence: "insufficient_evidence",
+            retryNeed: "none",
+            reason: null,
             independent,
         };
     const expected =
@@ -368,12 +368,89 @@ export function getExposureGap(
     return previous ? Math.max(0, presentedAt - Date.parse(previous)) : null;
 }
 
+/** Minimum answer-free interval required for a new retention observation. */
+export function getReviewIntervalMs(
+    stability: number,
+    hasAnchor: boolean,
+): number {
+    return hasAnchor
+        ? Math.max(
+              MIN_SPACED_EVIDENCE_MS,
+              -Math.max(0.12, stability) *
+                  Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) *
+                  DAY_MS,
+          )
+        : MIN_SPACED_EVIDENCE_MS;
+}
+
+// One interpretation of legacy recognition rows for prediction, scheduling
+// and updates. Missing stability must not silently change on the first write.
+function recognitionMemory(track: AnswerModeTrack | undefined) {
+    const anchor =
+        track?.lastReviewedAt !== undefined
+            ? track.lastReviewedAt
+            : track?.correctStreak
+              ? track.lastAttemptAt
+              : null;
+    return {
+        anchor,
+        stability: Math.max(
+            0.12,
+            track?.stability ??
+                (anchor
+                    ? INITIAL_CLEAR_RECALL_STABILITY
+                    : INITIAL_ENCODING_STABILITY),
+        ),
+    };
+}
+
+/** Earliest useful long-term review, including all intervening answer exposures. */
+export function getNextMemoryReviewAt(
+    memory: ItemMemoryState | undefined,
+    mode: AnswerModeResult,
+): number | null {
+    if (!memory) return null;
+    const track = memory.answerModeStats?.recognition;
+    const recognition = recognitionMemory(track);
+    const anchor =
+        mode === "input" ? memory.lastReviewedAt : recognition.anchor;
+    const stability =
+        mode === "input" ? memory.stability : recognition.stability;
+    const exposure =
+        memory.lastPresentedAt ??
+        (mode === "selection" ? track?.lastAttemptAt : memory.lastReviewedAt) ??
+        anchor;
+    if (!exposure) return null;
+    const at = Date.parse(exposure);
+    if (!Number.isFinite(at)) return null;
+    return (
+        Math.max(at, anchor ? Date.parse(anchor) : at) +
+        getReviewIntervalMs(stability, Boolean(anchor))
+    );
+}
+
 function spacedStability(stability: number, gapMs: number) {
     const days = gapMs / DAY_MS;
     if (!Number.isFinite(days)) return stability;
     const gain = stability * (1 - Math.exp(-days / stability)) * RETENTION_GAIN_FACTOR;
     const demonstrated = 1.25 * days / -Math.log(MASTERY_RETRIEVABILITY_THRESHOLD);
     return Math.min(stability * 3, Math.max(stability + gain, demonstrated));
+}
+
+// Evidence eligibility belongs to memory, never to a scheduler reason label.
+function hasSpacedEvidence(
+    stability: number,
+    anchor: string | null,
+    gapMs: number | null,
+    firstExposure: boolean,
+    now: number,
+): boolean {
+    const interval = getReviewIntervalMs(stability, Boolean(anchor));
+    return (
+        (firstExposure ||
+            (gapMs !== null && Number.isFinite(gapMs) && gapMs >= interval)) &&
+        (!anchor || now - Date.parse(anchor) >= interval)
+    );
 }
 
 const updateAnswerModeStats = (
@@ -385,7 +462,6 @@ const updateAnswerModeStats = (
     usedHint = false,
     exposureGapMs: number | null = null,
     choiceCount = 4,
-    practiceOnly = false,
 ): AnswerModeStats => {
     const emptyTrack = (): AnswerModeTrack => ({
         attempts: 0,
@@ -414,47 +490,36 @@ const updateAnswerModeStats = (
         // track recognition separately to avoid awarding free-recall mastery.
         // A failed/revealed choice weakens stability without creating a new
         // successful-review timestamp (which would falsely raise mastery).
-        const lastCleanAt =
-            previous.lastReviewedAt !== undefined ? previous.lastReviewedAt :
-            (previous.correctStreak > 0 ? previous.lastAttemptAt : null);
-        const previousStability = Math.max(
-            0.12,
-            previous.stability ?? INITIAL_ENCODING_STABILITY,
+        const { anchor: lastCleanAt, stability: previousStability } =
+            recognitionMemory(previous);
+        const creditsMemory = hasSpacedEvidence(
+            previousStability,
+            lastCleanAt,
+            exposureGapMs,
+            previous.attempts === 0 && exposureGapMs === null,
+            now.getTime(),
         );
-        const independent = isIndependentExposure(exposureGapMs);
-        const requiredGapMs = lastCleanAt
-            ? Math.max(
-                  MIN_SPACED_EVIDENCE_MS,
-                  -previousStability *
-                      Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * DAY_MS,
-              )
-            : MIN_SPACED_EVIDENCE_MS;
-        const sufficientlySpaced =
-            exposureGapMs === null
-                ? previous.attempts === 0
-                : Number.isFinite(exposureGapMs) &&
-                  exposureGapMs >= requiredGapMs;
-        const dueForRecognition =
-            !lastCleanAt ||
-            getRecognitionRetrievability(
-                { answerModeStats: stats },
-                now.getTime(),
-            ) <= MASTERY_RETRIEVABILITY_THRESHOLD;
-        const creditsMemory =
-            !practiceOnly && independent &&
-            sufficientlySpaced && dueForRecognition;
-        if (!success) {
-            nextTrack.stability = Math.max(0.12, previousStability * (usedHint ? 0.75 : 0.8));
-        } else if (creditsMemory) {
+        if (!success && creditsMemory) {
+            nextTrack.stability = Math.max(
+                0.12,
+                previousStability * (usedHint ? 0.75 : 0.8),
+            );
+        } else if (success && creditsMemory) {
             // Discount successful guesses when fewer distractors were available.
-            const weight = (1 - 1 / Math.max(2, Math.min(4, choiceCount))) / 0.75;
-            nextTrack.stability = lastCleanAt && exposureGapMs !== null
-                ? previousStability + weight * (spacedStability(previousStability, exposureGapMs) - previousStability)
-                : INITIAL_CLEAR_RECALL_STABILITY * weight;
+            const weight =
+                (1 - 1 / Math.max(2, Math.min(4, choiceCount))) / 0.75;
+            nextTrack.stability =
+                lastCleanAt && exposureGapMs !== null
+                    ? previousStability +
+                      weight *
+                          (spacedStability(previousStability, exposureGapMs) -
+                              previousStability)
+                    : INITIAL_CLEAR_RECALL_STABILITY * weight;
         } else {
             nextTrack.stability = previousStability;
         }
-        nextTrack.lastReviewedAt = success && creditsMemory ? now.toISOString() : lastCleanAt;
+        nextTrack.lastReviewedAt =
+            success && creditsMemory ? now.toISOString() : lastCleanAt;
     }
 
     if (
@@ -498,7 +563,6 @@ export const recordAnswerModeResult = ({
     usedHint = false,
     choiceCount = 4,
     exposureGapMs,
-    practiceOnly = false,
 }: {
     memory: ItemMemoryState | undefined;
     userId: string;
@@ -511,10 +575,12 @@ export const recordAnswerModeResult = ({
     usedHint?: boolean;
     choiceCount?: number;
     exposureGapMs?: number | null;
-    practiceOnly?: boolean;
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const iso = now.toISOString();
+    // With no distractor there is no recognition test, only answer exposure.
+    if (mode === "selection" && choiceCount < 2)
+        return recordAnswerExposure(current, now);
     return {
         ...current,
         userId,
@@ -527,9 +593,10 @@ export const recordAnswerModeResult = ({
             now,
             responseMs,
             usedHint,
-            exposureGapMs === undefined ? getExposureGap(current, mode, now.getTime()) : exposureGapMs,
+            exposureGapMs === undefined
+                ? getExposureGap(current, mode, now.getTime())
+                : exposureGapMs,
             choiceCount,
-            practiceOnly,
         ),
         // A typing failure is an intermediate attempt within the current
         // presentation, not a new exposure. Preserve the previous timestamp
@@ -565,16 +632,10 @@ export const getRecognitionRetrievability = (
 ): number => {
     const track = memory?.answerModeStats?.recognition;
     if (!track || track.attempts === 0) return 0;
-    const lastCleanAt =
-        track.lastReviewedAt !== undefined ? track.lastReviewedAt :
-        (track.correctStreak > 0 ? track.lastAttemptAt : null);
-    if (!lastCleanAt) return 0;
-    const lastReviewedMs = Date.parse(lastCleanAt);
+    const { anchor, stability } = recognitionMemory(track);
+    if (!anchor) return 0;
+    const lastReviewedMs = Date.parse(anchor);
     if (!Number.isFinite(lastReviewedMs)) return 0;
-    const stability = Math.max(
-        0.12,
-        track.stability ?? INITIAL_CLEAR_RECALL_STABILITY,
-    );
     const elapsedDays = Math.max(0, (now - lastReviewedMs) / DAY_MS);
     return clamp(Math.exp(-elapsedDays / stability), 0, 1);
 };
@@ -613,32 +674,27 @@ export const getMasteryProgress = (
     let masteredNow = 0;
     let masteredAfter3Hours = 0;
     let masteredAfter24Hours = 0;
-
     for (const itemId of uniqueItemIds) {
         const memory = memoryByItem[itemId];
-        const predict = (modeByItem?.[itemId] ?? mode) === "selection"
-            ? getRecognitionRetrievability
-            : getRetrievability;
-        const recognition = (modeByItem?.[itemId] ?? mode) === "selection";
+        const effectiveMode = modeByItem?.[itemId] ?? mode;
+        const recognition = effectiveMode === "selection";
+        const predict = recognition ? getRecognitionRetrievability : getRetrievability;
         const stability = recognition ? memory?.answerModeStats?.recognition.stability : memory?.stability;
         const valid = stability === undefined || (Number.isFinite(stability) && stability >= 0);
         const probabilities = [0, MASTERY_THREE_HOUR_HORIZON_MS, MASTERY_FORECAST_HORIZON_MS]
-            .map(offset => { const value = valid ? predict(memory, now + offset) : 0; return Number.isFinite(value) ? value : 0; });
+            .map(offset => {
+                const value = valid ? predict(memory, now + offset) : 0;
+                return Number.isFinite(value) ? value : 0;
+            });
         const aboveThreshold = probabilities.map(value => value >= threshold);
-        observe?.({ itemId, mode: modeByItem?.[itemId] ?? mode, probabilities,
-            aboveThreshold, included: true, reason: !memory ? "missing_memory" : !valid ? "invalid_memory" : "prediction" });
+        observe?.({ itemId, mode: effectiveMode, probabilities, aboveThreshold, included: true,
+            reason: !memory ? "missing_memory" : !valid ? "invalid_memory" : "prediction" });
         if (!aboveThreshold[0]) continue;
         masteredNow++;
         if (aboveThreshold[1]) masteredAfter3Hours++;
         if (aboveThreshold[2]) masteredAfter24Hours++;
     }
-
-    return {
-        total: uniqueItemIds.size,
-        masteredNow,
-        masteredAfter3Hours,
-        masteredAfter24Hours,
-    };
+    return { total: uniqueItemIds.size, masteredNow, masteredAfter3Hours, masteredAfter24Hours };
 };
 
 export const applyRecallObservation = ({
@@ -658,9 +714,8 @@ export const applyRecallObservation = ({
 }): ItemMemoryState => {
     const current = memory ?? createInitialMemory(userId, roomId, itemId);
     const evaluation = evaluateRecall(observation);
-    const independentInputSuccess =
+    const unaidedInputSuccess =
         observation.success &&
-        evaluation.independent &&
         evaluation.retryNeed === "none" &&
         !observation.answerWasFullyRevealed &&
         (observation.initialCueRatio ?? 0) === 0 &&
@@ -671,46 +726,37 @@ export const applyRecallObservation = ({
     let difficulty = current.difficulty;
     let lastReviewedAt = current.lastReviewedAt;
     const iso = now.toISOString();
-    const gapMs = observation.elapsedSincePresentationMs === undefined
-        ? getExposureGap(current, "input", now.getTime())
-        : observation.elapsedSincePresentationMs;
-    // A successful answer after an early presentation is not an
-    // independent spaced review. Compare the *last exposure* gap against
-    // the memory's own target retention interval, not just a fixed 2 minutes.
-    const requiredGapMs = current.lastReviewedAt
-        ? Math.max(
-              MIN_SPACED_EVIDENCE_MS,
-              -Math.max(0.12, current.stability) *
-                  Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * DAY_MS,
-          )
-        : MIN_SPACED_EVIDENCE_MS;
+    const gapMs =
+        observation.elapsedSincePresentationMs === undefined
+            ? getExposureGap(current, "input", now.getTime())
+            : observation.elapsedSincePresentationMs;
     const previouslyExposed =
         current.reviewCount > 0 ||
         Boolean(current.lastPresentedAt) ||
         (current.answerModeStats?.recognition.attempts ?? 0) > 0;
-    const spacedEvidence =
-        observation.schedulerReason !== "early_practice" &&
-        (!previouslyExposed ||
-            (gapMs !== null &&
-                Number.isFinite(gapMs) &&
-                gapMs >= requiredGapMs)) &&
-        (!current.lastReviewedAt ||
-            getRetrievability(current, now.getTime()) <=
-                MASTERY_RETRIEVABILITY_THRESHOLD);
+    const spacedEvidence = hasSpacedEvidence(
+        current.stability,
+        current.lastReviewedAt,
+        gapMs,
+        !previouslyExposed,
+        now.getTime(),
+    );
     if (
         !observation.success ||
         observation.answerWasFullyRevealed ||
         (observation.finalCueRatio ?? 0) >= 1
     ) {
-        stability = Math.max(0.12, stability * 0.8);
-        difficulty = clamp(difficulty + 0.5, 1, 10);
+        if (spacedEvidence) {
+            stability = Math.max(0.12, stability * 0.8);
+            difficulty = clamp(difficulty + 0.5, 1, 10);
+        }
     } else if (
         evaluation.independent &&
         evaluation.memoryEvidence !== "insufficient_evidence"
     ) {
         // Speed controls session repetition, not the magnitude of long-term gain.
         const weak = evaluation.memoryEvidence === "weak_recall";
-        if (independentInputSuccess && spacedEvidence) {
+        if (unaidedInputSuccess && spacedEvidence) {
             stability = current.lastReviewedAt
                 ? spacedStability(stability, gapMs ?? 0)
                 : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY);
@@ -736,7 +782,7 @@ export const applyRecallObservation = ({
         answerModeStats: updateAnswerModeStats(
             current.answerModeStats,
             "input",
-            independentInputSuccess,
+            unaidedInputSuccess,
             now,
         ),
     };

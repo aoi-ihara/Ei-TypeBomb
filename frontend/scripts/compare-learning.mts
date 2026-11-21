@@ -29,7 +29,11 @@ function baseline(name: string): Record<string, (...args: unknown[]) => unknown>
 const oldScheduler = baseline("scheduler");
 const oldMemory = baseline("memory");
 const output = simulate(JSON.parse(readFileSync(fixture, "utf8")));
-const equal = (a: unknown, b: unknown, message: string) => assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)), message);
+let selectionDifferences = 0, inputUpdateDifferences = 0, graphDifferences = 0;
+const equal = (a: unknown, b: unknown, category: "selection" | "input" | "graph") => {
+    try { assert.deepEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b))); }
+    catch { if (category === "selection") selectionDifferences++; else if (category === "input") inputUpdateDifferences++; else graphDifferences++; }
+};
 for (const turn of output.timeline) {
     if (!turn.replay || !turn.selection) continue;
     const before = structuredClone(turn.replay);
@@ -37,16 +41,16 @@ for (const turn of output.timeline) {
     const selected = oldScheduler.chooseNextUserItem(before.scheduler, before.memories,
         () => { if (!draws.length) throw new Error("Unexpected baseline RNG draw"); return draws.shift(); },
         before.now, "input", before.modes, "adaptive");
-    equal(selected, turn.selection, `selection turn ${turn.index}`);
+    equal(selected, turn.selection, "selection");
     const id = turn.selection.itemId;
     const identity = { memory: before.memories[id], userId: "simulation", roomId: "local", itemId: id, now: new Date(turn.answeredAt!) };
     if (before.modes[id] === "input") {
-        equal(oldMemory.applyRecallObservation({ ...identity, observation: turn.observation }), turn.after, `memory turn ${turn.index}`);
+        equal(oldMemory.applyRecallObservation({ ...identity, observation: turn.observation }), turn.after, "input");
         oldScheduler.recordUserAnswer(before.scheduler, oldMemory.evaluateRecall(turn.observation), turn.answeredAt);
-        equal(before.scheduler, turn.schedulerAfter, `scheduler turn ${turn.index}`);
+        equal(before.scheduler, turn.schedulerAfter, "input");
     }
     equal(oldMemory.getMasteryProgress(before.scheduler.itemIds,
-        { ...before.memories, [id]: turn.after }, turn.answeredAt, .8, "input", before.modes), turn.masteryGraph.totals, `graph turn ${turn.index}`);
+        { ...before.memories, [id]: turn.after }, turn.answeredAt, .8, "input", before.modes), turn.masteryGraph.totals, "graph");
 }
 console.log(JSON.stringify({ baseline: revision, fixture, seed: output.seed, turnsCompared: output.timeline.length,
-    selectionDifferences: 0, inputUpdateDifferences: 0, graphDifferences: 0 }));
+    selectionDifferences, inputUpdateDifferences, graphDifferences }));
