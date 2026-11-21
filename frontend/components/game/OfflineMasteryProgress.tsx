@@ -40,7 +40,8 @@ function stabilityGradient(
         let strength = 0;
         for (let j = start; j < end; j++) {
             const scaled = Math.log1p(sorted[j]) / Math.log1p(STABILITY_REFERENCE_DAYS);
-            strength += Math.min(1, Math.max(0, scaled));
+            // Emphasize early progress without changing the stability ranking.
+            strength += Math.sqrt(Math.min(1, Math.max(0, scaled)));
         }
         strength /= end - start;
         // Interpolate colors, not DOM boxes; each gradient stop is a percentile.
