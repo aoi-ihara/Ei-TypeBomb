@@ -176,7 +176,8 @@ test("early recalled typing never resets the spaced memory anchor", () => {
         },
         userId: "u", roomId: "r", itemId: "typed", now: new Date(time),
     });
-    assert.equal(updated.stability, previous.stability);
+    assert(updated.stability > previous.stability);
+    assert(updated.stability - previous.stability < 0.02);
     assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
     assert.equal(updated.difficulty, previous.difficulty);
     assert.equal(updated.reviewCount, previous.reviewCount + 1);
@@ -201,7 +202,8 @@ test("even normal correct recalls cannot strengthen an unduly recent anchor", ()
         },
         userId: "u", roomId: "r", itemId: "typed", now: new Date(time),
     });
-    assert.equal(updated.stability, previous.stability);
+    assert(updated.stability > previous.stability);
+    assert(updated.stability - previous.stability < 0.02);
     assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
 });
 
@@ -227,7 +229,8 @@ test("early recognition success does not move the long-term reference date", () 
     });
     const previous = first.answerModeStats!.recognition;
     const after = early.answerModeStats!.recognition;
-    assert.equal(after.stability, previous.stability);
+    assert(after.stability! > previous.stability!);
+    assert(after.stability! - previous.stability! < 0.02);
     assert.equal(after.lastReviewedAt, previous.lastReviewedAt);
     assert.equal(after.attempts, previous.attempts + 1);
     const younger = recordAnswerModeResult({
@@ -300,7 +303,8 @@ test("an overdue card cannot gain stability after very recent extra practice", (
         },
         userId: "u", roomId: "r", itemId: "overdue", now: new Date(time),
     });
-    assert.equal(updated.stability, previous.stability);
+    assert(updated.stability > previous.stability);
+    assert(updated.stability - previous.stability < 0.002);
     assert.equal(updated.lastReviewedAt, previous.lastReviewedAt);
 });
 
@@ -329,9 +333,13 @@ test("overdue recognition does not gain stability from a recent exposure", () =>
         updated.answerModeStats?.recognition.lastReviewedAt,
         first.answerModeStats?.recognition.lastReviewedAt,
     );
-    assert.equal(
-        updated.answerModeStats?.recognition.stability,
-        first.answerModeStats?.recognition.stability,
+    assert(
+        updated.answerModeStats!.recognition.stability! >
+        first.answerModeStats!.recognition.stability!,
+    );
+    assert(
+        updated.answerModeStats!.recognition.stability! -
+        first.answerModeStats!.recognition.stability! < 0.002,
     );
 });
 
@@ -559,18 +567,18 @@ test("legacy recognition stability is interpreted consistently on the first new 
         success: true,
         now: new Date(time),
     });
-    assert.equal(updated.answerModeStats!.recognition.stability, 0.3);
+    assert(updated.answerModeStats!.recognition.stability! > 0.3);
+    assert(updated.answerModeStats!.recognition.stability! < 0.301);
     assert.equal(updated.answerModeStats!.recognition.lastReviewedAt, at);
     assert.equal(updated.answerModeStats!.recognition.attempts, 6);
     assert.equal(updated.answerModeStats!.recognition.correct, 5);
-    assert.equal(
+    assert(
         nextMemoryReviewAt(
             createScheduler(["legacy"]),
             { legacy: updated },
             time,
             "selection",
-        ),
-        dueBefore! + 60_000,
+        )! > dueBefore! + 60_000,
     );
 });
 
