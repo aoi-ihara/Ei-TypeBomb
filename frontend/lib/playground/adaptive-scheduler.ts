@@ -1,3 +1,4 @@
+import { SCHEDULER_VERSION, type DecisionObserver, type CandidateDecision } from "./decision-trace";
 import {
     getRecognitionRetrievability,
     getRetrievability,
@@ -42,6 +43,7 @@ function selectEarlyPractice(
     now: number,
     mode: AnswerMode,
     modes?: Modes,
+    decisions?: CandidateDecision[],
 ): string | null {
     const candidates: Practice[] = [];
     for (const id of state.itemIds) {
@@ -82,6 +84,11 @@ function selectEarlyPractice(
             a.dueAt - b.dueAt ||
             a.lastExposure - b.lastExposure;
     });
+    pool.forEach((entry, rank) => decisions?.push({
+        itemId: entry.id, stage: "early_practice", status: "ranked",
+        rank, score: entry.retention, dueAt: Number.isFinite(entry.dueAt) ? entry.dueAt : null,
+        exposureGapMs: Number.isFinite(entry.lastExposure) ? now - entry.lastExposure : null,
+    }));
     return (pool.find((entry) => entry.id !== state.lastUserItem) ?? pool[0]).id;
 }
 
@@ -136,9 +143,23 @@ export function chooseAdaptiveUserItem(
     now: number,
     mode: AnswerMode,
     modes?: Modes,
+    observe?: DecisionObserver,
 ): Selection | null {
-    if (!state.itemIds.length) return null;
-    if (state.current) return state.current;
+    const before = observe ? structuredClone(state) : undefined;
+    const decisions: CandidateDecision[] | undefined = observe ? [] : undefined;
+    const randomDraws: number[] = [];
+    const draw = () => { const value = random(); if (observe) randomDraws.push(value); return value; };
+    const finish = (selection: Selection | null) => {
+        if (observe && before) observe({ schemaVersion: 1, algorithmVersion: SCHEDULER_VERSION,
+            selectedAt: now, schedulerBefore: before, candidates: decisions!, randomDraws,
+            selection: selection ? structuredClone(selection) : null });
+        return selection;
+    };
+    if (!state.itemIds.length) return finish(null);
+    if (state.current) {
+        decisions?.push({ itemId: state.current.itemId, stage: "resume", status: "unfinished" });
+        return finish(state.current);
+    }
 
     const turn = state.turn + 1;
     const pending = Object.values(state.retries).filter(
@@ -148,6 +169,20 @@ export function chooseAdaptiveUserItem(
         .filter((entry) => entry.earliestTurn <= turn)
         .sort((a, b) => a.latestTurn - b.latestTurn);
 
+    if (decisions) for (const id of state.itemIds) {
+        const retry = state.retries[id];
+        const hold = state.struggles[id]?.suspendedUntil;
+        const memory = memories[id];
+        const itemMode = modeFor(id, mode, modes);
+        const exposedAt = Date.parse(memory?.lastPresentedAt ?? "");
+        decisions.push({ itemId: id, stage: "candidate", mode: itemMode,
+            introduced: state.introduced.includes(id), status: history(memory, itemMode) ? "experienced" : "unseen",
+            score: retention(memory, itemMode, now), dueAt: forecastDue(memory, itemMode),
+            exposureGapMs: Number.isFinite(exposedAt) ? now - exposedAt : null });
+        decisions.push({ itemId: id, stage: "retry", status: hold != null ? "held" :
+            retry ? (retry.earliestTurn <= turn ? "due" : "before_retry_turn") : "not_pending",
+            ...(retry ? { score: retry.latestTurn, rank: eligible.findIndex(entry => entry.itemId === id) } : {}) });
+    }
     let itemId: string | undefined = eligible[0]?.itemId;
     let reason: Selection["reason"] = "retry";
 
@@ -160,6 +195,10 @@ export function chooseAdaptiveUserItem(
                 entry.suspendedUntil <= now,
             )
             .sort((a, b) => a[1].suspendedUntil! - b[1].suspendedUntil!)[0];
+        decisions?.push(...Object.entries(state.struggles).map(([id, entry]) => ({
+            itemId: id, stage: "hold", status: entry.suspendedUntil === null ? "inactive" :
+                entry.suspendedUntil <= now ? "due" : "before_deadline", dueAt: entry.suspendedUntil,
+        })));
         if (dueHold) {
             itemId = dueHold[0];
             state.struggles[itemId].suspendedUntil = null;
@@ -171,22 +210,32 @@ export function chooseAdaptiveUserItem(
         const due: Due[] = [];
         const unseen: string[] = [];
         for (const id of state.itemIds) {
-            if (state.retries[id] || state.struggles[id]?.suspendedUntil != null) continue;
+            if (state.retries[id] || state.struggles[id]?.suspendedUntil != null) {
+                decisions?.push({ itemId: id, stage: "review", status: state.retries[id] ? "pending_retry" : "held" });
+                continue;
+            }
             const itemMode = modeFor(id, mode, modes);
             const memory = memories[id];
             if (!history(memory, itemMode)) {
                 // The shared answer counter can include another answer mode.
                 // A recognized word is still new to independent typed recall.
+                decisions?.push({ itemId: id, stage: "introduction", status:
+                    pending.length >= 4 ? "retry_capacity" : (state.introduced?.length ?? 0) >= MAX_NEW_PER_SESSION ? "session_budget" : "unseen" });
                 unseen.push(id);
                 continue;
             }
             const r = retention(memory, itemMode, now);
+            decisions?.push({ itemId: id, stage: "review", status: r >= MASTERY_RETRIEVABILITY_THRESHOLD ? "before_deadline" : "below_threshold",
+                score: r, dueAt: forecastDue(memory, itemMode) });
             if (r >= MASTERY_RETRIEVABILITY_THRESHOLD) continue;
             // A completed turn already creates its own retry. Don't immediately
             // reshow the same word just because its prediction is still low.
             const lastExposure = Date.parse(memory?.lastPresentedAt ?? "");
             if (Number.isFinite(lastExposure) && now - lastExposure < RECENT_EXPOSURE_MS)
+            {
+                decisions?.push({ itemId: id, stage: "review", status: "recent_exposure", exposureGapMs: now - lastExposure });
                 continue;
+            }
             due.push({
                 id,
                 retention: r,
@@ -194,6 +243,7 @@ export function chooseAdaptiveUserItem(
             });
         }
         due.sort((a, b) => a.retention - b.retention || a.dueAt - b.dueAt);
+        due.forEach((entry, rank) => decisions?.push({ itemId: entry.id, stage: "review", status: entry.id === state.lastUserItem ? "avoid_previous_if_alternative" : "ranked", rank, score: entry.retention }));
         const distinct = due.filter((candidate) => candidate.id !== state.lastUserItem);
         if (distinct.length || due.length) {
             itemId = (distinct.length ? distinct : due)[0].id;
@@ -206,7 +256,7 @@ export function chooseAdaptiveUserItem(
             // The queue already starts shuffled, so avoid another random draw
             // each turn that would make reload order unpredictable.
             itemId = state.cycleQueue.find((id) => unseen.includes(id)) ??
-                unseen[Math.floor(random() * unseen.length)];
+                unseen[Math.floor(draw() * unseen.length)];
             state.introduced ??= [];
             state.introduced.push(itemId);
             reason = "cycle";
@@ -216,7 +266,7 @@ export function chooseAdaptiveUserItem(
     // Prefer a real filler over a premature retry. If no other practice
     // exists (e.g. a one-word room), allow the earliest retry to continue.
     if (!itemId) {
-        itemId = selectEarlyPractice(state, memories, now, mode, modes) ?? undefined;
+        itemId = selectEarlyPractice(state, memories, now, mode, modes, decisions) ?? undefined;
         if (itemId) reason = "early_practice";
     }
     if (!itemId && pending.length) {
@@ -249,5 +299,5 @@ export function chooseAdaptiveUserItem(
         ...(retry ? { retry } : {}),
         reason,
     };
-    return state.current;
+    return finish(state.current);
 }

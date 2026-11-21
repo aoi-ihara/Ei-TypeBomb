@@ -1,5 +1,10 @@
 # Playground: mastery-first scheduling
 
+Authoritative development references: [specification](../../docs/learning/SPECIFICATION.md),
+[architecture](../../docs/learning/ARCHITECTURE.md), [testing and audit](../../docs/learning/TESTING.md).
+The adaptive offline policy below and legacy online policy are distinct.
+
+
 ## Adaptive offline selection (incremental migration)
 
 Offline practice now uses `chooseNextUserItem(..., "adaptive")`; online
@@ -72,8 +77,9 @@ do not count as failures.
   material (but after an already-due active retry). A successful independent,
   unaided answer reduces the retained hold level by one, rather than
   immediately wiping all evidence of prior difficulty.
-- If every word is held, the Playground pauses and displays the earliest
-  next review time. It never breaks a multi-hour hold to fill a question.
+- Historical/legacy online behavior: when every word is held, selection stops.
+  Current offline adaptive behavior: continue with `early_practice`, retaining
+  the hold and withholding long-term success credit.
 - Hold timestamps are absolute and survive reload, but stale/invalid entries
   and words removed from the room are discarded during cache recovery.
 - `playground_item_suspended` records the hold level and deadline for
@@ -83,7 +89,7 @@ These times and failure thresholds are **uncalibrated product hypotheses**.
 Compare delayed unaided recall and overall practice throughput before deciding
 whether the feature actually improves retention.
 
-## Interleaved reviews of previously learned words
+## Legacy online interleaved reviews of previously learned words
 
 Eligible retries and returning holds take priority. Ordinary selection compares due words across the remaining cycle and previously answered words. A word outside the cycle can return after two minutes without exposure. Among cycle words, predictions below 80% precede unseen items, followed by retained items. Each item uses the mode actually shown. Recognition error rate and active response time refine priority within five-percentage-point retention bands.
 
@@ -125,7 +131,7 @@ The existing 300 ms debounced save, serialized writes, 5-second retry, online/pa
 
 ## Validation and limits
 
-Run `npm --prefix client run test:playground` from the repository root. Simulations cover 20/100 fast-correct words across 20 seeds, one failing word, simultaneous permanent failures in 1/2/3/4/8/20/100-item rooms, 30 mixed 500-question runs, all-graduated sets across repeated cycles, legacy BOT helper invariants, confirmation/re-failure, corrected typos, real Client callbacks, real InputView Backspace callbacks, and concurrent/failed saving. The actual callback tests run source-extracted functions with state/clock/network mocks; they are not an authenticated full-browser E2E test.
+Run `npm --prefix frontend run test:playground` from the repository root. Simulations cover 20/100 fast-correct words across 20 seeds, one failing word, simultaneous permanent failures in 1/2/3/4/8/20/100-item rooms, 30 mixed 500-question runs, all-graduated sets across repeated cycles, legacy BOT helper invariants, confirmation/re-failure, corrected typos, real Client callbacks, real InputView Backspace callbacks, and concurrent/failed saving. The actual callback tests run source-extracted functions with state/clock/network mocks; they are not an authenticated full-browser E2E test.
 
 A browser reload resumes the saved per-user, per-room scheduler (separately for Playground and online play): cycle order, pending retries, and the unfinished question survive. After six hours, an unfinished question returns to the candidate pool without being graded and the remaining cycle is re-ranked using current memory retrievability. Newly added room words are appended; removed words are discarded. Invalid or older-than-30-day local snapshots start a fresh scheduler. Completed observations are cached immediately before any asynchronous database sync, so a quick reload does not lose the corresponding memory. Mid-answer typing itself is not a completed observation. Game restarts in the same mounted session retain the scheduler.
 

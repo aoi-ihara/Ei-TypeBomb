@@ -7,7 +7,7 @@ const vm = require("node:vm");
 const ts = require("typescript");
 const root = path.resolve(__dirname, "..");
 function evaluate(source, globals = {}) {
-    const scope = { exports: {}, ...globals };
+    const scope = { exports: {}, LEARNING_DIAGNOSTICS_ENABLED: false, ...globals };
     vm.runInNewContext(
         ts.transpileModule(source, {
             compilerOptions: {

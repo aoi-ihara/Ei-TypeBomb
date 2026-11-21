@@ -1,3 +1,4 @@
+import { masterySegments } from "@/lib/playground/mastery-graph";
 import { type MasteryProgress } from "@/lib/playground/memory";
 
 export default function OfflineMasteryProgress({
@@ -5,8 +6,7 @@ export default function OfflineMasteryProgress({
 }: Readonly<{ progress: MasteryProgress }>) {
     const { total, masteredNow, masteredAfter3Hours, masteredAfter24Hours } = progress;
     const currentPercent = total ? (masteredNow / total) * 100 : 0;
-    const threeHourPercent = total ? (masteredAfter3Hours / total) * 100 : 0;
-    const retainedPercent = total ? (masteredAfter24Hours / total) * 100 : 0;
+    const { percentages } = masterySegments(progress);
 
     return (
         <div
@@ -20,18 +20,18 @@ export default function OfflineMasteryProgress({
         >
             <div
                 className="bg-cyan-600 h-full transition-[width] duration-300"
-                style={{ width: `${retainedPercent}%` }}
+                style={{ width: `${percentages.after24Hours}%` }}
             />
             <div
                 className="bg-(--color-foreground) h-full transition-[width] duration-300"
                 style={{
-                    width: `${Math.max(0, threeHourPercent - retainedPercent)}%`,
+                    width: `${percentages.after3HoursOnly}%`,
                 }}
             />
             <div
                 className="bg-(--color-border) h-full transition-[width] duration-300"
                 style={{
-                    width: `${Math.max(0, currentPercent - threeHourPercent)}%`,
+                    width: `${percentages.nowOnly}%`,
                 }}
             />
         </div>

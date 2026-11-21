@@ -107,6 +107,16 @@ export type AttemptEvaluation = {
     reason: "failed_recall" | "heavy_hint" | "uncertain_recall" | null;
     independent: boolean;
 };
+/** Recognition evidence is shared by the UI, retry policy and simulator. */
+export function evaluateRecognition(hadMistake: boolean, exposureGapMs?: number | null): AttemptEvaluation {
+    return {
+        memoryEvidence: hadMistake ? "insufficient_evidence" : "recall",
+        retryNeed: hadMistake ? "short" : "none",
+        reason: hadMistake ? "failed_recall" : null,
+        independent: isIndependentExposure(exposureGapMs),
+    };
+}
+
 // Read-only compatibility with existing JSON rows. Never used by the scheduler.
 export type PersistedLearningState = {
     phase: "encoding" | "supported_recall" | "free_recall" | "graduated";
@@ -581,6 +591,15 @@ export type MasteryProgress = {
     masteredAfter24Hours: number;
 };
 
+export type MasteryItemPrediction = {
+    itemId: string;
+    mode: AnswerModeResult;
+    probabilities: number[];
+    aboveThreshold: boolean[];
+    included: true;
+    reason: "prediction" | "missing_memory" | "invalid_memory";
+};
+
 export const getMasteryProgress = (
     itemIds: readonly string[],
     memoryByItem: Readonly<Record<string, ItemMemoryState>>,
@@ -588,6 +607,7 @@ export const getMasteryProgress = (
     threshold = MASTERY_RETRIEVABILITY_THRESHOLD,
     mode: AnswerModeResult = "input",
     modeByItem?: Readonly<Record<string, AnswerModeResult>>,
+    observe?: (item: MasteryItemPrediction) => void,
 ): MasteryProgress => {
     const uniqueItemIds = new Set(itemIds);
     let masteredNow = 0;
@@ -599,15 +619,18 @@ export const getMasteryProgress = (
         const predict = (modeByItem?.[itemId] ?? mode) === "selection"
             ? getRecognitionRetrievability
             : getRetrievability;
-        if (!(predict(memory, now) >= threshold)) continue;
+        const recognition = (modeByItem?.[itemId] ?? mode) === "selection";
+        const stability = recognition ? memory?.answerModeStats?.recognition.stability : memory?.stability;
+        const valid = stability === undefined || (Number.isFinite(stability) && stability >= 0);
+        const probabilities = [0, MASTERY_THREE_HOUR_HORIZON_MS, MASTERY_FORECAST_HORIZON_MS]
+            .map(offset => { const value = valid ? predict(memory, now + offset) : 0; return Number.isFinite(value) ? value : 0; });
+        const aboveThreshold = probabilities.map(value => value >= threshold);
+        observe?.({ itemId, mode: modeByItem?.[itemId] ?? mode, probabilities,
+            aboveThreshold, included: true, reason: !memory ? "missing_memory" : !valid ? "invalid_memory" : "prediction" });
+        if (!aboveThreshold[0]) continue;
         masteredNow++;
-        if (
-            predict(memory, now + MASTERY_THREE_HOUR_HORIZON_MS) >= threshold
-        ) masteredAfter3Hours++;
-        if (
-            predict(memory, now + MASTERY_FORECAST_HORIZON_MS) >=
-            threshold
-        ) masteredAfter24Hours++;
+        if (aboveThreshold[1]) masteredAfter3Hours++;
+        if (aboveThreshold[2]) masteredAfter24Hours++;
     }
 
     return {

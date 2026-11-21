@@ -10,7 +10,7 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "postinstall": "node scripts/fix-word-drag.mjs",
-        "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs test/retry-gap.test.cjs test/automatic-hint-evidence.test.cjs && tsx --test test/answer-mode.test.mts test/adaptive-scheduler.test.mts && npm run test:fsrs",
+        "test:playground": "node scripts/test-learning.mjs all",
         "test:selection-browser": "playwright test",
         "test:kana": "node --test test/romaji-input.test.mjs",
         "test:import": "node --test test/import-words.test.mjs",
@@ -24,7 +24,12 @@
         "test:mcp-server": "tsx --test test/mcp-authorization-server.test.mts test/mcp-database-tls.test.mts",
         "generate:mcp-keys": "node scripts/generate-mcp-keys.mjs",
         "test:mcp-tls": "tsx --test test/mcp-database-tls.test.mts",
-        "test:fsrs": "tsx --test test/fsrs7-engine.test.mts"
+        "test:fsrs": "tsx --test test/fsrs7-engine.test.mts",
+        "test:learning": "node scripts/test-learning.mjs learning",
+        "test:game": "node scripts/test-learning.mjs game",
+        "test:simulation": "node scripts/test-learning.mjs simulation",
+        "test:simulation:long": "ETB_LONG_SIMULATION=1 node scripts/test-learning.mjs simulation",
+        "simulate:learning": "tsx scripts/simulate-learning.mts"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",

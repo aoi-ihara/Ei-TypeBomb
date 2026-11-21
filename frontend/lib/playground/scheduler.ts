@@ -1,9 +1,10 @@
+import type { DecisionObserver } from "./decision-trace";
 import { chooseAdaptiveUserItem } from "./adaptive-scheduler";
 export { nextAdaptiveReviewAt } from "./adaptive-scheduler";
 
 import {
     MASTERY_RETRIEVABILITY_THRESHOLD,
-    isIndependentExposure,
+    evaluateRecognition,
     getRetrievability,
     getRecognitionRetrievability,
     getRecognitionSpeedAdjustment,
@@ -368,12 +369,7 @@ export const recordRecognitionAnswer = (
 
     recordUserAnswer(
         state,
-        {
-            memoryEvidence: hadMistake ? "insufficient_evidence" : "recall",
-            retryNeed: hadMistake ? "short" : "none",
-            reason: hadMistake ? "failed_recall" : null,
-            independent: isIndependentExposure(exposureGapMs),
-        },
+        evaluateRecognition(hadMistake, exposureGapMs),
         now,
     );
     return true;
@@ -387,9 +383,10 @@ export const chooseNextUserItem = (
     mode: SchedulerAnswerMode = "input",
     modes?: ItemModes,
     strategy: "legacy" | "adaptive" = "legacy",
+    observe?: DecisionObserver,
 ): Selection | null => {
     if (strategy === "adaptive")
-        return chooseAdaptiveUserItem(state, memories, random, now, mode, modes);
+        return chooseAdaptiveUserItem(state, memories, random, now, mode, modes, observe);
     if (state.itemIds.length === 0) return null;
     if (state.current) return state.current;
 
@@ -633,9 +630,10 @@ export const saveSchedulerState = (
     roomId: string,
     state: SchedulerState,
     now = Date.now(),
+    storage?: Pick<Storage, "setItem">,
 ): void => {
     try {
-        localStorage.setItem(
+        (storage ?? localStorage).setItem(
             schedulerKey(mode, userId, roomId),
             JSON.stringify({
                 version: SCHEDULER_CACHE_VERSION,
@@ -662,10 +660,11 @@ export const loadSchedulerState = (
     memories: Record<string, ItemMemoryState> = {},
     now = Date.now(),
     answerMode: SchedulerAnswerMode = "input",
+    storage?: Pick<Storage, "getItem">,
 ): SchedulerState | null => {
     try {
         const raw: unknown = JSON.parse(
-            localStorage.getItem(schedulerKey(mode, userId, roomId)) ?? "null",
+            (storage ?? localStorage).getItem(schedulerKey(mode, userId, roomId)) ?? "null",
         );
         if (!raw || typeof raw !== "object") return null;
         const cache = raw as {
@@ -765,8 +764,10 @@ export const loadSchedulerState = (
                 "long_term_due",
                 "suspension_due",
                 "spaced_review",
+                "early_practice",
             ].includes(selected.reason) &&
-            struggles[selected.itemId]?.suspendedUntil == null
+            (struggles[selected.itemId]?.suspendedUntil == null ||
+                (mode === "playground" && selected.reason === "early_practice"))
         ) {
             const retry = selected.retry
                 ? validRetry(selected.retry, selected.itemId)

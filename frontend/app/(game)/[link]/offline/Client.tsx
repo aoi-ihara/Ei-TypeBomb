@@ -1,4 +1,6 @@
 "use client";
+import { getMasteryGraph } from "@/lib/playground/mastery-graph";
+import { LEARNING_DIAGNOSTICS_ENABLED, captureDecision, diagnosticJSON, type CapturedDecision, type AnswerEvent } from "@/lib/playground/diagnostics";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,8 +23,7 @@ import {
     evaluateRecall,
     getRetrievability,
     getExposureGap,
-    getMasteryProgress,
-    MASTERY_RETRIEVABILITY_THRESHOLD,
+    evaluateRecognition,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -193,6 +194,8 @@ export default function Client({
     const [masteryNow, setMasteryNow] = useState(() => Date.now());
     const pendingMemoryRef = useRef(new Map<string, ItemMemoryState>());
     const syncInFlightRef = useRef<Promise<void> | null>(null);
+    const decisionRef = useRef<CapturedDecision | null>(null);
+    const answerDiagnosticRef = useRef<AnswerEvent | null>(null);
     const schedulerRef = useRef<SchedulerState | null>(null);
     const exposureGapAtStartRef = useRef<number | null>(null);
     const expectedTypingAtStartRef = useRef(0);
@@ -443,6 +446,11 @@ export default function Client({
             answerMode,
             itemModes,
             "adaptive",
+            LEARNING_DIAGNOSTICS_ENABLED ? trace => {
+                try {
+                    decisionRef.current = captureDecision(trace, memoryByItemRef.current, itemModes, answerDiagnosticRef.current);
+                } catch { decisionRef.current = null; }
+            } : undefined,
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -620,6 +628,17 @@ export default function Client({
                 itemId: item.id,
             });
 
+            if (LEARNING_DIAGNOSTICS_ENABLED) answerDiagnosticRef.current = {
+                at: Date.now(), itemId: item.id, mode: "input", evaluation,
+                evidence: { success: evidence.success, firstAttemptCorrect: evidence.firstAttemptCorrect,
+                    hintCount: evidence.hintCount, answerWasFullyRevealed: evidence.answerWasFullyRevealed,
+                    incorrectInputCount: evidence.incorrectInputCount, elapsedMs: evidence.elapsedMs,
+                    exposureGapMs: evidence.elapsedSincePresentationMs, initialCueRatio: evidence.initialCueRatio,
+                    finalCueRatio: evidence.finalCueRatio, recallLatencyMs: evidence.recallLatencyMs,
+                    expectedTypingMs: evidence.expectedTypingMs },
+                before: freshestMemory[item.id], after: nextMemory,
+                schedulerAfter: scheduler ? structuredClone(scheduler) : null,
+            };
             let nextMemoryByItem = {
                 ...freshestMemory,
                 [item.id]: nextMemory,
@@ -742,6 +761,14 @@ export default function Client({
                 exposureGapMs,
                 practiceOnly,
             });
+            if (LEARNING_DIAGNOSTICS_ENABLED && mode === "selection") answerDiagnosticRef.current = {
+                at: Date.now(), itemId: item.id, mode,
+                evidence: { success, firstAttemptCorrect: success, hintCount: usedHint ? 1 : 0,
+                    elapsedMs: responseMs ?? undefined, exposureGapMs, choiceCount },
+                evaluation: evaluateRecognition(!success, exposureGapMs),
+                before: freshestMemory[item.id], after: updated,
+                schedulerAfter: schedulerRef.current ? structuredClone(schedulerRef.current) : null,
+            };
             let nextMemoryByItem = {
                 ...freshestMemory,
                 [item.id]: updated,
@@ -1045,15 +1072,15 @@ export default function Client({
         };
     }, [memoryReady, isStarted]);
 
-    const masteryProgress = useMemo(
+    const masteryGraph = useMemo(
         () =>
-            getMasteryProgress(
+            getMasteryGraph(
                 items.map((item) => item.id),
                 memoryByItem,
                 masteryNow,
-                MASTERY_RETRIEVABILITY_THRESHOLD,
                 answerMode,
                 itemModes,
+                LEARNING_DIAGNOSTICS_ENABLED,
             ),
         [items, memoryByItem, masteryNow, answerMode, itemModes],
     );
@@ -1214,7 +1241,7 @@ export default function Client({
                 isPaused={isPaused}
                 answerMode={answerMode}
                 masteryProgress={
-                    <OfflineMasteryProgress progress={masteryProgress} />
+                    <OfflineMasteryProgress progress={masteryGraph.totals} />
                 }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
@@ -1272,6 +1299,8 @@ export default function Client({
                     />
                 </div>
                 <GameSettings
+                    getLearningDiagnostic={LEARNING_DIAGNOSTICS_ENABLED ? () =>
+                        diagnosticJSON(decisionRef.current, masteryGraph, items.map(item => item.id)) : undefined}
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
                     onBackgroundMusicChange={(next) => {
