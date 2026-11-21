@@ -213,16 +213,15 @@ export function chooseAdaptiveUserItem(
         }
     }
 
-    // Legacy retries are measured in turns rather than timestamps. In a room
-    // too small to supply filler questions, choose the oldest pending retry
-    // instead of leaving the learner in a permanent deadlock.
-    if (!itemId && pending.length) {
-        itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0].itemId;
-        reason = "retry";
-    }
+    // Prefer a real filler over a premature retry. If no other practice
+    // exists (e.g. a one-word room), allow the earliest retry to continue.
     if (!itemId) {
         itemId = selectEarlyPractice(state, memories, now, mode, modes) ?? undefined;
         if (itemId) reason = "early_practice";
+    }
+    if (!itemId && pending.length) {
+        itemId = [...pending].sort((a, b) => a.earliestTurn - b.earliestTurn)[0].itemId;
+        reason = "retry";
     }
     // Nonempty sessions with a previously answered word can always continue.
     if (!itemId) return null;
