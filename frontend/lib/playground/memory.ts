@@ -106,6 +106,8 @@ export type AttemptEvaluation = {
     retryNeed: "none" | "confirm" | "short";
     reason: "failed_recall" | "heavy_hint" | "uncertain_recall" | null;
     independent: boolean;
+    /** Continuous 0–1 recall evidence, distinct from predicted retention. */
+    quality?: number;
 };
 /** Recognition evidence is shared by the UI, retry policy and simulator. */
 export function evaluateRecognition(hadMistake: boolean, exposureGapMs?: number | null): AttemptEvaluation {
@@ -183,9 +185,30 @@ export type TurnPlan = {
     countsAsRecall: boolean;
 };
 
+/** Continuous recall evidence; typing length is intentionally not a penalty. */
+export function getRecallQuality(observation: RecallObservation): number {
+    if (!observation.success || observation.answerWasFullyRevealed) return 0;
+    const cue = clamp(Math.max(
+        observation.initialCueRatio ?? 0,
+        observation.finalCueRatio ??
+            observation.revealedHintChars / Math.max(1, observation.answerLength),
+    ), 0, 1);
+    if (cue >= 1) return 0;
+    const errors = Math.max(0, observation.incorrectInputCount ??
+        Math.max(0, observation.attemptCount - 1));
+    const latency = observation.recallLatencyMs;
+    // First key latency is a length-independent proxy, not proof of full recall.
+    const speed = latency === null ? 0.75 :
+        0.65 + 0.35 * Math.exp(-Math.max(0, latency) / 6_000);
+    return clamp(speed * Math.exp(-0.12 * errors) *
+        Math.pow(1 - cue, 1.5) *
+        Math.exp(-0.12 * (observation.additionalHintCount ?? 0)), 0, 1);
+}
+
 export const evaluateRecall = (
     observation: RecallObservation,
 ): AttemptEvaluation => {
+    const quality = getRecallQuality(observation);
     const cue = Math.max(
         observation.initialCueRatio ?? 0,
         observation.finalCueRatio ??
@@ -202,6 +225,7 @@ export const evaluateRecall = (
             retryNeed: "short",
             reason: !observation.success ? "failed_recall" : "heavy_hint",
             independent,
+        quality,
         };
     if (cue >= HEAVY_CUE_RATIO)
         return {
@@ -209,6 +233,7 @@ export const evaluateRecall = (
             retryNeed: "short",
             reason: "heavy_hint",
             independent,
+        quality,
         };
     if (cue > 0 || (observation.additionalHintCount ?? 0) > 0)
         return {
@@ -216,6 +241,7 @@ export const evaluateRecall = (
             retryNeed: "confirm",
             reason: "uncertain_recall",
             independent,
+        quality,
         };
     const errors =
         observation.incorrectInputCount ??
@@ -227,6 +253,7 @@ export const evaluateRecall = (
             retryNeed: correctedMistake ? "confirm" : "none",
             reason: correctedMistake ? "uncertain_recall" : null,
             independent,
+        quality,
         };
     const expected =
         observation.expectedTypingMs ??
@@ -241,6 +268,7 @@ export const evaluateRecall = (
             retryNeed: "none",
             reason: null,
             independent,
+        quality,
         };
 
     // A corrected typing error is still unaided recall, so it should not
@@ -252,6 +280,7 @@ export const evaluateRecall = (
         retryNeed: correctedMistake ? "confirm" : "none",
         reason: correctedMistake ? "uncertain_recall" : null,
         independent,
+        quality,
     };
 };
 
@@ -442,11 +471,11 @@ function earlyPracticeStability(stability: number, gapMs: number | null) {
     return stability + Math.max(0, gapMs) / DAY_MS * EARLY_PRACTICE_GAIN_DAYS_PER_DAY;
 }
 
-function spacedStability(stability: number, gapMs: number) {
+function spacedStability(stability: number, gapMs: number, quality = 1) {
     const days = gapMs / DAY_MS;
     if (!Number.isFinite(days)) return stability;
-    const gain = stability * (1 - Math.exp(-days / stability)) * RETENTION_GAIN_FACTOR;
-    const demonstrated = 1.25 * days / -Math.log(MASTERY_RETRIEVABILITY_THRESHOLD);
+    const gain = stability * (1 - Math.exp(-days / stability)) * RETENTION_GAIN_FACTOR * quality;
+    const demonstrated = 1.25 * days / -Math.log(MASTERY_RETRIEVABILITY_THRESHOLD) * quality;
     return Math.min(stability * 3, Math.max(stability + gain, demonstrated));
 }
 
@@ -778,7 +807,7 @@ export const applyRecallObservation = ({
         const weak = evaluation.memoryEvidence === "weak_recall";
         if (unaidedInputSuccess && spacedEvidence) {
             stability = current.lastReviewedAt
-                ? spacedStability(stability, gapMs ?? 0)
+                ? spacedStability(stability, gapMs ?? 0, evaluation.quality ?? 1)
                 : Math.max(stability, INITIAL_CLEAR_RECALL_STABILITY);
             lastReviewedAt = iso;
         } else if (unaidedInputSuccess && current.lastReviewedAt) {

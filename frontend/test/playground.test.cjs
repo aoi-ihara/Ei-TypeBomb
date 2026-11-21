@@ -932,7 +932,7 @@ test("a failed word is retried promptly, before unbounded new introductions", ()
     );
     assert(result.coverage !== null);
 });
-test("four persistently failing words block new introductions", () => {
+test("saturated relearning keeps new introductions progressing without overflowing retries", () => {
     for (const size of [4, 8, 20, 100]) {
         const result = simulate(size, {
             kind: () => "fail",
@@ -940,7 +940,8 @@ test("four persistently failing words block new introductions", () => {
         });
         const introduced = new Set(result.trace.map((x) => x.itemId));
         assert(introduced.size >= 1);
-        assert(introduced.size <= Math.min(4, size));
+        if (size > 4) assert(introduced.size > 4,
+            "even persistent failures must not permanently starve new words");
         assert.equal(result.state.retries && Object.keys(result.state.retries).length <= 4, true);
     }
 });

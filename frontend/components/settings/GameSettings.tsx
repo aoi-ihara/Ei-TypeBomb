@@ -67,48 +67,47 @@ export default function GameSettings({
                 </div>
                 {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
                     getLearningDiagnostic && (
-                        <>
-                            <Button
-                                className="w-full"
-                                onClick={async () => {
-                                    try {
-                                        const json = getLearningDiagnostic();
+                        <Button
+                            className="w-full"
+                            onClick={async () => {
+                                try {
+                                    const json = getLearningDiagnostic();
 
-                                        if (!json) {
-                                            setDiagnosticStatus(false);
-                                            return;
-                                        }
-
-                                        await navigator.clipboard.writeText(
-                                            json,
-                                        );
-                                        setDiagnosticStatus(true);
-                                    } catch {
+                                    if (!json) {
                                         setDiagnosticStatus(false);
-                                    } finally {
-                                        setTimeout(() => {
-                                            setDiagnosticStatus(null);
-                                        }, 3000);
+                                        return;
                                     }
-                                }}
-                                iconName={
-                                    diagnosticStatus
-                                        ? "check"
-                                        : diagnosticStatus === false
-                                          ? "x"
-                                          : "clipboardPen"
+
+                                    await navigator.clipboard.writeText(json);
+                                    setDiagnosticStatus(true);
+                                } catch {
+                                    setDiagnosticStatus(false);
+                                } finally {
+                                    setTimeout(() => {
+                                        setDiagnosticStatus(null);
+                                    }, 3000);
                                 }
-                            >
-                                出題診断をコピー
-                            </Button>
-                            <p role="status" aria-live="polite" className="min-h-5 px-3 text-sm">
-                                {diagnosticStatus === true
-                                    ? "出題診断をコピーしました。"
+                            }}
+                            iconName={
+                                diagnosticStatus
+                                    ? "check"
                                     : diagnosticStatus === false
-                                      ? "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"
-                                      : ""}
-                            </p>
-                        </>
+                                      ? "x"
+                                      : "clipboardPen"
+                            }
+                        >
+                            出題診断をコピー
+                        </Button>
+                    )}
+                {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
+                    getLearningDiagnostic && (
+                        <p role="status" aria-live="polite" className="min-h-5 px-3 text-sm">
+                            {diagnosticStatus === true
+                                ? "出題診断をコピーしました。"
+                                : diagnosticStatus === false
+                                  ? "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"
+                                  : ""}
+                        </p>
                     )}
                 <Button
                     className="w-full"

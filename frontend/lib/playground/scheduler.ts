@@ -23,6 +23,8 @@ export const REQUIRED_RETRY_SUCCESSES = 2;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
+// A soft introduction quota: keep learning new cards without missing retry deadlines.
+export const INTRODUCTION_STRIDE = 6;
 
 // Product hypotheses to calibrate with retention outcomes.
 export const INITIAL_SUSPENSION_FAILURES = 4;
@@ -373,6 +375,23 @@ export const chooseNextUserItem = (
         modes?.[id] === "selection" || (!modes?.[id] && mode === "selection")
             ? hasRecognitionHistory(memories[id])
             : Boolean(memories[id]?.reviewCount);
+    // Active retries must not monopolize the entire session.
+    // Introduce a new card at a bounded cadence (at most one in six turns),
+    // even if difficult cards keep renewing their retry deadlines. The
+    // preselected retry stays queued and will be considered on the next turn.
+    // An expired suspension is never overwritten: its deadline and state
+    // must be preserved until the suspended item is actually presented.
+    if (pending.length > 0 &&
+        turn % INTRODUCTION_STRIDE === 0 &&
+        reason !== "suspension_due") {
+        const nextUnseen = state.cycleQueue.find(id =>
+            !known(id) && !state.retries[id] && !isOnHold(state, id));
+        if (nextUnseen) {
+            itemId = nextUnseen;
+            reason = "cycle";
+            if (observe) candidateOrder = [nextUnseen, ...candidateOrder];
+        }
+    }
     const due = (id: string) => {
         const at = getNextMemoryReviewAt(memories[id], modes?.[id] ?? mode);
         return known(id) && at !== null && at <= now;

@@ -7,6 +7,7 @@ import {
     recordAnswerModeResult,
     applyRecallObservation,
     evaluateRecall,
+    getRecallQuality,
     type ItemMemoryState,
 } from "../lib/playground/memory";
 import {
@@ -630,4 +631,48 @@ test("recovered selection mistakes earn stability at the first genuine spaced re
     });
     assert.equal(reviewedMemory.answerModeStats?.recognition.lastReviewedAt, new Date(reviewAt).toISOString());
     assert.ok(reviewedMemory.answerModeStats!.recognition.stability! > 0.12);
+});
+
+test("recall evidence is continuous and answer-length independent", () => {
+    const base = { success: true, firstAttemptCorrect: true, attemptCount: 1,
+        hintCount: 0, revealedHintChars: 0, maxCorrectPrefixLength: 4,
+        recallLatencyMs: 700, elapsedMs: 4000 };
+    const fast = getRecallQuality({ ...base, answerLength: 4 });
+    const long = getRecallQuality({ ...base, answerLength: 14 });
+    const slower = getRecallQuality({ ...base, answerLength: 4, recallLatencyMs: 2700 });
+    const hinted = getRecallQuality({ ...base, answerLength: 14, finalCueRatio: 0.2 });
+    assert.equal(fast, long);
+    assert(fast > slower && slower > 0);
+    assert(fast > hinted && hinted > 0);
+});
+
+test("a saturated retry queue reserves a periodic new-word slot", () => {
+    const state = createScheduler(["a", "b", "c", "d", "new"], () => 0.5);
+    state.turn = 5;
+    for (const id of ["a", "b", "c", "d"])
+        state.retries[id] = { itemId: id, earliestTurn: 6, latestTurn: 8,
+            reason: "failed_recall", successCount: 0 };
+    assert.equal(choose(state)?.itemId, "new");
+    assert.equal(Object.keys(state.retries).length, 4);
+});
+
+test("due suspension is not displaced by an introduction slot", () => {
+    const state = createScheduler(["held", "new"], () => 0.5);
+    state.turn = 3;
+    state.struggles.held = {
+        consecutiveFailures: 0, firstFailureAt: null, suspensionLevel: 1,
+        suspendedUntil: time,
+    };
+    const selected = choose(state, {}, time);
+    assert.equal(selected?.itemId, "held");
+    assert.equal(selected?.reason, "suspension_due");
+    assert.equal(state.struggles.held.suspendedUntil, null);
+});
+
+test("an expiring retry beats an introduction slot", () => {
+    const state = createScheduler(["retry", "new"], () => 0.5);
+    state.turn = 1;
+    state.retries.retry = { itemId: "retry", earliestTurn: 2,
+        latestTurn: 2, reason: "failed_recall", successCount: 0 };
+    assert.equal(choose(state)?.itemId, "retry");
 });
