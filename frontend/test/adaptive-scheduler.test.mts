@@ -98,6 +98,20 @@ test("no review is scheduled early merely to fill the session", () => {
     assert(next !== null && next > time);
 });
 
+test("a recently shown overdue word supplies a future cooldown deadline", () => {
+    const state = createScheduler(["recent"], () => 0.5);
+    const memory = {
+        ...reviewed("recent", 0.2, 48),
+        lastPresentedAt: new Date(time - 30_000).toISOString(),
+    };
+    const memories = { recent: memory };
+    assert.equal(choose(state, memories), null);
+    assert.equal(
+        nextAdaptiveReviewAt(state, memories, time, "input"),
+        time + 90_000,
+    );
+});
+
 test("mode-specific recognition history does not count as typed recall", () => {
     const state = createScheduler(["known", "unseen"], () => 0.5);
     const typed = reviewed("known", 0.2, 24);
