@@ -88,7 +88,7 @@ export default function GameSettings({
                                     } finally {
                                         setTimeout(() => {
                                             setDiagnosticStatus(null);
-                                        }, 5000);
+                                        }, 3000);
                                     }
                                 }}
                                 iconName={
@@ -101,13 +101,6 @@ export default function GameSettings({
                             >
                                 出題診断をコピー
                             </Button>
-                            {diagnosticStatus !== null && (
-                                <p role="status" aria-live="polite" className="text-sm px-3">
-                                    {diagnosticStatus
-                                        ? "出題診断をコピーしました。"
-                                        : "コピーできませんでした。ブラウザのクリップボード権限を確認してください。"}
-                                </p>
-                            )}
                         </>
                     )}
                 <Button
