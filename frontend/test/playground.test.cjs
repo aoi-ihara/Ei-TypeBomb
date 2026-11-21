@@ -755,7 +755,7 @@ test("a successful independent recall reduces hold severity without treating typ
         incorrectInputCount: 1,
         firstAttemptCorrect: false,
     }));
-    assert.equal(typo.retryNeed, "none");
+    assert.equal(typo.retryNeed, "confirm");
     gradeStruggle(state, "hard", typo, now.getTime() + 1_000);
     assert.equal(state.struggles.hard.suspensionLevel, 2);
     assert.equal(state.struggles.hard.consecutiveFailures, 0);
@@ -1015,7 +1015,7 @@ test("light corrected typo is distinct from a fully revealed answer", () => {
         revealedHintChars: 8,
     });
     assert.equal(memory.evaluateRecall(typo).memoryEvidence, "recall");
-    assert.equal(memory.evaluateRecall(typo).retryNeed, "none");
+    assert.equal(memory.evaluateRecall(typo).retryNeed, "confirm");
     assert.equal(
         memory.evaluateRecall(full).memoryEvidence,
         "insufficient_evidence",
@@ -1035,7 +1035,7 @@ test("slow unaided correctness and typing errors do not become recall failures",
     });
     const evaluation = memory.evaluateRecall(slow);
     assert.equal(evaluation.memoryEvidence, "recall");
-    assert.equal(evaluation.retryNeed, "none");
+    assert.equal(evaluation.retryNeed, "confirm");
     assert.equal(evaluation.independent, true);
     assert.equal(apply({ ...initial(), stability: 5 }, slow).stability,
         apply({ ...initial(), stability: 5 }, observation()).stability);
@@ -1627,7 +1627,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
     assert.equal(observations[0].success, true);
     assert.equal(observations[0].firstAttemptCorrect, false);
     assert.equal(observations[0].incorrectInputCount, 1);
-    assert.equal(memory.evaluateRecall(observations[0]).retryNeed, "none");
+    assert.equal(memory.evaluateRecall(observations[0]).retryNeed, "confirm");
 });
 test("a renewed failure resets confirmation; clean rehearsal finishes short-term retries", () => {
     const state = scheduler.createScheduler(
