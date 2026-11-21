@@ -51,6 +51,7 @@ import {
     Lightbulb,
     SquareArrowOutUpRight,
     Clock,
+    ClipboardPen,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
@@ -105,6 +106,7 @@ const icons: Record<string, LucideIcon> = {
     lightbulb: Lightbulb,
     squareArrowOutUpRight: SquareArrowOutUpRight,
     clock: Clock,
+    clipboardPen: ClipboardPen,
 };
 
 export type IconName = keyof typeof icons;
