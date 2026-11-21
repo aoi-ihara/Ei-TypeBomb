@@ -295,6 +295,15 @@ export const recordUserAnswer = (
     if (!selected) return;
     state.userAnswered[selected.itemId] =
         (state.userAnswered[selected.itemId] ?? 0) + 1;
+    // Practice during a deliberate hold must not cancel/escalate that hold.
+    // It is rehearsal, not the overdue confirmation that restores the word.
+    if (
+        selected.reason === "early_practice" &&
+        state.struggles[selected.itemId]?.suspendedUntil != null
+    ) {
+        state.current = null;
+        return;
+    }
     if (trackStruggle(state, selected.itemId, evaluation, now)) {
         state.current = null;
         return;
