@@ -52,7 +52,21 @@ export function nextAdaptiveReviewAt(
             .map((entry) => entry.suspendedUntil)
             .filter((time): time is number => time !== null && time > now),
         ...state.itemIds
-            .map((id) => forecastDue(memories[id], modeFor(id, mode, modes)))
+            .map((id) => {
+                const memory = memories[id];
+                const itemMode = modeFor(id, mode, modes);
+                if (!history(memory, itemMode)) return null;
+                // If a due word is still in the recent-exposure cooldown,
+                // its next available time is the end of that cooldown.
+                const exposedAt = Date.parse(memory?.lastPresentedAt ?? "");
+                if (
+                    retention(memory, itemMode, now) <
+                        MASTERY_RETRIEVABILITY_THRESHOLD &&
+                    Number.isFinite(exposedAt) &&
+                    now - exposedAt < 120_000
+                ) return exposedAt + 120_000;
+                return forecastDue(memory, itemMode);
+            })
             .filter((time): time is number => time !== null && time > now),
     ];
     return future.length ? Math.min(...future) : null;
