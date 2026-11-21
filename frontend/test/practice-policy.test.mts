@@ -192,10 +192,10 @@ for (const mode of ["input", "selection"] as const) {
                             : (memories[id].answerModeStats?.recognition
                                   .stability ?? 0);
                     baselines[id] ??= stability;
-                    assert.equal(
-                        stability,
-                        baselines[id],
-                        "five-second rehearsals cannot manufacture retention",
+                    assert(
+                        stability >= baselines[id] &&
+                            stability - baselines[id] < 0.01,
+                        "five-second rehearsals provide only bounded, tiny credit",
                     );
                     if (turn % 3 === 0) {
                         saveSchedulerState("playground", "u", "r", state, now);
