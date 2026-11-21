@@ -10,7 +10,7 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "postinstall": "node scripts/fix-word-drag.mjs",
-        "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs test/retry-gap.test.cjs test/automatic-hint-evidence.test.cjs && tsx --test test/answer-mode.test.mts test/adaptive-scheduler.test.mts",
+        "test:playground": "node --test test/playground.test.cjs test/online-memory.test.cjs test/retry-gap.test.cjs test/automatic-hint-evidence.test.cjs && tsx --test test/answer-mode.test.mts test/adaptive-scheduler.test.mts && npm run test:fsrs",
         "test:selection-browser": "playwright test",
         "test:kana": "node --test test/romaji-input.test.mjs",
         "test:import": "node --test test/import-words.test.mjs",
@@ -23,7 +23,8 @@
         "check:mcp-oauth": "node scripts/check-mcp-oauth.mjs",
         "test:mcp-server": "tsx --test test/mcp-authorization-server.test.mts test/mcp-database-tls.test.mts",
         "generate:mcp-keys": "node scripts/generate-mcp-keys.mjs",
-        "test:mcp-tls": "tsx --test test/mcp-database-tls.test.mts"
+        "test:mcp-tls": "tsx --test test/mcp-database-tls.test.mts",
+        "test:fsrs": "tsx --test test/fsrs7-engine.test.mts"
     },
     "dependencies": {
         "@dnd-kit/core": "^6.3.1",
@@ -59,7 +60,8 @@
         "socket.io": "^4.8.3",
         "socket.io-client": "^4.8.3",
         "validator": "^13.15.35",
-        "zod": "^4.5.4"
+        "zod": "^4.5.4",
+        "ts-fsrs": "6.0.0"
     },
     "devDependencies": {
         "@playwright/test": "^1.65.1",
@@ -81,6 +83,6 @@
         "typescript": "^5"
     },
     "engines": {
-        "node": "22.x"
+        "node": "24.x"
     }
 }
