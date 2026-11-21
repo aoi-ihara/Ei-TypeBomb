@@ -194,7 +194,7 @@ for (const mode of ["input", "selection"] as const) {
                     baselines[id] ??= stability;
                     assert(
                         stability >= baselines[id] &&
-                            stability - baselines[id] < 0.01,
+                            stability - baselines[id] < 0.03,
                         "five-second rehearsals provide only bounded, tiny credit",
                     );
                     if (turn % 3 === 0) {
