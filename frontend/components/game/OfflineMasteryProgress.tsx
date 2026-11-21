@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AnswerModeResult, ItemMemoryState, MasteryProgress } from "@/lib/playground/memory";
+import { recognitionMemory, type AnswerModeResult, type ItemMemoryState, type MasteryProgress } from "@/lib/playground/memory";
 
 const GRAPH_SAMPLES = 96;
 const STABILITY_REFERENCE_DAYS = 180;
@@ -20,15 +20,13 @@ function stabilityGradient(
 ) {
     const sorted = [...new Set(ids)].map(id => {
         const memory = memories[id];
-        const stability = (modes?.[id] ?? defaultMode) === "selection"
-            ? memory?.answerModeStats?.recognition.stability
-            : memory?.stability;
-        // New words must remain gray; an initialized but unreviewed memory
-        // record does not count as evidence of learning.
-        const reviewed = (modes?.[id] ?? defaultMode) === "selection"
-            ? Boolean(memory?.answerModeStats?.recognition.lastReviewedAt)
-            : Boolean(memory?.lastReviewedAt);
-        return reviewed && typeof stability === "number" && Number.isFinite(stability)
+        if ((modes?.[id] ?? defaultMode) === "selection") {
+            const track = memory?.answerModeStats?.recognition;
+            const { anchor, stability } = recognitionMemory(track);
+            return anchor !== null && Number.isFinite(stability) ? stability : 0;
+        }
+        const stability = memory?.stability;
+        return memory?.lastReviewedAt && typeof stability === "number" && Number.isFinite(stability)
             ? Math.max(0, stability)
             : 0;
     }).sort((a, b) => b - a);
@@ -52,7 +50,7 @@ function stabilityGradient(
         stops.push(`${color} ${position}%`);
     }
     // A single sample should paint the whole bar.
-    if (samples === 1) stops.push(stops[0].replace(" 0%", " 100%"));
+    if (samples === 1) stops.push(`${stops[0].slice(0, -3)} 100%`);
     return `linear-gradient(to right, ${stops.join(", ")})`;
 }
 
