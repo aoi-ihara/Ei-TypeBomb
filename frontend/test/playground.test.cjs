@@ -281,7 +281,7 @@ for (const mode of ["input", "selection"]) {
     });
 }
 
-test("previously answered words wait for the next fair round instead of interrupting new learning", () => {
+test("spaced overdue words interrupt new learning without consuming the saved round", () => {
     const timestamp = now.getTime();
     const oldReview = new Date(timestamp - 2 * 60 * 60_000).toISOString();
     const state = scheduler.createScheduler(["old", "older", "new", "next"], () => 0.5);
@@ -295,20 +295,28 @@ test("previously answered words wait for the next fair round instead of interrup
     };
     const queueBefore = [...state.cycleQueue];
     const chosen = scheduler.chooseNextUserItem(state, memories, () => 0.99, timestamp);
-    assert.equal(chosen.itemId, "new");
-    assert.equal(chosen.reason, "cycle");
-    assert.equal(chosen.advancesCycle, true);
-    assert.deepEqual(Array.from(state.cycleQueue), queueBefore.slice(1));
+    assert.equal(chosen.itemId, "older");
+    assert.equal(chosen.reason, "long_term_due");
+    assert.equal(chosen.advancesCycle, false);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
 
     scheduler.saveSchedulerState("playground", "review-user", "review-room", state, timestamp);
     const restored = scheduler.loadSchedulerState(
         "playground", "review-user", "review-room",
         state.itemIds, timestamp + 1000,
     );
-    assert.equal(restored.current.itemId, "new");
-    assert.equal(restored.current.reason, "cycle");
+    assert.equal(restored.current.itemId, "older");
+    assert.equal(restored.current.reason, "long_term_due");
 
-    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
+    // The newly presented word is no longer independently due. The other
+    // word has not yet crossed the 80% retention threshold, so new learning
+    // resumes from the original round without shuffling its remaining entries.
+    memories.older = memory.recordAnswerExposure(memories.older, new Date(timestamp));
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()), timestamp);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+    const next = scheduler.chooseNextUserItem(state, memories, () => 0.99, timestamp + 1000);
+    assert.equal(next.itemId, "new");
+    assert.equal(next.reason, "cycle");
     assert.deepEqual(Array.from(state.cycleQueue), queueBefore.slice(1));
 });
 
