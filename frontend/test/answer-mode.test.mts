@@ -428,27 +428,27 @@ test("clean choice recall grows recognition stability with spaced practice", () 
     );
 });
 
-test("wrong and revealed selections reduce stability without crediting a recall", () => {
+test("spaced wrong and revealed selections reduce stability without crediting a recall", () => {
     const start = new Date("2026-11-20T00:00:00.000Z");
     const reviewed = recordAnswerModeResult({
         memory: undefined, userId: "u", roomId: "r", itemId: "a",
         mode: "selection", success: true, now: start,
     });
-    const afterHour = new Date(start.getTime() + 60 * 60 * 1000);
+    const afterDay = new Date(start.getTime() + 24 * 60 * 60 * 1000);
     const wrong = recordAnswerModeResult({
         memory: reviewed, userId: "u", roomId: "r", itemId: "a",
-        mode: "selection", success: false, now: afterHour,
+        mode: "selection", success: false, now: afterDay,
     });
     const revealed = recordAnswerModeResult({
         memory: reviewed, userId: "u", roomId: "r", itemId: "a",
-        mode: "selection", success: false, usedHint: true, now: afterHour,
+        mode: "selection", success: false, usedHint: true, now: afterDay,
     });
     assert.ok(wrong.answerModeStats!.recognition.stability! < reviewed.answerModeStats!.recognition.stability!);
     assert.ok(revealed.answerModeStats!.recognition.stability! <= wrong.answerModeStats!.recognition.stability!);
     assert.equal(wrong.answerModeStats!.recognition.lastReviewedAt, start.toISOString());
     assert.equal(revealed.answerModeStats!.recognition.lastReviewedAt, start.toISOString());
-    assert.ok(getRecognitionRetrievability(wrong, afterHour.getTime()) <=
-        getRecognitionRetrievability(reviewed, afterHour.getTime()));
+    assert.ok(getRecognitionRetrievability(wrong, afterDay.getTime()) <=
+        getRecognitionRetrievability(reviewed, afterDay.getTime()));
     assert.equal(getRecognitionRetrievability(recordAnswerModeResult({
         memory: undefined, userId: "u", roomId: "r", itemId: "a",
         mode: "selection", success: false, usedHint: true, now: start,

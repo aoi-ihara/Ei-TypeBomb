@@ -28,11 +28,8 @@ const schedulerStorage = {
     getItem: (key) => schedulerCache.get(key) ?? null,
     setItem: (key, value) => schedulerCache.set(key, value),
 };
-const adaptive = load("lib/playground/adaptive-scheduler.ts", {
-    require: () => memory,
-});
 const scheduler = load("lib/playground/scheduler.ts", {
-    require: (id) => id === "./adaptive-scheduler" ? adaptive : memory,
+    require: () => memory,
     localStorage: schedulerStorage,
 });
 const input = load("lib/playground/recall-input.ts");
@@ -98,8 +95,7 @@ function simulate(
                 stability: 100,
                 learningState: { phase: "graduated", freeRecallSuccesses: 2 },
             };
-    let coverage = null,
-        lastCycle = 0;
+    let coverage = null;
     for (let i = 0; i < turns; i++) {
         const pending = { ...state.retries };
         const selected = scheduler.chooseNextUserItem(
@@ -116,7 +112,6 @@ function simulate(
                 "early practice is allowed only under a bounded active pool",
             );
         }
-        if (selected.advancesCycle) lastCycle = selected.turn;
         if (selected.cycle === 1) seen.add(selected.itemId);
         const action = kind(selected.itemId, selected.turn, selected);
         const o = observation(
@@ -243,7 +238,7 @@ test("the first cycle reviews due words before untouched words", () => {
         scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
     }
     assert.deepEqual(order, ["hard-due", "due", "untouched", "recent"]);
-    assert.equal(state.initialPriorityApplied, true);
+    assert.equal(state.completedCycles, 1);
 });
 
 for (const mode of ["input", "selection"]) {
@@ -281,16 +276,15 @@ for (const mode of ["input", "selection"]) {
         assert.deepEqual(Array.from(state.cycleQueue), ["stable", "fragile"]);
         assert.equal(choose(timestamp + hour), first);
         scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()), timestamp);
-        assert.equal(choose(timestamp + hour).itemId, "fragile");
+        assert.equal(choose(timestamp + 2 * hour).itemId, "fragile");
         assert.equal(state.cycle, 1);
     });
 }
 
-test("interleaved review targets the weakest previously answered word without consuming the cycle", () => {
+test("previously answered words wait for the next fair round instead of interrupting new learning", () => {
     const timestamp = now.getTime();
     const oldReview = new Date(timestamp - 2 * 60 * 60_000).toISOString();
     const state = scheduler.createScheduler(["old", "older", "new", "next"], () => 0.5);
-    state.initialPriorityApplied = true;
     state.turn = 6;
     state.cycleQueue = ["new", "next"];
     state.userAnswered = { old: 1, older: 1 };
@@ -301,28 +295,27 @@ test("interleaved review targets the weakest previously answered word without co
     };
     const queueBefore = [...state.cycleQueue];
     const chosen = scheduler.chooseNextUserItem(state, memories, () => 0.99, timestamp);
-    assert.equal(chosen.itemId, "older");
-    assert.equal(chosen.reason, "spaced_review");
-    assert.equal(chosen.advancesCycle, false);
-    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+    assert.equal(chosen.itemId, "new");
+    assert.equal(chosen.reason, "cycle");
+    assert.equal(chosen.advancesCycle, true);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore.slice(1));
 
     scheduler.saveSchedulerState("playground", "review-user", "review-room", state, timestamp);
     const restored = scheduler.loadSchedulerState(
         "playground", "review-user", "review-room",
-        state.itemIds, memories, timestamp + 1000,
+        state.itemIds, timestamp + 1000,
     );
-    assert.equal(restored.current.itemId, "older");
-    assert.equal(restored.current.reason, "spaced_review");
+    assert.equal(restored.current.itemId, "new");
+    assert.equal(restored.current.reason, "cycle");
 
     scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
-    assert.deepEqual(Array.from(state.cycleQueue), queueBefore);
+    assert.deepEqual(Array.from(state.cycleQueue), queueBefore.slice(1));
 });
 
 test("retained words and recent exposures cannot interrupt the cycle", () => {
     const timestamp = now.getTime();
     const oldReview = new Date(timestamp - 10 * 60_000).toISOString();
     const state = scheduler.createScheduler(["old", "new", "next"], () => 0.5);
-    state.initialPriorityApplied = true;
     state.turn = 6;
     state.cycleQueue = ["new", "next"];
     state.userAnswered = { old: 1 };
@@ -336,7 +329,6 @@ test("retained words and recent exposures cannot interrupt the cycle", () => {
     scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()));
 
     const recent = scheduler.createScheduler(["old", "new"], () => 0.5);
-    recent.initialPriorityApplied = true;
     recent.turn = 6;
     recent.userAnswered = { old: 1 };
     recent.cycleQueue = ["new"];
@@ -352,7 +344,6 @@ test("retained words and recent exposures cannot interrupt the cycle", () => {
 test("due relearning takes priority over an optional spaced review", () => {
     const timestamp = now.getTime();
     const state = scheduler.createScheduler(["old", "retry", "new"], () => 0.5);
-    state.initialPriorityApplied = true;
     state.turn = 6;
     state.cycleQueue = ["new"];
     state.userAnswered = { old: 1, retry: 1 };
@@ -423,7 +414,7 @@ test("selection-only recognition history prioritizes difficult questions without
     const memories = { hard: failed, easy: correct };
     const state = scheduler.createScheduler(["new", "easy", "hard"], () => 0.5);
     const picked = scheduler.chooseNextUserItem(
-        state, memories, () => 0.5, stamp, "selection",
+        state, memories, () => 0.5, stamp + 120_000, "selection",
     );
     assert.equal(picked.itemId, "hard");
     assert.equal(failed.reviewCount, 0);
@@ -521,7 +512,7 @@ test("the first cycle preserves its Fisher–Yates order when no recall history 
 
 
 
-test("cached queue is re-ranked on answer mode change while keeping current and retries", () => {
+test("mode changes preserve the saved queue and grade current mode at selection time", () => {
     const timestamp = now.getTime();
     const ids = ["recall-due", "recognition-hard", "retry", "current"];
     const memories = {
@@ -531,12 +522,11 @@ test("cached queue is re-ranked on answer mode change while keeping current and 
         },
         "recognition-hard": memory.recordAnswerModeResult({
             userId: "u", roomId: "r", itemId: "recognition-hard",
-            mode: "selection", success: false, now,
+            mode: "selection", success: false, now: new Date(timestamp - 120_000),
         }),
     };
     const state = scheduler.createScheduler(ids, () => 0.5);
     state.cycleQueue = ["recognition-hard", "recall-due"];
-    state.initialPriorityApplied = true;
     state.priorityAnswerMode = "selection";
     state.turn = 4;
     state.retries.retry = {
@@ -550,40 +540,39 @@ test("cached queue is re-ranked on answer mode change while keeping current and 
     scheduler.saveSchedulerState("playground", "switch-user", "room", state, timestamp);
 
     const inputState = scheduler.loadSchedulerState(
-        "playground", "switch-user", "room", ids, memories,
-        timestamp + 1_000, "input",
+        "playground", "switch-user", "room", ids,
+        timestamp + 1_000,
     );
     assert.deepEqual(Array.from(inputState.cycleQueue), [
-        "recall-due", "recognition-hard",
+        "recognition-hard", "recall-due",
     ]);
     assert.equal(inputState.current.itemId, "current");
     assert.deepEqual({ ...inputState.retries.retry }, { ...state.retries.retry });
-    assert.equal(inputState.priorityAnswerMode, "input");
+    assert.equal("priorityAnswerMode" in inputState, false);
     scheduler.recordRecognitionAnswer(inputState, "current");
     assert.equal(scheduler.chooseNextUserItem(
         inputState, memories, () => 0.5, timestamp + 1_000, "input",
     ).itemId, "recall-due");
 
     const selectionState = scheduler.loadSchedulerState(
-        "playground", "switch-user", "room", ids, memories,
-        timestamp + 1_000, "selection",
+        "playground", "switch-user", "room", ids,
+        timestamp + 1_000,
     );
     assert.deepEqual(Array.from(selectionState.cycleQueue), [
         "recognition-hard", "recall-due",
     ]);
-    assert.equal(selectionState.priorityAnswerMode, "selection");
+    assert.equal("priorityAnswerMode" in selectionState, false);
     scheduler.recordRecognitionAnswer(selectionState, "current");
     assert.equal(scheduler.chooseNextUserItem(
         selectionState, memories, () => 0.5, timestamp + 1_000, "selection",
     ).itemId, "recognition-hard");
 });
 
-test("old caches without an answer mode re-rank on restore", () => {
+test("old caches preserve round order and re-rank when selecting", () => {
     const timestamp = now.getTime();
     const ids = ["recall-due", "recognition-hard"];
     const state = scheduler.createScheduler(ids, () => 0.5);
     state.cycleQueue = [...ids].reverse();
-    state.initialPriorityApplied = true;
     delete state.priorityAnswerMode;
     const memories = {
         "recall-due": {
@@ -592,18 +581,18 @@ test("old caches without an answer mode re-rank on restore", () => {
         },
         "recognition-hard": memory.recordAnswerModeResult({
             userId: "u", roomId: "r", itemId: "recognition-hard",
-            mode: "selection", success: false, now,
+            mode: "selection", success: false, now: new Date(timestamp - 120_000),
         }),
     };
     scheduler.saveSchedulerState("playground", "legacy-mode", "room", state, timestamp);
     const restored = scheduler.loadSchedulerState(
-        "playground", "legacy-mode", "room", ids, memories,
-        timestamp + 1_000, "input",
+        "playground", "legacy-mode", "room", ids,
+        timestamp + 1_000,
     );
     assert.deepEqual(Array.from(restored.cycleQueue), [
-        "recall-due", "recognition-hard",
+        "recognition-hard", "recall-due",
     ]);
-    assert.equal(restored.priorityAnswerMode, "input");
+    assert.equal(scheduler.chooseNextUserItem(restored, memories, () => 0.5, timestamp + 1000).itemId, "recall-due");
 });
 
 test("reload continues the exact pending cycle instead of reshuffling", () => {
@@ -615,7 +604,7 @@ test("reload continues the exact pending cycle instead of reshuffling", () => {
     scheduler.saveSchedulerState("playground", "reload-user", "reload-room", state, timestamp);
     const expected = scheduler.chooseNextUserItem(state, {}, rng(2), timestamp);
     const restored = scheduler.loadSchedulerState(
-        "playground", "reload-user", "reload-room", ids, {}, timestamp + 1000,
+        "playground", "reload-user", "reload-room", ids, timestamp + 1000,
     );
     assert.ok(restored);
     assert.equal(
@@ -633,7 +622,7 @@ test("reload preserves unfinished questions and scheduled failed recalls", () =>
     const first = scheduler.chooseNextUserItem(state, {}, rng(10), timestamp);
     scheduler.saveSchedulerState("playground", "retry-user", "retry-room", state, timestamp);
     let restored = scheduler.loadSchedulerState(
-        "playground", "retry-user", "retry-room", ids, {}, timestamp + 1000,
+        "playground", "retry-user", "retry-room", ids, timestamp + 1000,
     );
     assert.equal(restored.current.itemId, first.itemId);
     assert.equal(restored.turn, 1);
@@ -651,7 +640,7 @@ test("reload preserves unfinished questions and scheduled failed recalls", () =>
         "playground", "retry-user", "retry-room", restored, timestamp + 1000,
     );
     const resumed = scheduler.loadSchedulerState(
-        "playground", "retry-user", "retry-room", ids, {}, timestamp + 2000,
+        "playground", "retry-user", "retry-room", ids, timestamp + 2000,
     );
     assert.ok(resumed.retries[first.itemId]);
     scheduler.chooseNextUserItem(resumed, {}, rng(12), timestamp + 2000);
@@ -729,8 +718,10 @@ test("persistent failures escalate through 3h, 12h and 24h with a 24h cap", () =
         24 * 60 * 60_000,
     ];
     for (let index = 0; index < expected.length; index++) {
-        // One-word room: there are no safe fillers before this deadline.
-        assert.equal(scheduler.chooseNextUserItem(state, {}, rng(1), deadline - 1), null);
+        // Rehearsal keeps a one-word room active without lifting the hold.
+        assert.equal(scheduler.chooseNextUserItem(state, {}, rng(1), deadline - 1).reason, "early_practice");
+        scheduler.recordUserAnswer(state, failedRecall, deadline - 1);
+        assert.equal(state.struggles.hard.suspendedUntil, deadline);
         const due = scheduler.chooseNextUserItem(state, {}, rng(1), deadline);
         assert.equal(due?.reason, "suspension_due");
         scheduler.recordUserAnswer(state, failedRecall, deadline);
@@ -786,7 +777,7 @@ test("recent BOT exposure never escalates difficulty, but assisted independent r
     assert.equal(state.struggles.hard.consecutiveFailures, 1);
 });
 
-test("all held words remain absent from user/BOT selection until due", () => {
+test("all held words allow user rehearsal but remain protected from BOT exposure", () => {
     const state = scheduler.createScheduler(["a", "b"], rng(1));
     const until = now.getTime() + 3 * 60 * 60_000;
     for (const id of state.itemIds) {
@@ -798,7 +789,8 @@ test("all held words remain absent from user/BOT selection until due", () => {
         };
         state.userAnswered[id] = 1;
     }
-    assert.equal(scheduler.chooseNextUserItem(state, {}, rng(4), now.getTime()), null);
+    assert.equal(scheduler.chooseNextUserItem(state, {}, rng(4), now.getTime()).reason, "early_practice");
+    scheduler.recordUserAnswer(state, memory.evaluateRecall(observation()), now.getTime());
     assert.equal(scheduler.chooseBotItem(state, rng(4)), null);
     assert.equal(scheduler.nextSuspendedReviewAt(state), until);
     const restoredId = scheduler.chooseNextUserItem(state, {}, rng(4), until)?.itemId;
@@ -823,7 +815,7 @@ test("word hold deadlines survive reload and removed room words are discarded", 
     };
     scheduler.saveSchedulerState("playground", "hold-user", "room", state, time);
     const restored = scheduler.loadSchedulerState(
-        "playground", "hold-user", "room", ["hard", "new"], {}, time + 10_000,
+        "playground", "hold-user", "room", ["hard", "new"], time + 10_000,
     );
     assert.equal(restored.struggles.hard.suspendedUntil, time + 12 * 60 * 60_000);
     assert.equal(restored.struggles.deleted, undefined);
@@ -836,7 +828,7 @@ test("word hold deadlines survive reload and removed room words are discarded", 
     scheduler.saveSchedulerState("playground", "old-cache", "room", old, time);
     assert.deepEqual(
         Object.keys(scheduler.loadSchedulerState(
-            "playground", "old-cache", "room", ["old"], {}, time + 1_000,
+            "playground", "old-cache", "room", ["old"], time + 1_000,
         ).struggles),
         [],
     );
@@ -854,7 +846,7 @@ test("scheduler storage is scoped to user, room and mode", () => {
         ["playground", "owner", "other"],
     ]) {
         assert.equal(
-            scheduler.loadSchedulerState(mode, user, room, ids, {}, now.getTime()),
+            scheduler.loadSchedulerState(mode, user, room, ids, now.getTime()),
             null,
         );
     }
@@ -875,7 +867,7 @@ test("long-break restore re-evaluates due words without grading interrupted work
         },
     };
     const restored = scheduler.loadSchedulerState(
-        "playground", "delayed", "room", ids, memories,
+        "playground", "delayed", "room", ids,
         timestamp + 8 * 60 * 60 * 1000,
     );
     assert.equal(restored.current, null);
@@ -896,7 +888,7 @@ test("room edits reconcile the queue while preserving prior answers", () => {
     scheduler.saveSchedulerState("playground", "edit", "room", state, timestamp);
     const ids = ["a", "b", "new"];
     const restored = scheduler.loadSchedulerState(
-        "playground", "edit", "room", ids, {}, timestamp + 1000,
+        "playground", "edit", "room", ids, timestamp + 1000,
     );
     assert.ok(restored);
     assert.deepEqual(Array.from(restored.itemIds), ids);
@@ -915,7 +907,7 @@ test("damaged scheduler storage falls back to normal scheduling", () => {
     );
     assert.equal(
         scheduler.loadSchedulerState(
-            "playground", "bad", "room", ["a"], {}, now.getTime(),
+            "playground", "bad", "room", ["a"], now.getTime(),
         ),
         null,
     );
@@ -1004,7 +996,7 @@ test("retry success widens the gap, second success clears it, renewed failure re
     assert.equal(state.retries[target], undefined);
 });
 test("light corrected typo is distinct from a fully revealed answer", () => {
-    const current = { ...initial(), stability: 5 };
+    const current = { ...initial(), stability: 5, lastReviewedAt: new Date(now.getTime() - 2 * 86_400_000).toISOString() };
     const typo = observation({
         incorrectInputCount: 1,
         firstAttemptCorrect: false,
@@ -1022,7 +1014,8 @@ test("light corrected typo is distinct from a fully revealed answer", () => {
     );
     assert.equal(memory.evaluateRecall(full).retryNeed, "short");
     assert(apply(current, typo).stability >= current.stability);
-    assert(apply(current, full).stability < current.stability);
+    assert.equal(apply(current, full).stability, current.stability, "recent rehearsal only updates short-term state");
+    assert(apply(current, { ...full, elapsedSincePresentationMs: 2 * 86_400_000 }).stability < current.stability);
 });
 test("slow unaided correctness and typing errors do not become recall failures", () => {
     const slow = observation({
@@ -1354,7 +1347,7 @@ function clientCallbacks(names, globals) {
         globals,
     );
 }
-test("actual solo Client callbacks keep practicing after the eight-new-word budget", () => {
+test("actual solo Client callbacks cover all words and keep practicing without a budget reset", () => {
     for (const size of [20, 100]) {
         let time = now.getTime();
         class Clock extends Date {
@@ -1366,13 +1359,9 @@ test("actual solo Client callbacks keep practicing after the eight-new-word budg
             }
         }
         const m = load("lib/playground/memory.ts", { Date: Clock });
-        const adaptive = load("lib/playground/adaptive-scheduler.ts", {
-            Date: Clock,
-            require: () => m,
-        });
         const sch = load("lib/playground/scheduler.ts", {
             Date: Clock,
-            require: (id) => id === "./adaptive-scheduler" ? adaptive : m,
+            require: () => m,
         });
         const ref = (current) => ({ current }),
             noop = () => {};
@@ -1440,15 +1429,14 @@ test("actual solo Client callbacks keep practicing after the eight-new-word budg
         for (let turn = 0; turn < size; turn++) {
             const item = globals.currentItemRef.current;
             assert(item, "solo play does not pause while reviews are not yet due");
-            if (turn < 8) assert(!seen.has(item.id));
-            else assert(seen.has(item.id), "the new-word budget remains enforced");
+            assert(!seen.has(item.id), "successful learning advances through the entire room");
             seen.add(item.id);
             time += 1200;
             actual.handleRecallComplete(observation());
             actual.handleSuccess();
         }
-        assert.equal(seen.size, 8);
-        assert.equal(globals.schedulerRef.current.introduced.length, 8);
+        assert.equal(seen.size, size);
+        assert.equal(globals.schedulerRef.current.completedCycles, 1);
         assert.equal(globals.userReviewCountRef.current, size);
         const recallEvents = events.filter(
             (x) => x.event === "playground_item_recalled",
@@ -1456,8 +1444,8 @@ test("actual solo Client callbacks keep practicing after the eight-new-word budg
         assert.equal(recallEvents.length, size);
         assert(
             recallEvents.every(
-                (x, i) =>
-                    x.scheduler_reason === (i < 8 ? "cycle" : "early_practice") &&
+                (x) =>
+                    x.scheduler_reason === "cycle" &&
                     x.memory_evidence === "strong_recall" &&
                     x.retry_need === "none",
             ),
@@ -1489,7 +1477,7 @@ test("actual solo Client callbacks keep practicing after the eight-new-word budg
     }
 });
 
-test("selection callbacks mark early practice before clearing the scheduler turn", () => {
+test("selection callbacks preserve the exposure interval when completing a scheduler turn", () => {
     const schedulerState = {
         current: { itemId: "a", reason: "early_practice" },
     };
@@ -1509,7 +1497,7 @@ test("selection callbacks mark early practice before clearing the scheduler turn
     callback(true, false, 1_000, false);
     assert.equal(schedulerState.current, null);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0][6], true, "practice-only evidence must survive turn completion");
+    assert.equal(calls[0][5], 30_000, "memory eligibility uses the prompt exposure gap, not the scheduler label");
 });
 
 test("fallback answer-mode observations never enter authenticated sync queue", async () => {
@@ -1633,7 +1621,7 @@ test("actual input callbacks retain a wrong character through Backspace correcti
     assert.equal(observations[0].incorrectInputCount, 1);
     assert.equal(memory.evaluateRecall(observations[0]).retryNeed, "none");
 });
-test("a renewed failure resets confirmation; exposure-assisted success never clears retry", () => {
+test("a renewed failure resets confirmation; clean rehearsal finishes short-term retries", () => {
     const state = scheduler.createScheduler(
         Array.from({ length: 10 }, (_, i) => String(i)),
         rng(9),
@@ -1660,7 +1648,7 @@ test("a renewed failure resets confirmation; exposure-assisted success never cle
     reachTarget(
         memory.evaluateRecall(observation({ elapsedSincePresentationMs: 0 })),
     );
-    assert.equal(state.retries[first.itemId].successCount, 0);
+    assert.equal(state.retries[first.itemId], undefined);
     reachTarget(memory.evaluateRecall(observation({ success: false })));
     assert.equal(
         state.retries[first.itemId].earliestTurn,
@@ -2025,7 +2013,7 @@ test("demonstrated spacing extends the forecast while immediate recognition give
 
 test("a mixed room prioritizes a due selection over a freshly recalled typing word", () => {
     const state = scheduler.createScheduler(["typing", "choice"]);
-    const failedChoice = memory.recordAnswerModeResult({ userId: "u", roomId: "r", itemId: "choice", mode: "selection", success: false, now });
+    const failedChoice = memory.recordAnswerModeResult({ userId: "u", roomId: "r", itemId: "choice", mode: "selection", success: false, now: new Date(now.getTime() - 120_000) });
     const next = scheduler.chooseNextUserItem(state, { typing: initial("typing"), choice: failedChoice },
         () => 0.9, now.getTime(), "input", { choice: "selection" });
     assert.equal(next.itemId, "choice");
@@ -2057,7 +2045,7 @@ test("waiting with the prompt open does not increase spacing credit", () => {
         first.answerModeStats.recognition.stability);
 });
 
-test("an immediate selection does not clear the pending independent confirmation", () => {
+test("an immediate clean selection clears short-term confirmation", () => {
     const state = scheduler.createScheduler(["review", "other"]);
     state.retries.review = {
         itemId: "review", earliestTurn: 1, latestTurn: 2,
@@ -2066,7 +2054,7 @@ test("an immediate selection does not clear the pending independent confirmation
     const stamp = now.getTime();
     assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "review");
     scheduler.recordRecognitionAnswer(state, "review", false, stamp, 1000);
-    assert.equal(state.retries.review.successCount, 1);
+    assert.equal(state.retries.review, undefined);
     assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "other");
     scheduler.recordRecognitionAnswer(state, "other", false, stamp);
     assert.equal(scheduler.chooseNextUserItem(state, {}, () => 0.9, stamp).itemId, "review");
@@ -2088,4 +2076,28 @@ test("a full retry pool uses an answered filler before a retry becomes due", () 
     assert.equal(Object.keys(state.retries).length, 4);
     assert.ok(state.cycleQueue.includes("filler"));
     assert.equal(scheduler.chooseNextUserItem(state).retry?.earliestTurn, 2);
+});
+
+test("single-option Client answers persist exposure without recognition credit", () => {
+    const item = { id: "single", answer: "answer" };
+    const records = { current: {} };
+    const state = scheduler.createScheduler([item.id]);
+    scheduler.chooseNextUserItem(state);
+    const actual = clientCallbacks(["handleSelectionAnswer", "updateAnswerModeMemory"], {
+        ...memory,
+        room: { id: "r" }, items: [item], choiceCount: 1,
+        currentItemRef: {current:item}, schedulerRef: {current:state},
+        isPaused: false, authenticatedUserIdRef: {current:"u"},
+        memoryPersistenceDisabledRef: {current:true},
+        memoryByItemRef: records, pendingMemoryRef: {current:new Map()},
+        recallProgressRef: {current:null}, exposureGapAtStartRef: {current:null},
+        setMemoryByItem: () => {}, setMasteryNow: () => {},
+    });
+    actual.handleSelectionAnswer(true, false, 500, false);
+    assert.equal(state.current, null);
+    assert.equal(records.current.single.reviewCount, 0);
+    assert.equal(records.current.single.answerModeStats, undefined);
+    assert.equal(records.current.single.lastReviewedAt, null);
+    assert(Number.isFinite(Date.parse(records.current.single.lastPresentedAt)));
+    assert.equal(scheduler.chooseNextUserItem(state, records.current).itemId, item.id);
 });

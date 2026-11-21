@@ -230,7 +230,6 @@ export const createOnlineMemorySession = (
             userId ?? guestUserId,
             roomId,
             itemIds,
-            memory,
         ) ?? createScheduler(itemIds),
     pending: new Map(),
 });
