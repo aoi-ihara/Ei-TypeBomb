@@ -385,7 +385,7 @@ export function getReviewIntervalMs(
 
 // One interpretation of legacy recognition rows for prediction, scheduling
 // and updates. Missing stability must not silently change on the first write.
-function recognitionMemory(track: AnswerModeTrack | undefined) {
+export function recognitionMemory(track: AnswerModeTrack | undefined) {
     const anchor =
         track?.lastReviewedAt !== undefined
             ? track.lastReviewedAt
