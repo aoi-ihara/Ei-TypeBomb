@@ -413,10 +413,10 @@ const updateAnswerModeStats = (
         );
         const independent = isIndependentExposure(exposureGapMs);
         const sufficientlySpaced =
-            previous.attempts === 0 ||
-            (exposureGapMs !== null &&
-                Number.isFinite(exposureGapMs) &&
-                exposureGapMs >= MIN_SPACED_EVIDENCE_MS);
+            exposureGapMs === null
+                ? previous.attempts === 0
+                : Number.isFinite(exposureGapMs) &&
+                  exposureGapMs >= MIN_SPACED_EVIDENCE_MS;
         const dueForRecognition =
             !lastCleanAt ||
             getRecognitionRetrievability(
@@ -646,9 +646,9 @@ export const applyRecallObservation = ({
         : observation.elapsedSincePresentationMs;
     const spacedEvidence =
         observation.schedulerReason !== "early_practice" &&
-        (current.reviewCount === 0 ||
-            (gapMs !== null && Number.isFinite(gapMs) &&
-                gapMs >= MIN_SPACED_EVIDENCE_MS)) &&
+        (gapMs === null
+            ? current.reviewCount === 0 && !current.lastPresentedAt
+            : Number.isFinite(gapMs) && gapMs >= MIN_SPACED_EVIDENCE_MS) &&
         (!current.lastReviewedAt ||
             getRetrievability(current, now.getTime()) <=
                 MASTERY_RETRIEVABILITY_THRESHOLD);
