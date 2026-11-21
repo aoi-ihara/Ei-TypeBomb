@@ -420,7 +420,7 @@ const updateAnswerModeStats = (
         const dueForRecognition =
             !lastCleanAt ||
             getRecognitionRetrievability(
-                { answerModeStats: stats } as ItemMemoryState,
+                { answerModeStats: stats },
                 now.getTime(),
             ) <= MASTERY_RETRIEVABILITY_THRESHOLD;
         const creditsMemory =
@@ -543,7 +543,7 @@ export const getRetrievability = (
 // Recognition prediction uses the same forgetting curve, but a separate
 // stability so choosing an answer never overwrites free-recall confidence.
 export const getRecognitionRetrievability = (
-    memory: ItemMemoryState | undefined,
+    memory: Pick<ItemMemoryState, "answerModeStats"> | undefined,
     now = Date.now(),
 ): number => {
     const track = memory?.answerModeStats?.recognition;
