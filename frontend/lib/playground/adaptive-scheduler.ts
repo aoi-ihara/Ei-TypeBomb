@@ -118,7 +118,9 @@ export function chooseAdaptiveUserItem(
             const itemMode = modeFor(id, mode, modes);
             const memory = memories[id];
             if (!history(memory, itemMode)) {
-                if ((state.userAnswered[id] ?? 0) === 0) unseen.push(id);
+                // The shared answer counter can include another answer mode.
+                // A recognized word is still new to independent typed recall.
+                unseen.push(id);
                 continue;
             }
             const r = retention(memory, itemMode, now);
