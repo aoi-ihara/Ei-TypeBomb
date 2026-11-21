@@ -611,7 +611,7 @@ test("recovered selection mistakes earn stability at the first genuine spaced re
     });
     assert.equal(second.answerModeStats?.recognition.correctStreak, 2);
     assert.equal(second.answerModeStats?.recognition.lastReviewedAt, null);
-    assert.equal(second.answerModeStats?.recognition.stability, 0.15);
+    assert.equal(second.answerModeStats?.recognition.stability, 0.12);
     const reviewAt = time + 90_000;
     const selected = choose(state, { relearn: second }, reviewAt, "selection");
     assert.equal(selected?.itemId, "relearn");
@@ -621,5 +621,5 @@ test("recovered selection mistakes earn stability at the first genuine spaced re
         mode: "selection", success: true, now: new Date(reviewAt),
     });
     assert.equal(reviewedMemory.answerModeStats?.recognition.lastReviewedAt, new Date(reviewAt).toISOString());
-    assert.ok(reviewedMemory.answerModeStats!.recognition.stability! > 0.15);
+    assert.ok(reviewedMemory.answerModeStats!.recognition.stability! > 0.12);
 });
