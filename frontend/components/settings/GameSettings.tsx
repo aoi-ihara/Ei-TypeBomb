@@ -76,13 +76,19 @@ export default function GameSettings({
                 {onReadQuestionChange && readQuestion !== undefined && (
                     <div className="flex w-full items-center justify-between pl-3">
                         <div data-cursor="text">読み上げ（問題）</div>
-                        <Toggle checked={readQuestion} onChange={onReadQuestionChange} />
+                        <Toggle
+                            checked={readQuestion}
+                            onChange={onReadQuestionChange}
+                        />
                     </div>
                 )}
                 {onReadAnswerChange && readAnswer !== undefined && (
                     <div className="flex w-full items-center justify-between pl-3">
                         <div data-cursor="text">読み上げ（解答）</div>
-                        <Toggle checked={readAnswer} onChange={onReadAnswerChange} />
+                        <Toggle
+                            checked={readAnswer}
+                            onChange={onReadAnswerChange}
+                        />
                     </div>
                 )}
                 {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
@@ -119,13 +125,6 @@ export default function GameSettings({
                             出題診断をコピー
                         </Button>
                     )}
-                {diagnosticStatus !== null && (
-                    <p role="status" className="sr-only">
-                        {diagnosticStatus
-                            ? "出題診断をコピーしました。"
-                            : "コピーできませんでした。ブラウザの権限を確認して再試行してください。"}
-                    </p>
-                )}
                 <Button
                     className="w-full"
                     variant="primary"
