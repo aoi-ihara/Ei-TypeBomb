@@ -81,13 +81,30 @@ export const loadPlaygroundMemory = async (roomId: string) => {
     };
 };
 
-export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
+type MemorySyncFailure = {
+    type:
+        | "batch_too_large"
+        | "auth_failed"
+        | "auth_required"
+        | "invalid_memory"
+        | "database_error";
+    message: string;
+    databaseCode?: string;
+};
+
+export const syncPlaygroundMemory = async (
+    memory: ItemMemoryState[],
+): Promise<MemorySyncFailure | null> => {
     if (memory.length === 0) return null;
-    if (memory.length > 500) return { message: "Too many memory updates" };
+    if (memory.length > 500) {
+        return { type: "batch_too_large", message: "Too many memory updates" };
+    }
 
     const { userId, error: authError } = await getMemoryAuthStatus();
-    if (authError) return authError;
-    if (!userId) return { message: "Authentication required" };
+    if (authError) return { type: "auth_failed", message: authError.message };
+    if (!userId) {
+        return { type: "auth_required", message: "Authentication required" };
+    }
 
     if (
         memory.some(
@@ -106,7 +123,7 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
                     !isValidAnswerModeStats(item.answerModeStats)),
         )
     ) {
-        return { message: "Invalid memory update" };
+        return { type: "invalid_memory", message: "Invalid memory update" };
     }
 
     const supabase = await createClient();
@@ -127,5 +144,10 @@ export const syncPlaygroundMemory = async (memory: ItemMemoryState[]) => {
     const { error } = await supabase
         .from("ei_typebomb_item_memory")
         .upsert(rows, { onConflict: "user_id,room_id,id" });
-    return error ? { message: error.message } : null;
+    if (!error) return null;
+    // Only include machine-readable SQLSTATE and PostgREST codes in telemetry.
+    const databaseCode = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/.test(error.code)
+        ? error.code
+        : undefined;
+    return { type: "database_error", message: error.message, databaseCode };
 };
