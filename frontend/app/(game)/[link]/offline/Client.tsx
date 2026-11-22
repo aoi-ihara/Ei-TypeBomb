@@ -249,6 +249,8 @@ export default function Client({
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
+    const answerSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const [answerSpeechVersion, setAnswerSpeechVersion] = useState(0);
 
     useEffect(() => {
         if (!notice?.visible) return;
@@ -999,11 +1001,20 @@ export default function Client({
             typeof SpeechSynthesisUtterance !== "undefined"
         ) {
             const synthesis = window.speechSynthesis;
+            answerSpeechRef.current = null;
             synthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(
                 presentedItem.answer,
             );
             utterance.lang = "en-US";
+            answerSpeechRef.current = utterance;
+            const finishAnswerSpeech = () => {
+                if (answerSpeechRef.current !== utterance) return;
+                answerSpeechRef.current = null;
+                setAnswerSpeechVersion((version) => version + 1);
+            };
+            utterance.onend = finishAnswerSpeech;
+            utterance.onerror = finishAnswerSpeech;
             synthesis.speak(utterance);
         }
 
@@ -1047,6 +1058,10 @@ export default function Client({
         const text = currentItem.prompt;
         if (!text.trim()) return;
 
+        // The next question is visible immediately, but its audio waits
+        // until the preceding answer has finished.
+        if (answerSpeechRef.current) return;
+
         const synthesis = window.speechSynthesis;
         synthesis.cancel();
 
@@ -1054,7 +1069,10 @@ export default function Client({
         utterance.lang = "ja-JP";
         synthesis.speak(utterance);
 
-        return () => synthesis.cancel();
+        // Do not cancel the answer utterance when the item changes.
+        return () => {
+            if (!answerSpeechRef.current) synthesis.cancel();
+        };
     }, [
         currentItem,
         isStarted,
@@ -1062,7 +1080,26 @@ export default function Client({
         readQuestion,
         voiceSettingsReady,
         isPaused,
+        answerSpeechVersion,
     ]);
+
+    useEffect(() => {
+        if (
+            (!isStarted || isPaused) &&
+            typeof window !== "undefined" &&
+            "speechSynthesis" in window
+        ) {
+            answerSpeechRef.current = null;
+            window.speechSynthesis.cancel();
+        }
+    }, [isStarted, isPaused]);
+
+    useEffect(() => {
+        return () => {
+            if (typeof window !== "undefined" && "speechSynthesis" in window)
+                window.speechSynthesis.cancel();
+        };
+    }, []);
 
     // Recompute time-decayed predictions without answers; refresh on tab return.
     useEffect(() => {
