@@ -13,7 +13,6 @@ import OfflineMasteryProgress from "@/components/game/OfflineMasteryProgress";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
-import type { OfflineVoiceReading } from "@/lib/settings";
 import posthog from "posthog-js";
 import {
     applyRecallObservation,
@@ -44,7 +43,6 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
 import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
@@ -53,7 +51,6 @@ type Props = {
     answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const LOCAL_USER_ID = "playground-player";
@@ -164,7 +161,6 @@ export default function Client({
     answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
-    initialOfflineVoiceReading,
 }: Readonly<Props>) {
     const router = useRouter();
 
@@ -172,7 +168,33 @@ export default function Client({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const offlineVoiceReading = initialOfflineVoiceReading;
+    const [readQuestion, setReadQuestion] = useState(true);
+    const [readAnswer, setReadAnswer] = useState(true);
+    const [voiceSettingsReady, setVoiceSettingsReady] = useState(false);
+
+    useEffect(() => {
+        try {
+            setReadQuestion(localStorage.getItem("offline-voice-question") !== "false");
+            setReadAnswer(localStorage.getItem("offline-voice-answer") !== "false");
+        } catch {
+            // Keep both enabled if local storage is unavailable.
+        }
+        setVoiceSettingsReady(true);
+    }, []);
+
+    const updateVoiceSetting = (kind: "question" | "answer", enabled: boolean) => {
+        if (kind === "question") setReadQuestion(enabled);
+        else setReadAnswer(enabled);
+        try {
+            localStorage.setItem(`offline-voice-${kind}`, String(enabled));
+        } catch {
+            // The current session still uses the selected value.
+        }
+        posthog.capture("settings_changed", {
+            setting: `offline_voice_${kind}`,
+            value: enabled,
+        });
+    };
     const users = SOLO_USERS;
     const room = useMemo<Room>(
         () => ({
@@ -970,7 +992,7 @@ export default function Client({
         const presentedItem = currentItemRef.current;
         // Speech also plays when the answer was entered after a full hint.
         if (
-            offlineVoiceReading === "answer" &&
+            readAnswer &&
             presentedItem.answer.trim() &&
             typeof window !== "undefined" &&
             "speechSynthesis" in window &&
@@ -997,7 +1019,7 @@ export default function Client({
     }, [
         isPaused,
         soundEffects,
-        offlineVoiceReading,
+        readAnswer,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
@@ -1008,7 +1030,8 @@ export default function Client({
             !isStarted ||
             isPaused ||
             !currentItem ||
-            offlineVoiceReading !== "question"
+            !voiceSettingsReady ||
+            !readQuestion
         ) {
             return;
         }
@@ -1036,7 +1059,8 @@ export default function Client({
         currentItem,
         isStarted,
         itemPresentationKey,
-        offlineVoiceReading,
+        readQuestion,
+        voiceSettingsReady,
         isPaused,
     ]);
 
@@ -1282,16 +1306,15 @@ export default function Client({
                         void flushPendingMemory();
                     }}
                 />
-                <div>
-                    <OfflineVoicePicker
-                        initialValue={initialOfflineVoiceReading}
-                    />
-                </div>
                 <GameSettings
                     getLearningDiagnostic={LEARNING_DIAGNOSTICS_ENABLED ? () =>
                         diagnosticJSON(decisionRef.current, masteryGraph, items.map(item => item.id)) : undefined}
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
+                    readQuestion={readQuestion}
+                    readAnswer={readAnswer}
+                    onReadQuestionChange={(next) => updateVoiceSetting("question", next)}
+                    onReadAnswerChange={(next) => updateVoiceSetting("answer", next)}
                     onBackgroundMusicChange={(next) => {
                         setBackgroundMusic(next);
                         document.cookie =
