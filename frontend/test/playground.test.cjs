@@ -1190,10 +1190,9 @@ function getCallback(name, globals) {
 
 test("solo answer speech plays after success, including after a full hint", () => {
     for (const scenario of [
-        { mode: "answer", revealed: false, expected: ["apple"] },
-        { mode: "answer", revealed: true, expected: ["apple"] },
-        { mode: "question", revealed: false, expected: [] },
-        { mode: "none", revealed: false, expected: [] },
+        { readAnswer: true, revealed: false, expected: ["apple"] },
+        { readAnswer: true, revealed: true, expected: ["apple"] },
+        { readAnswer: false, revealed: false, expected: [] },
     ]) {
         const spoken = [];
         const nextItems = [];
@@ -1210,7 +1209,7 @@ test("solo answer speech plays after success, including after a full hint", () =
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
             isPaused: false,
-            offlineVoiceReading: scenario.mode,
+            readAnswer: scenario.readAnswer,
             soundEffects: false,
             successAudioRef: { current: null },
             currentItemRef: { current: { id: "a", answer: "apple" } },
@@ -1390,7 +1389,7 @@ test("actual solo Client callbacks cover all words and keep practicing without a
             itemModes: {},
             choiceCount: 4,
             isPaused: false,
-            offlineVoiceReading: "none",
+            readAnswer: false,
             soundEffects: false,
             schedulerRef: ref(sch.createScheduler(items.map((x) => x.id), rng(17))),
             currentItemRef: ref(null),
