@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Client from "./Client";
 import { getPlaygroundRoom } from "@/lib/room/playground";
-import { parseOfflineVoiceReading } from "@/lib/settings";
 import { getTypingAnswer, normalizeAnswerMode } from "@/lib/answer-mode";
 
 export default async function OfflinePlayPage({
@@ -37,17 +36,12 @@ export default async function OfflinePlayPage({
     const backgroundMusic =
         cookieStore.get("background-music")?.value !== "false";
     const soundEffects = cookieStore.get("sound-effects")?.value !== "false";
-    const offlineVoiceReading = parseOfflineVoiceReading(
-        cookieStore.get("offline-voice-reading")?.value,
-    );
-
     return (
         <Client
             room={room}
             answerMode={answerMode}
             initialSounDeffects={soundEffects}
             initialBackgroundMusic={backgroundMusic}
-            initialOfflineVoiceReading={offlineVoiceReading}
         />
     );
 }
