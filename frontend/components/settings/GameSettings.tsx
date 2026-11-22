@@ -125,6 +125,13 @@ export default function GameSettings({
                             出題診断をコピー
                         </Button>
                     )}
+                {diagnosticStatus !== null && (
+                    <p role="status" className="sr-only">
+                        {diagnosticStatus
+                            ? "出題診断をコピーしました。"
+                            : "コピーできませんでした。ブラウザの権限を確認して再試行してください。"}
+                    </p>
+                )}
                 <Button
                     className="w-full"
                     variant="primary"

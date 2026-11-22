@@ -836,7 +836,11 @@ export default function Client({
             while (pendingMemoryRef.current.size > 0) {
                 const snapshot = [...pendingMemoryRef.current.values()];
                 try {
-                    const error = await syncPlaygroundMemory(snapshot);
+                    const error = await syncPlaygroundMemory(
+                        snapshot,
+                        room.id,
+                        "offline",
+                    );
                     if (error) throw error;
                     for (const synced of snapshot) {
                         if (
@@ -848,9 +852,6 @@ export default function Client({
                     cachePendingMemory();
                 } catch (error) {
                     console.error("Failed to sync playground memory", error);
-                    posthog.capture("playground_memory_sync_failed", {
-                        room_id: room.id,
-                    });
                     break;
                 }
             }

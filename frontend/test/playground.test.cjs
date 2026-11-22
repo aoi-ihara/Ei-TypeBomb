@@ -1289,7 +1289,6 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
             savingError = value;
         },
         room: { id: "r" },
-        posthog: { capture: () => {} },
         console: { error: () => {} },
         syncPlaygroundMemory: (snapshot) => {
             snapshots.push(snapshot);
@@ -1322,7 +1321,6 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
             savingError = value;
         },
         room: { id: "r" },
-        posthog: { capture: () => {} },
         console: { error: () => {} },
         syncPlaygroundMemory: () => Promise.reject(new Error("offline")),
     });
@@ -1330,8 +1328,84 @@ test("memory sync serializes newer writes and retains unsent data on rejection",
     await failing();
     assert.equal(pending.current.get("a"), newer);
     assert.equal(savingError, false);
-    // A failed sync preserves pending data for the next retry and reports telemetry.
     assert.equal(inFlight.current, null);
+});
+
+test("memory sync reports safe PostHog properties from the server action", async () => {
+    const roomId = "00000000-0000-4000-8000-000000000001";
+    const item = {
+        ...initial("00000000-0000-4000-8000-000000000002"),
+        roomId,
+    };
+    const message = "private details from the upstream error";
+    let authStatus = { userId: "u", error: null };
+    let databaseError = null;
+    const actions = load("lib/playground/memory-actions.ts", {
+        require: (id) => ({
+            "@/lib/db/server": {
+                createClient: async () => ({
+                    from: () => ({ upsert: async () => ({ error: databaseError }) }),
+                }),
+            },
+            "@/lib/auth/session": { getMemoryAuthStatus: async () => authStatus },
+            "@/lib/playground/memory": memory,
+        })[id],
+    });
+    const events = [];
+    const { syncPlaygroundMemory } = load("lib/playground/memory-client.ts", {
+        require: (id) => id === "posthog-js"
+            ? { default: { capture: (...args) => events.push(JSON.parse(JSON.stringify(args))) } }
+            : actions,
+    });
+    assert.equal(await syncPlaygroundMemory([item], roomId, "offline"), null);
+    assert.equal(events.length, 0);
+
+    databaseError = { code: "23514", message };
+    assert.equal((await syncPlaygroundMemory([item], roomId, "online")).message, message);
+    assert.deepEqual(events.pop(), ["playground_memory_sync_failed", {
+        room_id: roomId,
+        mode: "online",
+        batch_size: 1,
+        error_type: "database_error",
+        database_error_code: "23514",
+    }]);
+
+    databaseError = { code: message, message };
+    await syncPlaygroundMemory([item], roomId, "offline");
+    assert.deepEqual(events.pop(), ["playground_memory_sync_failed", {
+        room_id: roomId,
+        mode: "offline",
+        batch_size: 1,
+        error_type: "database_error",
+    }]);
+
+    await syncPlaygroundMemory([{ ...item, stability: -1 }], roomId, "offline");
+    await syncPlaygroundMemory(Array(501).fill(item), roomId, "offline");
+    authStatus = { userId: null, error: null };
+    await syncPlaygroundMemory([item], roomId, "offline");
+    authStatus = { userId: null, error: { message } };
+    await syncPlaygroundMemory([item], roomId, "offline");
+    assert.deepEqual(events.map(([, properties]) => properties.error_type), [
+        "invalid_memory", "batch_too_large", "auth_required", "auth_failed",
+    ]);
+    assert.equal(JSON.stringify(events).includes(message), false);
+});
+
+test("memory sync records request rejection and lets the caller retry", async () => {
+    const error = new Error("private request details");
+    const navigator = { onLine: false };
+    const errors = [];
+    const { syncPlaygroundMemory } = load("lib/playground/memory-client.ts", {
+        navigator,
+        require: (id) => id === "posthog-js"
+            ? { default: { capture: (_, properties) => errors.push(properties.error_type) } }
+            : { syncPlaygroundMemory: async () => { throw error; } },
+    });
+
+    await assert.rejects(syncPlaygroundMemory([initial()], "r", "online"), error);
+    navigator.onLine = true;
+    await assert.rejects(syncPlaygroundMemory([initial()], "r", "online"), error);
+    assert.deepEqual(errors, ["offline", "request_failed"]);
 });
 
 function clientCallbacks(names, globals) {

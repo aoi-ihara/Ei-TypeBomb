@@ -161,7 +161,11 @@ export default function Clinet({
             while (session.pending.size > 0) {
                 const snapshot = [...session.pending.values()];
                 try {
-                    const error = await syncPlaygroundMemory(snapshot);
+                    const error = await syncPlaygroundMemory(
+                        snapshot,
+                        session.roomId,
+                        "online",
+                    );
                     if (error) throw error;
                     for (const saved of snapshot) {
                         if (session.pending.get(saved.itemId) === saved)
