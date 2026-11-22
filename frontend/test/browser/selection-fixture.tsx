@@ -65,7 +65,6 @@ createRoot(document.getElementById("root")!).render(
         answerMode="selection"
         initialBackgroundMusic={false}
         initialSounDeffects={false}
-        initialOfflineVoiceReading="none"
       />
     )}
   </StrictMode>,

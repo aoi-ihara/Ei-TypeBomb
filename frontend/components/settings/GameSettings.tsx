@@ -8,6 +8,10 @@ import Toggle from "@/components/ui/Toggle";
 type Props = {
     backgroundMusic: boolean;
     soundEffects: boolean;
+    readQuestion?: boolean;
+    readAnswer?: boolean;
+    onReadQuestionChange?: (value: boolean) => void;
+    onReadAnswerChange?: (value: boolean) => void;
     onBackgroundMusicChange: (value: boolean) => void;
     onSoundEffectsChange: (value: boolean) => void;
     getLearningDiagnostic?: () => string | null;
@@ -17,6 +21,10 @@ type Props = {
 export default function GameSettings({
     backgroundMusic,
     soundEffects,
+    readQuestion,
+    readAnswer,
+    onReadQuestionChange,
+    onReadAnswerChange,
     onBackgroundMusicChange,
     onSoundEffectsChange,
     placement = "inline",
@@ -65,6 +73,24 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
+                {onReadQuestionChange && readQuestion !== undefined && (
+                    <div className="flex w-full items-center justify-between pl-3">
+                        <div data-cursor="text">読み上げ（問題）</div>
+                        <Toggle
+                            checked={readQuestion}
+                            onChange={onReadQuestionChange}
+                        />
+                    </div>
+                )}
+                {onReadAnswerChange && readAnswer !== undefined && (
+                    <div className="flex w-full items-center justify-between pl-3">
+                        <div data-cursor="text">読み上げ（解答）</div>
+                        <Toggle
+                            checked={readAnswer}
+                            onChange={onReadAnswerChange}
+                        />
+                    </div>
+                )}
                 {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
                     getLearningDiagnostic && (
                         <Button

@@ -13,7 +13,6 @@ import OfflineMasteryProgress from "@/components/game/OfflineMasteryProgress";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
-import type { OfflineVoiceReading } from "@/lib/settings";
 import posthog from "posthog-js";
 import {
     applyRecallObservation,
@@ -44,7 +43,6 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
 import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
@@ -53,7 +51,6 @@ type Props = {
     answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const LOCAL_USER_ID = "playground-player";
@@ -164,7 +161,6 @@ export default function Client({
     answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
-    initialOfflineVoiceReading,
 }: Readonly<Props>) {
     const router = useRouter();
 
@@ -172,7 +168,33 @@ export default function Client({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const offlineVoiceReading = initialOfflineVoiceReading;
+    const [readQuestion, setReadQuestion] = useState(true);
+    const [readAnswer, setReadAnswer] = useState(true);
+    const [voiceSettingsReady, setVoiceSettingsReady] = useState(false);
+
+    useEffect(() => {
+        try {
+            setReadQuestion(localStorage.getItem("offline-voice-question") !== "false");
+            setReadAnswer(localStorage.getItem("offline-voice-answer") !== "false");
+        } catch {
+            // Keep both enabled if local storage is unavailable.
+        }
+        setVoiceSettingsReady(true);
+    }, []);
+
+    const updateVoiceSetting = (kind: "question" | "answer", enabled: boolean) => {
+        if (kind === "question") setReadQuestion(enabled);
+        else setReadAnswer(enabled);
+        try {
+            localStorage.setItem(`offline-voice-${kind}`, String(enabled));
+        } catch {
+            // The current session still uses the selected value.
+        }
+        posthog.capture("settings_changed", {
+            setting: `offline_voice_${kind}`,
+            value: enabled,
+        });
+    };
     const users = SOLO_USERS;
     const room = useMemo<Room>(
         () => ({
@@ -227,6 +249,8 @@ export default function Client({
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
+    const answerSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const [answerSpeechVersion, setAnswerSpeechVersion] = useState(0);
 
     useEffect(() => {
         if (!notice?.visible) return;
@@ -970,18 +994,27 @@ export default function Client({
         const presentedItem = currentItemRef.current;
         // Speech also plays when the answer was entered after a full hint.
         if (
-            offlineVoiceReading === "answer" &&
+            readAnswer &&
             presentedItem.answer.trim() &&
             typeof window !== "undefined" &&
             "speechSynthesis" in window &&
             typeof SpeechSynthesisUtterance !== "undefined"
         ) {
             const synthesis = window.speechSynthesis;
+            answerSpeechRef.current = null;
             synthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(
                 presentedItem.answer,
             );
             utterance.lang = "en-US";
+            answerSpeechRef.current = utterance;
+            const finishAnswerSpeech = () => {
+                if (answerSpeechRef.current !== utterance) return;
+                answerSpeechRef.current = null;
+                setAnswerSpeechVersion((version) => version + 1);
+            };
+            utterance.onend = finishAnswerSpeech;
+            utterance.onerror = finishAnswerSpeech;
             synthesis.speak(utterance);
         }
 
@@ -997,7 +1030,7 @@ export default function Client({
     }, [
         isPaused,
         soundEffects,
-        offlineVoiceReading,
+        readAnswer,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
@@ -1008,7 +1041,8 @@ export default function Client({
             !isStarted ||
             isPaused ||
             !currentItem ||
-            offlineVoiceReading !== "question"
+            !voiceSettingsReady ||
+            !readQuestion
         ) {
             return;
         }
@@ -1024,6 +1058,10 @@ export default function Client({
         const text = currentItem.prompt;
         if (!text.trim()) return;
 
+        // The next question is visible immediately, but its audio waits
+        // until the preceding answer has finished.
+        if (answerSpeechRef.current) return;
+
         const synthesis = window.speechSynthesis;
         synthesis.cancel();
 
@@ -1031,14 +1069,37 @@ export default function Client({
         utterance.lang = "ja-JP";
         synthesis.speak(utterance);
 
-        return () => synthesis.cancel();
+        // Do not cancel the answer utterance when the item changes.
+        return () => {
+            if (!answerSpeechRef.current) synthesis.cancel();
+        };
     }, [
         currentItem,
         isStarted,
         itemPresentationKey,
-        offlineVoiceReading,
+        readQuestion,
+        voiceSettingsReady,
         isPaused,
+        answerSpeechVersion,
     ]);
+
+    useEffect(() => {
+        if (
+            (!isStarted || isPaused) &&
+            typeof window !== "undefined" &&
+            "speechSynthesis" in window
+        ) {
+            answerSpeechRef.current = null;
+            window.speechSynthesis.cancel();
+        }
+    }, [isStarted, isPaused]);
+
+    useEffect(() => {
+        return () => {
+            if (typeof window !== "undefined" && "speechSynthesis" in window)
+                window.speechSynthesis.cancel();
+        };
+    }, []);
 
     // Recompute time-decayed predictions without answers; refresh on tab return.
     useEffect(() => {
@@ -1282,16 +1343,15 @@ export default function Client({
                         void flushPendingMemory();
                     }}
                 />
-                <div>
-                    <OfflineVoicePicker
-                        initialValue={initialOfflineVoiceReading}
-                    />
-                </div>
                 <GameSettings
                     getLearningDiagnostic={LEARNING_DIAGNOSTICS_ENABLED ? () =>
                         diagnosticJSON(decisionRef.current, masteryGraph, items.map(item => item.id)) : undefined}
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
+                    readQuestion={readQuestion}
+                    readAnswer={readAnswer}
+                    onReadQuestionChange={(next) => updateVoiceSetting("question", next)}
+                    onReadAnswerChange={(next) => updateVoiceSetting("answer", next)}
                     onBackgroundMusicChange={(next) => {
                         setBackgroundMusic(next);
                         document.cookie =

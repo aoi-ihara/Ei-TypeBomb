@@ -1190,16 +1190,21 @@ function getCallback(name, globals) {
 
 test("solo answer speech plays after success, including after a full hint", () => {
     for (const scenario of [
-        { mode: "answer", revealed: false, expected: ["apple"] },
-        { mode: "answer", revealed: true, expected: ["apple"] },
-        { mode: "question", revealed: false, expected: [] },
-        { mode: "none", revealed: false, expected: [] },
+        { readAnswer: true, revealed: false, expected: ["apple"] },
+        { readAnswer: true, revealed: true, expected: ["apple"] },
+        { readAnswer: false, revealed: false, expected: [] },
     ]) {
         const spoken = [];
+        const utterances = [];
         const nextItems = [];
+        const answerSpeechRef = { current: null };
+        let speechVersion = 0;
         const synthesis = {
             cancel: () => {},
-            speak: (utterance) => spoken.push([utterance.text, utterance.lang]),
+            speak: (utterance) => {
+                utterances.push(utterance);
+                spoken.push([utterance.text, utterance.lang]);
+            },
         };
         class Utterance {
             constructor(text) {
@@ -1210,7 +1215,9 @@ test("solo answer speech plays after success, including after a full hint", () =
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
             isPaused: false,
-            offlineVoiceReading: scenario.mode,
+            readAnswer: scenario.readAnswer,
+            answerSpeechRef,
+            setAnswerSpeechVersion: (update) => { speechVersion = update(speechVersion); },
             soundEffects: false,
             successAudioRef: { current: null },
             currentItemRef: { current: { id: "a", answer: "apple" } },
@@ -1228,7 +1235,16 @@ test("solo answer speech plays after success, including after a full hint", () =
         callback();
         assert.deepEqual(spoken.map(([text]) => text), scenario.expected);
         assert.deepEqual(nextItems, ["b"], "the next prompt belongs to the same player");
-        if (scenario.expected.length) assert.equal(spoken[0][1], "en-US");
+        if (scenario.expected.length) {
+            assert.equal(spoken[0][1], "en-US");
+            assert.equal(answerSpeechRef.current, utterances[0]);
+            assert.equal(speechVersion, 0, "answer completion has not occurred yet");
+            utterances[0].onend();
+            assert.equal(answerSpeechRef.current, null);
+            assert.equal(speechVersion, 1, "the next question may now be read");
+        } else {
+            assert.equal(answerSpeechRef.current, null);
+        }
     }
 });
 
@@ -1390,7 +1406,7 @@ test("actual solo Client callbacks cover all words and keep practicing without a
             itemModes: {},
             choiceCount: 4,
             isPaused: false,
-            offlineVoiceReading: "none",
+            readAnswer: false,
             soundEffects: false,
             schedulerRef: ref(sch.createScheduler(items.map((x) => x.id), rng(17))),
             currentItemRef: ref(null),
