@@ -19,7 +19,8 @@ export function isPublicBetaPath(pathname: string): boolean {
         pathname === "/ingest" ||
         pathname.startsWith("/ingest/") ||
         [
-            "/favicon.ico",
+            "/favicon-dark.ico",
+            "/favicon-light.ico",
             "/apple-touch-icon.png",
             "/icon-dark.png",
             "/icon-light.png",
