@@ -84,6 +84,8 @@ export default function AccountSettings({
                 </div>
             }
             title={title}
+            showBackButton={section === "security" && securityScreen !== "overview"}
+            onBackClicked={() => setSecurityScreen("overview")}
             size="medium"
         >
             <div className="w-full px-4 sm:px-0">

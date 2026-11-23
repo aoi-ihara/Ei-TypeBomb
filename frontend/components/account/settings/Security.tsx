@@ -23,21 +23,11 @@ export default function Security({
 }) {
     if (screen !== "overview") {
         return (
-            <div className="flex w-full flex-col gap-4">
-                <Button
-                    variant="text"
-                    className="w-fit"
-                    iconName="arrowLeft"
-                    onClick={() => onScreenChange("overview")}
-                >
-                    セキュリティへ戻る
-                </Button>
-                <AuthForm
-                    key={screen}
-                    mode={screen}
-                    requireReauthentication={screen === "password"}
-                />
-            </div>
+            <AuthForm
+                key={screen}
+                mode={screen}
+                requireReauthentication={screen === "password"}
+            />
         );
     }
 

@@ -317,7 +317,10 @@ test("settings show apps to all users and group email/password under security", 
     assert.match(settings, /section === "apps" \? \(/);
     assert.match(security, /key: "email", label: "メールアドレス"/);
     assert.match(security, /key: "password", label: "パスワード"/);
-    assert.match(security, /onScreenChange\("overview"\)/);
+    assert.match(settings, /showBackButton=\{section === "security" && securityScreen !== "overview"\}/);
+    assert.match(settings, /onBackClicked=\{\(\) => setSecurityScreen\("overview"\)\}/);
+    assert.doesNotMatch(security, /セキュリティへ戻る/);
+    assert.doesNotMatch(security, /iconName="arrowLeft"/);
     assert.match(apps, /listAuthorizedApps/);
     assert.match(icon, /shield: Shield/);
 });
