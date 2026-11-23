@@ -76,7 +76,7 @@ export default function AccountDetails({
                     </Button>
                 </div>
             }
-            title="アカウント"
+            title={buttonNames[navigation]}
             size="medium"
         >
             <div className="w-full px-4 sm:px-0">
@@ -85,7 +85,7 @@ export default function AccountDetails({
                 ) : navigation == (mcpEnabled ? 1 : 0) ? (
                     <AuthForm key="email" mode="email" />
                 ) : (
-                    <AuthForm key="password" mode="password" />
+                    <AuthForm key="password" mode="password" requireReauthentication />
                 )}
             </div>
         </Shell>
