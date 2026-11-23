@@ -10,7 +10,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             <div className="flex min-w-0 flex-1 gap-4">
                 <div className="min-w-0 rounded-lg" data-cursor="button">
                     <Link
-                        className="flex min-w-0 items-center gap-2 rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
+                        className="flex min-w-0 items-center rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                         href="/"
                     >
                         <picture className="shrink-0">
