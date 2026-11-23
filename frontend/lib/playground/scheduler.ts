@@ -20,6 +20,8 @@ export const CONFIRM_RETRY_GAP = 5;
 export const RETRY_WINDOW_WIDTH = 3;
 export const CYCLE_STRIDE = 2;
 export const REQUIRED_RETRY_SUCCESSES = 2;
+// One corrected typo can start a confirmation halfway when recall is confident.
+export const CONFIDENT_TYPO_QUALITY = 0.8;
 export const BOT_LOOKAHEAD = 3;
 // Do not introduce more words while this many still need recall practice.
 export const MAX_ACTIVE_RELEARNING = 4;
@@ -245,6 +247,14 @@ const trackStruggle = (
     return true;
 };
 
+// A single independently corrected typo is still unaided retrieval. It can
+// advance short-term confirmation without claiming a clean or spaced review.
+const isMinorCorrectedRecall = (evaluation: AttemptEvaluation) =>
+    evaluation.minorCorrection === true &&
+    evaluation.independent &&
+    evaluation.retryNeed === "confirm" &&
+    evaluation.memoryEvidence === "recall";
+
 export const recordUserAnswer = (
     state: SchedulerState,
     evaluation: AttemptEvaluation,
@@ -268,6 +278,9 @@ export const recordUserAnswer = (
         state.current = null;
         return;
     }
+    const minorCorrection = isMinorCorrectedRecall(evaluation);
+    const confidentCorrection = minorCorrection &&
+        (evaluation.quality ?? 0) >= CONFIDENT_TYPO_QUALITY;
     if (
         !selected.retry &&
         evaluation.retryNeed !== "none" &&
@@ -285,7 +298,8 @@ export const recordUserAnswer = (
             0,
             SHORT_RETRY_GAP,
         );
-    } else if (selected.retry && evaluation.retryNeed === "none") {
+    } else if (selected.retry &&
+        (evaluation.retryNeed === "none" || minorCorrection)) {
         const successes = selected.retry.successCount + 1;
         if (successes < REQUIRED_RETRY_SUCCESSES)
             enqueueRetry(
@@ -300,8 +314,8 @@ export const recordUserAnswer = (
             state,
             selected.itemId,
             "uncertain_recall",
-            0,
-            SHORT_RETRY_GAP,
+            confidentCorrection ? 1 : 0,
+            confidentCorrection ? CONFIRM_RETRY_GAP : SHORT_RETRY_GAP,
         );
     }
     state.current = null;

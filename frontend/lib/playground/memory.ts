@@ -106,6 +106,8 @@ export type AttemptEvaluation = {
     retryNeed: "none" | "confirm" | "short";
     reason: "failed_recall" | "heavy_hint" | "uncertain_recall" | null;
     independent: boolean;
+    /** An independent, unaided answer recovered after exactly one corrected typo. */
+    minorCorrection?: boolean;
     /** Continuous 0–1 recall evidence, distinct from predicted retention. */
     quality?: number;
 };
@@ -280,6 +282,9 @@ export const evaluateRecall = (
         retryNeed: correctedMistake ? "confirm" : "none",
         reason: correctedMistake ? "uncertain_recall" : null,
         independent,
+        ...(errors === 1 && !observation.firstAttemptCorrect
+            ? { minorCorrection: true }
+            : {}),
         quality,
     };
 };
