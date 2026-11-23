@@ -6,12 +6,14 @@ const ts = require("typescript");
 
 function load(overrides = {}) {
     const calls = [];
+    const updateErrors = [...(overrides.updateErrors ?? [])];
     const auth = Object.fromEntries(
         [
             "signUp",
             "signInWithPassword",
             "resetPasswordForEmail",
             "updateUser",
+            "reauthenticate",
         ].map((name) => [
             name,
             async (...args) => {
@@ -20,7 +22,13 @@ function load(overrides = {}) {
                     error:
                         name === "signInWithPassword"
                             ? (overrides.signInError ?? null)
-                            : null,
+                            : name === "updateUser"
+                              ? (updateErrors.length
+                                    ? updateErrors.shift()
+                                    : (overrides.updateError ?? null))
+                              : name === "reauthenticate"
+                                ? (overrides.reauthError ?? null)
+                                : null,
                 };
             },
         ]),
@@ -54,7 +62,11 @@ function load(overrides = {}) {
             throw Error(id);
         },
     });
-    return { submit: exports.submitAccountForm, calls };
+    return {
+        submit: exports.submitAccountForm,
+        requestReauth: exports.requestPasswordReauthentication,
+        calls,
+    };
 }
 
 test("ETB password sign-in uses Supabase Auth even without legacy OAuth", async () => {
@@ -144,4 +156,110 @@ test("signup and recovery use trusted ETB callbacks and pass CAPTCHA to Auth", a
         "https://etb.example/auth/confirm?next=/sign-in/reset-password?update=true",
     );
     assert.equal(calls[1][2].captchaToken, "captcha2");
+});
+
+test("recently signed-in users can change passwords without OTP", async () => {
+    const { submit, calls } = load();
+    assert.equal(await submit("password", "", "newpassword123", ""), null);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], "updateUser");
+    assert.equal(calls[0][1].password, "newpassword123");
+    assert.equal(calls[0][1].nonce, undefined);
+});
+
+test("reauthentication_needed sends a confirmation code", async () => {
+    const { submit, calls } = load({
+        updateError: { code: "reauthentication_needed" },
+    });
+    assert.equal(
+        (await submit("password", "", "newpassword123", "")).reauthenticationRequired,
+        true,
+    );
+    assert.deepEqual(
+        calls.map((call) => call[0]),
+        ["updateUser", "reauthenticate"],
+    );
+});
+
+test("verified nonce is passed only with password updates", async () => {
+    const { submit, calls } = load();
+    assert.equal(
+        await submit("password", "", "newpassword123", "", " 123456 "),
+        null,
+    );
+    assert.equal(calls[0][1].password, "newpassword123");
+    assert.equal(calls[0][1].nonce, "123456");
+    assert.equal(await submit("email", "a@example.com", "", ""), null);
+    assert.equal(calls[1][1].nonce, undefined);
+});
+
+test("invalid confirmation codes never reach Supabase Auth", async () => {
+    for (const code of ["", "12ab56", "12345", "1234567"]) {
+        const { submit, calls } = load();
+        assert.equal(
+            await submit("password", "", "newpassword123", "", code),
+            "確認コードは6桁の数字で入力してください。",
+        );
+        assert.equal(calls.length, 0);
+    }
+});
+
+test("invalid and expired confirmation codes are recoverable", async () => {
+    for (const code of [
+        "reauthentication_not_valid",
+        "otp_expired",
+        "reauthentication_needed",
+        "reauth_nonce_missing",
+    ]) {
+        const { submit, calls } = load({ updateError: { code } });
+        assert.match(
+            await submit("password", "", "newpassword123", "", "123456"),
+            /確認コード/,
+        );
+        assert.equal(
+            calls.filter((call) => call[0] === "reauthenticate").length,
+            0,
+        );
+    }
+});
+
+test("sending a confirmation code handles rate limiting", async () => {
+    const { submit, calls } = load({
+        updateError: { code: "reauthentication_needed" },
+        reauthError: { code: "over_email_send_rate_limit" },
+    });
+    assert.match(
+        await submit("password", "", "newpassword123", ""),
+        /送信回数/,
+    );
+    assert.deepEqual(
+        calls.map((call) => call[0]),
+        ["updateUser", "reauthenticate"],
+    );
+});
+
+test("resending confirmation codes requires a signed-in user", async () => {
+    const { requestReauth, calls } = load();
+    assert.equal(await requestReauth(), null);
+    assert.deepEqual(
+        calls.map((call) => call[0]),
+        ["reauthenticate"],
+    );
+    const unauthorized = load({ user: false });
+    assert.equal(
+        await unauthorized.requestReauth(),
+        "サインインし直してください。",
+    );
+    assert.equal(unauthorized.calls.length, 0);
+});
+
+test("password form shows a code input only during reauthentication", () => {
+    const form = readFileSync(
+        new URL("../components/account/AuthForm.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(form, /mode === "password" && reauthenticationRequired/);
+    assert.match(form, /autoComplete="one-time-code"/);
+    assert.match(form, /requestPasswordReauthentication\(\)/);
+    assert.match(form, /setReauthenticationRequired\(false\)/);
 });

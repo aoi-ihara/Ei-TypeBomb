@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Turnstile } from "@marsidev/react-turnstile";
-import { submitAccountForm } from "@/lib/auth/account";
+import {
+    requestPasswordReauthentication,
+    submitAccountForm,
+} from "@/lib/auth/account";
 import { safeReturnPath } from "@/lib/auth/return-path";
 
 type Mode = "sign-in" | "sign-up" | "recovery" | "email" | "password";
@@ -19,6 +22,9 @@ export default function AuthForm({
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmation, setConfirmation] = useState("");
+    const [nonce, setNonce] = useState("");
+    const [reauthenticationRequired, setReauthenticationRequired] =
+        useState(false);
     const [token, setToken] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -52,8 +58,17 @@ export default function AuthForm({
                         email,
                         password,
                         token,
+                        mode === "password" && reauthenticationRequired
+                            ? nonce
+                            : undefined,
                     );
-                    if (result) setError(result);
+                    if (result && typeof result === "object") {
+                        setReauthenticationRequired(true);
+                        setNonce("");
+                        setMessage(
+                            "本人確認コードを送信しました。メールに届いた6桁のコードを入力してください。",
+                        );
+                    } else if (result) setError(result);
                     else if (mode === "sign-in")
                         window.location.assign(
                             next ? safeReturnPath(next) : "/mine",
@@ -63,6 +78,8 @@ export default function AuthForm({
                     else {
                         setPassword("");
                         setConfirmation("");
+                        setNonce("");
+                        setReauthenticationRequired(false);
                         setMessage(
                             mode === "password"
                                 ? "パスワードを変更しました。"
@@ -119,6 +136,48 @@ export default function AuthForm({
                     onChange={(e) => setConfirmation(e.target.value)}
                 />
             )}
+            {mode === "password" && reauthenticationRequired && (
+                <>
+                    <Input
+                        label="確認コード"
+                        value={nonce}
+                        type="text"
+                        autoComplete="one-time-code"
+                        font="mono"
+                        disabled={busy}
+                        onChange={(e) =>
+                            setNonce(e.target.value.replace(/\D/g, "").slice(0, 6))
+                        }
+                    />
+                    <Button
+                        type="button"
+                        variant="text"
+                        disabled={busy}
+                        onClick={async () => {
+                            if (lock.current) return;
+                            lock.current = true;
+                            setBusy(true);
+                            setError("");
+                            setMessage("");
+                            try {
+                                const result = await requestPasswordReauthentication();
+                                if (result) setError(result);
+                                else {
+                                    setNonce("");
+                                    setMessage("確認コードを再送信しました。");
+                                }
+                            } catch {
+                                setError("通信に失敗しました。再度お試しください。");
+                            } finally {
+                                lock.current = false;
+                                setBusy(false);
+                            }
+                        }}
+                    >
+                        確認コードを再送信
+                    </Button>
+                </>
+            )}
             {publicOperation &&
                 (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? (
                     <Turnstile
@@ -157,7 +216,7 @@ export default function AuthForm({
                     }[mode]
                 }
                 loading={busy}
-                disabled={publicOperation && !token}
+                disabled={busy || (publicOperation && !token)}
             >
                 {
                     {

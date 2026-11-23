@@ -27,6 +27,15 @@ revoke MCP grants.
 - `ETB_MCP_OAUTH_ENABLED` controls the MCP authorization server independently
   of website login. No separate website OAuth client is required.
 
+## Secure password changes
+
+When Supabase requires reauthentication for a password change, ETB sends a
+verification code using `auth.reauthenticate()` and accepts the six-digit code
+with `auth.updateUser({ password, nonce })`. The original password stays in
+the browser form until the verification completes. The code can be resent, and
+invalid/expired codes and rate limiting receive user-facing messages.
+Keep Supabase's secure password change setting enabled.
+
 ## Verification
 
 Run `npm run test:account` and `npm run test:mcp-oauth` from `frontend`.
