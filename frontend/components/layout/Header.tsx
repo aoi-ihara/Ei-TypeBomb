@@ -20,7 +20,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                             />
                             <Image
                                 src="/icon-light.png"
-                                alt="Ei-TypeBomb"
+                                alt="ETB"
                                 className="rounded-lg"
                                 width={36}
                                 height={36}
@@ -29,8 +29,8 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                         <span className="min-w-0 truncate font-extrabold">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
-                                ? "Ei-TypeBomb Beta"
-                                : "Ei-TypeBomb"}
+                                ? "ETB Beta"
+                                : "ETB"}
                         </span>
                     </Link>
                 </div>
