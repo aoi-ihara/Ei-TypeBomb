@@ -72,18 +72,6 @@ export const metadata: Metadata = {
         images: ["/hero.png"],
     },
     icons: {
-        icon: [
-            {
-                url: "/icon-light.png",
-                type: "image/png",
-                media: "(prefers-color-scheme: light)",
-            },
-            {
-                url: "/icon-dark.png",
-                type: "image/png",
-                media: "(prefers-color-scheme: dark)",
-            },
-        ],
         apple: "/apple-touch-icon.png",
     },
 };
