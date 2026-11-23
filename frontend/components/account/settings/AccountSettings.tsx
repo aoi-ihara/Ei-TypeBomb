@@ -20,9 +20,14 @@ const sections: { key: AccountSection; label: string; icon: IconName }[] = [
     { key: "security", label: "セキュリティ", icon: "shield" },
 ];
 
-export default function AccountSettings({ user }: { user: PostHogIdentityUser }) {
+export default function AccountSettings({
+    user,
+}: {
+    user: PostHogIdentityUser;
+}) {
     const [section, setSection] = useState<AccountSection>("apps");
-    const [securityScreen, setSecurityScreen] = useState<SecurityScreen>("overview");
+    const [securityScreen, setSecurityScreen] =
+        useState<SecurityScreen>("overview");
     const router = useRouter();
 
     useEffect(() => {
