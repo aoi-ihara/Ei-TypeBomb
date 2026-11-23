@@ -2,6 +2,7 @@ import {
     Heart,
     MessageCircle,
     Share,
+    Shield,
     Search,
     Home,
     User,
@@ -51,12 +52,14 @@ import {
     Lightbulb,
     SquareArrowOutUpRight,
     Clock,
+    ClipboardPen,
 } from "lucide-react";
 
 const icons: Record<string, LucideIcon> = {
     heart: Heart,
     comment: MessageCircle,
     share: Share,
+    shield: Shield,
     search: Search,
     home: Home,
     user: User,
@@ -105,6 +108,7 @@ const icons: Record<string, LucideIcon> = {
     lightbulb: Lightbulb,
     squareArrowOutUpRight: SquareArrowOutUpRight,
     clock: Clock,
+    clipboardPen: ClipboardPen,
 };
 
 export type IconName = keyof typeof icons;

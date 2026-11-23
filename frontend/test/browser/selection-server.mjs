@@ -1,12 +1,12 @@
 import { build } from "esbuild";
 import { createServer } from "node:http";
-const result = await build({
+const bundle = async (beta) => build({
   entryPoints: ["test/browser/selection-fixture.tsx"],
   bundle: true,
   write: false,
   jsx: "automatic",
   tsconfig: "tsconfig.json",
-  define: { "process.env.NODE_ENV": '"development"' },
+  define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_BETA_ENVIRONMENT": JSON.stringify(beta) },
   plugins: [
     {
       name: "browser-fixture-adapters",
@@ -38,14 +38,17 @@ const result = await build({
     },
   ],
 });
+const result = await bundle("true");
+const production = await bundle("false");
 createServer((req, res) => {
   res.setHeader(
     "Content-Type",
-    req.url === "/bundle.js" ? "text/javascript" : "text/html",
+    req.url?.endsWith(".js") ? "text/javascript" : "text/html",
   );
   res.end(
     req.url === "/bundle.js"
       ? result.outputFiles[0].text
-      : '<!doctype html><html><body><div id="root"></div><script src="/bundle.js"></script></body></html>',
+      : req.url === "/production.js" ? production.outputFiles[0].text
+      : `<!doctype html><html><body><div id="root"></div><script src="${req.url === "/production" ? "/production.js" : "/bundle.js"}"></script></body></html>`,
   );
 }).listen(3101, "127.0.0.1");

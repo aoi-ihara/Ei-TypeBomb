@@ -5,7 +5,7 @@ import {
     listAuthorizedApps,
     revokeAuthorizedApp,
 } from "@/lib/auth/oauth-grants";
-import Button from "../ui/Button";
+import Button from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 
 type AuthorizedApp = { clientId: string; name: string; url: string | null };

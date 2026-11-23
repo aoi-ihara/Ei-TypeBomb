@@ -80,7 +80,7 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "../auth/validator": validators,
     });
     const route = load("app/(api)/api/mcp/route.ts", {
-        "@posthog/mcp": { PostHogMCP: class {
+        "@posthog/mcp": { PostHogMCP: class extends require("@posthog/mcp").PostHogMCP {
             captureToolCall(event) { telemetry.push(event); }
             captureToolsList() {}
             async flush() {}
@@ -112,6 +112,10 @@ function editor({ user = "owner", owner = "owner", version = 3, busy = false,
         "@/lib/room/list-data": {}, "@/lib/room/list-view": {},
     }, { TextEncoder, performance, URL, process: { env: { NEXT_PUBLIC_POSTHOG_KEY: "test" } }, crypto: require("node:crypto") });
     return { update: action.updateRoomFromId, calls, writes, telemetry,
+        listTools: () => route.POST({
+            headers: new Map([["content-type", "application/json"]]),
+            text: async () => JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+        }),
         mcp: (args, name = "update_room") => route.POST({
             headers: new Map([["content-type", "application/json"]]),
             text: async () => JSON.stringify({ jsonrpc: "2.0", id: 1,
@@ -295,4 +299,36 @@ test("successful owner and MCP updates invalidate the affected room aliases", as
     const mcp = editor();
     assert.equal((await mcp.mcp({ room_id: "room", title: "Changed", expected_edit_version: 3 }, "update_room")).result.isError, undefined);
     assert.ok(mcp.calls.some((call) => call.startsWith("invalidate-room:room,custom-room,")));
+});
+
+for (const context of [undefined, "", "   ", "The user wants to revise a learning activity."]) {
+    test(`MCP intent captures context or falls back: ${JSON.stringify(context)}`, async () => {
+        const h = editor();
+        await h.mcp({ room_id: "room", expected_edit_version: 3, title: "Private title", context });
+        const event = h.telemetry.at(-1);
+        assert.equal(event.intentSource, context?.trim() ? "context_parameter" : "inferred");
+        assert.equal(event.intent, context?.trim() ||
+            "The user is updating an owned Ei-TypeBomb room to adjust a learning activity.");
+        assert.ok(!event.intent.includes("Private title"));
+    });
+}
+
+test("MCP advertises the SDK context argument on every tool", async () => {
+    const response = await editor().listTools();
+    assert.equal(response.result.tools.length, 4);
+    for (const tool of response.result.tools) {
+        assert.equal(tool.inputSchema.properties.context.type, "string");
+        assert.ok(tool.inputSchema.required.includes("context"));
+    }
+});
+
+test("MCP fallback covers each tool without copying arguments", async () => {
+    for (const name of ["list_rooms", "create_room", "get_room", "update_room", "unknown"]) {
+        const h = editor();
+        await h.mcp({ title: 123, view: "invalid" }, name);
+        const event = h.telemetry.at(-1);
+        assert.equal(event.intentSource, "inferred");
+        assert.ok(event.intent.length > 0);
+        assert.ok(!event.intent.includes("Private title"));
+    }
 });

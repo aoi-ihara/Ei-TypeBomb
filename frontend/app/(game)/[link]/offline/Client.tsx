@@ -1,4 +1,6 @@
 "use client";
+import { getMasteryGraph } from "@/lib/playground/mastery-graph";
+import { LEARNING_DIAGNOSTICS_ENABLED, captureDecision, diagnosticJSON, type CapturedDecision, type AnswerEvent } from "@/lib/playground/diagnostics";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +13,6 @@ import OfflineMasteryProgress from "@/components/game/OfflineMasteryProgress";
 import type { GameNoticeProps } from "@/components/game/GameNotice";
 import Button from "@/components/ui/Button";
 import GameSettings from "@/components/settings/GameSettings";
-import type { OfflineVoiceReading } from "@/lib/settings";
 import posthog from "posthog-js";
 import {
     applyRecallObservation,
@@ -20,8 +21,8 @@ import {
     createTurnPlan,
     evaluateRecall,
     getRetrievability,
-    getMasteryProgress,
-    MASTERY_RETRIEVABILITY_THRESHOLD,
+    getExposureGap,
+    evaluateRecognition,
     MEMORY_MODEL_VERSION,
     type ItemMemoryState,
     type RecallObservation,
@@ -32,6 +33,7 @@ import {
     loadSchedulerState,
     saveSchedulerState,
     nextSuspendedReviewAt,
+    nextMemoryReviewAt,
     chooseNextUserItem,
     recordUserAnswer,
     recordRecognitionAnswer,
@@ -41,7 +43,6 @@ import {
     loadPlaygroundMemory,
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
-import OfflineVoicePicker from "@/components/settings/OfflineVoicePicker";
 import { Icon } from "@/components/ui/Icon";
 import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
 
@@ -50,7 +51,6 @@ type Props = {
     answerMode: AnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
-    initialOfflineVoiceReading: OfflineVoiceReading;
 };
 
 const LOCAL_USER_ID = "playground-player";
@@ -161,7 +161,6 @@ export default function Client({
     answerMode,
     initialBackgroundMusic,
     initialSounDeffects,
-    initialOfflineVoiceReading,
 }: Readonly<Props>) {
     const router = useRouter();
 
@@ -169,7 +168,33 @@ export default function Client({
         initialBackgroundMusic,
     );
     const [soundEffects, setSoundEffects] = useState(initialSounDeffects);
-    const offlineVoiceReading = initialOfflineVoiceReading;
+    const [readQuestion, setReadQuestion] = useState(true);
+    const [readAnswer, setReadAnswer] = useState(true);
+    const [voiceSettingsReady, setVoiceSettingsReady] = useState(false);
+
+    useEffect(() => {
+        try {
+            setReadQuestion(localStorage.getItem("offline-voice-question") !== "false");
+            setReadAnswer(localStorage.getItem("offline-voice-answer") !== "false");
+        } catch {
+            // Keep both enabled if local storage is unavailable.
+        }
+        setVoiceSettingsReady(true);
+    }, []);
+
+    const updateVoiceSetting = (kind: "question" | "answer", enabled: boolean) => {
+        if (kind === "question") setReadQuestion(enabled);
+        else setReadAnswer(enabled);
+        try {
+            localStorage.setItem(`offline-voice-${kind}`, String(enabled));
+        } catch {
+            // The current session still uses the selected value.
+        }
+        posthog.capture("settings_changed", {
+            setting: `offline_voice_${kind}`,
+            value: enabled,
+        });
+    };
     const users = SOLO_USERS;
     const room = useMemo<Room>(
         () => ({
@@ -179,6 +204,11 @@ export default function Client({
         [sourceRoom],
     );
     const items = useMemo(() => room.items ?? [], [room.items]);
+    const masteryItemIds = useMemo(() => items.map(item => item.id), [items]);
+    const itemModes = useMemo(() => Object.fromEntries(items.map(item =>
+        [item.id, getEffectiveAnswerMode(item, answerMode)])), [items, answerMode]);
+    const choiceCount = useMemo(() => new Set(items.map(item => item.answer).filter(Boolean)).size, [items]);
+
 
     const [memoryByItem, setMemoryByItem] = useState<
         Record<string, ItemMemoryState>
@@ -187,6 +217,8 @@ export default function Client({
     const [masteryNow, setMasteryNow] = useState(() => Date.now());
     const pendingMemoryRef = useRef(new Map<string, ItemMemoryState>());
     const syncInFlightRef = useRef<Promise<void> | null>(null);
+    const decisionRef = useRef<CapturedDecision | null>(null);
+    const answerDiagnosticRef = useRef<AnswerEvent | null>(null);
     const schedulerRef = useRef<SchedulerState | null>(null);
     const exposureGapAtStartRef = useRef<number | null>(null);
     const expectedTypingAtStartRef = useRef(0);
@@ -217,6 +249,8 @@ export default function Client({
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const successAudioRef = useRef<HTMLAudioElement | null>(null);
+    const answerSpeechRef = useRef<SpeechSynthesisUtterance | null>(null);
+    const [answerSpeechVersion, setAnswerSpeechVersion] = useState(0);
 
     useEffect(() => {
         if (!notice?.visible) return;
@@ -290,9 +324,7 @@ export default function Client({
                         userId,
                         room.id,
                         itemIds,
-                        fallbackMemory,
                         Date.now(),
-                        answerMode,
                     ) ?? createScheduler(itemIds);
             } else {
                 schedulerRef.current = createScheduler(itemIds);
@@ -358,9 +390,7 @@ export default function Client({
                         GUEST_MEMORY_USER_ID,
                         room.id,
                         itemIds,
-                        saved,
                         Date.now(),
-                        answerMode,
                     ) ?? createScheduler(itemIds);
                 setMemoryByItem(saved);
                 setMemoryReady(true);
@@ -385,9 +415,7 @@ export default function Client({
                     loaded.userId,
                     room.id,
                     itemIds,
-                    loaded.memoryByItem,
                     Date.now(),
-                    answerMode,
                 ) ?? createScheduler(itemIds);
             setMemoryByItem(loaded.memoryByItem);
             setMemoryReady(true);
@@ -413,14 +441,15 @@ export default function Client({
             memory && memory.reviewCount > 0 && memory.lastReviewedAt
                 ? getRetrievability(memory)
                 : null;
-        const exposure = memory?.lastPresentedAt ?? memory?.lastReviewedAt;
-        exposureGapAtStartRef.current = exposure
-            ? Math.max(0, Date.now() - Date.parse(exposure))
-            : null;
+        exposureGapAtStartRef.current = getExposureGap(
+            memory,
+            itemModes[item.id] ?? answerMode,
+            Date.now(),
+        );
         expectedTypingAtStartRef.current =
             (getTypingAnswer(item)?.length ?? item.answer.length) *
             userTypingDelayRef.current;
-    }, []);
+    }, [answerMode, itemModes]);
 
     const chooseItemForTurn = useCallback(() => {
         const scheduler =
@@ -434,6 +463,12 @@ export default function Client({
             Math.random,
             Date.now(),
             answerMode,
+            itemModes,
+            LEARNING_DIAGNOSTICS_ENABLED ? trace => {
+                try {
+                    decisionRef.current = captureDecision(trace, memoryByItemRef.current, itemModes, answerDiagnosticRef.current);
+                } catch { decisionRef.current = null; }
+            } : undefined,
         )?.itemId;
         if (!memoryPersistenceDisabledRef.current) {
             saveSchedulerState(
@@ -444,20 +479,26 @@ export default function Client({
             );
         }
         return items.find((item) => item.id === id) ?? null;
-    }, [items, room.id, answerMode]);
+    }, [items, room.id, answerMode, itemModes]);
 
     const resolveTurnWithItem = useCallback(() => {
         const item = chooseItemForTurn();
         if (!item) {
             setNextReviewAt(
                 schedulerRef.current
-                    ? nextSuspendedReviewAt(schedulerRef.current)
+                    ? nextMemoryReviewAt(
+                          schedulerRef.current,
+                          memoryByItemRef.current,
+                          Date.now(),
+                          answerMode,
+                          itemModes,
+                      ) ?? nextSuspendedReviewAt(schedulerRef.current)
                     : null,
             );
             setIsStarted(false);
         }
         return item;
-    }, [chooseItemForTurn]);
+    }, [chooseItemForTurn, answerMode, itemModes]);
 
     const startGame = useCallback(() => {
         if (!memoryReady || items.length === 0) return;
@@ -601,6 +642,17 @@ export default function Client({
                 itemId: item.id,
             });
 
+            if (LEARNING_DIAGNOSTICS_ENABLED) answerDiagnosticRef.current = {
+                at: Date.now(), itemId: item.id, mode: "input", evaluation,
+                evidence: { success: evidence.success, firstAttemptCorrect: evidence.firstAttemptCorrect,
+                    hintCount: evidence.hintCount, answerWasFullyRevealed: evidence.answerWasFullyRevealed,
+                    incorrectInputCount: evidence.incorrectInputCount, elapsedMs: evidence.elapsedMs,
+                    exposureGapMs: evidence.elapsedSincePresentationMs, initialCueRatio: evidence.initialCueRatio,
+                    finalCueRatio: evidence.finalCueRatio, recallLatencyMs: evidence.recallLatencyMs,
+                    expectedTypingMs: evidence.expectedTypingMs },
+                before: freshestMemory[item.id], after: nextMemory,
+                schedulerAfter: scheduler ? structuredClone(scheduler) : null,
+            };
             let nextMemoryByItem = {
                 ...freshestMemory,
                 [item.id]: nextMemory,
@@ -691,6 +743,7 @@ export default function Client({
             success: boolean,
             responseMs: number | null = null,
             usedHint = false,
+            exposureGapMs?: number | null,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -717,7 +770,17 @@ export default function Client({
                 success,
                 responseMs,
                 usedHint,
+                choiceCount,
+                exposureGapMs,
             });
+            if (LEARNING_DIAGNOSTICS_ENABLED && mode === "selection") answerDiagnosticRef.current = {
+                at: Date.now(), itemId: item.id, mode,
+                evidence: { success, firstAttemptCorrect: success, hintCount: usedHint ? 1 : 0,
+                    elapsedMs: responseMs ?? undefined, exposureGapMs, choiceCount },
+                evaluation: evaluateRecognition(!success, exposureGapMs),
+                before: freshestMemory[item.id], after: updated,
+                schedulerAfter: schedulerRef.current ? structuredClone(schedulerRef.current) : null,
+            };
             let nextMemoryByItem = {
                 ...freshestMemory,
                 [item.id]: updated,
@@ -746,7 +809,7 @@ export default function Client({
             setMasteryNow(Date.now());
             return updated;
         },
-        [room.id, items],
+        [room.id, items, choiceCount],
     );
 
     const cachePendingMemory = useCallback(() => {
@@ -773,7 +836,11 @@ export default function Client({
             while (pendingMemoryRef.current.size > 0) {
                 const snapshot = [...pendingMemoryRef.current.values()];
                 try {
-                    const error = await syncPlaygroundMemory(snapshot);
+                    const error = await syncPlaygroundMemory(
+                        snapshot,
+                        room.id,
+                        "offline",
+                    );
                     if (error) throw error;
                     for (const synced of snapshot) {
                         if (
@@ -785,9 +852,6 @@ export default function Client({
                     cachePendingMemory();
                 } catch (error) {
                     console.error("Failed to sync playground memory", error);
-                    posthog.capture("playground_memory_sync_failed", {
-                        room_id: room.id,
-                    });
                     break;
                 }
             }
@@ -889,7 +953,10 @@ export default function Client({
             if (!item || isPaused || !correct) return;
             const scheduler = schedulerRef.current;
             if (scheduler) {
-                recordRecognitionAnswer(scheduler, item.id, hadMistake);
+                if (choiceCount < 2) scheduler.current = null;
+                else recordRecognitionAnswer(
+                    scheduler, item.id, hadMistake, Date.now(), exposureGapAtStartRef.current,
+                );
                 if (!memoryPersistenceDisabledRef.current) {
                     saveSchedulerState(
                         "playground",
@@ -908,9 +975,10 @@ export default function Client({
                 !hadMistake,
                 responseMs,
                 usedHint,
+                exposureGapAtStartRef.current,
             );
         },
-        [isPaused, room.id, updateAnswerModeMemory],
+        [isPaused, room.id, updateAnswerModeMemory, choiceCount],
     );
 
     const handleSuccess = useCallback(() => {
@@ -927,18 +995,27 @@ export default function Client({
         const presentedItem = currentItemRef.current;
         // Speech also plays when the answer was entered after a full hint.
         if (
-            offlineVoiceReading === "answer" &&
+            readAnswer &&
             presentedItem.answer.trim() &&
             typeof window !== "undefined" &&
             "speechSynthesis" in window &&
             typeof SpeechSynthesisUtterance !== "undefined"
         ) {
             const synthesis = window.speechSynthesis;
+            answerSpeechRef.current = null;
             synthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(
                 presentedItem.answer,
             );
             utterance.lang = "en-US";
+            answerSpeechRef.current = utterance;
+            const finishAnswerSpeech = () => {
+                if (answerSpeechRef.current !== utterance) return;
+                answerSpeechRef.current = null;
+                setAnswerSpeechVersion((version) => version + 1);
+            };
+            utterance.onend = finishAnswerSpeech;
+            utterance.onerror = finishAnswerSpeech;
             synthesis.speak(utterance);
         }
 
@@ -954,7 +1031,7 @@ export default function Client({
     }, [
         isPaused,
         soundEffects,
-        offlineVoiceReading,
+        readAnswer,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
@@ -965,7 +1042,8 @@ export default function Client({
             !isStarted ||
             isPaused ||
             !currentItem ||
-            offlineVoiceReading !== "question"
+            !voiceSettingsReady ||
+            !readQuestion
         ) {
             return;
         }
@@ -981,6 +1059,10 @@ export default function Client({
         const text = currentItem.prompt;
         if (!text.trim()) return;
 
+        // The next question is visible immediately, but its audio waits
+        // until the preceding answer has finished.
+        if (answerSpeechRef.current) return;
+
         const synthesis = window.speechSynthesis;
         synthesis.cancel();
 
@@ -988,14 +1070,37 @@ export default function Client({
         utterance.lang = "ja-JP";
         synthesis.speak(utterance);
 
-        return () => synthesis.cancel();
+        // Do not cancel the answer utterance when the item changes.
+        return () => {
+            if (!answerSpeechRef.current) synthesis.cancel();
+        };
     }, [
         currentItem,
         isStarted,
         itemPresentationKey,
-        offlineVoiceReading,
+        readQuestion,
+        voiceSettingsReady,
         isPaused,
+        answerSpeechVersion,
     ]);
+
+    useEffect(() => {
+        if (
+            (!isStarted || isPaused) &&
+            typeof window !== "undefined" &&
+            "speechSynthesis" in window
+        ) {
+            answerSpeechRef.current = null;
+            window.speechSynthesis.cancel();
+        }
+    }, [isStarted, isPaused]);
+
+    useEffect(() => {
+        return () => {
+            if (typeof window !== "undefined" && "speechSynthesis" in window)
+                window.speechSynthesis.cancel();
+        };
+    }, []);
 
     // Recompute time-decayed predictions without answers; refresh on tab return.
     useEffect(() => {
@@ -1012,22 +1117,17 @@ export default function Client({
         };
     }, [memoryReady, isStarted]);
 
-    const masteryProgress = useMemo(
+    const masteryGraph = useMemo(
         () =>
-            getMasteryProgress(
-                items.map((item) => item.id),
+            getMasteryGraph(
+                masteryItemIds,
                 memoryByItem,
                 masteryNow,
-                MASTERY_RETRIEVABILITY_THRESHOLD,
                 answerMode,
-                Object.fromEntries(
-                    items.map((item) => [
-                        item.id,
-                        getEffectiveAnswerMode(item, answerMode),
-                    ]),
-                ),
+                itemModes,
+                LEARNING_DIAGNOSTICS_ENABLED,
             ),
-        [items, memoryByItem, masteryNow, answerMode],
+        [masteryItemIds, memoryByItem, masteryNow, answerMode, itemModes],
     );
 
     const currentTurnPlan = useMemo(
@@ -1092,7 +1192,7 @@ export default function Client({
                                 すべての単語が復習待ちです
                             </p>
                             <p>
-                                難しい単語はいったん保留しました。 次の復習は
+                                新しい単語の導入を止め、復習期限を待っています。 次の復習は
                                 {new Date(nextReviewAt).toLocaleString(
                                     "ja-JP",
                                     {
@@ -1186,7 +1286,13 @@ export default function Client({
                 isPaused={isPaused}
                 answerMode={answerMode}
                 masteryProgress={
-                    <OfflineMasteryProgress progress={masteryProgress} />
+                    <OfflineMasteryProgress
+                        progress={masteryGraph.totals}
+                        itemIds={masteryItemIds}
+                        memories={memoryByItem}
+                        answerMode={answerMode}
+                        modes={itemModes}
+                    />
                 }
                 onSelectionAnswer={handleSelectionAnswer}
                 onResume={() => setIsPaused(false)}
@@ -1238,14 +1344,15 @@ export default function Client({
                         void flushPendingMemory();
                     }}
                 />
-                <div>
-                    <OfflineVoicePicker
-                        initialValue={initialOfflineVoiceReading}
-                    />
-                </div>
                 <GameSettings
+                    getLearningDiagnostic={LEARNING_DIAGNOSTICS_ENABLED ? () =>
+                        diagnosticJSON(decisionRef.current, masteryGraph, items.map(item => item.id)) : undefined}
                     backgroundMusic={backgroundMusic}
                     soundEffects={soundEffects}
+                    readQuestion={readQuestion}
+                    readAnswer={readAnswer}
+                    onReadQuestionChange={(next) => updateVoiceSetting("question", next)}
+                    onReadAnswerChange={(next) => updateVoiceSetting("answer", next)}
                     onBackgroundMusicChange={(next) => {
                         setBackgroundMusic(next);
                         document.cookie =

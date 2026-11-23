@@ -343,3 +343,15 @@ If discovery returns 200 but `/api/oauth/register` or `/api/oauth/jwks` returns
 Database URLs, passwords, OAuth parameters, exception messages and stacks are
 never included in these logs. A successful metadata response validates keys and
 configuration, but does not prove database connectivity or client registration.
+
+## MCP intent analytics
+
+The custom HTTP dispatcher uses `PostHogMCP` rather than an MCP SDK server,
+so there is no `instrument()` call. With `NEXT_PUBLIC_POSTHOG_KEY` configured,
+`prepareToolList(..., { context: true })` explicitly enables intent capture,
+and `prepareToolCall()` strips the injected argument before tool execution.
+Non-empty context takes precedence (`$mcp_intent_source = "context_parameter"`).
+Omitted, empty, or whitespace-only context uses a deterministic per-tool fallback
+(`$mcp_intent_source = "inferred"`), including calls arriving before `tools/list`.
+Fallback text never includes raw arguments or room content.
+See [PostHog intent documentation](https://posthog.com/docs/mcp-analytics/intent).

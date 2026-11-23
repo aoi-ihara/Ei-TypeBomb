@@ -27,7 +27,7 @@ export async function listAuthorizedApps(): Promise<{
     error: string | null;
 }> {
     if (process.env.ETB_MCP_OAUTH_ENABLED !== "true") {
-        return { apps: [], error: "MCP接続管理が無効です。" };
+        return { apps: [], error: null };
     }
     const user = await getUser();
     if (!user) return { apps: [], error: "サインインが必要です。" };

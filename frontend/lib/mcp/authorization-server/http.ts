@@ -175,7 +175,7 @@ async function interaction(
         html(
             res,
             "アカウントが切り替わりました",
-            `<p>現在ログイン中のアカウントで接続を再開してください。</p><a href="${escape("/api/oauth/authorize?" + params)}">接続を再開する</a>`,
+            `<p>現在サインイン中のアカウントで接続を再開してください。</p><a href="${escape("/api/oauth/authorize?" + params)}">接続を再開する</a>`,
         );
         return;
     }

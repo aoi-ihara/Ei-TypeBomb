@@ -19,7 +19,7 @@ export const toggleSavedRoom = async (
         createAdminClient(),
     ]);
     if (!userId) {
-        return { saved: false, error: "ログインが必要です。" };
+        return { saved: false, error: "サインインが必要です。" };
     }
 
     const { data, error } = await supabase.rpc(

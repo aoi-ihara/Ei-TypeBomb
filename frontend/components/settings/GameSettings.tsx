@@ -8,18 +8,31 @@ import Toggle from "@/components/ui/Toggle";
 type Props = {
     backgroundMusic: boolean;
     soundEffects: boolean;
+    readQuestion?: boolean;
+    readAnswer?: boolean;
+    onReadQuestionChange?: (value: boolean) => void;
+    onReadAnswerChange?: (value: boolean) => void;
     onBackgroundMusicChange: (value: boolean) => void;
     onSoundEffectsChange: (value: boolean) => void;
+    getLearningDiagnostic?: () => string | null;
     placement?: "inline" | "top-left";
 };
 
 export default function GameSettings({
     backgroundMusic,
     soundEffects,
+    readQuestion,
+    readAnswer,
+    onReadQuestionChange,
+    onReadAnswerChange,
     onBackgroundMusicChange,
     onSoundEffectsChange,
     placement = "inline",
+    getLearningDiagnostic,
 }: Readonly<Props>) {
+    const [diagnosticStatus, setDiagnosticStatus] = useState<boolean | null>(
+        null,
+    );
     const [showSettings, setShowSettings] = useState(false);
 
     return (
@@ -60,6 +73,65 @@ export default function GameSettings({
                         onChange={onSoundEffectsChange}
                     />
                 </div>
+                {onReadQuestionChange && readQuestion !== undefined && (
+                    <div className="flex w-full items-center justify-between pl-3">
+                        <div data-cursor="text">読み上げ（問題）</div>
+                        <Toggle
+                            checked={readQuestion}
+                            onChange={onReadQuestionChange}
+                        />
+                    </div>
+                )}
+                {onReadAnswerChange && readAnswer !== undefined && (
+                    <div className="flex w-full items-center justify-between pl-3">
+                        <div data-cursor="text">読み上げ（解答）</div>
+                        <Toggle
+                            checked={readAnswer}
+                            onChange={onReadAnswerChange}
+                        />
+                    </div>
+                )}
+                {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true" &&
+                    getLearningDiagnostic && (
+                        <Button
+                            className="w-full"
+                            onClick={async () => {
+                                try {
+                                    const json = getLearningDiagnostic();
+
+                                    if (!json) {
+                                        setDiagnosticStatus(false);
+                                        return;
+                                    }
+
+                                    await navigator.clipboard.writeText(json);
+                                    setDiagnosticStatus(true);
+                                } catch {
+                                    setDiagnosticStatus(false);
+                                } finally {
+                                    setTimeout(() => {
+                                        setDiagnosticStatus(null);
+                                    }, 3000);
+                                }
+                            }}
+                            iconName={
+                                diagnosticStatus
+                                    ? "check"
+                                    : diagnosticStatus === false
+                                      ? "x"
+                                      : "clipboardPen"
+                            }
+                        >
+                            出題診断をコピー
+                        </Button>
+                    )}
+                {diagnosticStatus !== null && (
+                    <p role="status" className="sr-only">
+                        {diagnosticStatus
+                            ? "出題診断をコピーしました。"
+                            : "コピーできませんでした。ブラウザの権限を確認して再試行してください。"}
+                    </p>
+                )}
                 <Button
                     className="w-full"
                     variant="primary"
