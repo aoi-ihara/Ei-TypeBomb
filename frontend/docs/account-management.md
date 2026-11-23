@@ -6,9 +6,10 @@ host-scoped Supabase SSR cookies and refreshed in the Next.js proxy.
 
 MCP clients authenticate through ETB's own OAuth authorization server, which
 uses the ETB browser session to identify the user during consent. Website
-session cookies are not accepted as MCP access tokens. When MCP OAuth is
-enabled, the account screen links to `/api/oauth/connections` to review and
-revoke MCP grants.
+session cookies are not accepted as MCP access tokens. When MCP OAuth is enabled, the account settings show authorized apps and allow
+revocation. The **アプリ** section appears for every signed-in user, showing an
+empty state when MCP OAuth is disabled. The **セキュリティ** section groups
+email-address and password changes.
 
 ## Deployment configuration
 
@@ -34,7 +35,8 @@ Account password changes begin with an emailed six-digit code sent by
 the user selects **Continue**, then shows only the new-password fields.
 Supabase validates the nonce when ETB calls
 `auth.updateUser({ password, nonce })`; advancing to the password step checks
-only its six-digit format. Invalid/expired codes return users to the
+only its six-digit format. Supabase does not document a separate nonce
+verification API for this step; the nonce is checked when updating the password. Invalid/expired codes return users to the
 confirmation-code step, where they can resend the code. A password-reset link
 still opens the password form directly because the email recovery link has
 already been verified. Keep Supabase's secure password change setting enabled.

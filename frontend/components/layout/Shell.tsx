@@ -14,6 +14,7 @@ type AuthShellProps = {
     animateAppear?: boolean;
     showBackButton?: boolean;
     backLink?: string;
+    onBackClicked?: () => void;
     showHeader?: boolean;
     sidebar?: React.ReactNode;
     header?: React.ReactNode;
@@ -28,6 +29,7 @@ export default function Shell({
     animateAppear = false,
     showBackButton = false,
     backLink,
+    onBackClicked,
     showHeader = true,
     sidebar,
     header,
@@ -50,9 +52,11 @@ export default function Shell({
                             href={backLink ?? undefined}
                             onClick={
                                 !backLink
-                                    ? () => {
-                                          router.back();
-                                      }
+                                    ? onBackClicked
+                                        ? onBackClicked
+                                        : () => {
+                                              router.back();
+                                          }
                                     : undefined
                             }
                         />

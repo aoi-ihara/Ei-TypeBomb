@@ -267,16 +267,85 @@ test("password form shows a code input only during reauthentication", () => {
     assert.match(form, /iconName="rotateCcw"/);
     assert.match(form, /isVerificationStep\s*\? "arrowRight"/);
     assert.match(form, /isVerificationStep\s*\? "続ける"/);
-    const details = readFileSync(
-        new URL("../components/account/AccountDetails.tsx", `file://${__filename}`),
+    const settings = readFileSync(
+        new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`),
         "utf8",
     );
-    assert.match(details, /title=\{buttonNames\[navigation\]\}/);
-    assert.match(details, /mode="password" requireReauthentication/);
+    const security = readFileSync(
+        new URL("../components/account/settings/Security.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(settings, /label: "セキュリティ", icon: "shield"/);
+    assert.match(settings, /title=\{title\}/);
+    assert.match(security, /label: "メールアドレス"/);
+    assert.match(security, /label: "パスワード"/);
+    assert.match(security, /mode=\{screen\}/);
+    assert.match(security, /requireReauthentication=\{screen === "password"\}/);
     const resetPage = readFileSync(
         new URL("../app/(auth)/sign-in/reset-password/page.tsx", `file://${__filename}`),
         "utf8",
     );
     assert.match(resetPage, /mode=\{update \? "password" : "recovery"\}/);
     assert.doesNotMatch(resetPage, /requireReauthentication/);
+});
+
+test("settings show apps to all users and group email/password under security", () => {
+    const page = readFileSync(
+        new URL("../app/(auth)/account/page.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    const settings = readFileSync(
+        new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    const security = readFileSync(
+        new URL("../components/account/settings/Security.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    const apps = readFileSync(
+        new URL("../components/account/settings/Apps.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    const icon = readFileSync(
+        new URL("../components/ui/Icon.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(page, /<AccountSettings user=\{user\}/);
+    assert.doesNotMatch(page, /mcpEnabled|ETB_MCP_OAUTH_ENABLED/);
+    assert.match(settings, /key: "apps", label: "アプリ"/);
+    assert.match(settings, /key: "security", label: "セキュリティ", icon: "shield"/);
+    assert.match(settings, /section === "apps" \? \(/);
+    assert.match(security, /key: "email", label: "メールアドレス"/);
+    assert.match(security, /key: "password", label: "パスワード"/);
+    assert.match(settings, /showBackButton=\{section === "security" && securityScreen !== "overview"\}/);
+    assert.match(settings, /onBackClicked=\{\(\) => setSecurityScreen\("overview"\)\}/);
+    assert.doesNotMatch(security, /セキュリティへ戻る/);
+    assert.doesNotMatch(security, /iconName="arrowLeft"/);
+    assert.match(apps, /listAuthorizedApps/);
+    assert.match(icon, /shield: Shield/);
+});
+
+test("apps show an empty state rather than an error when MCP is disabled", async () => {
+    const source = ts.transpileModule(
+        readFileSync(
+            new URL("../lib/auth/oauth-grants.ts", `file://${__filename}`),
+            "utf8",
+        ),
+        { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+    ).outputText;
+    const exports = {};
+    vm.runInNewContext(source, {
+        exports,
+        process: { env: { ETB_MCP_OAUTH_ENABLED: "false" } },
+        require(id) {
+            if (id.endsWith("/session"))
+                return { getUser: () => { throw Error("unexpected user lookup"); } };
+            if (id.endsWith("/provider"))
+                return { getMcpProvider: () => { throw Error("unexpected provider lookup"); } };
+            if (id.endsWith("/store")) return {};
+            throw Error(id);
+        },
+    });
+    const result = await exports.listAuthorizedApps();
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), { apps: [], error: null });
 });
