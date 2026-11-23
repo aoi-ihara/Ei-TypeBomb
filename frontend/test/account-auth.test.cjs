@@ -6,14 +6,12 @@ const ts = require("typescript");
 
 function load(overrides = {}) {
     const calls = [];
-    const updateErrors = [...(overrides.updateErrors ?? [])];
     const auth = Object.fromEntries(
         [
             "signUp",
             "signInWithPassword",
             "resetPasswordForEmail",
             "updateUser",
-            "reauthenticate",
         ].map((name) => [
             name,
             async (...args) => {
@@ -23,20 +21,17 @@ function load(overrides = {}) {
                         name === "signInWithPassword"
                             ? (overrides.signInError ?? null)
                             : name === "updateUser"
-                              ? (updateErrors.length
-                                    ? updateErrors.shift()
-                                    : (overrides.updateError ?? null))
-                              : name === "reauthenticate"
-                                ? (overrides.reauthError ?? null)
-                                : null,
+                              ? (overrides.updateError ?? null)
+                              : (overrides.recoveryError ?? null),
                 };
             },
         ]),
     );
     auth.getUser = async () => ({
-        data: { user: overrides.user === false ? null : { id: "verified" } },
+        data: { user: overrides.user === false ? null : { id: "verified", email: overrides.email ?? "registered@example.com", email_confirmed_at: overrides.unconfirmed ? null : "2026-11-23" } },
         error: null,
     });
+    let recoveryCleared = false;
     const exports = {};
     const source = ts.transpileModule(
         readFileSync(
@@ -50,6 +45,12 @@ function load(overrides = {}) {
         require(id) {
             if (id.endsWith("/db/server"))
                 return { createClient: async () => ({ auth }) };
+            if (id.endsWith("/password-recovery"))
+                return {
+                    PASSWORD_RESET_PATH: "/sign-in/reset-password",
+                    hasPasswordRecovery: async () => overrides.recovery === true,
+                    clearPasswordRecovery: async () => { recoveryCleared = true; },
+                };
             if (id.endsWith("/validator"))
                 return {
                     validateEmail: (e) =>
@@ -64,7 +65,7 @@ function load(overrides = {}) {
     });
     return {
         submit: exports.submitAccountForm,
-        requestReauth: exports.requestPasswordReauthentication,
+        recoveryCleared: () => recoveryCleared,
         calls,
     };
 }
@@ -158,115 +159,87 @@ test("signup and recovery use trusted ETB callbacks and pass CAPTCHA to Auth", a
     assert.equal(calls[1][2].captchaToken, "captcha2");
 });
 
-test("recently signed-in users can change passwords without OTP", async () => {
+test("settings send the same reset link to the verified account email", async () => {
     const { submit, calls } = load();
-    assert.equal(await submit("password", "", "newpassword123", ""), null);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0][0], "updateUser");
-    assert.equal(calls[0][1].password, "newpassword123");
-    assert.equal(calls[0][1].nonce, undefined);
-});
-
-test("reauthentication_needed sends a confirmation code", async () => {
-    const { submit, calls } = load({
-        updateError: { code: "reauthentication_needed" },
-    });
-    assert.equal(
-        (await submit("password", "", "newpassword123", "")).reauthenticationRequired,
-        true,
-    );
-    assert.deepEqual(
-        calls.map((call) => call[0]),
-        ["updateUser", "reauthenticate"],
-    );
-});
-
-test("verified nonce is passed only with password updates", async () => {
-    const { submit, calls } = load();
-    assert.equal(
-        await submit("password", "", "newpassword123", "", " 123456 "),
-        null,
-    );
-    assert.equal(calls[0][1].password, "newpassword123");
-    assert.equal(calls[0][1].nonce, "123456");
-    assert.equal(await submit("email", "a@example.com", "", ""), null);
-    assert.equal(calls[1][1].nonce, undefined);
-});
-
-test("invalid confirmation codes never reach Supabase Auth", async () => {
-    for (const code of ["", "12ab56", "12345", "1234567"]) {
-        const { submit, calls } = load();
-        assert.equal(
-            await submit("password", "", "newpassword123", "", code),
-            "確認コードは6桁の数字で入力してください。",
-        );
-        assert.equal(calls.length, 0);
+    assert.equal(await submit("password-link", "other@example.com", "", "captcha"), null);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[
+        "resetPasswordForEmail", "registered@example.com",
+        {
+            captchaToken: "captcha",
+            redirectTo: "https://etb.example/auth/confirm?next=/sign-in/reset-password?update=true",
+        },
+    ]]);
+    for (const [options, token] of [[{ user: false }, "captcha"], [{ unconfirmed: true }, "captcha"], [{}, ""]]) {
+        const fixture = load(options);
+        assert.ok(await fixture.submit("password-link", "", "", token));
+        assert.equal(fixture.calls.length, 0);
     }
 });
 
-test("invalid and expired confirmation codes are recoverable", async () => {
-    for (const code of [
-        "reauthentication_not_valid",
-        "otp_expired",
-        "reauthentication_needed",
-        "reauth_nonce_missing",
-    ]) {
-        const { submit, calls } = load({ updateError: { code } });
-        assert.match(
-            await submit("password", "", "newpassword123", "", "123456"),
-            /確認コード/,
-        );
+test("password updates require a verified recovery session and consume it on success", async () => {
+    const blocked = load();
+    assert.match(await blocked.submit("password", "", "newpassword123", ""), /再設定リンク/);
+    assert.equal(blocked.calls.length, 0);
+
+    const verified = load({ recovery: true });
+    assert.equal(await verified.submit("password", "", "newpassword123", ""), null);
+    assert.deepEqual(JSON.parse(JSON.stringify(verified.calls)), [["updateUser", { password: "newpassword123" }]]);
+    assert.equal(verified.recoveryCleared(), true);
+
+    const rejected = load({ recovery: true, updateError: { code: "same_password" } });
+    assert.match(await rejected.submit("password", "", "newpassword123", ""), /現在と異なる/);
+    assert.equal(rejected.recoveryCleared(), false);
+});
+
+test("password reset link requests give a retry message when rate limited", async () => {
+    const { submit } = load({ recoveryError: { code: "over_email_send_rate_limit" } });
+    assert.match(await submit("password-link", "", "", "captcha"), /送信回数/);
+});
+
+test("reset link requests report a rejected CAPTCHA as a verification error", async () => {
+    for (const mode of ["recovery", "password-link"]) {
+        const { submit } = load({ recoveryError: { code: "captcha_failed" } });
         assert.equal(
-            calls.filter((call) => call[0] === "reauthenticate").length,
-            0,
+            await submit(mode, "a@example.com", "", "captcha"),
+            "ロボットではないことを確認できませんでした。再度お試しください。",
         );
     }
 });
 
-test("sending a confirmation code handles rate limiting", async () => {
-    const { submit, calls } = load({
-        updateError: { code: "reauthentication_needed" },
-        reauthError: { code: "over_email_send_rate_limit" },
+test("recovery proof is limited to the verified session and expires", async () => {
+    const exports = {};
+    const source = ts.transpileModule(
+        readFileSync(new URL("../lib/auth/password-recovery.ts", `file://${__filename}`), "utf8"),
+        { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+    ).outputText;
+    const cookies = new Map();
+    let now = 1_000_000;
+    vm.runInNewContext(source, {
+        exports,
+        Buffer,
+        Date: { now: () => now },
+        process: { env: { SUPABASE_SERVICE_ROLE_KEY: "test-only", NODE_ENV: "production" } },
+        require(id) {
+            if (id === "node:crypto") return require(id);
+            if (id === "next/headers") return { cookies: async () => cookies };
+            throw Error(id);
+        },
     });
-    assert.match(
-        await submit("password", "", "newpassword123", ""),
-        /送信回数/,
-    );
-    assert.deepEqual(
-        calls.map((call) => call[0]),
-        ["updateUser", "reauthenticate"],
-    );
+    const auth = (session_id, method) => ({
+        getClaims: async () => ({ data: { claims: { session_id, amr: [{ method }] } } }),
+    });
+    const session = auth("session-one", "recovery");
+    assert.equal(await exports.grantPasswordRecovery(auth("session-one", "password"), "token", "recovery"), false);
+    assert.equal(await exports.hasPasswordRecovery(session), false);
+    assert.equal(await exports.grantPasswordRecovery(session, "token", "recovery"), true);
+    for (const [name, value] of cookies) cookies.set(name, { value });
+    assert.equal(await exports.hasPasswordRecovery(session), true);
+    assert.equal(await exports.hasPasswordRecovery(auth("session-two", "recovery")), false);
+    now += 15 * 60 * 1000;
+    assert.equal(await exports.hasPasswordRecovery(session), false);
 });
 
-test("resending confirmation codes requires a signed-in user", async () => {
-    const { requestReauth, calls } = load();
-    assert.equal(await requestReauth(), null);
-    assert.deepEqual(
-        calls.map((call) => call[0]),
-        ["reauthenticate"],
-    );
-    const unauthorized = load({ user: false });
-    assert.equal(
-        await unauthorized.requestReauth(),
-        "サインインし直してください。",
-    );
-    assert.equal(unauthorized.calls.length, 0);
-});
-
-test("password form shows a code input only during reauthentication", () => {
-    const form = readFileSync(
-        new URL("../components/account/AuthForm.tsx", `file://${__filename}`),
-        "utf8",
-    );
-    assert.match(form, /isVerificationStep &&/);
-    assert.match(form, /autoComplete="one-time-code"/);
-    assert.match(form, /requestPasswordReauthentication\(\)/);
-    assert.match(form, /setReauthenticationRequired\(false\)/);
-    assert.match(form, /setPasswordStep\("verification"\)/);
-    assert.match(form, /setPasswordStep\("password"\)/);
-    assert.match(form, /iconName="rotateCcw"/);
-    assert.match(form, /isVerificationStep\s*\? "arrowRight"/);
-    assert.match(form, /isVerificationStep\s*\? "続ける"/);
+test("settings link to password recovery and the reset page checks recovery state", () => {
     const settings = readFileSync(
         new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`),
         "utf8",
@@ -279,14 +252,13 @@ test("password form shows a code input only during reauthentication", () => {
     assert.match(settings, /title=\{title\}/);
     assert.match(security, /label: "メールアドレス"/);
     assert.match(security, /label: "パスワード"/);
-    assert.match(security, /mode=\{screen\}/);
-    assert.match(security, /requireReauthentication=\{screen === "password"\}/);
+    assert.match(security, /mode=\{screen === "password" \? "password-link" : "email"\}/);
     const resetPage = readFileSync(
         new URL("../app/(auth)/sign-in/reset-password/page.tsx", `file://${__filename}`),
         "utf8",
     );
     assert.match(resetPage, /mode=\{update \? "password" : "recovery"\}/);
-    assert.doesNotMatch(resetPage, /requireReauthentication/);
+    assert.match(resetPage, /await hasPasswordRecovery/);
 });
 
 test("settings show apps to all users and group email/password under security", () => {
