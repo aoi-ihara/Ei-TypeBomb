@@ -86,7 +86,8 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/.well-known/oauth-authorization-server",
         "/.well-known/oauth-protected-resource/api/mcp",
         "/ingest/array/",
-        "/favicon.ico",
+        "/favicon-light.ico",
+        "/favicon-dark.ico",
     ])
         assert.equal(isPublicBetaPath(allowed), true, allowed);
     for (const protectedPath of [
@@ -98,6 +99,7 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/api/mcp",
         "/some-room/edit",
         "/server-health",
+        "/favicon.ico",
         "/api/oauth-not-real",
     ])
         assert.equal(isPublicBetaPath(protectedPath), false, protectedPath);
