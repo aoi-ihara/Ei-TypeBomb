@@ -49,8 +49,11 @@ reproduced 33 presentations of the failed word versus 8–9 of each other word i
 
 A failure/full reveal schedules a retry after two user turns, followed by a
 five-turn confirmation after the first unaided success. Two such
-successes finish the retry. Tiny rooms shorten gaps. BOT presentations do not
-advance user turns. Holds retain the existing escalating deadlines for persistent
+successes finish the retry. A confident, independently recovered single typo
+starts halfway through confirmation and gets the longer confirmation gap.
+A later independent single-typo correction can advance that confirmation instead
+of resetting it. Multiple errors, hints and failures never earn this credit.
+Tiny rooms shorten gaps. BOT presentations do not advance user turns. Holds retain the existing escalating deadlines for persistent
 struggle and remain protected while early rehearsal fills an otherwise empty game.
 
 Even a rapid clean answer resolves a short-term task; requiring independent

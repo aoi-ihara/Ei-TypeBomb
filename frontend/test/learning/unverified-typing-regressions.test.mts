@@ -126,6 +126,8 @@ test("corrected typing mistake schedules a finite confirmation without marking r
     assert.equal(evaluation.memoryEvidence, "recall");
     assert.equal(evaluation.retryNeed, "confirm");
     assert.equal(evaluation.reason, "uncertain_recall");
+    assert.equal(evaluation.minorCorrection, true);
+    assert((evaluation.quality ?? 0) >= 0.8);
 
     const original: ItemMemoryState = {
         ...createInitialMemory("u", "r", selected.itemId), reviewCount: 2,
@@ -145,6 +147,8 @@ test("corrected typing mistake schedules a finite confirmation without marking r
 
     recordUserAnswer(state, evaluation, start);
     assert(state.retries[selected.itemId], "a correction requests a near-term revisit");
+    assert.equal(state.retries[selected.itemId].successCount, 1);
+    assert.equal(state.retries[selected.itemId].earliestTurn, state.turn + 5);
     let confirmations = 0;
     for (let i = 1; i <= 18; i++) {
         const next = chooseNextUserItem(state, {}, () => 0.5,
@@ -157,8 +161,8 @@ test("corrected typing mistake schedules a finite confirmation without marking r
             ...clean, elapsedSincePresentationMs: 10_000,
         }), start + i * 10_000);
     }
-    assert.equal(confirmations, 2,
-        "uncertain recall should clear after two bounded confirmations");
+    assert.equal(confirmations, 1,
+        "one confident typo plus one clean confirmation finishes the retry");
     assert.equal(state.retries[selected.itemId], undefined);
     assert.equal(state.struggles[selected.itemId], undefined);
 });
@@ -171,6 +175,117 @@ test("an immediately corrected typo is not strong recall, but still requests con
     assert.equal(evaluation.independent, false);
     assert.equal(evaluation.memoryEvidence, "insufficient_evidence");
     assert.equal(evaluation.retryNeed, "confirm");
+});
+
+
+test("another independent one-typo recall finishes confirmation without resetting", () => {
+    const state = createScheduler(ids, () => 0.5);
+    const first = chooseNextUserItem(state, {}, () => 0.5, start)!;
+    const typo = evaluateRecall({
+        ...clean, firstAttemptCorrect: false, incorrectInputCount: 1,
+        attemptCount: 2, elapsedSincePresentationMs: 60_000,
+    });
+    recordUserAnswer(state, typo, start);
+    assert.equal(state.retries[first.itemId].successCount, 1);
+    let retryCount = 0;
+    for (let i = 1; i <= 24; i++) {
+        const next = chooseNextUserItem(state, {}, () => 0.5, start + i * 10_000)!;
+        if (next.itemId === first.itemId && next.reason === "retry") retryCount++;
+        recordUserAnswer(state, next.itemId === first.itemId && next.reason === "retry"
+            ? typo : evaluateRecall({ ...clean, elapsedSincePresentationMs: 10_000 }),
+            start + i * 10_000);
+    }
+    assert.equal(retryCount, 1);
+    assert.equal(state.retries[first.itemId], undefined);
+});
+
+test("slow one-typo recall starts at zero and needs two successful confirmations", () => {
+    const state = createScheduler(ids, () => 0.5);
+    const first = chooseNextUserItem(state, {}, () => 0.5, start)!;
+    const slow = evaluateRecall({
+        ...clean, firstAttemptCorrect: false, incorrectInputCount: 1,
+        attemptCount: 2, recallLatencyMs: 24_000, elapsedMs: 32_000,
+        elapsedSincePresentationMs: 60_000,
+    });
+    assert.equal(slow.minorCorrection, true);
+    assert((slow.quality ?? 1) < 0.8);
+    recordUserAnswer(state, slow, start);
+    assert.equal(state.retries[first.itemId].successCount, 0);
+    assert.equal(state.retries[first.itemId].earliestTurn, state.turn + 2);
+    let retryCount = 0;
+    for (let i = 1; i <= 25; i++) {
+        const next = chooseNextUserItem(state, {}, () => 0.5, start + i * 10_000)!;
+        if (next.itemId === first.itemId && next.reason === "retry") retryCount++;
+        recordUserAnswer(state, evaluateRecall({ ...clean, elapsedSincePresentationMs: 10_000 }),
+            start + i * 10_000);
+    }
+    assert.equal(retryCount, 2);
+    assert.equal(state.retries[first.itemId], undefined);
+});
+
+test("multiple errors, hint assistance, and failure do not earn typo credit", () => {
+    const attempts = [
+        { ...clean, firstAttemptCorrect: false, incorrectInputCount: 3,
+            attemptCount: 4, elapsedSincePresentationMs: 60_000 },
+        { ...clean, firstAttemptCorrect: false, incorrectInputCount: 1,
+            attemptCount: 2, hintCount: 1, revealedHintChars: 1,
+            elapsedSincePresentationMs: 60_000 },
+        { ...clean, success: false, firstAttemptCorrect: false,
+            incorrectInputCount: 1, attemptCount: 2,
+            elapsedSincePresentationMs: 60_000 },
+    ];
+    for (const observation of attempts) {
+        const evaluation = evaluateRecall(observation);
+        assert.notEqual(evaluation.minorCorrection, true);
+        const state = createScheduler(ids, () => 0.5);
+        const first = chooseNextUserItem(state, {}, () => 0.5, start)!;
+        recordUserAnswer(state, evaluation, start);
+        assert.equal(state.retries[first.itemId].successCount, 0);
+        assert.equal(state.retries[first.itemId].earliestTurn, state.turn + 2);
+    }
+});
+
+test("150 known words and 1000 turns: one typo-prone word does not dominate", () => {
+    const all = Array.from({ length: 150 }, (_, i) => `item-${i + 1}`);
+    const target = "item-78";
+    const state = createScheduler(all, () => 0.5);
+    const memories: Record<string, ItemMemoryState> = Object.fromEntries(
+        all.map(id => [id, {
+            ...createInitialMemory("u", "r", id),
+            reviewCount: 1, stability: 0.3,
+            lastReviewedAt: new Date(start - 60_000).toISOString(),
+            lastPresentedAt: new Date(start - 60_000).toISOString(),
+        }]),
+    );
+    let maxRetries = 0;
+    let targetRetries = 0;
+    for (let i = 0; i < 1000; i++) {
+        const now = start + i * 15_000;
+        const selected = chooseNextUserItem(state, memories, () => 0.5, now, "input")!;
+        const id = selected.itemId;
+        if (id === target && selected.reason === "retry") targetRetries++;
+        const observation = {
+            ...clean,
+            ...(id === target ? {
+                firstAttemptCorrect: false, incorrectInputCount: 1,
+                attemptCount: 2, recallLatencyMs: 921, elapsedMs: 3935,
+            } : {}),
+            elapsedSincePresentationMs: getExposureGap(memories[id], "input", now),
+        };
+        memories[id] = applyRecallObservation({
+            memory: memories[id], observation, userId: "u", roomId: "r",
+            itemId: id, now: new Date(now),
+        });
+        recordUserAnswer(state, evaluateRecall(observation), now);
+        maxRetries = Math.max(maxRetries, Object.keys(state.retries).length);
+    }
+    const counts = Object.values(state.userAnswered).sort((a, b) => a - b);
+    assert.equal(counts.length, 150, "all known words remain in circulation");
+    const median = counts[Math.floor(counts.length / 2)];
+    assert((state.userAnswered[target] ?? 0) <= median * 3,
+        `target repeats ${state.userAnswered[target]} times vs median ${median}`);
+    assert(targetRetries < 20, "typo confirmation must not monopolize practice");
+    assert(maxRetries <= 4);
 });
 
 test("two unanchored cards are fairly rotated when no useful filler is available", () => {
