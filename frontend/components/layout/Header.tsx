@@ -14,7 +14,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                         href="/"
                     >
                         <Image
-                            src="/favicon.svg"
+                            src="/icon-light.png"
                             alt="page-logo"
                             className="shrink-0 rounded-lg"
                             width={36}
