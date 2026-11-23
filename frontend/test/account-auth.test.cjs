@@ -258,8 +258,25 @@ test("password form shows a code input only during reauthentication", () => {
         new URL("../components/account/AuthForm.tsx", `file://${__filename}`),
         "utf8",
     );
-    assert.match(form, /mode === "password" && reauthenticationRequired/);
+    assert.match(form, /isVerificationStep &&/);
     assert.match(form, /autoComplete="one-time-code"/);
     assert.match(form, /requestPasswordReauthentication\(\)/);
     assert.match(form, /setReauthenticationRequired\(false\)/);
+    assert.match(form, /setPasswordStep\("verification"\)/);
+    assert.match(form, /setPasswordStep\("password"\)/);
+    assert.match(form, /iconName="rotateCcw"/);
+    assert.match(form, /isVerificationStep\s*\? "arrowRight"/);
+    assert.match(form, /isVerificationStep\s*\? "続ける"/);
+    const details = readFileSync(
+        new URL("../components/account/AccountDetails.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(details, /title=\{buttonNames\[navigation\]\}/);
+    assert.match(details, /mode="password" requireReauthentication/);
+    const resetPage = readFileSync(
+        new URL("../app/(auth)/sign-in/reset-password/page.tsx", `file://${__filename}`),
+        "utf8",
+    );
+    assert.match(resetPage, /mode=\{update \? "password" : "recovery"\}/);
+    assert.doesNotMatch(resetPage, /requireReauthentication/);
 });
