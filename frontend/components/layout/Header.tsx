@@ -13,13 +13,19 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                         className="flex min-w-0 items-center gap-2 rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                         href="/"
                     >
-                        <Image
-                            src="/icon-light.png"
-                            alt="page-logo"
-                            className="shrink-0 rounded-lg"
-                            width={36}
-                            height={36}
-                        />
+                        <picture className="shrink-0">
+                            <source
+                                media="(prefers-color-scheme: dark)"
+                                srcSet="/icon-dark.png"
+                            />
+                            <Image
+                                src="/icon-light.png"
+                                alt="Ei-TypeBomb"
+                                className="rounded-lg"
+                                width={36}
+                                height={36}
+                            />
+                        </picture>
                         <span className="min-w-0 truncate font-extrabold">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
