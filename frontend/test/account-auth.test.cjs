@@ -196,6 +196,16 @@ test("password reset link requests give a retry message when rate limited", asyn
     assert.match(await submit("password-link", "", "", "captcha"), /送信回数/);
 });
 
+test("reset link requests report a rejected CAPTCHA as a verification error", async () => {
+    for (const mode of ["recovery", "password-link"]) {
+        const { submit } = load({ recoveryError: { code: "captcha_failed" } });
+        assert.equal(
+            await submit(mode, "a@example.com", "", "captcha"),
+            "ロボットではないことを確認できませんでした。再度お試しください。",
+        );
+    }
+});
+
 test("recovery proof is limited to the verified session and expires", async () => {
     const exports = {};
     const source = ts.transpileModule(

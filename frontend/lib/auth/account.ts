@@ -76,6 +76,8 @@ export async function submitAccountForm(
         const { code, message } = result.error;
         if (mode === "sign-in" && (code === "invalid_credentials" || message === "Invalid login credentials"))
             return "入力内容が不正確です。";
+        if (code === "captcha_failed")
+            return "ロボットではないことを確認できませんでした。再度お試しください。";
         if (recovery && (code === "over_email_send_rate_limit" || code === "over_request_rate_limit"))
             return "メールの送信回数が多すぎます。時間をおいて再度お試しください。";
         if (mode === "password") {

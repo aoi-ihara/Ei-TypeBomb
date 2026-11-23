@@ -16,7 +16,10 @@ email-address and password changes.
 - Set `ETB_BASE_URL` to the deployment's HTTPS origin and configure
   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
   `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Enable CAPTCHA protection in Supabase
-  Auth with the matching Turnstile secret.
+  Auth with the matching Turnstile secret. When connecting a development or
+  preview build to a hosted Auth project, use the site key paired with that
+  project's secret and a hostname allowed by the widget. Use Cloudflare's test
+  keys together on an isolated Auth project configured for testing.
 - Add `<ETB_BASE_URL>/auth/confirm` and
   `<ETB_BASE_URL>/auth/confirm?next=/sign-in/reset-password?update=true`
   to the Supabase Auth redirect allowlist.
