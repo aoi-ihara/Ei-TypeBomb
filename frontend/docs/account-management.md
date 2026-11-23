@@ -16,7 +16,10 @@ email-address and password changes.
 - Set `ETB_BASE_URL` to the deployment's HTTPS origin and configure
   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
   `NEXT_PUBLIC_TURNSTILE_SITE_KEY`. Enable CAPTCHA protection in Supabase
-  Auth with the matching Turnstile secret.
+  Auth with the matching Turnstile secret. When connecting a development or
+  preview build to a hosted Auth project, use the site key paired with that
+  project's secret and a hostname allowed by the widget. Use Cloudflare's test
+  keys together on an isolated Auth project configured for testing.
 - Add `<ETB_BASE_URL>/auth/confirm` and
   `<ETB_BASE_URL>/auth/confirm?next=/sign-in/reset-password?update=true`
   to the Supabase Auth redirect allowlist.
@@ -30,16 +33,15 @@ email-address and password changes.
 
 ## Secure password changes
 
-Account password changes begin with an emailed six-digit code sent by
-`auth.reauthenticate()`. The UI shows only the confirmation-code entry until
-the user selects **Continue**, then shows only the new-password fields.
-Supabase validates the nonce when ETB calls
-`auth.updateUser({ password, nonce })`; advancing to the password step checks
-only its six-digit format. Supabase does not document a separate nonce
-verification API for this step; the nonce is checked when updating the password. Invalid/expired codes return users to the
-confirmation-code step, where they can resend the code. A password-reset link
-still opens the password form directly because the email recovery link has
-already been verified. Keep Supabase's secure password change setting enabled.
+In account settings, **パスワード** sends a reset link to the verified email
+address on the signed-in account. This uses the same Supabase **Reset password**
+template as signed-out recovery. With the default `{{ .ConfirmationURL }}`
+template, open the link in the same browser and on the same device that requested
+it so Supabase can complete PKCE. Use the latest email if the link was resent.
+
+After the callback verifies the link, ETB gives that Supabase session 15 minutes
+to submit a new password. A successful update clears the recovery cookie. Keep
+Supabase's secure password change setting enabled.
 
 ## Verification
 

@@ -22,13 +22,7 @@ export default function Security({
     onScreenChange: (screen: SecurityScreen) => void;
 }) {
     if (screen !== "overview") {
-        return (
-            <AuthForm
-                key={screen}
-                mode={screen}
-                requireReauthentication={screen === "password"}
-            />
-        );
+        return <AuthForm key={screen} mode={screen === "password" ? "password-link" : "email"} />;
     }
 
     return (
