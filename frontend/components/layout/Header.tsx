@@ -26,7 +26,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                                 height={36}
                             />
                         </picture>
-                        <span className="min-w-0 truncate font-extrabold">
+                        <span className="min-w-0 truncate font-extrabold text-xl">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
                                 ? "ETB Beta"
