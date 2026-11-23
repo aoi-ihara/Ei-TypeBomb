@@ -77,7 +77,7 @@ test("room feed and confirmed account page both synchronize person details", () 
         new URL("../app/(game)/RoomList.tsx", `file://${__filename}`), "utf8",
     );
     const account = readFileSync(
-        new URL("../components/account/AccountDetails.tsx", `file://${__filename}`), "utf8",
+        new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`), "utf8",
     );
     const accountPage = readFileSync(
         new URL("../app/(auth)/account/page.tsx", `file://${__filename}`), "utf8",
