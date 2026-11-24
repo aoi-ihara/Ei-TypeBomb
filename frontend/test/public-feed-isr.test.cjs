@@ -371,3 +371,8 @@ test("room-card entry uses the shared element morph while editor and return keep
     assert.match(css, /animation-timing-function: var\(--ease-etb, ease\)/);
     assert.match(card, /href=\{\x60\/\$\{roomLink\}\/edit\x60\}\s+navigation="push"\s+navigationScope="root"/);
 });
+
+test("room morph snapshots follow both dimensions of the interpolated rectangle", () => {
+    const css = readFileSync(path.join(__dirname, "..", "components/layout/navigation.css"), "utf8");
+    assert.match(css, /::view-transition-old\(etb-navigation-morph\),\s*html\[data-etb-navigation="morph"\]::view-transition-new\(etb-navigation-morph\)\s*\{\s*width: 100%;\s*height: 100%;\s*object-fit: fill;/);
+});

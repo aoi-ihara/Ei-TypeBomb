@@ -147,6 +147,15 @@ html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-morph) {
 html[data-etb-navigation="morph"]::view-transition-image-pair(etb-navigation-morph) {
     isolation: isolate;
 }
+/* Both snapshots follow the interpolated rectangle in both axes, just as
+ * Morph scales its two layers to the current width and height. Keep this
+ * scoped to the shared element: the surrounding page only crossfades. */
+html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-morph),
+html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-morph) {
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+}
 html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-content),
 html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-morph) {
     animation-name: etb-navigation-morph-out;
