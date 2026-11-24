@@ -92,24 +92,27 @@ export default function Card({
     );
 
     const revealHint = useCallback(() => reveal(true), [reveal]);
-    const onOtherKeyDown = useCallback((event: KeyboardEvent) => {
-        if (completed.current) return;
+    const onOtherKeyDown = useCallback(
+        (event: KeyboardEvent) => {
+            if (completed.current) return;
 
-        const current = phaseRef.current;
-        if (event.key === "Enter" && current !== "revealed") {
-            event.preventDefault();
-            if (current === "hidden") reveal(false);
-            else finish(false);
-        } else if (current === "revealed") {
-            if (event.key === "ArrowLeft" || event.key === "1") {
+            const current = phaseRef.current;
+            if (event.key === "Enter" && current !== "revealed") {
                 event.preventDefault();
-                finish(false);
-            } else if (event.key === "ArrowRight" || event.key === "2") {
-                event.preventDefault();
-                finish(true);
+                if (current === "hidden") reveal(false);
+                else finish(false);
+            } else if (current === "revealed") {
+                if (event.key === "ArrowLeft" || event.key === "1") {
+                    event.preventDefault();
+                    finish(false);
+                } else if (event.key === "ArrowRight" || event.key === "2") {
+                    event.preventDefault();
+                    finish(true);
+                }
             }
-        }
-    }, [reveal, finish]);
+        },
+        [reveal, finish],
+    );
 
     useSelectionShortcuts({
         questionRef,
@@ -178,6 +181,7 @@ export default function Card({
                         <Button
                             className="w-full"
                             disabled={disabled}
+                            iconName="arrowRight"
                             onClick={() => finish(false)}
                         >
                             次へ
