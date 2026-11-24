@@ -2248,3 +2248,14 @@ test("navigation and local question slides read the same duration and offset tok
     assert.match(readLayout("SlideTransition.tsx"), /const \{ timing, offset \} = getSlideMotion\(\)/);
     assert.doesNotMatch(fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8"), /duration=\{200\}/);
 });
+
+test("mobile solo slides use the full game width while keeping content gutters", () => {
+    const game = fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8");
+    const slide = fs.readFileSync(path.join(root, "components/layout/SlideTransition.tsx"), "utf8");
+    assert.match(game, /const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError/);
+    assert.match(game, /max-w-3xl w-full \$\{fullWidthQuestion \? "sm:px-4" : "px-4"\}/);
+    assert.match(game, /fullWidthQuestion \? "px-4 sm:px-0"/);
+    assert.match(game, /<div className="w-full px-4 sm:px-0">\{masteryProgress\}<\/div>/);
+    assert.match(slide, /w-full flex-col overflow-x-clip/);
+    assert.match(slide, /slideFrames\("push-in", live\.offsetWidth, offset\)/);
+});
