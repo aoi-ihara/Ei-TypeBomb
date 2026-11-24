@@ -11,12 +11,11 @@ export default async function AccountPage({
     backLink?: string;
     children: ReactNode;
 }) {
-    // The persistent layout may be reused on client navigation.
     await requireAccountUser();
 
     return (
         <Shell title={title} size="medium" showHeader={false} back={backLink}>
-            <div className="w-full px-4 sm:px-0">{children}</div>
+            {children}
         </Shell>
     );
 }

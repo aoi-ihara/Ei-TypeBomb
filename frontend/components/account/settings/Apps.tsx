@@ -124,7 +124,6 @@ export default function Apps() {
                             {app.url !== null ? (
                                 <Button
                                     onClick={() => router.push(app.url ?? "")}
-                                    padding="large"
                                     className="w-full"
                                     alignment="left"
                                 >
@@ -134,7 +133,6 @@ export default function Apps() {
                                 </Button>
                             ) : (
                                 <Button
-                                    padding="large"
                                     className="w-full"
                                     alignment="left"
                                     disabled={true}
@@ -147,7 +145,6 @@ export default function Apps() {
                             <Button
                                 variant="danger"
                                 iconName="trash"
-                                padding="large"
                                 loading={revokingId === app.clientId}
                                 onClick={() => void revoke(app.clientId)}
                             />
