@@ -70,7 +70,7 @@ test("beta access requires a verified user and an enabled flag on that user ID",
     assert.equal(await policy({ token: "" }).canAccessBeta("user"), false);
 });
 
-test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the beta gate", () => {
+test("only explicitly public routes and assets bypass the beta gate", () => {
     const { isPublicBetaPath } = policy();
     for (const allowed of [
         "/beta-access-denied",
@@ -86,7 +86,7 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/.well-known/oauth-authorization-server",
         "/.well-known/oauth-protected-resource/api/mcp",
         "/ingest/array/",
-        "/favicon-light.ico",
+        "/favicon.ico",
         "/favicon-dark.ico",
     ])
         assert.equal(isPublicBetaPath(allowed), true, allowed);
@@ -99,7 +99,7 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/api/mcp",
         "/some-room/edit",
         "/server-health",
-        "/favicon.ico",
+        "/favicon-light.ico",
         "/api/oauth-not-real",
     ])
         assert.equal(isPublicBetaPath(protectedPath), false, protectedPath);
