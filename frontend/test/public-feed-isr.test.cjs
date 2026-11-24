@@ -407,3 +407,13 @@ test("morph pushes reset scroll before redirect or missing-target cancellation",
     const nav = readFileSync(path.join(__dirname, "..", "components/layout/Navigation.tsx"), "utf8");
     assert.match(nav, /if \(request\.morph\) \{\s*stop\(request\);[\s\S]*?if \(request\.direction === "push"\) \{\s*window\.scrollTo\(\{ top: 0, behavior: "instant" \}\);\s*\}\s*if \(!matches\) \{ cancel\(\); return; \}[\s\S]*?if \(!destination \|\|[^}]+cancel\(\)/);
 });
+
+test("page morph crops both outgoing and incoming layers without changing page layout", () => {
+    const morph = readFileSync(path.join(__dirname, "..", "components/layout/page-morph.ts"), "utf8");
+    assert.match(morph, /const origin = intersectMorphRect\(fullOrigin, screenRect\(\)\)/);
+    assert.match(morph, /clipToVisible\(oldSource, fullOrigin, origin\)/);
+    assert.match(morph, /let target = intersectMorphRect\(fullTarget, screenRect\(\)\)/);
+    assert.match(morph, /clipToVisible\(destination, fullTarget, target\)/);
+    assert.match(morph, /const visible = intersectMorphRect\(next, screenRect\(\)\)/);
+    assert.match(morph, /const properties = \[[^\]]*"clip-path"\]/);
+});

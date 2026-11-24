@@ -2392,3 +2392,36 @@ test("page morph advances even when its destination changes every frame", () => 
         if (i === 20) assert.deepEqual({ ...state.rect }, target);
     }
 });
+
+test("page morph crops long rooms to the visible viewport in both directions", () => {
+    const { intersectMorphRect, visibleMorphTransform, morphClipInsets, advanceMorphRect } = load("components/layout/morph-motion.ts");
+    const screen = { x: 0, y: 0, width: 1200, height: 800 };
+    const room = { x: 250, y: 100, width: 896, height: 6000 };
+    const visible = intersectMorphRect(room, screen);
+    assert.deepEqual({ ...visible }, { x: 250, y: 100, width: 896, height: 700 });
+    assert.deepEqual(Array.from(morphClipInsets(room, visible)), [0, 0, 5300, 0]);
+    const card = { x: 250, y: 240, width: 432, height: 180 };
+    const opening = advanceMorphRect(card, visible, 0, 0.5).rect;
+    const closing = advanceMorphRect(visible, card, 0, 0.5).rect;
+    assert.equal(opening.height, 440);
+    assert.equal(closing.height, 440);
+    const scrolled = { ...room, y: -300 };
+    const scrolledVisible = intersectMorphRect(scrolled, screen);
+    assert.deepEqual({ ...scrolledVisible }, { x: 250, y: 0, width: 896, height: 800 });
+    assert.deepEqual(Array.from(morphClipInsets(scrolled, scrolledVisible)), [300, 0, 4900, 0]);
+    const transform = visibleMorphTransform(scrolled, scrolledVisible, card);
+    assert.equal(scrolled.x + transform.dx + (scrolledVisible.x - scrolled.x) * transform.sx, card.x);
+    assert.equal(scrolled.y + transform.dy + (scrolledVisible.y - scrolled.y) * transform.sy, card.y);
+    assert.equal(scrolledVisible.height * transform.sy, card.height);
+    assert.equal(intersectMorphRect({ ...card, y: 1000 }, screen).height, 0);
+});
+
+test("visible morph handoff is identity even when the full destination extends offscreen", () => {
+    const { intersectMorphRect, visibleMorphTransform, morphClipInsets } = load("components/layout/morph-motion.ts");
+    const full = { x: -20, y: -300, width: 1000, height: 6000 };
+    const screen = { x: 0, y: 0, width: 800, height: 700 };
+    const visible = intersectMorphRect(full, screen);
+    assert.deepEqual({ ...visible }, screen);
+    assert.deepEqual({ ...visibleMorphTransform(full, visible, visible) }, { sx: 1, sy: 1, dx: 0, dy: 0 });
+    assert.deepEqual(Array.from(morphClipInsets(full, visible)), [300, 180, 5000, 20]);
+});
