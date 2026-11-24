@@ -22,6 +22,6 @@ export const getRoomListData = cache(async (view: View) => {
         publicRooms,
         myRooms: myRooms ?? [],
         currentUser,
-        initialSavedRoomIds: savedRoomIds ?? [],
+        initialSavedRoomIds: savedRoomIds,
     };
 });

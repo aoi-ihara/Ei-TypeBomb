@@ -1,9 +1,10 @@
-import AccountSettings from "@/components/account/settings/AccountSettings";
-import { getUserDetails } from "@/lib/auth/session";
-import { redirect } from "next/navigation";
+import Apps from "@/components/account/settings/Apps";
+import AccountPage from "./AccountPage";
 
-export default async function Page() {
-    const user = await getUserDetails();
-    if (!user) redirect("/sign-in");
-    return <AccountSettings user={user} />;
+export default function Page() {
+    return (
+        <AccountPage title="アプリ">
+            <Apps />
+        </AccountPage>
+    );
 }
