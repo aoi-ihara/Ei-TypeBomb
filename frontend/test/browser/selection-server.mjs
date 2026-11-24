@@ -4,6 +4,8 @@ const bundle = async (beta) => build({
   entryPoints: ["test/browser/selection-fixture.tsx"],
   bundle: true,
   write: false,
+  outdir: "test/browser/.fixture-output",
+  entryNames: "fixture",
   jsx: "automatic",
   tsconfig: "tsconfig.json",
   define: { "process.env.NODE_ENV": '"development"', "process.env.NEXT_PUBLIC_BETA_ENVIRONMENT": JSON.stringify(beta) },
@@ -40,15 +42,24 @@ const bundle = async (beta) => build({
 });
 const result = await bundle("true");
 const production = await bundle("false");
+function output(bundle, extension) {
+  return bundle.outputFiles.find(file => file.path.endsWith(extension))?.text ?? "";
+}
 createServer((req, res) => {
-  res.setHeader(
-    "Content-Type",
-    req.url?.endsWith(".js") ? "text/javascript" : "text/html",
-  );
-  res.end(
-    req.url === "/bundle.js"
-      ? result.outputFiles[0].text
-      : req.url === "/production.js" ? production.outputFiles[0].text
-      : `<!doctype html><html><body><div id="root"></div><script src="${req.url === "/production" ? "/production.js" : "/bundle.js"}"></script></body></html>`,
-  );
+  const pathname = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+  const isProduction = pathname === "/production" || pathname.startsWith("/production.");
+  const buildResult = isProduction ? production : result;
+  if (pathname === "/bundle.js" || pathname === "/production.js") {
+    res.setHeader("Content-Type", "text/javascript");
+    res.end(output(buildResult, ".js"));
+    return;
+  }
+  if (pathname === "/bundle.css" || pathname === "/production.css") {
+    res.setHeader("Content-Type", "text/css");
+    res.end(output(buildResult, ".css"));
+    return;
+  }
+  const asset = isProduction ? "/production" : "/bundle";
+  res.setHeader("Content-Type", "text/html");
+  res.end(`<!doctype html><html><head><link rel="stylesheet" href="${asset}.css"></head><body><div id="root"></div><script src="${asset}.js"></script></body></html>`);
 }).listen(3101, "127.0.0.1");

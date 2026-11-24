@@ -1,4 +1,5 @@
 "use client";
+import { createSpeechLanguageResolver } from "@/lib/speech-language";
 import { getMasteryGraph } from "@/lib/playground/mastery-graph";
 import { LEARNING_DIAGNOSTICS_ENABLED, captureDecision, diagnosticJSON, type CapturedDecision, type AnswerEvent } from "@/lib/playground/diagnostics";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
@@ -204,6 +205,7 @@ export default function Client({
         [sourceRoom],
     );
     const items = useMemo(() => room.items ?? [], [room.items]);
+    const getSpeechLanguage = useMemo(() => createSpeechLanguageResolver(items), [items]);
     const masteryItemIds = useMemo(() => items.map(item => item.id), [items]);
     const itemModes = useMemo(() => Object.fromEntries(items.map(item =>
         [item.id, getEffectiveAnswerMode(item, answerMode)])), [items, answerMode]);
@@ -865,7 +867,7 @@ export default function Client({
             const utterance = new SpeechSynthesisUtterance(
                 presentedItem.answer,
             );
-            utterance.lang = "en-US";
+            utterance.lang = getSpeechLanguage(presentedItem.answer, "answer", window.navigator?.language);
             answerSpeechRef.current = utterance;
             const finishAnswerSpeech = () => {
                 if (answerSpeechRef.current !== utterance) return;
@@ -890,6 +892,7 @@ export default function Client({
         isPaused,
         soundEffects,
         readAnswer,
+        getSpeechLanguage,
         resolveTurnWithItem,
         room.id,
         setTrackedItem,
@@ -925,7 +928,7 @@ export default function Client({
         synthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "ja-JP";
+        utterance.lang = getSpeechLanguage(text, "prompt", window.navigator?.language);
         synthesis.speak(utterance);
 
         // Do not cancel the answer utterance when the item changes.
@@ -937,6 +940,7 @@ export default function Client({
         isStarted,
         itemPresentationKey,
         readQuestion,
+        getSpeechLanguage,
         voiceSettingsReady,
         isPaused,
         answerSpeechVersion,
