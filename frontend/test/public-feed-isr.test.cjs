@@ -193,7 +193,7 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     // Keep the header dimensions stable without requiring an exact class order.
     assert.match(header, /<header className="[^"]*\bw-full\b[^"]*\bshrink-0\b[^"]*\bjustify-between\b[^"]*\bpx-4\b[^"]*\bpy-4\b/);
     assert.match(header, /className="flex min-w-0 flex-1 gap-4"/);
-    assert.match(header, /className="min-w-0 truncate font-extrabold"/);
+    assert.match(header, /<span className="(?=[^"]*\bmin-w-0\b)(?=[^"]*\btruncate\b)(?=[^"]*\bfont-extrabold\b)[^"]*"/);
     assert.doesNotMatch(header, /min-h-\[|absolute right-4/);
     assert.match(source, /disabled=\{viewerLoading \|\| viewerError\}/);
     assert.match(button, /opacity-50 pointer-events-none/);
