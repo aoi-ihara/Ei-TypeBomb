@@ -2,6 +2,7 @@
 
 import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import { createMorphClock, morphLerp } from "../layout/morph-motion";
 
 export type MorphProps = {
     first: ReactNode;
@@ -142,23 +143,18 @@ export default function Morph({ first, last, state, onSettled }: MorphProps) {
                 onSettledRef.current?.();
                 return;
             }
-            clock = new Animation(
-                new KeyframeEffect(root, [], {
-                    duration,
-                    easing: css.getPropertyValue("--ease-etb").trim() || "ease",
-                    fill: "both",
-                }),
-                document.timeline,
-            );
+            clock = createMorphClock(root, {
+                duration,
+                easing: css.getPropertyValue("--ease-etb").trim() || "ease",
+            });
             setPointerEvents(true);
-            clock.play();
             paint(start, true);
             notifyCursor();
             const tick = () => {
                 const progress =
                     clock?.effect?.getComputedTiming().progress ?? 0;
                 const done = Number(clock?.currentTime ?? 0) >= duration;
-                const lerp = (a: number, b: number) => a + (b - a) * progress;
+                const lerp = (a: number, b: number) => morphLerp(a, b, progress);
                 paint(
                     done
                         ? target

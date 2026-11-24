@@ -2353,3 +2353,15 @@ test("native slide cursor resolves the new DOM when captured content cannot be h
     cursor.endNativeSlideCursor();
     assert.equal(cursor.getSlideCursorTarget(120, 30), null);
 });
+
+test("shared morph rectangles interpolate both axes and retarget without jumping", () => {
+    const { interpolateMorphRect, sameMorphRect } = load("components/layout/morph-motion.ts");
+    const start = { x: 20, y: 100, width: 300, height: 120 };
+    const target = { x: 10, y: 20, width: 700, height: 520 };
+    const middle = interpolateMorphRect(start, target, 0.5);
+    assert.deepEqual({ ...middle }, { x: 15, y: 60, width: 500, height: 320 });
+    const resized = { ...target, height: 620 };
+    assert.equal(sameMorphRect(target, resized), false);
+    assert.deepEqual({ ...interpolateMorphRect(middle, resized, 0) }, { ...middle });
+    assert.deepEqual({ ...interpolateMorphRect(middle, resized, 1) }, resized);
+});
