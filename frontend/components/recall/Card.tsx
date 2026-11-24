@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import "./card.css";
@@ -37,6 +37,8 @@ export default function Card({
     const phaseRef = useRef<Phase>("hidden");
     const completed = useRef(false);
     const questionRef = useRef<HTMLDivElement>(null);
+    const nextButtonRef = useRef<HTMLDivElement>(null);
+    const moveFocusToNext = useRef(false);
     const clock = useRef(createActiveResponseClock());
     const responseMs = useRef<number | null>(null);
     const disabled = currentInput !== null || isPaused;
@@ -64,12 +66,22 @@ export default function Card({
             const now = performance.now();
             responseMs.current = readActiveResponseMs(clock.current, now);
             setResponseClockActive(clock.current, false, now);
+            // WebKit can retain focus on the disabled mask after it is hidden.
+            // Move focus to the replacement action only if this question owned it.
+            moveFocusToNext.current = unknown &&
+                questionRef.current?.contains(document.activeElement) === true;
             const next = unknown ? "unknown" : "revealed";
             phaseRef.current = next;
             setPhase(next);
         },
         [disabled],
     );
+
+    useLayoutEffect(() => {
+        if (phase !== "unknown" || !moveFocusToNext.current) return;
+        moveFocusToNext.current = false;
+        nextButtonRef.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    }, [phase]);
 
     const finish = useCallback(
         (remembered: boolean) => {
@@ -167,7 +179,7 @@ export default function Card({
                         }}
                     />
                 </div>
-                <div className="min-h-12 w-full">
+                <div ref={nextButtonRef} className="min-h-12 w-full">
                     {phase === "hidden" ? (
                         <Button
                             className="w-full"

@@ -86,7 +86,9 @@ test("card double Space uses the same physical key sequence as selection", async
     await page.keyboard.press("Space");
     await expect(page.getByText(answer, { exact: true })).toBeVisible();
     await expect(correct(page)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "次へ", exact: true })).toBeEnabled();
+    const next = page.getByRole("button", { name: "次へ", exact: true });
+    await expect(next).toBeEnabled();
+    await expect(next).toBeFocused();
     await page.keyboard.press("Enter");
     await expect.poll(() => recognition(page, answer)).toMatchObject({ attempts: 1, correct: 0 });
     expect((await recognition(page, answer)).unknownCount ?? 0).toBe(0);

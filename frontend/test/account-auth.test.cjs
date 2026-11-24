@@ -342,8 +342,8 @@ test("navigation distance follows responsive Shell width without narrowing its v
     assert.match(navigation, /slideFrames\(request\.direction === "push" \? "push-in" : "under-in", width, offset\)/);
     assert.match(css, /translateX\(var\(--etb-navigation-new-width, 100%\)\)/);
     assert.match(css, /translateX\(var\(--etb-navigation-old-width, 100%\)\)/);
-    assert.match(css, /calc\(var\(--etb-navigation-old-width, 100%\) \* var\(--etb-slide-offset\) \* -1\)/);
-    assert.match(css, /calc\(var\(--etb-navigation-new-width, 100%\) \* var\(--etb-slide-offset\) \* -1\)/);
+    assert.match(css, /calc\(\s*var\(--etb-navigation-old-width, 100%\)\s*\*\s*var\(--etb-slide-offset\)\s*\*\s*-1\s*\)/);
+    assert.match(css, /calc\(\s*var\(--etb-navigation-new-width, 100%\)\s*\*\s*var\(--etb-slide-offset\)\s*\*\s*-1\s*\)/);
 });
 
 test("native navigation keeps the cursor separate and refreshes on destination commit", () => {

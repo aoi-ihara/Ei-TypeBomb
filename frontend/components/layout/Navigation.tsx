@@ -30,8 +30,12 @@ type Request = {
     timer?: ReturnType<typeof setTimeout>;
     complete?: () => void;
     transition?: ViewTransition;
+    viewport?: HTMLElement;
     morph?: { source: HTMLElement; key?: string; destination?: HTMLElement };
 };
+
+// View transitions are document-wide, even when Navigation providers are nested.
+let documentTransition: { request: Request; cancel: () => void } | null = null;
 
 const NavigationContext = createContext<Navigate | null>(null);
 const RootNavigationContext = createContext<Navigate | null>(null);
@@ -43,11 +47,14 @@ function navigationWidth(viewport: HTMLElement) {
     return shell?.offsetWidth || viewport.clientWidth;
 }
 
-function clearTransitionStyles() {
+function releaseDocumentTransition(request: Request) {
+    if (documentTransition?.request !== request) return;
+    documentTransition = null;
     const root = document.documentElement;
     delete root.dataset.etbNavigation;
     root.style.removeProperty("--etb-navigation-old-width");
     root.style.removeProperty("--etb-navigation-new-width");
+    endNativeSlideCursor();
 }
 
 export function useNavigation(scope: "local" | "root" = "local") {
@@ -81,19 +88,16 @@ export default function Navigation({ children, root = false }: { children: React
     function cancel() {
         if (pending.current) stop(pending.current, true);
         pending.current = null;
-        if (active.current) {
-            stop(active.current, true);
-            clearMorph(active.current);
-        }
+        const request = active.current;
         active.current = null;
+        if (request) {
+            stop(request, true);
+            clearMorph(request);
+            releaseDocumentTransition(request);
+            request.viewport?.style.removeProperty("view-transition-name");
+        }
         animation.current?.cancel();
         animation.current = null;
-        // Nested navigation instances must not clear another instance’s transition.
-        if (viewport.current?.style.viewTransitionName === "etb-navigation-content") {
-            clearTransitionStyles();
-            viewport.current.style.viewTransitionName = "";
-            endNativeSlideCursor();
-        }
     }
 
     useEffect(() => {
@@ -172,6 +176,10 @@ export default function Navigation({ children, root = false }: { children: React
         pending.current = request;
 
         if (typeof document.startViewTransition === "function") {
+            // Retire the old owner synchronously before assigning any shared names.
+            documentTransition?.cancel();
+            documentTransition = { request, cancel };
+            request.viewport = node;
             const root = document.documentElement;
             const width = navigationWidth(node);
             if (width > 0) {
@@ -207,9 +215,8 @@ export default function Navigation({ children, root = false }: { children: React
                     if (active.current !== request) return;
                     active.current = null;
                     clearMorph(request);
-                    clearTransitionStyles();
+                    releaseDocumentTransition(request);
                     node.style.viewTransitionName = "";
-                    endNativeSlideCursor();
                 };
                 void transition.ready.catch(() => {});
                 void transition.finished.then(cleanup, cleanup);
@@ -218,7 +225,7 @@ export default function Navigation({ children, root = false }: { children: React
                 active.current = null;
                 clearMorph(request);
                 request.morph = undefined;
-                clearTransitionStyles();
+                releaseDocumentTransition(request);
                 node.style.viewTransitionName = "";
             }
         }

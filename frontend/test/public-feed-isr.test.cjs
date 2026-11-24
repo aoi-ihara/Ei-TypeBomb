@@ -389,3 +389,10 @@ test("room detail back morph selects only the original room card", () => {
     assert.match(nav, /if \(request.direction === "pop"\) \{\s*\/\/[^\n]+\n\s*destination.scrollIntoView/);
     assert.match(nav, /if \(!destination \|\|[^}]+stop\(request, true\)/);
 });
+
+test("nested navigation releases document state only for the current transition owner", () => {
+    const nav = readFileSync(path.join(__dirname, "..", "components/layout/Navigation.tsx"), "utf8");
+    assert.match(nav, /function releaseDocumentTransition\(request: Request\) \{\s*if \(documentTransition\?\.request !== request\) return;\s*documentTransition = null;/);
+    assert.match(nav, /documentTransition\?\.cancel\(\);\s*documentTransition = \{ request, cancel \};/);
+    assert.match(nav, /clearMorph\(request\);\s*releaseDocumentTransition\(request\);\s*node.style.viewTransitionName = "";/);
+});
