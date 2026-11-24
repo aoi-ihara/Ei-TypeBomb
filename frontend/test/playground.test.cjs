@@ -2286,3 +2286,64 @@ test("question slide distance uses the widest visible question element and both 
     desktop = false;
     assert.equal(getQuestionSlideDistance(make(390, 100, 200)), 390);
 });
+
+test("slide cursor uses destination geometry and restores animated transforms", async () => {
+    let transform = "translateX(12px)";
+    let priority = "";
+    let refreshes = 0;
+    let finish;
+    const animation = { playState: "running", finished: new Promise(resolve => { finish = resolve; }) };
+    const rect = { left: 100, top: 20, width: 80, height: 30 };
+    const button = { closest: () => button, getBoundingClientRect: () => rect };
+    const element = {
+        isConnected: true,
+        animate: () => animation,
+        style: {
+            getPropertyValue: () => transform,
+            getPropertyPriority: () => priority,
+            setProperty: (_name, value, important = "") => { transform = value; priority = important; },
+            removeProperty: () => { transform = ""; priority = ""; },
+        },
+    };
+    const cursor = load("components/layout/slide-cursor.ts", {
+        window: { dispatchEvent: () => { refreshes++; } },
+        Event: class {},
+        document: {
+            elementFromPoint: () => {
+                assert.equal(transform, "none");
+                assert.equal(priority, "important");
+                return button;
+            },
+        },
+    });
+    cursor.animateSlideEntrance(element, [], {});
+    assert.equal(refreshes, 1, "refresh happens at animation start");
+    assert.equal(cursor.getSlideCursorTarget(120, 30).rect, rect);
+    assert.equal(transform, "translateX(12px)");
+    assert.equal(priority, "");
+    assert.equal(cursor.isSlideCursorActive(), true);
+    finish();
+    await Promise.resolve();
+    assert.equal(cursor.isSlideCursorActive(), false);
+    assert.equal(refreshes, 2);
+});
+
+test("native slide cursor resolves the new DOM when captured content cannot be hit", () => {
+    const rect = { left: 100, top: 20, right: 180, bottom: 50, width: 80, height: 30 };
+    const button = {
+        closest: selector => selector.includes("inert") ? null : button,
+        getClientRects: () => [rect],
+        getBoundingClientRect: () => rect,
+    };
+    const cursor = load("components/layout/slide-cursor.ts", {
+        window: { dispatchEvent: () => {} },
+        Event: class {},
+        getComputedStyle: () => ({ visibility: "visible", pointerEvents: "auto" }),
+        document: { elementFromPoint: () => null, querySelectorAll: () => [button] },
+    });
+    cursor.beginNativeSlideCursor();
+    assert.equal(cursor.getSlideCursorTarget(120, 30).element, button);
+    assert.equal(cursor.getSlideCursorTarget(90, 30), null);
+    cursor.endNativeSlideCursor();
+    assert.equal(cursor.getSlideCursorTarget(120, 30), null);
+});

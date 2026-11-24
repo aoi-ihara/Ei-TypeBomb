@@ -1,5 +1,25 @@
 @import "./slide-motion.css";
 
+/* Keep the cursor in its own live layer rather than translating it with a
+ * page snapshot. Its full-viewport box stays fixed while the spring moves. */
+html[data-etb-navigation] [data-slide-cursor] {
+    view-transition-name: etb-navigation-cursor;
+}
+html[data-etb-navigation]::view-transition-group(etb-navigation-cursor) {
+    animation: none;
+    z-index: 100;
+    pointer-events: none;
+}
+html[data-etb-navigation]::view-transition-image-pair(etb-navigation-cursor),
+html[data-etb-navigation]::view-transition-new(etb-navigation-cursor) {
+    animation: none;
+    mix-blend-mode: normal;
+    pointer-events: none;
+}
+html[data-etb-navigation]::view-transition-old(etb-navigation-cursor) {
+    display: none;
+}
+
 /* Only explicitly marked hierarchical navigation uses these snapshots. */
 html[data-etb-navigation]::view-transition-group(root),
 html[data-etb-navigation]::view-transition-new(root) {

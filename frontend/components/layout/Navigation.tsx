@@ -11,6 +11,7 @@ import {
 } from "react";
 import "./navigation.css";
 import { slideFrames, getSlideMotion, prefersReducedMotion } from "./slide-motion";
+import { animateSlideEntrance, beginNativeSlideCursor, endNativeSlideCursor } from "./slide-cursor";
 
 export type NavigationDirection = "push" | "pop";
 
@@ -72,6 +73,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
         animation.current = null;
         clearTransitionStyles();
         if (viewport.current) viewport.current.style.viewTransitionName = "";
+        endNativeSlideCursor();
     }
 
     useEffect(() => {
@@ -102,6 +104,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
         if (matches && request.transition && width > 0) {
             document.documentElement.style.setProperty("--etb-navigation-new-width", `${width}px`);
         }
+        if (matches && request.transition) beginNativeSlideCursor();
         stop(request, !matches);
         if (request.transition || !matches ||
             prefersReducedMotion()) return;
@@ -110,10 +113,11 @@ export default function Navigation({ children }: { children: ReactNode }) {
         if (!width) return;
         animation.current?.cancel();
         const { timing, offset } = getSlideMotion();
-        animation.current = content.current?.animate(
+        animation.current = content.current ? animateSlideEntrance(
+            content.current,
             slideFrames(request.direction === "push" ? "push-in" : "under-in", width, offset),
             timing,
-        ) ?? null;
+        ) : null;
     }, [pathname]);
 
     const navigate: Navigate = (href, direction, preventDefault) => {
@@ -159,6 +163,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
                     active.current = null;
                     clearTransitionStyles();
                     node.style.viewTransitionName = "";
+                    endNativeSlideCursor();
                 };
                 void transition.ready.catch(() => {});
                 void transition.finished.then(cleanup, cleanup);
