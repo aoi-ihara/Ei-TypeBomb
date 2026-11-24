@@ -74,6 +74,7 @@ export default function Shell({
                 )}
 
                 <div
+                    data-navigation-shell-width
                     className={`pb-[50vh] ${
                         size == "small"
                             ? "max-w-xs"

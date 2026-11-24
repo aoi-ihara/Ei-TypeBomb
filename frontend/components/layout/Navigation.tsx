@@ -30,6 +30,19 @@ type Request = {
 const NavigationContext = createContext<Navigate | null>(null);
 const normalize = (path: string) => path.replace(/\/+$/, "") || "/";
 
+// Measure the responsive Shell content, not the full clipping viewport.
+function navigationWidth(viewport: HTMLElement) {
+    const shell = viewport.querySelector<HTMLElement>("[data-navigation-shell-width]");
+    return shell?.offsetWidth || viewport.clientWidth;
+}
+
+function clearTransitionStyles() {
+    const root = document.documentElement;
+    delete root.dataset.etbNavigation;
+    root.style.removeProperty("--etb-navigation-old-width");
+    root.style.removeProperty("--etb-navigation-new-width");
+}
+
 export function useNavigation() {
     return useContext(NavigationContext);
 }
@@ -56,7 +69,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
         active.current = null;
         animation.current?.cancel();
         animation.current = null;
-        delete document.documentElement.dataset.etbNavigation;
+        clearTransitionStyles();
         if (viewport.current) viewport.current.style.viewTransitionName = "";
     }
 
@@ -84,15 +97,21 @@ export default function Navigation({ children }: { children: ReactNode }) {
         if (!request || !pathname) return;
         pending.current = null;
         const matches = normalize(pathname) === request.target;
+        const width = viewport.current ? navigationWidth(viewport.current) : 0;
+        if (matches && request.transition && width > 0) {
+            document.documentElement.style.setProperty("--etb-navigation-new-width", `${width}px`);
+        }
         stop(request, !matches);
         if (request.transition || !matches ||
             window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
         // Older browsers still get a directional entrance without snapshots.
+        if (!width) return;
+        const offset = request.direction === "push" ? width : -width / 2;
         animation.current?.cancel();
         animation.current = content.current?.animate(
             [
-                { transform: `translateX(${request.direction === "push" ? "100%" : "-30%"})` },
+                { transform: `translateX(${offset}px)` },
                 { transform: "translateX(0)" },
             ],
             { duration: 300, easing: "cubic-bezier(0.25, 0.8, 0.25, 1)" },
@@ -112,8 +131,14 @@ export default function Navigation({ children }: { children: ReactNode }) {
         pending.current = request;
 
         if (typeof document.startViewTransition === "function") {
+            const root = document.documentElement;
+            const width = navigationWidth(node);
+            if (width > 0) {
+                root.style.setProperty("--etb-navigation-old-width", `${width}px`);
+                root.style.setProperty("--etb-navigation-new-width", `${width}px`);
+            }
             node.style.viewTransitionName = "etb-navigation-content";
-            document.documentElement.dataset.etbNavigation = direction;
+            root.dataset.etbNavigation = direction;
             active.current = request;
             try {
                 const transition = document.startViewTransition(async () => {
@@ -134,7 +159,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
                 const cleanup = () => {
                     if (active.current !== request) return;
                     active.current = null;
-                    delete document.documentElement.dataset.etbNavigation;
+                    clearTransitionStyles();
                     node.style.viewTransitionName = "";
                 };
                 void transition.ready.catch(() => {});
@@ -142,7 +167,7 @@ export default function Navigation({ children }: { children: ReactNode }) {
                 return;
             } catch {
                 active.current = null;
-                delete document.documentElement.dataset.etbNavigation;
+                clearTransitionStyles();
                 node.style.viewTransitionName = "";
             }
         }

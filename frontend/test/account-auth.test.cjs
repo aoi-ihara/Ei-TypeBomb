@@ -328,3 +328,20 @@ test("only nested security links opt into directional navigation", () => {
     assert.match(shell, /navigation=\{back \? "pop" : undefined\}/);
     assert.doesNotMatch(sidebar, /navigation="(?:push|pop)"/);
 });
+
+test("navigation distance follows responsive Shell width without narrowing its viewport", () => {
+    const readLayout = (file) => readFileSync(
+        new URL("../components/layout/" + file, `file://${__filename}`), "utf8",
+    );
+    const shell = readLayout("Shell.tsx");
+    const navigation = readLayout("Navigation.tsx");
+    const css = readLayout("navigation.css");
+    assert.match(shell, /data-navigation-shell-width\s+className=/);
+    assert.match(navigation, /shell\?\.offsetWidth \|\| viewport\.clientWidth/);
+    assert.match(navigation, /min-w-0 w-full overflow-x-clip/);
+    assert.match(navigation, /direction === "push" \? width : -width \/ 2/);
+    assert.match(css, /translateX\(var\(--etb-navigation-new-width, 100%\)\)/);
+    assert.match(css, /translateX\(var\(--etb-navigation-old-width, 100%\)\)/);
+    assert.match(css, /calc\(var\(--etb-navigation-old-width, 100%\) \* -0\.5\)/);
+    assert.match(css, /calc\(var\(--etb-navigation-new-width, 100%\) \* -0\.5\)/);
+});
