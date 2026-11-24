@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
 import "./card.css";
-import { isGameSpaceKeyDown } from "@/lib/selection-shortcut";
+import { useSelectionShortcuts } from "@/lib/use-selection-shortcuts";
 import {
     createActiveResponseClock,
     readActiveResponseMs,
@@ -91,59 +91,34 @@ export default function Card({
         [disabled, onAnswer, onSuccess],
     );
 
-    useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (
-                disabled ||
-                completed.current ||
-                event.defaultPrevented ||
-                event.repeat ||
-                event.isComposing ||
-                event.altKey ||
-                event.ctrlKey ||
-                event.metaKey ||
-                event.shiftKey
-            )
-                return;
-            const target = event.target;
-            if (
-                target instanceof HTMLElement &&
-                (target.isContentEditable ||
-                    target.closest("input, textarea, select"))
-            )
-                return;
-            const interactive =
-                target instanceof Element &&
-                target.closest(
-                    "button, a, summary, [role='button'], [role='link']",
-                );
-            if (interactive && !questionRef.current?.contains(interactive))
-                return;
-            // Focused buttons retain their standard Space/Enter activation.
-            // When focus is on the page, Space reveals or advances an unknown.
-            if (isGameSpaceKeyDown(event) && !interactive) {
-                if (phaseRef.current === "hidden") {
-                    event.preventDefault();
-                    reveal(false);
-                } else if (phaseRef.current === "unknown") {
-                    event.preventDefault();
-                    finish(false);
-                }
-            } else if (event.key === "ArrowLeft") {
+    const revealHint = useCallback(() => reveal(true), [reveal]);
+    const onOtherKeyDown = useCallback((event: KeyboardEvent) => {
+        if (completed.current) return;
+
+        const current = phaseRef.current;
+        if (event.key === "Enter" && current !== "revealed") {
+            event.preventDefault();
+            if (current === "hidden") reveal(false);
+            else finish(false);
+        } else if (current === "revealed") {
+            if (event.key === "ArrowLeft" || event.key === "1") {
                 event.preventDefault();
-                if (phaseRef.current === "hidden") reveal(true);
-                else if (phaseRef.current === "revealed") finish(false);
-            } else if (
-                event.key === "ArrowRight" &&
-                phaseRef.current === "revealed"
-            ) {
+                finish(false);
+            } else if (event.key === "ArrowRight" || event.key === "2") {
                 event.preventDefault();
                 finish(true);
             }
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [disabled, reveal, finish]);
+        }
+    }, [reveal, finish]);
+
+    useSelectionShortcuts({
+        questionRef,
+        disabled,
+        allowHint: true,
+        hintUsed: !hidden,
+        revealHint,
+        onOtherKeyDown,
+    });
 
     return (
         <div
@@ -166,7 +141,7 @@ export default function Card({
                 <div className="card-answer relative grid w-full place-items-center">
                     <div
                         aria-live="polite"
-                        className={`card-answer-text col-start-1 row-start-1 max-h-full max-w-full overflow-y-auto whitespace-pre-wrap wrap-break-word text-center font-serif text-xl leading-loose transition-opacity duration-(--duration-etb) motion-reduce:transition-none ${hidden ? "opacity-0" : "opacity-100"}`}
+                        className={`card-answer-text col-start-1 row-start-1 max-h-full max-w-full overflow-y-auto whitespace-pre-wrap wrap-break-word text-center font-serif text-xl leading-loose ${hidden ? "opacity-0" : "opacity-100"}`}
                         data-cursor={hidden ? undefined : "text"}
                     >
                         {hidden ? null : item.answer}
@@ -182,7 +157,7 @@ export default function Card({
                             hidden ? (disabled ? "2" : "0") : undefined
                         }
                         onClick={() => reveal(false)}
-                        className={`card-mask col-start-1 row-start-1 h-12 w-56 max-w-full rounded-lg bg-(--color-background-secondary) transition-opacity duration-(--duration-etb) motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-600 ${hidden ? "cursor-pointer opacity-100" : "pointer-events-none opacity-0"}`}
+                        className={`card-mask col-start-1 row-start-1 h-12 w-56 max-w-full rounded-lg bg-(--color-background-secondary) focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-600 ${hidden ? "cursor-pointer opacity-100" : "pointer-events-none opacity-0"}`}
                         style={{
                             backgroundImage:
                                 "repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-foreground) 13%, transparent) 5px 7px)",
