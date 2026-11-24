@@ -16,9 +16,7 @@ export async function generateMetadata({
         return {};
     }
 
-    const title = room.title?.trim()
-        ? `${room.title.trim()} - Ei-TypeBomb`
-        : "Ei-TypeBomb";
+    const title = room.title?.trim() ? `${room.title.trim()} - ETB` : "ETB";
     const description = room.explanation?.trim() || DEFAULT_DESCRIPTION;
 
     return {
