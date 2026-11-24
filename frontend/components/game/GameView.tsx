@@ -289,7 +289,6 @@ export default function GameView({
                     <SlideTransition
                         transitionKey={itemPresentationKey}
                         enabled={slideQuestion && !isPaused}
-                        duration={200}
                     >
                         {questionContent}
                     </SlideTransition>

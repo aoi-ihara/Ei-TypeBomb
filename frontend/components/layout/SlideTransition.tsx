@@ -1,14 +1,13 @@
 "use client";
 
 import { Component, createRef, type ReactNode } from "react";
-import { prefersReducedMotion, slideFrames, slideTiming } from "./slide-motion";
+import { prefersReducedMotion, slideFrames, getSlideMotion } from "./slide-motion";
 import "./slide-motion.css";
 
 type Props = {
     children: ReactNode;
     transitionKey: number | string;
     enabled?: boolean;
-    duration?: number;
 };
 
 type Snapshot = {
@@ -74,13 +73,13 @@ export default class SlideTransition extends Component<Props, object, Snapshot |
         });
         overlay.appendChild(node);
 
-        const timing = slideTiming(this.props.duration ?? 300);
-        const outgoing = node.animate(slideFrames("under-out", width), {
+        const { timing, offset } = getSlideMotion();
+        const outgoing = node.animate(slideFrames("under-out", width, offset), {
             ...timing,
             fill: "forwards",
         });
         this.outgoing = outgoing;
-        this.incoming = live.animate(slideFrames("push-in", live.offsetWidth), timing);
+        this.incoming = live.animate(slideFrames("push-in", live.offsetWidth, offset), timing);
         const finish = () => {
             if (this.outgoing !== outgoing) return;
             node.remove();

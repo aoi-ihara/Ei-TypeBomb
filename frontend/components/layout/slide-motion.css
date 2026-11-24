@@ -1,3 +1,5 @@
 :root {
+    --etb-slide-duration: 200ms;
+    --etb-slide-offset: 0.5;
     --etb-slide-easing: cubic-bezier(0.25, 0.8, 0.25, 1);
 }

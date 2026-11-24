@@ -10,7 +10,7 @@ import {
     type ReactNode,
 } from "react";
 import "./navigation.css";
-import { slideFrames, slideTiming, prefersReducedMotion } from "./slide-motion";
+import { slideFrames, getSlideMotion, prefersReducedMotion } from "./slide-motion";
 
 export type NavigationDirection = "push" | "pop";
 
@@ -109,9 +109,10 @@ export default function Navigation({ children }: { children: ReactNode }) {
         // Older browsers still get a directional entrance without snapshots.
         if (!width) return;
         animation.current?.cancel();
+        const { timing, offset } = getSlideMotion();
         animation.current = content.current?.animate(
-            slideFrames(request.direction === "push" ? "push-in" : "under-in", width),
-            slideTiming(300),
+            slideFrames(request.direction === "push" ? "push-in" : "under-in", width, offset),
+            timing,
         ) ?? null;
     }, [pathname]);
 

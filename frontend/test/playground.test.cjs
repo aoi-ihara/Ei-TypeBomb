@@ -2223,3 +2223,28 @@ test("shared slide motion scales to the rendered width", () => {
     assert.deepEqual(positions("push-in", 448), ["translateX(448px)", "translateX(0)"]);
     assert.deepEqual(positions("pop-out", 448), ["translateX(0)", "translateX(448px)"]);
 });
+
+test("navigation and local question slides read the same duration and offset tokens", () => {
+    const readLayout = (file) => fs.readFileSync(path.join(root, "components/layout", file), "utf8");
+    const css = readLayout("slide-motion.css");
+    const tokens = Object.fromEntries(Array.from(css.matchAll(/(--etb-slide-[\w-]+):\s*([^;]+);/g), match => [match[1], match[2]]));
+    const { getSlideMotion, slideFrames } = load("components/layout/slide-motion.ts", {
+        document: { documentElement: {} },
+        getComputedStyle: () => ({
+            getPropertyValue: (name) => tokens[name] ?? "",
+        }),
+    });
+    const defaults = getSlideMotion();
+    assert.equal(defaults.timing.duration, 200);
+    assert.equal(defaults.timing.easing, tokens["--etb-slide-easing"]);
+    assert.equal(defaults.offset, 0.5);
+    tokens["--etb-slide-duration"] = "0.25s";
+    tokens["--etb-slide-offset"] = "0.25";
+    const changed = getSlideMotion();
+    assert.equal(changed.timing.duration, 250);
+    assert.equal(slideFrames("under-out", 320, changed.offset)[1].transform, "translateX(-80px)");
+    assert.match(readLayout("navigation.css"), /animation-duration: var\(--etb-slide-duration\)/);
+    assert.match(readLayout("Navigation.tsx"), /const \{ timing, offset \} = getSlideMotion\(\)/);
+    assert.match(readLayout("SlideTransition.tsx"), /const \{ timing, offset \} = getSlideMotion\(\)/);
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8"), /duration=\{200\}/);
+});
