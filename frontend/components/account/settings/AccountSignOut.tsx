@@ -5,9 +5,16 @@ import { unstable_rethrow, useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import Button from "@/components/ui/Button";
 import { signOut } from "@/lib/auth/sign-out";
-import { identifyPostHogUser, type PostHogIdentityUser } from "@/lib/analytics/posthog-identity";
+import {
+    identifyPostHogUser,
+    type PostHogIdentityUser,
+} from "@/lib/analytics/posthog-identity";
 
-export default function AccountSignOut({ user }: { user: PostHogIdentityUser }) {
+export default function AccountSignOut({
+    user,
+}: {
+    user: PostHogIdentityUser;
+}) {
     const router = useRouter();
 
     useEffect(() => {
@@ -32,6 +39,7 @@ export default function AccountSignOut({ user }: { user: PostHogIdentityUser }) 
             onClick={handleSignOut}
             className="w-fit shrink-0 sm:w-full"
             iconName="logOut"
+            padding="small"
             alignment="left"
         >
             サインアウト
