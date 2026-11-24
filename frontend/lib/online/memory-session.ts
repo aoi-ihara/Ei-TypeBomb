@@ -103,57 +103,12 @@ export type OnlineMemorySession = {
     modes?: Record<string, AnswerModeResult>;
     choiceCount?: number;
     scheduler: SchedulerState;
-    pending: Map<string, ItemMemoryState>;
+    enqueue?: (memory: ItemMemoryState) => void;
 };
 
 // Guest online play intentionally shares the exact same per-room storage as Playground.
 const guestKey = (roomId: string) => `playground-memory:guest:${roomId}`;
 const guestUserId = "playground-guest";
-const pendingKey = (userId: string, roomId: string) =>
-    `playground-pending:${userId}:${roomId}`;
-
-// Recover unsent rows from either learning mode after navigation or reload.
-export const loadOnlinePendingMemory = (
-    roomId: string,
-    userId: string,
-    itemIds: string[],
-): ItemMemoryState[] => {
-    try {
-        const data: unknown = JSON.parse(
-            localStorage.getItem(pendingKey(userId, roomId)) ?? "[]",
-        );
-        if (!Array.isArray(data)) return [];
-        const allowed = new Set(itemIds);
-        return data.filter(
-            (value): value is ItemMemoryState =>
-                !!value &&
-                typeof value === "object" &&
-                value.userId === userId &&
-                value.roomId === roomId &&
-                allowed.has(value.itemId) &&
-                Number.isFinite(value.stability) &&
-                Number.isFinite(value.difficulty) &&
-                Number.isInteger(value.reviewCount) &&
-                (value.answerModeStats == null ||
-                    isValidAnswerModeStats(value.answerModeStats)),
-        );
-    } catch {
-        return [];
-    }
-};
-
-export const cacheOnlinePendingMemory = (session: OnlineMemorySession) => {
-    if (!session.userId) return;
-    try {
-        localStorage.setItem(
-            pendingKey(session.userId, session.roomId),
-            JSON.stringify([...session.pending.values()]),
-        );
-    } catch {
-        // Supabase sync can still work when local storage is unavailable.
-    }
-};
-
 export const loadOnlineGuestMemory = (
     roomId: string,
     itemIds: string[],
@@ -218,6 +173,7 @@ export const createOnlineMemorySession = (
     memory: Record<string, ItemMemoryState>,
     modes?: Record<string, AnswerModeResult>,
     choiceCount = 4,
+    enqueue?: OnlineMemorySession["enqueue"],
 ): OnlineMemorySession => ({
     modes,
     choiceCount,
@@ -231,7 +187,7 @@ export const createOnlineMemorySession = (
             roomId,
             itemIds,
         ) ?? createScheduler(itemIds),
-    pending: new Map(),
+    enqueue,
 });
 
 export const nextOnlineRecommendation = (session: OnlineMemorySession) => {
@@ -331,7 +287,7 @@ export const recordOnlineAnswerModeResult = (
         recordRecognitionAnswer(session.scheduler, itemId, hadMistake, now, exposureGapMs);
     }
     session.memory = { ...session.memory, [itemId]: updated };
-    if (session.userId) session.pending.set(itemId, updated);
+    if (session.userId) session.enqueue?.(updated);
     else saveOnlineGuestMemory(session);
     saveSchedulerState(
         "online",
@@ -413,7 +369,7 @@ export const recordOnlineRecall = (
         itemId,
     });
     session.memory = { ...session.memory, [itemId]: updated };
-    if (session.userId) session.pending.set(itemId, updated);
+    if (session.userId) session.enqueue?.(updated);
     else saveOnlineGuestMemory(session);
     saveSchedulerState(
         "online",

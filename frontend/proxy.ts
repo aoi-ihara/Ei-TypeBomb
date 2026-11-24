@@ -10,10 +10,14 @@ const hasAuthCookie = (request: NextRequest) =>
 
 /** Refresh ETB's local Supabase Auth session before route handlers and pages. */
 export async function proxy(request: NextRequest) {
-    const feed = request.nextUrl.pathname === "/" || request.nextUrl.pathname === "/latest";
-    // Guests keep the static ISR path. Cookie-bearing requests use a
-    // dynamic, personalized route; even expired cookies cannot enter ISR.
-    if (!isBetaEnvironment() && feed && !hasAuthCookie(request)) return NextResponse.next();
+    const pathname = request.nextUrl.pathname;
+    const feed = pathname === "/" || pathname === "/latest";
+    const hasSession = hasAuthCookie(request);
+    // MCP verifies its Bearer token and applies beta policy in the handler.
+    const betaProtected = isBetaEnvironment() && !isPublicBetaPath(pathname) && pathname !== "/api/mcp";
+    // Guests keep the shared ISR feed, while protected beta routes still
+    // return the same denial as a signed-in visitor without access.
+    if (!hasSession && !betaProtected) return NextResponse.next();
 
     const destination = request.nextUrl.clone();
     if (feed) {
@@ -24,46 +28,43 @@ export async function proxy(request: NextRequest) {
         feed ? NextResponse.rewrite(destination, { request }) : NextResponse.next({ request });
 
     let response = createResponse();
-    const client = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookieOptions,
-            cookies: {
-                getAll: () => request.cookies.getAll(),
-                setAll(values) {
-                    values.forEach(({ name, value }) =>
-                        request.cookies.set(name, value),
-                    );
-                    response = createResponse();
-                    values.forEach(({ name, value, options }) =>
-                        response.cookies.set(name, value, options),
-                    );
+    let userId: string | null = null;
+    if (hasSession) {
+        const refreshHeaders: Record<string, string> = {};
+        const client = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                cookieOptions,
+                cookies: {
+                    getAll: () => request.cookies.getAll(),
+                    setAll(values, headers) {
+                        values.forEach(({ name, value }) => request.cookies.set(name, value));
+                        const refreshed = createResponse();
+                        response.cookies.getAll().forEach(cookie => refreshed.cookies.set(cookie));
+                        values.forEach(({ name, value, options }) => refreshed.cookies.set(name, value, options));
+                        Object.assign(refreshHeaders, headers);
+                        Object.entries(refreshHeaders).forEach(([name, value]) => refreshed.headers.set(name, value));
+                        response = refreshed;
+                    },
                 },
             },
-        },
-    );
-    // Verify locally when the project uses asymmetric JWTs; refresh tokens via SSR cookies.
-    // Ownership checks and privileged writes still use a fresh getUser() on the server.
-    await client.auth.getClaims();
+        );
+        if (!betaProtected) {
+            // Verify/refresh SSR sessions even on navigations to public pages.
+            await client.auth.getClaims();
+            return response;
+        }
 
-    const pathname = request.nextUrl.pathname;
-    // MCP uses Bearer OAuth tokens rather than Supabase browser cookies. Its
-    // own route handler checks beta access after verifying the Bearer token.
-    if (!isBetaEnvironment() || isPublicBetaPath(pathname) || pathname === "/api/mcp") {
-        return response;
+        try {
+            // getUser verifies the user and refreshes SSR cookies as needed.
+            const { data, error } = await client.auth.getUser();
+            if (!error) userId = data.user?.id ?? null;
+        } catch {
+            // Auth outages leave the protected beta routes closed.
+        }
     }
-
-    let userId: string | null = null;
-    try {
-        // A verified user is required; an untrusted cookie or JWT claim alone
-        // must not grant access to a beta-only deployment.
-        const { data, error } = await client.auth.getUser();
-        if (!error) userId = data.user?.id ?? null;
-    } catch {
-        // Authentication outages must not expose the beta environment.
-    }
-    if (await canAccessBeta(userId)) return response;
+    if (userId && await canAccessBeta(userId)) return response;
 
     const headers = { "Cache-Control": "private, no-store, max-age=0" };
     const denied = pathname.startsWith("/api/")
@@ -81,5 +82,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+    // Exclude the collector rewrite and known assets. Keep application pages,
+    // APIs and their prefetch requests covered by the same beta policy.
+    matcher: [
+        "/((?!_next/(?:static|image)(?:/|$)|ingest(?:/|$)|(?:favicon(?:-dark)?\\.ico|apple-touch-icon\\.png|icon-(?:dark|light)\\.png|hero\\.png|Blip_select_(?:8|36)\\.wav|Explosion_7\\.wav|MT-RD_17_for_Loop\\.wav|Powerup_1\\.wav)$).*)",
+    ],
 };
