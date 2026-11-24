@@ -125,6 +125,11 @@ export default function Navigation({ children, root = false }: { children: React
         const width = viewport.current ? navigationWidth(viewport.current) : 0;
         if (request.morph) {
             stop(request);
+            // Next's scroll handling is disabled for morph navigation. Reset
+            // push scrolling even if a redirect or password gate prevents morphing.
+            if (request.direction === "push") {
+                window.scrollTo({ top: 0, behavior: "instant" });
+            }
             if (!matches) { cancel(); return; }
             const { source, key } = request.morph;
             const targets = viewport.current?.querySelectorAll<HTMLElement>("[data-navigation-morph-target]");
@@ -139,8 +144,6 @@ export default function Navigation({ children, root = false }: { children: React
             if (request.direction === "pop") {
                 // Restore visibility before capturing the destination, including cards below the fold.
                 destination.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
-            } else {
-                window.scrollTo({ top: 0, behavior: "instant" });
             }
             request.morph.play(destination, () => {
                 if (active.current !== request) return;

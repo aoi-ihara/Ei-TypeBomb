@@ -401,3 +401,8 @@ test("nested navigation releases document state only for the current transition 
     assert.match(nav, /documentTransition\?\.cancel\(\);\s*documentTransition = \{ request, cancel \};/);
     assert.match(nav, /clearMorph\(request\);\s*releaseDocumentTransition\(request\);\s*node.style.viewTransitionName = "";/);
 });
+
+test("morph pushes reset scroll before redirect or missing-target cancellation", () => {
+    const nav = readFileSync(path.join(__dirname, "..", "components/layout/Navigation.tsx"), "utf8");
+    assert.match(nav, /if \(request\.morph\) \{\s*stop\(request\);[\s\S]*?if \(request\.direction === "push"\) \{\s*window\.scrollTo\(\{ top: 0, behavior: "instant" \}\);\s*\}\s*if \(!matches\) \{ cancel\(\); return; \}[\s\S]*?if \(!destination \|\|[^}]+cancel\(\)/);
+});
