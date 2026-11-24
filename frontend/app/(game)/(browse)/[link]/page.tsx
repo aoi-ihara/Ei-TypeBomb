@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import Shell from "@/components/layout/Shell";
+import RoomDetailShell from "./RoomDetailShell";
 import { Icon } from "@/components/ui/Icon";
 import { getRoomPageDataFromLink } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
@@ -30,13 +30,7 @@ export default async function RoomPage({
     );
 
     return (
-        <Shell
-            showHeader={false}
-            title={title}
-            className="grid lg:grid-cols-2 gap-4 px-4"
-            showBackButton
-            size="xlarge"
-        >
+        <RoomDetailShell title={title}>
             <section className="w-full flex-col flex gap-4">
                 <div className="flex w-full p-4 flex-col gap-4 rounded-lg bg-(--color-background-secondary)">
                     {room.explanation && (
@@ -135,6 +129,6 @@ export default async function RoomPage({
                     </p>
                 )}
             </section>
-        </Shell>
+        </RoomDetailShell>
     );
 }

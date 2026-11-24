@@ -328,3 +328,23 @@ test("sign-out ignores cached personalized props until fresh auth confirms an id
     viewer().reconcile(viewerData("two", ["fresh"]));
     assertSaves(viewer, ["fresh"]);
 });
+
+test("room lists and details share the existing directional navigation and Shell width", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const browser = read("app/(game)/(browse)/RoomBrowser.tsx");
+    const list = read("app/(game)/(browse)/RoomList.tsx");
+    const detail = read("app/(game)/(browse)/[link]/page.tsx");
+    const shell = read("app/(game)/(browse)/[link]/RoomDetailShell.tsx");
+    const card = read("components/rooms/RoomCard.tsx");
+    assert.match(browser, /<Navigation>\{children\}<\/Navigation>/);
+    assert.match(browser, /useState\("\/"\)/);
+    assert.match(browser, /isFeed && signedInItems\.some/);
+    assert.match(browser, /setBackHref\(listPath\)/);
+    assert.match(list, /size="xlarge"/);
+    assert.match(detail, /<RoomDetailShell title=\{title\}>/);
+    assert.match(shell, /size="xlarge"/);
+    assert.match(shell, /back=\{backHref\}/);
+    assert.match(card, /navigate\?\.\(`\/\$\{roomLink\}`, "push", event\.preventDefault\)/);
+    assert.match(card, /href=\{`\/\$\{roomLink\}`\}\s+navigation="push"/);
+    assert.doesNotMatch(card, /href=\{`\/\$\{roomLink\}\/edit`\}\s+navigation=/);
+});

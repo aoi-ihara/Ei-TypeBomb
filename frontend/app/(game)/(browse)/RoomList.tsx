@@ -164,7 +164,7 @@ export default function RoomList({
     return (
         <Shell
             showHeader={false}
-            size="large"
+            size="xlarge"
             title={viewTitle}
         >
             <div className="flex w-full items-center justify-between gap-4">

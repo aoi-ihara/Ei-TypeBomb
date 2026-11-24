@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 import Link from "next/link";
+import { useNavigation } from "@/components/layout/Navigation";
 import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
 // Each speculative room request on beta requires a verified Supabase user.
@@ -27,6 +28,7 @@ export default function RoomCard({
     eagerPrefetch?: boolean;
 }) {
     const router = useRouter();
+    const navigate = useNavigation();
     const lastPrefetchRef = useRef<{ link: string; at: number } | null>(null);
     const articleRef = useRef<HTMLElement>(null);
     const [copied, setCopied] = useState(false);
@@ -102,7 +104,10 @@ export default function RoomCard({
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
                     }}
-                    onNavigate={() => startNavigationProgress()}
+                    onNavigate={(event) => {
+                        startNavigationProgress();
+                        navigate?.(`/${roomLink}`, "push", event.preventDefault);
+                    }}
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     onMouseEnter={prefetchOnIntent}
                     onFocus={prefetchOnIntent}
@@ -166,6 +171,7 @@ export default function RoomCard({
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     href={`/${roomLink}`}
+                    navigation="push"
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"
