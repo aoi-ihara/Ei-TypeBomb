@@ -1213,7 +1213,7 @@ export default function Client({
                     </Button>
                 }
             />
-            <header className="w-full flex absolute justify-end p-4 gap-4">
+            <header className="absolute top-0 right-0 flex justify-end p-4 gap-4">
                 <Button
                     iconName="pause"
                     padding="small"
