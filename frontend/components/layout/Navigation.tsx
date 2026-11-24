@@ -266,8 +266,13 @@ export default function Navigation({ children, root = false }: { children: React
     const Context = root ? RootNavigationContext : NavigationContext;
     return (
         <Context.Provider value={navigate}>
-            <div ref={viewport} className="min-w-0 w-full overflow-x-clip">
-                <div ref={content}>{children}</div>
+            <div
+                ref={viewport}
+                className={`min-w-0 w-full overflow-x-clip ${root ? "h-full min-h-0 shrink-0" : ""}`}
+            >
+                <div ref={content} className={root ? "h-full" : undefined}>
+                    {children}
+                </div>
             </div>
         </Context.Provider>
     );

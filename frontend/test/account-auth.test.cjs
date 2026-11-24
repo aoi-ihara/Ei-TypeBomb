@@ -355,3 +355,18 @@ test("native navigation keeps the cursor separate and refreshes on destination c
     assert.match(css, /view-transition-name: etb-navigation-cursor/);
     assert.match(css, /::view-transition-old\(etb-navigation-cursor\) \{\s*display: none/);
 });
+
+test("root navigation preserves the full-height game layout and anchors game settings", () => {
+    const read = file => readFileSync(new URL("../" + file, "file://" + __filename), "utf8");
+    const nav = read("components/layout/Navigation.tsx");
+    const root = read("app/layout.tsx");
+    const game = read("components/game/GameView.tsx");
+    assert.match(root, /<main className="[^"]*\bh-dvh\b[^"]*">\s*<Navigation root>/);
+    assert.ok(nav.includes('root ? "h-full min-h-0 shrink-0" : ""'));
+    assert.match(nav, /<div ref=\{content\} className=\{root \? "h-full" : undefined\}>/);
+    assert.match(game, /w-full h-full\x60\}/);
+    for (const mode of ["offline", "online"]) {
+        const client = read("app/(game)/[link]/" + mode + "/Client.tsx");
+        assert.match(client, /<header className="absolute top-0 right-0 flex justify-end p-4 gap-4">/);
+    }
+});
