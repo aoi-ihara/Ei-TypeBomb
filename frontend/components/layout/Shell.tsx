@@ -14,6 +14,7 @@ type ShellProps = {
     animateAppear?: boolean;
     showBackButton?: boolean;
     backLink?: string;
+    back?: string;
     onBackClicked?: () => void;
     showHeader?: boolean;
 };
@@ -27,10 +28,12 @@ export default function Shell({
     animateAppear = false,
     showBackButton = false,
     backLink,
+    back,
     onBackClicked,
     showHeader = true,
 }: ShellProps) {
     const router = useRouter();
+    const backHref = back ?? backLink;
 
     if (loading) return <ProgressSignal />;
 
@@ -40,17 +43,18 @@ export default function Shell({
             <div className="flex flex-col items-center w-full">
                 {title && (
                     <div
-                        className={`relative mb-8 flex items-center ${(showBackButton || backLink) && "max-w-[calc(100vw-32px)]"} px-8`}
+                        className={`relative mb-8 flex items-center ${(showBackButton || backHref) && "max-w-[calc(100vw-32px)]"} px-8`}
                     >
-                        {(showBackButton || backLink) && (
+                        {(showBackButton || backHref) && (
                             <Button
                                 variant="text"
                                 aria-label="戻る"
                                 iconName="arrowLeft"
                                 padding="small"
-                                href={backLink ?? undefined}
+                                href={backHref}
+                                navigation={back ? "pop" : undefined}
                                 onClick={
-                                    !backLink
+                                    !backHref
                                         ? onBackClicked
                                             ? onBackClicked
                                             : () => {
@@ -70,6 +74,7 @@ export default function Shell({
                 )}
 
                 <div
+                    data-navigation-shell-width
                     className={`pb-[50vh] ${
                         size == "small"
                             ? "max-w-xs"

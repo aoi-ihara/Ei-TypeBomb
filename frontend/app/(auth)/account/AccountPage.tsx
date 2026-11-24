@@ -15,7 +15,7 @@ export default async function AccountPage({
     await requireAccountUser();
 
     return (
-        <Shell title={title} size="medium" showHeader={false} backLink={backLink}>
+        <Shell title={title} size="medium" showHeader={false} back={backLink}>
             <div className="w-full px-4 sm:px-0">{children}</div>
         </Shell>
     );

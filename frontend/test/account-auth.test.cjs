@@ -310,3 +310,38 @@ test("apps show an empty state rather than an error when MCP is disabled", async
     const result = await exports.listAuthorizedApps();
     assert.deepEqual(JSON.parse(JSON.stringify(result)), { apps: [], error: null });
 });
+
+test("only nested security links opt into directional navigation", () => {
+    const security = readAccountRoute("security/page.tsx");
+    const layout = readAccountRoute("layout.tsx");
+    const accountPage = readAccountRoute("AccountPage.tsx");
+    const sidebar = readFileSync(
+        new URL("../components/layout/Sidebar.tsx", `file://${__filename}`), "utf8",
+    );
+    const shell = readFileSync(
+        new URL("../components/layout/Shell.tsx", `file://${__filename}`), "utf8",
+    );
+    assert.match(security, /href="\/account\/security\/email" navigation="push"/);
+    assert.match(security, /href="\/account\/security\/password" navigation="push"/);
+    assert.match(layout, /<Navigation>\{children\}<\/Navigation>/);
+    assert.match(accountPage, /back=\{backLink\}/);
+    assert.match(shell, /navigation=\{back \? "pop" : undefined\}/);
+    assert.doesNotMatch(sidebar, /navigation="(?:push|pop)"/);
+});
+
+test("navigation distance follows responsive Shell width without narrowing its viewport", () => {
+    const readLayout = (file) => readFileSync(
+        new URL("../components/layout/" + file, `file://${__filename}`), "utf8",
+    );
+    const shell = readLayout("Shell.tsx");
+    const navigation = readLayout("Navigation.tsx");
+    const css = readLayout("navigation.css");
+    assert.match(shell, /data-navigation-shell-width\s+className=/);
+    assert.match(navigation, /shell\?\.offsetWidth \|\| viewport\.clientWidth/);
+    assert.match(navigation, /min-w-0 w-full overflow-x-clip/);
+    assert.match(navigation, /direction === "push" \? width : -width \/ 2/);
+    assert.match(css, /translateX\(var\(--etb-navigation-new-width, 100%\)\)/);
+    assert.match(css, /translateX\(var\(--etb-navigation-old-width, 100%\)\)/);
+    assert.match(css, /calc\(var\(--etb-navigation-old-width, 100%\) \* -0\.5\)/);
+    assert.match(css, /calc\(var\(--etb-navigation-new-width, 100%\) \* -0\.5\)/);
+});
