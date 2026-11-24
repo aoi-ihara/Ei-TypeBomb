@@ -30,6 +30,7 @@ type Request = {
 };
 
 const NavigationContext = createContext<Navigate | null>(null);
+const RootNavigationContext = createContext<Navigate | null>(null);
 const normalize = (path: string) => path.replace(/\/+$/, "") || "/";
 
 // Measure the responsive Shell content, not the full clipping viewport.
@@ -45,8 +46,10 @@ function clearTransitionStyles() {
     root.style.removeProperty("--etb-navigation-new-width");
 }
 
-export function useNavigation() {
-    return useContext(NavigationContext);
+export function useNavigation(scope: "local" | "root" = "local") {
+    const local = useContext(NavigationContext);
+    const root = useContext(RootNavigationContext);
+    return scope === "root" ? root : local ?? root;
 }
 
 function stop(request: Request, skip = false) {
@@ -55,7 +58,7 @@ function stop(request: Request, skip = false) {
     request.complete?.();
 }
 
-export default function Navigation({ children }: { children: ReactNode }) {
+export default function Navigation({ children, root = false }: { children: ReactNode; root?: boolean }) {
     const router = useRouter();
     const pathname = usePathname();
     const viewport = useRef<HTMLDivElement>(null);
@@ -71,9 +74,12 @@ export default function Navigation({ children }: { children: ReactNode }) {
         active.current = null;
         animation.current?.cancel();
         animation.current = null;
-        clearTransitionStyles();
-        if (viewport.current) viewport.current.style.viewTransitionName = "";
-        endNativeSlideCursor();
+        // Nested navigation instances must not clear another instance’s transition.
+        if (viewport.current?.style.viewTransitionName === "etb-navigation-content") {
+            clearTransitionStyles();
+            viewport.current.style.viewTransitionName = "";
+            endNativeSlideCursor();
+        }
     }
 
     useEffect(() => {
@@ -181,11 +187,12 @@ export default function Navigation({ children }: { children: ReactNode }) {
         }, 5000);
     };
 
+    const Context = root ? RootNavigationContext : NavigationContext;
     return (
-        <NavigationContext.Provider value={navigate}>
+        <Context.Provider value={navigate}>
             <div ref={viewport} className="min-w-0 w-full overflow-x-clip">
                 <div ref={content}>{children}</div>
             </div>
-        </NavigationContext.Provider>
+        </Context.Provider>
     );
 }

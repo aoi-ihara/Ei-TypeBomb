@@ -346,5 +346,13 @@ test("room lists and details share the existing directional navigation and Shell
     assert.match(shell, /back=\{backHref\}/);
     assert.match(card, /navigate\?\.\(`\/\$\{roomLink\}`, "push", event\.preventDefault\)/);
     assert.match(card, /href=\{`\/\$\{roomLink\}`\}\s+navigation="push"/);
-    assert.doesNotMatch(card, /href=\{`\/\$\{roomLink\}\/edit`\}\s+navigation=/);
+    assert.match(card, /href=\{`\/\$\{roomLink\}\/edit`\}\s+navigation="push"\s+navigationScope="root"/);
+});
+
+test("editor links use a persistent root navigation across route groups", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    assert.match(read("app/layout.tsx"), /<Navigation root>\{children\}<\/Navigation>/);
+    assert.match(read("app/(game)/(browse)/[link]/PlayRoom.tsx"), /href=\{"\/" \+ link \+ "\/edit"\}\s+prefetch=\{false\}\s+navigation="push"\s+navigationScope="root"/);
+    assert.match(read("components/ui/Button.tsx"), /useNavigation\(navigationScope\)/);
+    assert.doesNotMatch(read("app/(editor)/[link]/edit/EditorClient.tsx"), /animateAppear=\{true\}/);
 });

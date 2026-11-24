@@ -180,6 +180,8 @@ export default function RoomCard({
                 {isOwner && (
                     <Button
                         href={`/${roomLink}/edit`}
+                        navigation="push"
+                        navigationScope="root"
                         prefetch={false}
                         iconName="pen"
                         variant="text"

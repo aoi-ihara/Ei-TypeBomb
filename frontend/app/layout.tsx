@@ -5,6 +5,7 @@ import "./globals.css";
 import Cursor from "@/components/ui/Cursor";
 import { Footer } from "@/components/layout/Footer";
 import NavigationProgress from "@/components/layout/NavigationProgress";
+import Navigation from "@/components/layout/Navigation";
 import {
     LINE_Seed_JP,
     JetBrains_Mono,
@@ -104,7 +105,7 @@ export default function RootLayout({
                     </Suspense>
                     <RouteEventTracker />
                     <main className="flex flex-col h-dvh w-full items-center">
-                        {children}
+                        <Navigation root>{children}</Navigation>
                         <div className="text-xs w-full flex fixed opacity-50 justify-center md:justify-start bottom-3">
                             <Footer />
                         </div>

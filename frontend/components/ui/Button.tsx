@@ -32,6 +32,7 @@ type ButtonProps = Pick<
     href?: string;
     prefetch?: boolean;
     navigation?: NavigationDirection;
+    navigationScope?: "local" | "root";
     font?: "default" | "mono" | "serif";
 };
 
@@ -73,10 +74,11 @@ export default function Button({
     href,
     prefetch,
     navigation,
+    navigationScope = "local",
     font,
     ...ariaProps
 }: ButtonProps) {
-    const navigate = useNavigation();
+    const navigate = useNavigation(navigationScope);
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant === "text" && padding === "xsmall"
