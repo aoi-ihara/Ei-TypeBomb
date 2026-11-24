@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import SlideTransition from "@/components/layout/SlideTransition";
+import { getQuestionSlideDistance } from "@/components/game/question-slide-distance";
 import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/recall/ItemView";
 import UsersView from "@/components/game/UsersView";
@@ -196,11 +197,11 @@ export default function GameView({
         activeGameRef.current?.classList.remove("wrong-answer");
     }, [failureKey]);
 
-    // On mobile the slide viewport reaches the game area edges. Keep the
-    // visual gutter inside the moving question instead of clipping at it.
+    // The slide viewport spans the game area on every screen size. Keep
+    // the resting question and progress bar constrained independently.
     const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError;
     const questionContent = currentItem === null ? null : (
-        <div className={`flex h-full ${fullWidthQuestion ? "px-4 sm:px-0" : soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
+        <div data-question-slide-content className={`flex h-full ${fullWidthQuestion ? "px-4" : soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
             {soloMode ? null : currentTurnUser?.id === userId ? (
                 <div
                     className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -288,12 +289,14 @@ export default function GameView({
                 }}
             >
                 {fullWidthQuestion && masteryProgress ? (
-                    <div className="w-full px-4 sm:px-0">{masteryProgress}</div>
+                    <div className="w-full max-w-3xl px-4">{masteryProgress}</div>
                 ) : masteryProgress}
                 {soloMode ? (
                     <SlideTransition
                         transitionKey={itemPresentationKey}
                         enabled={slideQuestion && !isPaused}
+                        contentClassName="max-w-3xl"
+                        getDistance={getQuestionSlideDistance}
                     >
                         {questionContent}
                     </SlideTransition>
@@ -378,7 +381,7 @@ export default function GameView({
             )}
 
             <div
-                className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full ${fullWidthQuestion ? "sm:px-4" : "px-4"} gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
+                className={`${soloMode ? "mx-auto" : "md:order-2"} w-full ${fullWidthQuestion ? "" : "max-w-3xl px-4"} gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
             >
                 <div
                     inert={isReconnecting || isPaused}

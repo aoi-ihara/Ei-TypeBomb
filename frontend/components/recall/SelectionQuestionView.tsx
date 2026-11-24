@@ -309,6 +309,7 @@ export default function SelectionQuestionView({
         >
             <div className="flex flex-col items-center">
                 <div
+                    data-question-slide-width
                     className="leading-loose text-xl text-center w-fit border border-(--color-border) px-3 rounded-lg py-1 font-serif"
                     data-cursor="text"
                 >
@@ -316,7 +317,7 @@ export default function SelectionQuestionView({
                 </div>
             </div>
             {masteryProgress}
-            <div className="max-w-lg w-full flex flex-col gap-4">
+            <div data-question-slide-width className="max-w-lg w-full flex flex-col gap-4">
                 {options.map((option, index) => (
                     <Button
                         key={option + ":" + index}

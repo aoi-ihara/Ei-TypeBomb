@@ -631,6 +631,7 @@ function TypingAttempt({
         <div className="flex flex-col gap-4">
             <div className="flex flex-col items-center">
                 <div
+                    data-question-slide-width
                     className="font-bold font-serif text-xl text-center w-fit border border-(--color-border) px-2 rounded-lg py-1"
                     data-cursor="text"
                 >
@@ -640,6 +641,7 @@ function TypingAttempt({
             {masteryProgress}
             <div className="w-full flex justify-center">
                 <div
+                    data-question-slide-width
                     className="w-fit relative rounded-lg border border-(--color-border) p-1 overflow-clip gap-y-3 flex-wrap font-serif flex justify-start"
                     onClick={() => {
                         if (!isReadonly) inputRef.current?.focus();

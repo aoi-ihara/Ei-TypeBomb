@@ -2249,13 +2249,40 @@ test("navigation and local question slides read the same duration and offset tok
     assert.doesNotMatch(fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8"), /duration=\{200\}/);
 });
 
-test("mobile solo slides use the full game width while keeping content gutters", () => {
+test("solo slides clip at the game edges independently of the centered content width", () => {
     const game = fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8");
     const slide = fs.readFileSync(path.join(root, "components/layout/SlideTransition.tsx"), "utf8");
     assert.match(game, /const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError/);
-    assert.match(game, /max-w-3xl w-full \$\{fullWidthQuestion \? "sm:px-4" : "px-4"\}/);
-    assert.match(game, /fullWidthQuestion \? "px-4 sm:px-0"/);
-    assert.match(game, /<div className="w-full px-4 sm:px-0">\{masteryProgress\}<\/div>/);
+    assert.match(game, /w-full \$\{fullWidthQuestion \? "" : "max-w-3xl px-4"\}/);
+    assert.match(game, /fullWidthQuestion \? "px-4"/);
+    assert.match(game, /<div className="w-full max-w-3xl px-4">\{masteryProgress\}<\/div>/);
+    assert.match(game, /contentClassName="max-w-3xl"/);
+    assert.match(game, /getDistance=\{getQuestionSlideDistance\}/);
     assert.match(slide, /w-full flex-col overflow-x-clip/);
-    assert.match(slide, /slideFrames\("push-in", live\.offsetWidth, offset\)/);
+    assert.match(slide, /mx-auto flex h-full min-w-0 w-full flex-col/);
+    assert.match(slide, /left: "50%"/);
+    assert.match(slide, /marginLeft: `\$\{-width \/ 2\}px`/);
+    assert.match(slide, /slideFrames\("push-in", customDistance \?\? live\.offsetWidth, offset\)/);
+    assert.match(slide, /slideFrames\("under-out", customDistance \?\? width, offset\)/);
+});
+
+test("question slide distance uses the widest visible question element and both gutters", () => {
+    let desktop = true;
+    const { getQuestionSlideDistance } = load("components/game/question-slide-distance.ts", {
+        window: { matchMedia: () => ({ matches: desktop }) },
+        getComputedStyle: () => ({ paddingLeft: "16px", paddingRight: "16px" }),
+    });
+    const make = (width, ...parts) => ({
+        offsetWidth: width,
+        querySelector: () => ({
+            querySelectorAll: () => parts.map(offsetWidth => ({ offsetWidth })),
+        }),
+    });
+    assert.equal(getQuestionSlideDistance(make(768, 300, 512)), 544);
+    assert.equal(getQuestionSlideDistance(make(768, 620, 512)), 652);
+    assert.equal(getQuestionSlideDistance(make(768, 100, 160)), 192);
+    assert.equal(getQuestionSlideDistance(make(640, 640)), 640);
+    assert.equal(getQuestionSlideDistance(make(768)), 768);
+    desktop = false;
+    assert.equal(getQuestionSlideDistance(make(390, 100, 200)), 390);
 });
