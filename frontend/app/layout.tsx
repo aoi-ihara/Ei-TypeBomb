@@ -45,28 +45,28 @@ export const metadata: Metadata = {
         ? { robots: { index: false, follow: false } }
         : {}),
     metadataBase: new URL(getEtbBaseUrl()),
-    title: "Ei-TypeBomb",
+    title: "ETB",
     description:
         "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
     openGraph: {
-        title: "Ei-TypeBomb",
+        title: "ETB",
         description:
             "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
         url: getEtbBaseUrl(),
-        siteName: "Ei-TypeBomb",
+        siteName: "ETB",
         images: [
             {
                 url: "/hero.png",
                 width: 1280,
                 height: 640,
-                alt: "Ei-TypeBomb",
+                alt: "ETB",
             },
         ],
         type: "website",
     },
     twitter: {
         card: "summary_large_image",
-        title: "Ei-TypeBomb",
+        title: "ETB",
         description:
             "好きな単語リストで、友達と一緒にタイピングゲームをプレイしながら単語を覚えられるオンラインゲーム。",
         images: ["/hero.png"],
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     icons: {
         icon: [
             {
-                url: "/favicon-light.ico",
+                url: "/favicon.ico",
                 type: "image/x-icon",
                 media: "(prefers-color-scheme: light)",
             },

@@ -1272,140 +1272,109 @@ test("active recall clock excludes paused intervals before and after resume", ()
     assert.equal(getActiveElapsedMs(100_000, 1_000, 60_000, 80_000), 19_000);
 });
 
-test("memory sync serializes newer writes and retains unsent data on rejection", async () => {
-    const pending = { current: new Map([["a", initial()]]) };
-    const inFlight = { current: null };
-    let release,
-        calls = 0,
-        savingError = false;
-    const snapshots = [];
-    const flush = getCallback("flushPendingMemory", {
-        cachePendingMemory: () => {},
-        authenticatedUserIdRef: { current: "u" },
-        memoryPersistenceDisabledRef: { current: false },
-        pendingMemoryRef: pending,
-        syncInFlightRef: inFlight,
-        setSaveError: (value) => {
-            savingError = value;
-        },
-        room: { id: "r" },
-        console: { error: () => {} },
-        syncPlaygroundMemory: (snapshot) => {
-            snapshots.push(snapshot);
-            calls++;
-            if (calls === 1)
-                return new Promise((resolve) => {
-                    release = resolve;
-                });
-            return Promise.resolve(null);
-        },
-    });
-    const first = flush();
-    const newer = { ...initial(), reviewCount: 2 };
-    pending.current.set("a", newer);
-    const second = flush();
-    assert.equal(calls, 1);
-    release(null);
-    await Promise.all([first, second]);
-    assert.equal(calls, 2);
-    assert.equal(snapshots[1][0], newer);
-    assert.equal(pending.current.size, 0);
-    assert.equal(inFlight.current, null);
-    const failing = getCallback("flushPendingMemory", {
-        cachePendingMemory: () => {},
-        authenticatedUserIdRef: { current: "u" },
-        memoryPersistenceDisabledRef: { current: false },
-        pendingMemoryRef: pending,
-        syncInFlightRef: inFlight,
-        setSaveError: (value) => {
-            savingError = value;
-        },
-        room: { id: "r" },
-        console: { error: () => {} },
-        syncPlaygroundMemory: () => Promise.reject(new Error("offline")),
-    });
-    pending.current.set("a", newer);
-    await failing();
-    assert.equal(pending.current.get("a"), newer);
-    assert.equal(savingError, false);
-    assert.equal(inFlight.current, null);
-});
-
-test("memory sync reports safe PostHog properties from the server action", async () => {
+test("memory action isolates invalid rows and maps existing room item IDs", async () => {
     const roomId = "00000000-0000-4000-8000-000000000001";
-    const item = {
-        ...initial("00000000-0000-4000-8000-000000000002"),
-        roomId,
-    };
-    const message = "private details from the upstream error";
+    const item = { ...initial("existing_item-17"), roomId, updatedAt: now.toISOString() };
+    const format = load("lib/playground/memory-sync-format.ts", { require: () => memory });
+    const codec = load("lib/playground/memory-storage-id.ts", {
+        require: id => id === "node:crypto" ? require(id) : format,
+    });
     let authStatus = { userId: "u", error: null };
     let databaseError = null;
+    const writes = [];
     const actions = load("lib/playground/memory-actions.ts", {
-        require: (id) => ({
+        performance,
+        require: id => ({
             "@/lib/db/server": {
                 createClient: async () => ({
-                    from: () => ({ upsert: async () => ({ error: databaseError }) }),
+                    from: () => ({
+                        upsert: async rows => {
+                            writes.push(rows);
+                            return { error: databaseError, status: databaseError ? 400 : 201 };
+                        },
+                        select: () => ({ eq: () => ({ eq: async () => ({ data: writes[0] }) }) }),
+                    }),
                 }),
             },
-            "@/lib/auth/session": { getMemoryAuthStatus: async () => authStatus },
+            "@/lib/auth/memory-session": { getMemoryAuthStatus: async () => authStatus },
             "@/lib/playground/memory": memory,
+            "./memory-sync-format": format,
+            "./memory-storage-id": codec,
         })[id],
     });
-    const events = [];
-    const { syncPlaygroundMemory } = load("lib/playground/memory-client.ts", {
-        require: (id) => id === "posthog-js"
-            ? { default: { capture: (...args) => events.push(JSON.parse(JSON.stringify(args))) } }
-            : actions,
-    });
-    assert.equal(await syncPlaygroundMemory([item], roomId, "offline"), null);
-    assert.equal(events.length, 0);
-
-    databaseError = { code: "23514", message };
-    assert.equal((await syncPlaygroundMemory([item], roomId, "online")).message, message);
-    assert.deepEqual(events.pop(), ["playground_memory_sync_failed", {
-        room_id: roomId,
-        mode: "online",
-        batch_size: 1,
-        error_type: "database_error",
-        database_error_code: "23514",
-    }]);
-
-    databaseError = { code: message, message };
-    await syncPlaygroundMemory([item], roomId, "offline");
-    assert.deepEqual(events.pop(), ["playground_memory_sync_failed", {
-        room_id: roomId,
-        mode: "offline",
-        batch_size: 1,
-        error_type: "database_error",
-    }]);
-
-    await syncPlaygroundMemory([{ ...item, stability: -1 }], roomId, "offline");
-    await syncPlaygroundMemory(Array(501).fill(item), roomId, "offline");
-    authStatus = { userId: null, error: null };
-    await syncPlaygroundMemory([item], roomId, "offline");
-    authStatus = { userId: null, error: { message } };
-    await syncPlaygroundMemory([item], roomId, "offline");
-    assert.deepEqual(events.map(([, properties]) => properties.error_type), [
-        "invalid_memory", "batch_too_large", "auth_required", "auth_failed",
+    const sync = rows => actions.syncPlaygroundMemory(roomId, "u", rows);
+    const result = await sync([{ ...item, stability: -1 }, item, null, { ...item, userId: "other" }]);
+    assert.equal(result.type, "saved");
+    assert.deepEqual(JSON.parse(JSON.stringify(result.rejected)), [
+        { index: 0, reason: "stability" }, { index: 2, reason: "shape" }, { index: 3, reason: "owner" },
     ]);
-    assert.equal(JSON.stringify(events).includes(message), false);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0][0].id, codec.memoryStorageId(roomId, item.itemId));
+    assert.match(writes[0][0].id, /^[\da-f]{8}-[\da-f]{4}-8[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/);
+    const loaded = await actions.loadPlaygroundMemory(roomId, [item.itemId]);
+    assert.equal(loaded.memoryByItem[item.itemId].itemId, item.itemId);
+    assert.equal((await sync(Array(501).fill(item))).type, "permanent");
+
+    databaseError = { code: "23514", message: "private database details" };
+    assert.equal((await sync([item])).rejected[0].reason, "database_error");
+    databaseError = { code: "42501", message: "private database details" };
+    assert.equal((await sync([item])).databaseCode, "42501");
+    assert.equal(JSON.stringify(await sync([item])).includes("private database details"), false);
+    databaseError = { code: "40001" };
+    assert.equal((await sync([item])).type, "temporary");
+    authStatus = { userId: null, error: null };
+    assert.equal((await sync([item])).type, "auth_required");
+    authStatus = { userId: null, error: { retryable: true } };
+    assert.equal((await sync([item])).type, "temporary");
 });
 
-test("memory sync records request rejection and lets the caller retry", async () => {
-    const error = new Error("private request details");
-    const navigator = { onLine: false };
-    const errors = [];
-    const { syncPlaygroundMemory } = load("lib/playground/memory-client.ts", {
-        navigator,
-        require: (id) => id === "posthog-js"
-            ? { default: { capture: (_, properties) => errors.push(properties.error_type) } }
-            : { syncPlaygroundMemory: async () => { throw error; } },
+test("memory sync adapter handles beta auth errors and reports sampled safe metrics", async () => {
+    const metrics = [];
+    const denied = "Beta tester access required";
+    const listeners = new Map();
+    let rejection = new Error(denied);
+    const events = {
+        visibilityState: "hidden",
+        addEventListener: (name, callback) => listeners.set(name, callback),
+        removeEventListener: name => listeners.delete(name),
+    };
+    let options;
+    let flushes = 0;
+    let stopped = 0;
+    const { startMemorySync } = load("lib/playground/memory-client.ts", {
+        Math: { random: () => 0 },
+        Error,
+        window: events,
+        document: events,
+        require: id => ({
+            "posthog-js": { default: { capture: (event, properties) => metrics.push([event, properties]) } },
+            "@/lib/auth/beta-action": { BETA_ACTION_DENIED: denied },
+            "./memory-actions": { syncPlaygroundMemory: async () => { throw rejection; } },
+            "./memory-queue": { MemoryQueue: class {
+                constructor(value) { options = value; }
+                flush() { flushes++; }
+                stop() { stopped++; }
+            } },
+        })[id],
     });
-
-    await assert.rejects(syncPlaygroundMemory([initial()], "r", "online"), error);
-    navigator.onLine = true;
-    await assert.rejects(syncPlaygroundMemory([initial()], "r", "online"), error);
-    assert.deepEqual(errors, ["offline", "request_failed"]);
+    const sync = startMemorySync("user-secret", "room-secret", "online");
+    assert.equal((await options.send([initial()])).type, "auth_required");
+    rejection = new Error("network failure");
+    await assert.rejects(options.send([initial()]), rejection);
+    listeners.get("pagehide")();
+    listeners.get("visibilitychange")();
+    listeners.get("online")();
+    assert.equal(flushes, 3);
+    const summary = { batch_size: 1, pending_count: 1, duration_ms: 12, retry_count: 0 };
+    options.report(summary);
+    options.report({ ...summary, error_type: "invalid_memory", invalid_fields: { timestamp: 1 } });
+    assert.deepEqual(metrics.map(([event, p]) => [event, p.sample_rate]), [
+        ["playground_memory_sync_succeeded", 0.1], ["playground_memory_sync_failed", 1],
+    ]);
+    assert.equal(JSON.stringify(metrics).includes("-secret"), false);
+    sync.stop();
+    assert.equal(listeners.size, 0);
+    assert.equal(stopped, 1);
 });
 
 function clientCallbacks(names, globals) {
@@ -1470,6 +1439,7 @@ test("actual solo Client callbacks cover all words and keep practicing without a
             answer: "abcdefgh",
         }));
         const events = [];
+        const pending = new Map();
         const globals = {
             ...m,
             ...sch,
@@ -1493,8 +1463,9 @@ test("actual solo Client callbacks cover all words and keep practicing without a
             getTypingAnswer: require("../../backend/shared/typing-answer.cjs").getTypingAnswer,
             userTypingDelayRef: ref(220),
             authenticatedUserIdRef: ref("u"),
-            memoryPersistenceDisabledRef: ref(false),
-            pendingMemoryRef: ref(new Map()),
+            memoryReadFailedRef: ref(false),
+            memorySyncRef: ref({ queue: { enqueue: value => pending.set(value.itemId, value) } }),
+            flushPendingMemory: noop,
             userReviewCountRef: ref(0),
             previousInputAtRef: ref(null),
             previousInputLengthRef: ref(0),
@@ -1565,11 +1536,11 @@ test("actual solo Client callbacks cover all words and keep practicing without a
             0,
         );
 
-        globals.pendingMemoryRef.current.clear();
-        globals.memoryPersistenceDisabledRef.current = true;
+        pending.clear();
+        globals.memoryReadFailedRef.current = true;
         actual.updateLocalMemory(items[0], observation());
         assert.equal(
-            globals.pendingMemoryRef.current.size,
+            pending.size,
             0,
             "fallback recall observations must stay out of the authenticated sync queue",
         );
@@ -1587,7 +1558,7 @@ test("selection callbacks preserve the exposure interval when completing a sched
         schedulerRef: { current: schedulerState },
         choiceCount: 4,
         recordRecognitionAnswer: (state) => { state.current = null; },
-        memoryPersistenceDisabledRef: { current: true },
+        memoryReadFailedRef: { current: true },
         recallProgressRef: { current: {} },
         updateAnswerModeMemory: (...args) => calls.push(args),
         exposureGapAtStartRef: { current: 30_000 },
@@ -1612,15 +1583,14 @@ test("fallback answer-mode observations never enter authenticated sync queue", a
         items: [item],
         choiceCount: 1,
         authenticatedUserIdRef: ref("u"),
-        memoryPersistenceDisabledRef: ref(true),
+        memoryReadFailedRef: ref(true),
         memoryByItemRef: memory,
-        pendingMemoryRef: pending,
+        memorySyncRef: ref({ queue: {
+            enqueue: value => pending.current.set(value.itemId, value),
+            flush: async () => { if (pending.current.size) syncCalls++; },
+        } }),
         setMemoryByItem: () => {},
         setMasteryNow: () => {},
-        syncPlaygroundMemory: async () => {
-            syncCalls++;
-            return null;
-        },
     };
     const actual = clientCallbacks(
         ["updateAnswerModeMemory", "flushPendingMemory"],
@@ -2187,8 +2157,8 @@ test("single-option Client answers persist exposure without recognition credit",
         room: { id: "r" }, items: [item], choiceCount: 1,
         currentItemRef: {current:item}, schedulerRef: {current:state},
         isPaused: false, authenticatedUserIdRef: {current:"u"},
-        memoryPersistenceDisabledRef: {current:true},
-        memoryByItemRef: records, pendingMemoryRef: {current:new Map()},
+        memoryReadFailedRef: {current:true},
+        memoryByItemRef: records, memorySyncRef: {current:null},
         recallProgressRef: {current:null}, exposureGapAtStartRef: {current:null},
         setMemoryByItem: () => {}, setMasteryNow: () => {},
     });

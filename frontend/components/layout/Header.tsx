@@ -10,7 +10,7 @@ export default function Header({ children }: { children?: React.ReactNode }) {
             <div className="flex min-w-0 flex-1 gap-4">
                 <div className="min-w-0 rounded-lg" data-cursor="button">
                     <Link
-                        className="flex min-w-0 items-center gap-2 rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
+                        className="flex min-w-0 items-center rounded-lg pr-3 duration-(--duration-etb) ease-etb transition-all active:scale-95"
                         href="/"
                     >
                         <picture className="shrink-0">
@@ -20,17 +20,17 @@ export default function Header({ children }: { children?: React.ReactNode }) {
                             />
                             <Image
                                 src="/icon-light.png"
-                                alt="Ei-TypeBomb"
+                                alt="ETB"
                                 className="rounded-lg"
                                 width={36}
                                 height={36}
                             />
                         </picture>
-                        <span className="min-w-0 truncate font-extrabold">
+                        <span className="min-w-0 truncate font-extrabold text-xl">
                             {process.env.NEXT_PUBLIC_BETA_ENVIRONMENT! ===
                             "true"
-                                ? "Ei-TypeBomb Beta"
-                                : "Ei-TypeBomb"}
+                                ? "ETB Beta"
+                                : "ETB"}
                         </span>
                     </Link>
                 </div>

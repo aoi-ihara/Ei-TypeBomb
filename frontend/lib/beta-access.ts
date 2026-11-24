@@ -20,7 +20,7 @@ export function isPublicBetaPath(pathname: string): boolean {
         pathname.startsWith("/ingest/") ||
         [
             "/favicon-dark.ico",
-            "/favicon-light.ico",
+            "/favicon.ico",
             "/apple-touch-icon.png",
             "/icon-dark.png",
             "/icon-light.png",
@@ -32,7 +32,22 @@ export function isPublicBetaPath(pathname: string): boolean {
 export const isBetaEnvironment = () =>
     process.env.NEXT_PUBLIC_BETA_ENVIRONMENT === "true";
 
+const FLAG_CACHE_LIMIT = 1024;
+const FLAG_ALLOW_TTL_MS = 30_000;
+const FLAG_DENY_TTL_MS = 5_000;
+const decisions = new Map<string, { allowed: boolean; expiresAt: number }>();
+const evaluating = new Map<string, Promise<boolean>>();
 let posthog: ReturnType<typeof getPostHogClient> | undefined;
+
+async function evaluateBetaFlag(userId: string): Promise<boolean> {
+    try {
+        posthog ??= getPostHogClient({ remoteFlagsOnly: true });
+        const flags = await posthog.evaluateFlags(userId, { flagKeys: [FLAG_NAME] });
+        return flags.getFlag(FLAG_NAME, { sendFeatureFlagEvents: false }) === true;
+    } catch {
+        return false;
+    }
+}
 
 /**
  * Access is evaluated server-side against the authenticated Supabase user ID,
@@ -51,11 +66,23 @@ export async function canAccessBeta(userId: string | null): Promise<boolean> {
         return false;
     }
 
-    try {
-        posthog ??= getPostHogClient();
-        return (await posthog.isFeatureEnabled(FLAG_NAME, userId)) === true;
-    } catch (error) {
-        console.error("Beta tester feature flag could not be evaluated", error);
-        return false;
-    }
+    const now = Date.now();
+    const cached = decisions.get(userId);
+    if (cached && cached.expiresAt > now) return cached.allowed;
+    const current = evaluating.get(userId);
+    if (current) return current;
+
+    // Bound memory per warm instance. An unavailable remote evaluation is
+    // never served a stale allow decision.
+    if (evaluating.size >= FLAG_CACHE_LIMIT) return false;
+    const evaluation = evaluateBetaFlag(userId).then(allowed => {
+        decisions.delete(userId);
+        if (decisions.size >= FLAG_CACHE_LIMIT)
+            decisions.delete(decisions.keys().next().value!);
+        decisions.set(userId, { allowed,
+            expiresAt: now + (allowed ? FLAG_ALLOW_TTL_MS : FLAG_DENY_TTL_MS) });
+        return allowed;
+    }).finally(() => evaluating.delete(userId));
+    evaluating.set(userId, evaluation);
+    return evaluation;
 }

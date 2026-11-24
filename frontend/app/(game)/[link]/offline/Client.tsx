@@ -41,7 +41,7 @@ import {
 } from "@/lib/playground/scheduler";
 import {
     loadPlaygroundMemory,
-    syncPlaygroundMemory,
+    startMemorySync,
 } from "@/lib/playground/memory-client";
 import { Icon } from "@/components/ui/Icon";
 import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
@@ -215,8 +215,10 @@ export default function Client({
     >({});
     const memoryByItemRef = useRef<Record<string, ItemMemoryState>>({});
     const [masteryNow, setMasteryNow] = useState(() => Date.now());
-    const pendingMemoryRef = useRef(new Map<string, ItemMemoryState>());
-    const syncInFlightRef = useRef<Promise<void> | null>(null);
+    const memorySyncRef = useRef<ReturnType<typeof startMemorySync> | null>(null);
+    const flushPendingMemory = useCallback(async () => {
+        await memorySyncRef.current?.queue.flush();
+    }, []);
     const decisionRef = useRef<CapturedDecision | null>(null);
     const answerDiagnosticRef = useRef<AnswerEvent | null>(null);
     const schedulerRef = useRef<SchedulerState | null>(null);
@@ -224,7 +226,7 @@ export default function Client({
     const expectedTypingAtStartRef = useRef(0);
     const predictedRetrievabilityAtPromptRef = useRef<number | null>(null);
     const authenticatedUserIdRef = useRef<string | null>(null);
-    const memoryPersistenceDisabledRef = useRef(false);
+    const memoryReadFailedRef = useRef(false);
     const [memoryReady, setMemoryReady] = useState(false);
     const [memoryError, setMemoryError] = useState<string | null>(null);
 
@@ -269,55 +271,16 @@ export default function Client({
         const itemIds = items.map((item) => item.id);
         const itemIdSet = new Set(itemIds);
 
-        const restorePendingMemory = (
-            userId: string,
-            memory: Record<string, ItemMemoryState>,
-        ) => {
-            try {
-                const queued: unknown = JSON.parse(
-                    localStorage.getItem(
-                        `playground-pending:${userId}:${room.id}`,
-                    ) ?? "[]",
-                );
-                if (!Array.isArray(queued)) return;
-
-                for (const value of queued) {
-                    if (!value || typeof value !== "object") continue;
-                    const pending = value as ItemMemoryState;
-                    if (
-                        pending.userId !== userId ||
-                        pending.roomId !== room.id ||
-                        !itemIdSet.has(pending.itemId) ||
-                        !Number.isFinite(pending.stability) ||
-                        !Number.isFinite(pending.difficulty) ||
-                        !Number.isFinite(pending.reviewCount)
-                    )
-                        continue;
-
-                    const remote = memory[pending.itemId];
-                    const pendingUpdatedAt =
-                        Date.parse(pending.updatedAt ?? "") || 0;
-                    const remoteUpdatedAt =
-                        Date.parse(remote?.updatedAt ?? "") || 0;
-                    if (!remote || pendingUpdatedAt >= remoteUpdatedAt) {
-                        memory[pending.itemId] = pending;
-                        pendingMemoryRef.current.set(pending.itemId, pending);
-                    }
-                }
-            } catch {
-                // A damaged or unavailable local cache must not prevent practice.
-            }
-        };
-
         const initializeFallback = (userId: string | null) => {
             authenticatedUserIdRef.current = userId;
             // A failed read means the existing history is unknown. Keep this
             // session's observations local until a later read can reconcile it.
-            memoryPersistenceDisabledRef.current = true;
+            memoryReadFailedRef.current = true;
 
             const fallbackMemory: Record<string, ItemMemoryState> = {};
             if (userId) {
-                restorePendingMemory(userId, fallbackMemory);
+                memorySyncRef.current = startMemorySync(userId, room.id, "offline", false);
+                memorySyncRef.current.queue.restore(fallbackMemory, itemIdSet);
                 schedulerRef.current =
                     loadSchedulerState(
                         "playground",
@@ -347,7 +310,7 @@ export default function Client({
         const loadMemory = async () => {
             let loaded: Awaited<ReturnType<typeof loadPlaygroundMemory>>;
             try {
-                loaded = await loadPlaygroundMemory(room.id);
+                loaded = await loadPlaygroundMemory(room.id, itemIds);
             } catch (error) {
                 if (cancelled) return;
                 const message =
@@ -378,7 +341,7 @@ export default function Client({
             const legacySchema =
                 "persistenceDisabled" in loaded &&
                 loaded.persistenceDisabled === true;
-            memoryPersistenceDisabledRef.current = legacySchema;
+            memoryReadFailedRef.current = false;
 
             if (!loaded.userId) {
                 authenticatedUserIdRef.current = null;
@@ -404,10 +367,11 @@ export default function Client({
                     iconName: "info",
                     title: "データベースの更新が必要です",
                     description:
-                        "既存の学習履歴を読み込んでプレイできますが、更新が完了するまで今回の進捗は保存されません。",
+                        "今回の進捗は端末に保存されます。データベースの更新後に同期されます。",
                 });
             }
-            restorePendingMemory(loaded.userId, loaded.memoryByItem);
+            memorySyncRef.current = startMemorySync(loaded.userId, room.id, "offline", !legacySchema);
+            memorySyncRef.current.queue.restore(loaded.memoryByItem, itemIdSet);
             memoryByItemRef.current = loaded.memoryByItem;
             schedulerRef.current =
                 loadSchedulerState(
@@ -425,6 +389,8 @@ export default function Client({
 
         return () => {
             cancelled = true;
+            memorySyncRef.current?.stop();
+            memorySyncRef.current = null;
         };
     }, [room.id, items, answerMode]);
 
@@ -470,7 +436,7 @@ export default function Client({
                 } catch { decisionRef.current = null; }
             } : undefined,
         )?.itemId;
-        if (!memoryPersistenceDisabledRef.current) {
+        if (!memoryReadFailedRef.current) {
             saveSchedulerState(
                 "playground",
                 authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
@@ -496,9 +462,10 @@ export default function Client({
                     : null,
             );
             setIsStarted(false);
+            void flushPendingMemory();
         }
         return item;
-    }, [chooseItemForTurn, answerMode, itemModes]);
+    }, [chooseItemForTurn, answerMode, itemModes, flushPendingMemory]);
 
     const startGame = useCallback(() => {
         if (!memoryReady || items.length === 0) return;
@@ -577,7 +544,7 @@ export default function Client({
         (item: Item, observation: RecallObservation) => {
             const userId =
                 authenticatedUserIdRef.current ??
-                (memoryPersistenceDisabledRef.current
+                (memoryReadFailedRef.current
                     ? SESSION_MEMORY_USER_ID
                     : GUEST_MEMORY_USER_ID);
 
@@ -625,7 +592,7 @@ export default function Client({
             }
             const freshestMemory =
                 authenticatedUserIdRef.current ||
-                memoryPersistenceDisabledRef.current
+                memoryReadFailedRef.current
                     ? memoryByItemRef.current
                     : mergeGuestMemory(
                           memoryByItemRef.current,
@@ -658,31 +625,18 @@ export default function Client({
                 [item.id]: nextMemory,
             };
 
-            if (
-                authenticatedUserIdRef.current &&
-                !memoryPersistenceDisabledRef.current
-            ) {
-                pendingMemoryRef.current.set(item.id, nextMemory);
-                // Persist the observation immediately, before a rapid reload.
-                // The existing debounced sync still sends it to the server.
-                try {
-                    localStorage.setItem(
-                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
-                        JSON.stringify([...pendingMemoryRef.current.values()]),
-                    );
-                } catch {
-                    // Local storage may be unavailable; the current game continues.
-                }
+            if (authenticatedUserIdRef.current && memorySyncRef.current && !memoryReadFailedRef.current) {
+                memorySyncRef.current.queue.enqueue(nextMemory);
             } else if (
                 !authenticatedUserIdRef.current &&
-                !memoryPersistenceDisabledRef.current
+                !memoryReadFailedRef.current
             ) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
             memoryByItemRef.current = nextMemoryByItem;
             setMemoryByItem(nextMemoryByItem);
             setMasteryNow(Date.now());
-            if (scheduler && !memoryPersistenceDisabledRef.current)
+            if (scheduler && !memoryReadFailedRef.current)
                 saveSchedulerState("playground", userId, room.id, scheduler);
             userReviewCountRef.current += 1;
 
@@ -747,12 +701,12 @@ export default function Client({
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
-                (memoryPersistenceDisabledRef.current
+                (memoryReadFailedRef.current
                     ? SESSION_MEMORY_USER_ID
                     : GUEST_MEMORY_USER_ID);
             const freshestMemory =
                 authenticatedUserIdRef.current ||
-                memoryPersistenceDisabledRef.current
+                memoryReadFailedRef.current
                     ? memoryByItemRef.current
                     : mergeGuestMemory(
                           memoryByItemRef.current,
@@ -785,22 +739,11 @@ export default function Client({
                 ...freshestMemory,
                 [item.id]: updated,
             };
-            if (
-                authenticatedUserIdRef.current &&
-                !memoryPersistenceDisabledRef.current
-            ) {
-                pendingMemoryRef.current.set(item.id, updated);
-                try {
-                    localStorage.setItem(
-                        `playground-pending:${authenticatedUserIdRef.current}:${room.id}`,
-                        JSON.stringify([...pendingMemoryRef.current.values()]),
-                    );
-                } catch {
-                    // The current session can continue if storage is unavailable.
-                }
+            if (authenticatedUserIdRef.current && memorySyncRef.current && !memoryReadFailedRef.current) {
+                memorySyncRef.current.queue.enqueue(updated);
             } else if (
                 !authenticatedUserIdRef.current &&
-                !memoryPersistenceDisabledRef.current
+                !memoryReadFailedRef.current
             ) {
                 nextMemoryByItem = saveGuestMemory(room.id, nextMemoryByItem);
             }
@@ -811,93 +754,6 @@ export default function Client({
         },
         [room.id, items, choiceCount],
     );
-
-    const cachePendingMemory = useCallback(() => {
-        const userId = authenticatedUserIdRef.current;
-        if (!userId) return;
-        try {
-            localStorage.setItem(
-                `playground-pending:${userId}:${room.id}`,
-                JSON.stringify([...pendingMemoryRef.current.values()]),
-            );
-        } catch {}
-    }, [room.id]);
-
-    const flushPendingMemory = useCallback(async () => {
-        if (
-            !authenticatedUserIdRef.current ||
-            memoryPersistenceDisabledRef.current
-        )
-            return;
-        cachePendingMemory();
-        if (syncInFlightRef.current) return syncInFlightRef.current;
-        const sync = async () => {
-            // Serialize requests so an older write cannot overtake a newer one.
-            while (pendingMemoryRef.current.size > 0) {
-                const snapshot = [...pendingMemoryRef.current.values()];
-                try {
-                    const error = await syncPlaygroundMemory(
-                        snapshot,
-                        room.id,
-                        "offline",
-                    );
-                    if (error) throw error;
-                    for (const synced of snapshot) {
-                        if (
-                            pendingMemoryRef.current.get(synced.itemId) ===
-                            synced
-                        )
-                            pendingMemoryRef.current.delete(synced.itemId);
-                    }
-                    cachePendingMemory();
-                } catch (error) {
-                    console.error("Failed to sync playground memory", error);
-                    break;
-                }
-            }
-        };
-        const promise = sync();
-        syncInFlightRef.current = promise;
-        try {
-            await promise;
-        } finally {
-            syncInFlightRef.current = null;
-        }
-    }, [room.id, cachePendingMemory]);
-
-    useEffect(() => {
-        if (!memoryReady || !authenticatedUserIdRef.current) return;
-        cachePendingMemory();
-        const timer = setTimeout(() => {
-            void flushPendingMemory();
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [memoryByItem, memoryReady, cachePendingMemory, flushPendingMemory]);
-
-    useEffect(() => {
-        if (!memoryReady || !authenticatedUserIdRef.current) return;
-        const retry = () => {
-            void flushPendingMemory();
-        };
-        const leaving = () => {
-            cachePendingMemory();
-            void flushPendingMemory();
-        };
-        const hidden = () => {
-            if (document.visibilityState === "hidden") leaving();
-        };
-        const interval = setInterval(retry, 5_000);
-        window.addEventListener("online", retry);
-        window.addEventListener("pagehide", leaving);
-        document.addEventListener("visibilitychange", hidden);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener("online", retry);
-            window.removeEventListener("pagehide", leaving);
-            document.removeEventListener("visibilitychange", hidden);
-            cachePendingMemory();
-        };
-    }, [memoryReady, cachePendingMemory, flushPendingMemory]);
 
     const handleRecallProgress = useCallback((progress: RecallProgress) => {
         recallProgressRef.current = progress;
@@ -957,7 +813,7 @@ export default function Client({
                 else recordRecognitionAnswer(
                     scheduler, item.id, hadMistake, Date.now(), exposureGapAtStartRef.current,
                 );
-                if (!memoryPersistenceDisabledRef.current) {
+                if (!memoryReadFailedRef.current) {
                     saveSchedulerState(
                         "playground",
                         authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,

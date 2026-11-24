@@ -30,7 +30,7 @@ const bundle = async (beta) => build({
                     ? "export const useFeatureFlagEnabled = () => false;"
                     : path === "posthog-js"
                       ? "export default {capture(){}};"
-                      : "export const loadPlaygroundMemory = async () => ({userId:null, memoryByItem:{}}); export const syncPlaygroundMemory = async () => ({error:null});",
+                      : "export const loadPlaygroundMemory = async () => ({userId:null, memoryByItem:{}}); export const startMemorySync = () => { throw new Error('guest fixture must not create a sync queue'); };",
           resolveDir: process.cwd(),
           loader: "js",
         }));
