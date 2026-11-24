@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, useSpring, useTransform } from "framer-motion";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import { getSlideCursorTarget, isSlideCursorActive, SLIDE_CURSOR_CHANGE } from "@/components/layout/slide-cursor";
 
 function getMorphCursorTarget(x: number, y: number) {
     const roots = document.querySelectorAll<HTMLElement>(
@@ -106,9 +107,9 @@ function CustomCursor() {
             mouse.current.x = x;
             mouse.current.y = y;
 
-            const destination = getMorphCursorTarget(x, y);
-            let hit: Element | null =
-                destination?.element ?? document.elementFromPoint(x, y);
+            const destination = getMorphCursorTarget(x, y) ?? getSlideCursorTarget(x, y);
+            let hit: Element | null = destination?.element ??
+                (isSlideCursorActive() ? null : document.elementFromPoint(x, y));
 
             if (hit && rootRef.current?.contains(hit)) {
                 hit = null;
@@ -278,6 +279,7 @@ function CustomCursor() {
         window.addEventListener("pointerup", onMouseUp);
 
         window.addEventListener("morphcursorchange", refresh);
+        window.addEventListener(SLIDE_CURSOR_CHANGE, refresh);
         window.addEventListener("resize", refresh);
         window.addEventListener("scroll", refresh, true);
         window.addEventListener("animationend", refresh, true);
@@ -291,6 +293,7 @@ function CustomCursor() {
             document.documentElement.classList.remove("custom-cursor-active");
 
             window.removeEventListener("morphcursorchange", refresh);
+            window.removeEventListener(SLIDE_CURSOR_CHANGE, refresh);
             window.removeEventListener("resize", refresh);
             window.removeEventListener("scroll", refresh, true);
             window.removeEventListener("animationend", refresh, true);
@@ -339,7 +342,8 @@ function CustomCursor() {
         <motion.div
             ref={rootRef}
             // Keep the cursor's stacking context above picker menus (z-index: 50).
-            className="z-100 pointer-events-none fixed"
+            data-slide-cursor
+            className="z-100 pointer-events-none fixed inset-0"
             style={{
                 opacity: isPointerActive ? cursorOpacity : 0,
             }}

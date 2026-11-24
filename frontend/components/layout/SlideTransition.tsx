@@ -3,6 +3,7 @@
 import { Component, createRef, type ReactNode } from "react";
 import { prefersReducedMotion, slideFrames, getSlideMotion } from "./slide-motion";
 import "./slide-motion.css";
+import { animateSlideEntrance } from "./slide-cursor";
 
 type Props = {
     children: ReactNode;
@@ -85,7 +86,11 @@ export default class SlideTransition extends Component<Props, object, Snapshot |
             fill: "forwards",
         });
         this.outgoing = outgoing;
-        this.incoming = live.animate(slideFrames("push-in", customDistance ?? live.offsetWidth, offset), timing);
+        this.incoming = animateSlideEntrance(
+            live,
+            slideFrames("push-in", customDistance ?? live.offsetWidth, offset),
+            timing,
+        );
         const finish = () => {
             if (this.outgoing !== outgoing) return;
             node.remove();

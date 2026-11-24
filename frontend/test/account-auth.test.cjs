@@ -345,3 +345,13 @@ test("navigation distance follows responsive Shell width without narrowing its v
     assert.match(css, /calc\(var\(--etb-navigation-old-width, 100%\) \* var\(--etb-slide-offset\) \* -1\)/);
     assert.match(css, /calc\(var\(--etb-navigation-new-width, 100%\) \* var\(--etb-slide-offset\) \* -1\)/);
 });
+
+test("native navigation keeps the cursor separate and refreshes on destination commit", () => {
+    const readLayout = file => readFileSync(new URL("../components/layout/" + file, `file://${__filename}`), "utf8");
+    const navigation = readLayout("Navigation.tsx");
+    const css = readLayout("navigation.css");
+    assert.match(navigation, /if \(matches && request\.transition\) beginNativeSlideCursor\(\);\s*stop\(request, !matches\)/);
+    assert.match(navigation, /endNativeSlideCursor\(\)/);
+    assert.match(css, /view-transition-name: etb-navigation-cursor/);
+    assert.match(css, /::view-transition-old\(etb-navigation-cursor\) \{\s*display: none/);
+});
