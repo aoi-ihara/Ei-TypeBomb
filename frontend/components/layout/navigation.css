@@ -3,18 +3,22 @@ html[data-etb-navigation]::view-transition-group(root),
 html[data-etb-navigation]::view-transition-new(root) {
     animation: none;
 }
+
 html[data-etb-navigation]::view-transition-old(root) {
     display: none;
 }
+
 html[data-etb-navigation]::view-transition-group(etb-navigation-content) {
     overflow: clip;
     z-index: 1;
     animation-duration: 300ms;
     animation-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
 }
+
 html[data-etb-navigation]::view-transition-image-pair(etb-navigation-content) {
     isolation: isolate;
 }
+
 html[data-etb-navigation]::view-transition-old(etb-navigation-content),
 html[data-etb-navigation]::view-transition-new(etb-navigation-content) {
     animation-duration: 300ms;
@@ -22,35 +26,62 @@ html[data-etb-navigation]::view-transition-new(etb-navigation-content) {
     animation-fill-mode: both;
     mix-blend-mode: normal;
 }
+
 html[data-etb-navigation="push"]::view-transition-old(etb-navigation-content) {
     animation-name: etb-navigation-under-out;
 }
+
 html[data-etb-navigation="push"]::view-transition-new(etb-navigation-content) {
     animation-name: etb-navigation-push-in;
     z-index: 1;
 }
+
 html[data-etb-navigation="pop"]::view-transition-old(etb-navigation-content) {
     animation-name: etb-navigation-pop-out;
     z-index: 1;
 }
+
 html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
     animation-name: etb-navigation-under-in;
 }
+
 @keyframes etb-navigation-push-in {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
 }
+
 @keyframes etb-navigation-pop-out {
-    from { transform: translateX(0); }
-    to { transform: translateX(100%); }
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(100%);
+    }
 }
+
 @keyframes etb-navigation-under-out {
-    from { transform: translateX(0); }
-    to { transform: translateX(-30%); opacity: 0; }
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+        opacity: 0;
+    }
 }
+
 @keyframes etb-navigation-under-in {
-    from { transform: translateX(-30%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+    from {
+        transform: translateX(-50%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 @media (prefers-reduced-motion: reduce) {
     html[data-etb-navigation]::view-transition-group(etb-navigation-content),
