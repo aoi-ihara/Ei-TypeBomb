@@ -1,0 +1,32 @@
+/* Keep the reveal area stable without depending on answer length. */
+.card-answer {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 8rem;
+}
+.card-answer-text, .card-mask {
+    grid-area: 1 / 1;
+}
+.card-answer-text {
+    max-height: 100%;
+    max-width: 100%;
+    overflow-y: auto;
+}
+.card-mask {
+    box-sizing: border-box;
+    width: 14rem;
+    max-width: 100%;
+    height: 3rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background-color: var(--color-background-secondary, #eee);
+}
+.card-mask[aria-hidden="true"] {
+    opacity: 0;
+    pointer-events: none;
+}
+.card-mask:not(:disabled) {
+    cursor: pointer;
+}

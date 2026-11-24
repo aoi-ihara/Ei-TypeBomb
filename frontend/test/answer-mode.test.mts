@@ -57,7 +57,7 @@ test("the answer-mode selector only offers selection when no answer is typable",
     );
     assert.deepEqual(
         getAnswerModeOptions(true).map((option) => option.value),
-        ["selection", "input"],
+        ["selection", "input", "card"],
     );
 });
 
@@ -515,4 +515,21 @@ test("legacy recognition history without stability remains readable", () => {
     });
     assert.ok(updated.answerModeStats!.recognition.stability! > 0);
     assert.equal(updated.answerModeStats!.recognition.lastReviewedAt, new Date(Date.parse(stamp) + 86_400_000).toISOString());
+});
+
+test("card self-assessment records recognition without distractors", () => {
+    assert.equal(getRecognitionChoiceCount("selection", 1), 1);
+    assert.equal(getRecognitionChoiceCount("card", 1), 2);
+    assert.equal(getRecognitionChoiceCount("card", 4), 4);
+    const now = new Date("2026-11-24T00:00:00Z");
+    for (const success of [true, false]) {
+        const rated = recordAnswerModeResult({
+            memory: undefined, userId: "u", roomId: "r", itemId: item.id,
+            mode: toLearningAnswerMode("card"), success, now,
+            choiceCount: getRecognitionChoiceCount("card", 1),
+        });
+        assert.equal(rated.answerModeStats?.recognition.attempts, 1);
+        assert.equal(rated.answerModeStats?.recognition.correct, Number(success));
+        assert.equal(rated.answerModeStats?.recognition.unknownCount ?? 0, 0);
+    }
 });

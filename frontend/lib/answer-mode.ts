@@ -9,6 +9,10 @@ export type OfflineAnswerMode = AnswerMode | "card";
 export const toLearningAnswerMode = (mode: OfflineAnswerMode): AnswerMode =>
     mode === "card" ? "selection" : mode;
 
+// Self-assessment remains a meaningful binary choice even without distractors.
+export const getRecognitionChoiceCount = (mode: OfflineAnswerMode, distinctAnswers: number): number =>
+    mode === "card" ? Math.max(2, distinctAnswers) : distinctAnswers;
+
 // ItemView falls back to selection for answers that cannot be typed.
 // Keep progress calculations in sync with the mode actually rendered.
 export const getEffectiveAnswerMode = (

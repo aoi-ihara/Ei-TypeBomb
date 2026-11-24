@@ -45,7 +45,7 @@ import {
     startMemorySync,
 } from "@/lib/playground/memory-client";
 import { Icon } from "@/components/ui/Icon";
-import { getEffectiveAnswerMode, getTypingAnswer, toLearningAnswerMode, type OfflineAnswerMode } from "@/lib/answer-mode";
+import { getEffectiveAnswerMode, getTypingAnswer, getRecognitionChoiceCount, toLearningAnswerMode, type OfflineAnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
@@ -210,7 +210,10 @@ export default function Client({
     const masteryItemIds = useMemo(() => items.map(item => item.id), [items]);
     const itemModes = useMemo(() => Object.fromEntries(items.map(item =>
         [item.id, getEffectiveAnswerMode(item, answerMode)])), [items, answerMode]);
-    const choiceCount = useMemo(() => new Set(items.map(item => item.answer).filter(Boolean)).size, [items]);
+    const choiceCount = useMemo(() => getRecognitionChoiceCount(
+        requestedAnswerMode,
+        new Set(items.map(item => item.answer).filter(Boolean)).size,
+    ), [items, requestedAnswerMode]);
 
 
     const [memoryByItem, setMemoryByItem] = useState<

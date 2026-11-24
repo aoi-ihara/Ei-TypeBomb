@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Item } from "@/type";
 import Button from "@/components/ui/Button";
+import "./card.css";
 import { isGameSpaceKeyDown } from "@/lib/selection-shortcut";
 import {
     createActiveResponseClock,
@@ -125,10 +126,10 @@ export default function Card({
             >
                 {/* Constant mask width and answer viewport avoid revealing
                     answer length or moving the prompt when it is uncovered. */}
-                <div className="relative grid h-32 w-full place-items-center">
+                <div className="card-answer relative grid h-32 w-full place-items-center">
                     <div
                         aria-live="polite"
-                        className={`col-start-1 row-start-1 max-h-full max-w-full overflow-y-auto whitespace-pre-wrap wrap-break-word text-center font-serif text-xl leading-loose transition-opacity duration-(--duration-etb) motion-reduce:transition-none ${hidden ? "opacity-0" : "opacity-100"}`}
+                        className={`card-answer-text col-start-1 row-start-1 max-h-full max-w-full overflow-y-auto whitespace-pre-wrap wrap-break-word text-center font-serif text-xl leading-loose transition-opacity duration-(--duration-etb) motion-reduce:transition-none ${hidden ? "opacity-0" : "opacity-100"}`}
                         data-cursor={hidden ? undefined : "text"}
                     >
                         {hidden ? null : item.answer}
@@ -142,7 +143,7 @@ export default function Card({
                         data-cursor={hidden ? "button" : undefined}
                         data-cursor-shape={hidden ? (disabled ? "2" : "0") : undefined}
                         onClick={() => reveal(false)}
-                        className={`col-start-1 row-start-1 h-12 w-56 max-w-full rounded-lg bg-(--color-background-secondary) transition-opacity duration-(--duration-etb) motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-600 ${hidden ? "cursor-pointer opacity-100" : "pointer-events-none opacity-0"}`}
+                        className={`card-mask col-start-1 row-start-1 h-12 w-56 max-w-full rounded-lg bg-(--color-background-secondary) transition-opacity duration-(--duration-etb) motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-600 ${hidden ? "cursor-pointer opacity-100" : "pointer-events-none opacity-0"}`}
                         style={{
                             backgroundImage: "repeating-linear-gradient(135deg, transparent 0 5px, color-mix(in srgb, var(--color-foreground) 13%, transparent) 5px 7px)",
                         }}
