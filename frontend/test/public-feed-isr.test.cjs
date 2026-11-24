@@ -375,9 +375,10 @@ test("page morph uses slide timing and retargets the live destination", () => {
     const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
     const morph = read("components/layout/page-morph.ts");
     assert.match(morph, /const \{ timing \} = getSlideMotion\(\)/);
-    assert.match(morph, /new ResizeObserver/);
-    assert.match(morph, /from = current;\s*fromMix = mix;/);
-    assert.match(morph, /interpolateMorphRect\(from, target,/);
+    assert.match(morph, /const next = measure\(\)/);
+    assert.match(morph, /clock = createMorphClock\(overlay, timing\)/);
+    assert.match(morph, /advanceMorphRect\(current, target, mix, progress\)/);
+    assert.doesNotMatch(morph, /restart\(/);
     assert.match(morph, /trackMorphCursorElement\(destination\)/);
     assert.match(read("components/ui/Morph.tsx"), /createMorphClock\(root,/);
 });

@@ -1,4 +1,4 @@
-import { createMorphClock, interpolateMorphRect, morphLerp, sameMorphRect, type MorphRect } from "./morph-motion";
+import { createMorphClock, advanceMorphRect, type MorphRect } from "./morph-motion";
 import { getSlideMotion, prefersReducedMotion } from "./slide-motion";
 import { trackMorphCursorElement } from "./slide-cursor";
 
@@ -74,7 +74,6 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
     let disposed = false;
     let frameId = 0;
     let clock: Animation | undefined;
-    let observer: ResizeObserver | undefined;
     let restore: (() => void) | undefined;
     let untrack: (() => void) | undefined;
     let stopMotion: (() => void) | undefined;
@@ -84,7 +83,6 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
         disposed = true;
         cancelAnimationFrame(frameId);
         clock?.cancel();
-        observer?.disconnect();
         stopMotion?.();
         restore?.();
         overlay.remove();
@@ -117,12 +115,7 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
 
         let current = origin;
         let mix = 0;
-        let from = current;
-        let fromMix = mix;
         let applied = { dx: 0, dy: 0, sx: 1, sy: 1 };
-        let segmentDuration = duration;
-        let geometryDirty = true;
-        let lastPaintedTarget = target;
 
         const paint = () => {
             const sx = current.width / target.width;
@@ -133,7 +126,6 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
             oldSource.style.transform = "translate(" + (current.x - origin.x) + "px, " + (current.y - origin.y) + "px) scale(" + (current.width / origin.width) + ", " + (current.height / origin.height) + ")";
             oldSource.style.opacity = String(1 - mix);
             oldPage.style.opacity = String(1 - mix);
-            lastPaintedTarget = target;
         };
 
         // Undo only our known transform mathematically. This reads the live
@@ -145,13 +137,6 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
                 width: visual.width / applied.sx, height: visual.height / applied.sy,
             };
         };
-        const restart = (remaining: number) => {
-            clock?.cancel();
-            from = current;
-            fromMix = mix;
-            segmentDuration = remaining;
-            clock = createMorphClock(overlay, { ...timing, duration: remaining });
-        };
         const finish = () => {
             dispose();
             onFinish();
@@ -160,38 +145,25 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
         document.body.append(overlay);
         paint();
         untrack = trackMorphCursorElement(destination);
-        observer = new ResizeObserver(() => { geometryDirty = true; });
-        observer.observe(destination);
-        observer.observe(viewport);
         const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
         const onMotion = () => { if (motion.matches) finish(); };
         motion.addEventListener("change", onMotion);
         stopMotion = () => motion.removeEventListener("change", onMotion);
-        restart(duration);
+        clock = createMorphClock(overlay, timing);
 
         const tick = () => {
             if (disposed) return;
             if (!destination.isConnected || !clock) { finish(); return; }
             const next = measure();
             if (!next.width || !next.height) { finish(); return; }
-            // Check coordinates too: a layout shift can move an element
-            // without resizing it (e.g. the header or document scroll).
-            if (geometryDirty || !sameMorphRect(next, lastPaintedTarget)) {
-                geometryDirty = false;
-                if (!sameMorphRect(next, target)) {
-                    const remaining = Math.max(120, segmentDuration - Number(clock.currentTime ?? 0));
-                    target = next;
-                    // Retarget from the last rendered frame, not the origin.
-                    restart(remaining);
-                    paint();
-                    frameId = requestAnimationFrame(tick);
-                    return;
-                }
-            }
-            const progress = clock.effect?.getComputedTiming().progress ?? 0;
-            const done = Number(clock.currentTime ?? 0) >= segmentDuration;
-            current = interpolateMorphRect(from, target, done ? 1 : progress);
-            mix = Math.min(1, Math.max(0, morphLerp(fromMix, 1, done ? 1 : progress)));
+            // Measure every frame, including position-only shifts. Retargeting
+            // must not reset the clock or skip this frame's elapsed progress.
+            target = next;
+            const done = Number(clock.currentTime ?? 0) >= duration;
+            const progress = done ? 1 : clock.effect?.getComputedTiming().progress ?? mix;
+            const advanced = advanceMorphRect(current, target, mix, progress);
+            current = advanced.rect;
+            mix = advanced.progress;
             paint();
             if (done) finish();
             else frameId = requestAnimationFrame(tick);
