@@ -1192,6 +1192,7 @@ test("solo answer speech plays after success, including after a full hint", () =
     for (const scenario of [
         { readAnswer: true, revealed: false, expected: ["apple"] },
         { readAnswer: true, revealed: true, expected: ["apple"] },
+        { readAnswer: true, revealed: false, answer: "こんにちは", lang: "ja-JP", expected: ["こんにちは"] },
         { readAnswer: false, revealed: false, expected: [] },
     ]) {
         const spoken = [];
@@ -1214,13 +1215,18 @@ test("solo answer speech plays after success, including after a full hint", () =
         const callback = getCallback("handleSuccess", {
             window: { speechSynthesis: synthesis },
             SpeechSynthesisUtterance: Utterance,
+            getSpeechLanguage: (text, side) => {
+                assert.equal(text, scenario.answer ?? "apple");
+                assert.equal(side, "answer");
+                return scenario.lang ?? "en-US";
+            },
             isPaused: false,
             readAnswer: scenario.readAnswer,
             answerSpeechRef,
             setAnswerSpeechVersion: (update) => { speechVersion = update(speechVersion); },
             soundEffects: false,
             successAudioRef: { current: null },
-            currentItemRef: { current: { id: "a", answer: "apple" } },
+            currentItemRef: { current: { id: "a", answer: scenario.answer ?? "apple" } },
             recallProgressRef: {
                 current: { answerWasFullyRevealed: scenario.revealed },
             },
@@ -1239,7 +1245,7 @@ test("solo answer speech plays after success, including after a full hint", () =
         assert.deepEqual(spoken.map(([text]) => text), scenario.expected);
         assert.deepEqual(nextItems, ["b"], "the next prompt belongs to the same player");
         if (scenario.expected.length) {
-            assert.equal(spoken[0][1], "en-US");
+            assert.equal(spoken[0][1], scenario.lang ?? "en-US");
             assert.equal(answerSpeechRef.current, utterances[0]);
             assert.equal(speechVersion, 0, "answer completion has not occurred yet");
             utterances[0].onend();
