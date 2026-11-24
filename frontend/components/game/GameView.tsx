@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import SlideTransition from "@/components/layout/SlideTransition";
 import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/recall/ItemView";
 import UsersView from "@/components/game/UsersView";
@@ -25,6 +26,7 @@ type Props = {
     bombStatus: number;
     currentItem: Item | null;
     itemPresentationKey?: number | string;
+    slideQuestion?: boolean;
     bombs?: GameBomb[];
     loserIds?: string[];
     loserNames?: string[];
@@ -82,6 +84,7 @@ export default function GameView({
     bombStatus,
     currentItem,
     itemPresentationKey = 0,
+    slideQuestion = false,
     bombs,
     loserIds,
     loserNames,
@@ -189,9 +192,77 @@ export default function GameView({
     ]);
 
     // A newly presented word should not inherit the previous word's shake.
-    useEffect(() => {
+    useLayoutEffect(() => {
         activeGameRef.current?.classList.remove("wrong-answer");
     }, [failureKey]);
+
+    const questionContent = currentItem === null ? null : (
+        <div className={`flex h-full ${soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
+            {soloMode ? null : currentTurnUser?.id === userId ? (
+                <div
+                    className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                    data-cursor="text"
+                >
+                    あなたの番です
+                </div>
+            ) : currentTurnUser ? (
+                <div
+                    className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
+                    data-cursor="text"
+                >
+                    {currentTurnUser.displayName + "の番です"}
+                </div>
+            ) : null}
+            <ItemView
+                key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
+                item={currentItem}
+                items={getRoomItems(room)}
+                answerMode={answerMode}
+                allowSelectionHint={soloMode}
+                onSelectionAnswer={(
+                    correct,
+                    hadMistake,
+                    responseMs,
+                    usedHint,
+                ) => {
+                    if (userId !== currentTurnUser?.id) return;
+                    if (!correct) triggerFailAnimation();
+                    onSelectionAnswer?.(
+                        correct,
+                        hadMistake,
+                        responseMs,
+                        usedHint,
+                    );
+                }}
+                remoteHintLength={remoteHintLength}
+                onHintChange={onHintChange}
+                hasDuplicatePrompt={hasDuplicatePrompt}
+                bombStatus={bombStatus}
+                onSuccess={onSuccess}
+                onChangeInput={(input, failed) => {
+                    if (userId !== currentTurnUser?.id) return;
+                    if (failed) triggerFailAnimation();
+                    onChangeInput(input, failed);
+                }}
+                currentInput={
+                    result !== null
+                        ? ""
+                        : userId === currentTurnUser?.id &&
+                            !isReconnecting
+                          ? null
+                          : currentInput
+                }
+                enableRemoteTypingSync={enableRemoteTypingSync}
+                learningMode={learningMode}
+                initialCueRatio={initialCueRatio}
+                cueSteps={cueSteps}
+                hintDelaysMs={hintDelaysMs}
+                onRecallProgress={onRecallProgress}
+                onRecallComplete={onRecallComplete}
+                isPaused={isPaused}
+            />
+        </div>
+    );
 
     const activeGame =
         currentItem === null ? (
@@ -203,7 +274,6 @@ export default function GameView({
             </div>
         ) : (
             <div
-                key={soloMode ? itemPresentationKey : undefined}
                 ref={activeGameRef}
                 className="flex h-full items-center justify-center flex-col gap-2 w-full"
                 onAnimationEnd={(event) => {
@@ -215,71 +285,14 @@ export default function GameView({
                 }}
             >
                 {masteryProgress}
-                <div className="flex h-full animate-appear items-center justify-center flex-col gap-2 w-full">
-                    {soloMode ? null : currentTurnUser?.id === userId ? (
-                        <div
-                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                            data-cursor="text"
-                        >
-                            あなたの番です
-                        </div>
-                    ) : currentTurnUser ? (
-                        <div
-                            className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
-                            data-cursor="text"
-                        >
-                            {currentTurnUser.displayName + "の番です"}
-                        </div>
-                    ) : null}
-                    <ItemView
-                        key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
-                        item={currentItem}
-                        items={getRoomItems(room)}
-                        answerMode={answerMode}
-                        allowSelectionHint={soloMode}
-                        onSelectionAnswer={(
-                            correct,
-                            hadMistake,
-                            responseMs,
-                            usedHint,
-                        ) => {
-                            if (userId !== currentTurnUser?.id) return;
-                            if (!correct) triggerFailAnimation();
-                            onSelectionAnswer?.(
-                                correct,
-                                hadMistake,
-                                responseMs,
-                                usedHint,
-                            );
-                        }}
-                        remoteHintLength={remoteHintLength}
-                        onHintChange={onHintChange}
-                        hasDuplicatePrompt={hasDuplicatePrompt}
-                        bombStatus={bombStatus}
-                        onSuccess={onSuccess}
-                        onChangeInput={(input, failed) => {
-                            if (userId !== currentTurnUser?.id) return;
-                            if (failed) triggerFailAnimation();
-                            onChangeInput(input, failed);
-                        }}
-                        currentInput={
-                            result !== null
-                                ? ""
-                                : userId === currentTurnUser?.id &&
-                                    !isReconnecting
-                                  ? null
-                                  : currentInput
-                        }
-                        enableRemoteTypingSync={enableRemoteTypingSync}
-                        learningMode={learningMode}
-                        initialCueRatio={initialCueRatio}
-                        cueSteps={cueSteps}
-                        hintDelaysMs={hintDelaysMs}
-                        onRecallProgress={onRecallProgress}
-                        onRecallComplete={onRecallComplete}
-                        isPaused={isPaused}
-                    />
-                </div>
+                {soloMode ? (
+                    <SlideTransition
+                        transitionKey={itemPresentationKey}
+                        enabled={slideQuestion && !isPaused}
+                    >
+                        {questionContent}
+                    </SlideTransition>
+                ) : questionContent}
             </div>
         );
 

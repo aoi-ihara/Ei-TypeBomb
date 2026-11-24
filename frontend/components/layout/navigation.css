@@ -1,3 +1,5 @@
+@import "./slide-motion.css";
+
 /* Only explicitly marked hierarchical navigation uses these snapshots. */
 html[data-etb-navigation]::view-transition-group(root),
 html[data-etb-navigation]::view-transition-new(root) {
@@ -11,8 +13,8 @@ html[data-etb-navigation]::view-transition-old(root) {
 html[data-etb-navigation]::view-transition-group(etb-navigation-content) {
     overflow: clip;
     z-index: 1;
-    animation-duration: 300ms;
-    animation-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+    animation-duration: var(--etb-slide-duration);
+    animation-timing-function: var(--etb-slide-easing);
 }
 
 html[data-etb-navigation]::view-transition-image-pair(etb-navigation-content) {
@@ -21,8 +23,8 @@ html[data-etb-navigation]::view-transition-image-pair(etb-navigation-content) {
 
 html[data-etb-navigation]::view-transition-old(etb-navigation-content),
 html[data-etb-navigation]::view-transition-new(etb-navigation-content) {
-    animation-duration: 300ms;
-    animation-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+    animation-duration: var(--etb-slide-duration);
+    animation-timing-function: var(--etb-slide-easing);
     animation-fill-mode: both;
     mix-blend-mode: normal;
 }
@@ -52,12 +54,14 @@ html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
     }
     to {
         transform: translateX(0);
+        opacity: 1;
     }
 }
 
 @keyframes etb-navigation-pop-out {
     from {
         transform: translateX(0);
+        opacity: 1;
     }
     to {
         transform: translateX(var(--etb-navigation-old-width, 100%));
@@ -68,10 +72,11 @@ html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
 @keyframes etb-navigation-under-out {
     from {
         transform: translateX(0);
+        opacity: 1;
     }
     to {
         transform: translateX(
-            calc(var(--etb-navigation-old-width, 100%) * -0.5)
+            calc(var(--etb-navigation-old-width, 100%) * var(--etb-slide-offset) * -1)
         );
         opacity: 0;
     }
@@ -80,7 +85,7 @@ html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
 @keyframes etb-navigation-under-in {
     from {
         transform: translateX(
-            calc(var(--etb-navigation-new-width, 100%) * -0.5)
+            calc(var(--etb-navigation-new-width, 100%) * var(--etb-slide-offset) * -1)
         );
         opacity: 0;
     }
