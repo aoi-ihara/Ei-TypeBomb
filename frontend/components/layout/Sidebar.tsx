@@ -35,7 +35,8 @@ function Sidebar({ items, children, actions }: SidebarProps) {
     let activePath = "";
     for (const item of items) {
         const path = normalizePath(item.href);
-        const matches = currentPath === path ||
+        const matches =
+            currentPath === path ||
             (path !== "/" && currentPath?.startsWith(path + "/"));
         if (matches && path.length > activePath.length) {
             activeItem = item;
@@ -56,11 +57,14 @@ function Sidebar({ items, children, actions }: SidebarProps) {
                         href={item.href}
                         className="w-fit shrink-0 sm:w-full"
                         alignment="left"
+                        padding="small"
                         iconName={item.iconName}
                         variant={item === activeItem ? "primary" : "default"}
                         aria-current={
                             item === activeItem
-                                ? currentPath === activePath ? "page" : "location"
+                                ? currentPath === activePath
+                                    ? "page"
+                                    : "location"
                                 : undefined
                         }
                     >
