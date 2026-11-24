@@ -1328,9 +1328,11 @@ test("memory action isolates invalid rows and maps existing room item IDs", asyn
     assert.equal((await sync([item])).type, "temporary");
 });
 
-test("memory sync adapter reports sampled success and safe failure metrics", () => {
+test("memory sync adapter handles beta auth errors and reports sampled safe metrics", async () => {
     const metrics = [];
+    const denied = "Beta tester access required";
     const listeners = new Map();
+    let rejection = new Error(denied);
     const events = {
         visibilityState: "hidden",
         addEventListener: (name, callback) => listeners.set(name, callback),
@@ -1341,10 +1343,13 @@ test("memory sync adapter reports sampled success and safe failure metrics", () 
     let stopped = 0;
     const { startMemorySync } = load("lib/playground/memory-client.ts", {
         Math: { random: () => 0 },
+        Error,
         window: events,
         document: events,
         require: id => ({
             "posthog-js": { default: { capture: (event, properties) => metrics.push([event, properties]) } },
+            "@/lib/auth/beta-action": { BETA_ACTION_DENIED: denied },
+            "./memory-actions": { syncPlaygroundMemory: async () => { throw rejection; } },
             "./memory-queue": { MemoryQueue: class {
                 constructor(value) { options = value; }
                 flush() { flushes++; }
@@ -1353,6 +1358,9 @@ test("memory sync adapter reports sampled success and safe failure metrics", () 
         })[id],
     });
     const sync = startMemorySync("user-secret", "room-secret", "online");
+    assert.equal((await options.send([initial()])).type, "auth_required");
+    rejection = new Error("network failure");
+    await assert.rejects(options.send([initial()]), rejection);
     listeners.get("pagehide")();
     listeners.get("visibilitychange")();
     listeners.get("online")();

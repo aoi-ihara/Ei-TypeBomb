@@ -117,6 +117,7 @@ function proxyFixture({
     allowed = false,
     pathname = "/",
     refresh = false,
+    action = false,
 } = {}) {
     const exports = {};
     const calls = [];
@@ -154,18 +155,22 @@ function proxyFixture({
             },
         },
         require(name) {
-            if (name === "next/server")
-                return {
-                    NextResponse: {
-                        next: () => response("next"),
-                        rewrite: (url, options) =>
-                            response("rewrite", url.pathname, options?.status),
-                        json: (body, options) => ({
-                            ...response("json", undefined, options?.status),
-                            body,
-                        }),
-                    },
-                };
+            if (name === "next/server") {
+                class NextResponse {
+                    constructor(body, options) {
+                        Object.assign(this, response("text", undefined, options.status), { body });
+                        this.headers = new Map(Object.entries(options.headers));
+                    }
+                    static next() { return response("next"); }
+                    static rewrite(url, options) { return response("rewrite", url.pathname, options?.status); }
+                    static json(body, options) {
+                        return { ...response("json", undefined, options?.status), body };
+                    }
+                }
+                return { NextResponse };
+            }
+            if (name === "@/lib/auth/beta-action")
+                return { BETA_ACTION_DENIED: "Beta tester access required" };
             if (name === "@supabase/ssr")
                 return {
                     createServerClient: (_url, _key, options) => ({
@@ -205,6 +210,8 @@ function proxyFixture({
     const request = {
         nextUrl: { pathname, clone: () => ({ pathname }) },
         url: "https://beta.example" + pathname,
+        method: action ? "POST" : "GET",
+        headers: new Map(action ? [["next-action", "action-id"]] : []),
         cookies: {
             getAll: () => [...requestCookies].map(([name, value]) => ({ name, value })),
             set: (name, value) => requestCookies.set(name, value),
@@ -347,5 +354,16 @@ test("beta verification preserves refreshed cookies on both approval and refusal
         assert.ok(response.cookies.getAll().every(cookie => cookie.secure));
         assert.equal(request.cookies.getAll()[0].value, "fresh");
         if (allowed) assert.equal(response.headers.get("cache-control"), "private, no-store");
+    }
+});
+
+test("denied beta Server Actions receive the auth error without reaching the app", async () => {
+    for (const userId of [null, "person"]) {
+        const { proxy, request } = proxyFixture({ userId, pathname: "/room/offline", action: true });
+        const response = await proxy(request);
+        assert.equal(response.kind, "text");
+        assert.equal(response.status, userId ? 403 : 401);
+        assert.equal(response.headers.get("Content-Type"), "text/plain");
+        assert.equal(response.body, "Beta tester access required");
     }
 });

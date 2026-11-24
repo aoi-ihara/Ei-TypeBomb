@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { BETA_ACTION_DENIED } from "@/lib/auth/beta-action";
 import { cookieOptions } from "@/lib/db/cookie-options";
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessBeta, isBetaEnvironment, isPublicBetaPath } from "@/lib/beta-access";
@@ -67,15 +68,20 @@ export async function proxy(request: NextRequest) {
     if (userId && await canAccessBeta(userId)) return response;
 
     const headers = { "Cache-Control": "private, no-store, max-age=0" };
-    const denied = pathname.startsWith("/api/")
-        ? NextResponse.json(
-              { error: "Beta tester access required" },
-              { status: userId ? 403 : 401, headers },
-          )
-        : NextResponse.rewrite(
-              new URL("/beta-access-denied", request.url),
-              { status: 403, headers },
-          );
+    const status = userId ? 403 : 401;
+    let denied: NextResponse;
+    if (request.method === "POST" && request.headers.has("next-action")) {
+        denied = new NextResponse(BETA_ACTION_DENIED, {
+            status,
+            headers: { ...headers, "Content-Type": "text/plain" },
+        });
+    } else if (pathname.startsWith("/api/")) {
+        denied = NextResponse.json({ error: BETA_ACTION_DENIED }, { status, headers });
+    } else {
+        denied = NextResponse.rewrite(new URL("/beta-access-denied", request.url), {
+            status: 403, headers,
+        });
+    }
     // Retain any Supabase session refresh/clear cookies produced above.
     response.cookies.getAll().forEach((cookie) => denied.cookies.set(cookie));
     return denied;

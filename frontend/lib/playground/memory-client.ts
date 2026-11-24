@@ -1,4 +1,5 @@
 import posthog from "posthog-js";
+import { BETA_ACTION_DENIED } from "@/lib/auth/beta-action";
 import { createClient } from "@/lib/db/client";
 import { syncPlaygroundMemory } from "./memory-actions";
 import { MemoryQueue } from "./memory-queue";
@@ -12,7 +13,16 @@ export function startMemorySync(userId: string, roomId: string, mode: "online" |
         roomId,
         storage: () => localStorage,
         online: () => enabled && navigator.onLine,
-        send: rows => syncPlaygroundMemory(roomId, userId, rows),
+        async send(rows) {
+            try {
+                return await syncPlaygroundMemory(roomId, userId, rows);
+            } catch (error) {
+                // The beta gate can refuse the request before the action runs.
+                if (error instanceof Error && error.message === BETA_ACTION_DENIED)
+                    return { type: "auth_required" };
+                throw error;
+            }
+        },
         async runExclusive(name, task) {
             if (!navigator.locks) return task();
             let started = false;
