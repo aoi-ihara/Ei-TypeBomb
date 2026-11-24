@@ -8,10 +8,24 @@ type Detector = (text: string) => Candidate[];
 const SAMPLE_LIMIT = 64;
 const CACHE_LIMIT = 1024;
 const letters = new RegExp("\\p{L}", "gu");
-const latin = new RegExp("^\\p{Script=Latin}+$", "u");
+// Homogeneous scripts must match the locale; mixed text goes through the model.
+const scriptCodes: Record<string, string> = {
+    Latin: "Latn", Cyrillic: "Cyrl", Greek: "Grek", Arabic: "Arab",
+    Hebrew: "Hebr", Devanagari: "Deva", Bengali: "Beng",
+    Gurmukhi: "Guru", Gujarati: "Gujr", Oriya: "Orya",
+    Tamil: "Taml", Telugu: "Telu", Kannada: "Knda", Malayalam: "Mlym",
+    Sinhala: "Sinh", Thai: "Thai", Lao: "Laoo", Myanmar: "Mymr",
+    Khmer: "Khmr", Georgian: "Geor", Armenian: "Armn",
+    Ethiopic: "Ethi", Tibetan: "Tibt", Mongolian: "Mong",
+};
+const scriptMatchers = Object.entries(scriptCodes).map(([script, code]) => ({
+    code,
+    pattern: new RegExp("^\\p{Script_Extensions=" + script + "}+$", "u"),
+}));
 const han = new RegExp("^\\p{Script=Han}+$", "u");
 
 function scriptLanguage(text: string): string | undefined {
+    text = text.normalize("NFKC");
     if (/[\u3041-\u3096\u30a1-\u30fa\u31f0-\u31ff]/u.test(text)) return "ja";
     if (/[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/u.test(text)) return "ko";
     return undefined;
@@ -29,17 +43,16 @@ function languageTag(lang: string): string {
 }
 
 function compatible(text: string, lang: string): boolean {
-    const chars = (text.match(letters) ?? []).join("");
+    const chars = (text.normalize("NFKC").match(letters) ?? []).join("");
     if (!chars) return true;
     if (han.test(chars)) return /^(ja|zh)(-|$)/i.test(lang);
-    if (latin.test(chars)) {
-        try {
-            return new Intl.Locale(lang).maximize().script === "Latn";
-        } catch {
-            return false;
-        }
+    const script = scriptMatchers.find(({ pattern }) => pattern.test(chars));
+    if (!script) return true;
+    try {
+        return new Intl.Locale(lang).maximize().script === script.code;
+    } catch {
+        return false;
     }
-    return true;
 }
 
 function confident(candidates: Candidate[], minScore = 0.45): boolean {
@@ -60,7 +73,7 @@ export function createSpeechLanguageResolver(
     const resolved = new Map<string, string>();
 
     function candidates(text: string): Candidate[] {
-        const key = text.trim().slice(0, 1000);
+        const key = text.normalize("NFKC").trim().slice(0, 1000);
         const cached = candidatesByText.get(key);
         if (cached) return cached;
         let result: Candidate[] = [];
@@ -87,7 +100,7 @@ export function createSpeechLanguageResolver(
         for (const text of new Set(samples)) {
             const script = scriptLanguage(text);
             const options = script ? [] : candidates(text);
-            const chars = (text.match(letters) ?? []).join("");
+            const chars = (text.normalize("NFKC").match(letters) ?? []).join("");
             const lang = script ?? (
                 chars.length >= 5 && !han.test(chars) && confident(options)
                     ? options[0].lang : undefined
@@ -115,7 +128,7 @@ export function createSpeechLanguageResolver(
         const key = JSON.stringify([side, text, browserLanguage]);
         const cached = resolved.get(key);
         if (cached) return cached;
-        const chars = (text.match(letters) ?? []).join("");
+        const chars = (text.normalize("NFKC").match(letters) ?? []).join("");
         const script = scriptLanguage(text);
         let lang = script;
         if (!lang) {
@@ -131,10 +144,12 @@ export function createSpeechLanguageResolver(
                 lang = first.lang;
             } else if (priorCompatible) {
                 lang = prior;
-            } else if (first && chars.length >= 3) {
+            } else if (first && chars.length >= 3 && confident(options)) {
                 lang = first.lang;
             } else if (browserCompatible) {
                 lang = browserLanguage;
+            } else if (first && chars.length >= 3) {
+                lang = first.lang;
             }
         }
         // Preserve a useful fallback for ambiguous symbols or unavailable models.

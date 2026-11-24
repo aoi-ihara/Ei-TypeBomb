@@ -50,3 +50,37 @@ test("real local detector recognizes full multilingual phrases", () => {
     assert.equal(resolve("Bonjour, comment allez-vous aujourd'hui ?", "answer"), "fr-FR");
     assert.equal(resolve("これは日本語の文章です。", "answer"), "ja-JP");
 });
+
+test("half-width katakana is recognized as Japanese", () => {
+    const resolve = createSpeechLanguageResolver([], () => []);
+    assert.equal(resolve("ﾈｺ", "answer", "en-US"), "ja-JP");
+    assert.equal(resolve("ﾊﾟﾝ", "prompt", "en-US"), "ja-JP");
+    assert.equal(resolve("ｶﾞｸ", "answer", "en-US"), "ja-JP");
+});
+
+test("room and browser priors cannot override incompatible scripts", () => {
+    const detector = (text: string) => {
+        if (text === "hello" || text === "world") return [{ lang: "en", accuracy: 0.9 }];
+        if (text === "дом" || text === "кот") return strong("ru");
+        if (text === "γεια") return strong("el");
+        if (text === "بيت") return strong("ar");
+        return [];
+    };
+    const resolve = createSpeechLanguageResolver([
+        { prompt: "こんにちは", answer: "hello" },
+        { prompt: "ありがとう", answer: "world" },
+    ], detector);
+    assert.equal(resolve("дом", "answer", "ru-RU"), "ru-RU");
+    assert.equal(resolve("кот", "answer", "en-US"), "ru-RU");
+    assert.equal(resolve("γεια", "answer", "en-US"), "el-GR");
+    assert.equal(resolve("بيت", "answer", "en-US"), "ar-EG");
+    assert.equal(resolve("д", "answer", "ru-RU"), "ru-RU");
+    assert.equal(resolve("hello", "answer", "ru-RU"), "en-US");
+});
+
+test("compatible browser locale takes priority over weak model evidence", () => {
+    const resolve = createSpeechLanguageResolver([], model);
+    assert.equal(resolve("chat", "answer", "fr-CA"), "fr-CA");
+    assert.equal(resolve("chat", "answer", "ja-JP"), "en-US");
+    assert.equal(resolve("bonjour", "answer", "en-US"), "fr-FR");
+});
