@@ -14,6 +14,7 @@ export default function RoomDetailShell({ title, children }: { title: string; ch
             className="grid lg:grid-cols-2 gap-4 px-4"
             back={backHref}
             size="xlarge"
+            morphTarget
         >
             {children}
         </Shell>

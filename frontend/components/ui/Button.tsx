@@ -1,10 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";
 import Link from "next/link";
-import { useNavigation, type NavigationDirection } from "../layout/Navigation";
+import { useNavigation, type NavigationDirection, type NavigationTransition } from "../layout/Navigation";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
@@ -33,6 +33,8 @@ type ButtonProps = Pick<
     prefetch?: boolean;
     navigation?: NavigationDirection;
     navigationScope?: "local" | "root";
+    navigationTransition?: NavigationTransition;
+    navigationMorphSource?: React.RefObject<HTMLElement | null>;
     font?: "default" | "mono" | "serif";
 };
 
@@ -75,10 +77,13 @@ export default function Button({
     prefetch,
     navigation,
     navigationScope = "local",
+    navigationTransition = "slide",
+    navigationMorphSource,
     font,
     ...ariaProps
 }: ButtonProps) {
     const navigate = useNavigation(navigationScope);
+    const linkRef = useRef<HTMLAnchorElement>(null);
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant === "text" && padding === "xsmall"
@@ -99,11 +104,17 @@ export default function Button({
                 data-cursor-shape={cursor}
             >
                 <Link
+                    ref={linkRef}
                     href={href}
                     prefetch={prefetch}
                     onNavigate={(event) => {
                         if (navigation && !disabled && !loading) {
-                            navigate?.(href, navigation, event.preventDefault);
+                            const source = navigationMorphSource?.current ?? linkRef.current;
+                            navigate?.(href, navigation, event.preventDefault,
+                                navigationTransition === "morph" && source
+                                    ? { transition: "morph", source }
+                                    : undefined,
+                            );
                         }
                     }}
                     {...ariaProps}

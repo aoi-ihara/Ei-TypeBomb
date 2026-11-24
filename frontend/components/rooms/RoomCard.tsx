@@ -106,7 +106,10 @@ export default function RoomCard({
                     }}
                     onNavigate={(event) => {
                         startNavigationProgress();
-                        navigate?.(`/${roomLink}`, "push", event.preventDefault);
+                        const source = articleRef.current;
+                        navigate?.(`/${roomLink}`, "push", event.preventDefault,
+                            source ? { transition: "morph", source } : undefined,
+                        );
                     }}
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     onMouseEnter={prefetchOnIntent}
@@ -172,6 +175,8 @@ export default function RoomCard({
                 <Button
                     href={`/${roomLink}`}
                     navigation="push"
+                    navigationTransition="morph"
+                    navigationMorphSource={articleRef}
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"

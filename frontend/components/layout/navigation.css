@@ -127,3 +127,51 @@ html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
         animation: none;
     }
 }
+
+/* A named card and the destination Shell share one geometry animation.
+ * The rest of the list/detail crossfades instead of sliding underneath it. */
+html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-content),
+html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-content),
+html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-content),
+html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-morph),
+html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-morph),
+html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-morph) {
+    animation-duration: var(--duration-etb, 400ms);
+    animation-timing-function: var(--ease-etb, ease);
+    animation-fill-mode: both;
+}
+html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-morph) {
+    z-index: 2;
+    pointer-events: none;
+}
+html[data-etb-navigation="morph"]::view-transition-image-pair(etb-navigation-morph) {
+    isolation: isolate;
+}
+html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-content),
+html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-morph) {
+    animation-name: etb-navigation-morph-out;
+    mix-blend-mode: normal;
+}
+html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-content),
+html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-morph) {
+    animation-name: etb-navigation-morph-in;
+    mix-blend-mode: normal;
+}
+@keyframes etb-navigation-morph-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+@keyframes etb-navigation-morph-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-morph),
+    html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-morph),
+    html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-morph),
+    html[data-etb-navigation="morph"]::view-transition-group(etb-navigation-content),
+    html[data-etb-navigation="morph"]::view-transition-old(etb-navigation-content),
+    html[data-etb-navigation="morph"]::view-transition-new(etb-navigation-content) {
+        animation: none;
+    }
+}

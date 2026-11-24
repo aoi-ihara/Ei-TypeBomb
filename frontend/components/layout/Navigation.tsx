@@ -14,11 +14,14 @@ import { slideFrames, getSlideMotion, prefersReducedMotion } from "./slide-motio
 import { animateSlideEntrance, beginNativeSlideCursor, endNativeSlideCursor } from "./slide-cursor";
 
 export type NavigationDirection = "push" | "pop";
+export type NavigationTransition = "slide" | "morph";
+type NavigationOptions = { transition: "morph"; source: HTMLElement };
 
 type Navigate = (
     href: string,
     direction: NavigationDirection,
     preventDefault: () => void,
+    options?: NavigationOptions,
 ) => void;
 
 type Request = {
@@ -27,6 +30,7 @@ type Request = {
     timer?: ReturnType<typeof setTimeout>;
     complete?: () => void;
     transition?: ViewTransition;
+    morph?: { source: HTMLElement; destination?: HTMLElement };
 };
 
 const NavigationContext = createContext<Navigate | null>(null);
@@ -52,6 +56,13 @@ export function useNavigation(scope: "local" | "root" = "local") {
     return scope === "root" ? root : local ?? root;
 }
 
+function clearMorph(request: Request) {
+    const morph = request.morph;
+    if (!morph) return;
+    morph.source.style.removeProperty("view-transition-name");
+    morph.destination?.style.removeProperty("view-transition-name");
+}
+
 function stop(request: Request, skip = false) {
     clearTimeout(request.timer);
     if (skip) request.transition?.skipTransition();
@@ -70,7 +81,10 @@ export default function Navigation({ children, root = false }: { children: React
     function cancel() {
         if (pending.current) stop(pending.current, true);
         pending.current = null;
-        if (active.current) stop(active.current, true);
+        if (active.current) {
+            stop(active.current, true);
+            clearMorph(active.current);
+        }
         active.current = null;
         animation.current?.cancel();
         animation.current = null;
@@ -107,6 +121,17 @@ export default function Navigation({ children, root = false }: { children: React
         pending.current = null;
         const matches = normalize(pathname) === request.target;
         const width = viewport.current ? navigationWidth(viewport.current) : 0;
+        if (matches && request.transition && request.morph) {
+            const destination = viewport.current?.querySelector<HTMLElement>("[data-navigation-morph-target]");
+            // A password gate, error or redirect is not a room-detail morph target.
+            if (!destination || !destination.getBoundingClientRect().height) {
+                stop(request, true);
+                return;
+            }
+            request.morph.source.style.removeProperty("view-transition-name");
+            request.morph.destination = destination;
+            destination.style.viewTransitionName = "etb-navigation-morph";
+        }
         if (matches && request.transition && width > 0) {
             document.documentElement.style.setProperty("--etb-navigation-new-width", `${width}px`);
         }
@@ -126,7 +151,7 @@ export default function Navigation({ children, root = false }: { children: React
         ) : null;
     }, [pathname]);
 
-    const navigate: Navigate = (href, direction, preventDefault) => {
+    const navigate: Navigate = (href, direction, preventDefault, options) => {
         cancel();
         const node = viewport.current;
         if (!node || prefersReducedMotion()) return;
@@ -146,7 +171,13 @@ export default function Navigation({ children, root = false }: { children: React
                 root.style.setProperty("--etb-navigation-new-width", `${width}px`);
             }
             node.style.viewTransitionName = "etb-navigation-content";
-            root.dataset.etbNavigation = direction;
+            const source = options?.source;
+            const rect = source?.getBoundingClientRect();
+            if (options?.transition === "morph" && source && node.contains(source) && rect?.width && rect.height) {
+                request.morph = { source };
+                source.style.viewTransitionName = "etb-navigation-morph";
+            }
+            root.dataset.etbNavigation = request.morph ? "morph" : direction;
             active.current = request;
             try {
                 const transition = document.startViewTransition(async () => {
@@ -167,6 +198,7 @@ export default function Navigation({ children, root = false }: { children: React
                 const cleanup = () => {
                     if (active.current !== request) return;
                     active.current = null;
+                    clearMorph(request);
                     clearTransitionStyles();
                     node.style.viewTransitionName = "";
                     endNativeSlideCursor();
@@ -176,6 +208,8 @@ export default function Navigation({ children, root = false }: { children: React
                 return;
             } catch {
                 active.current = null;
+                clearMorph(request);
+                request.morph = undefined;
                 clearTransitionStyles();
                 node.style.viewTransitionName = "";
             }

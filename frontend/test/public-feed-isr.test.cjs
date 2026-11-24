@@ -344,7 +344,7 @@ test("room lists and details share the existing directional navigation and Shell
     assert.match(detail, /<RoomDetailShell title=\{title\}>/);
     assert.match(shell, /size="xlarge"/);
     assert.match(shell, /back=\{backHref\}/);
-    assert.match(card, /navigate\?\.\(`\/\$\{roomLink\}`, "push", event\.preventDefault\)/);
+    assert.match(card, /navigate\?\.\(`\/\$\{roomLink\}`, "push", event\.preventDefault,\s+source \? \{ transition: "morph", source \}/);
     assert.match(card, /href=\{`\/\$\{roomLink\}`\}\s+navigation="push"/);
     assert.match(card, /href=\{`\/\$\{roomLink\}\/edit`\}\s+navigation="push"\s+navigationScope="root"/);
 });
@@ -355,4 +355,19 @@ test("editor links use a persistent root navigation across route groups", () => 
     assert.match(read("app/(game)/(browse)/[link]/PlayRoom.tsx"), /href=\{"\/" \+ link \+ "\/edit"\}\s+prefetch=\{false\}\s+navigation="push"\s+navigationScope="root"/);
     assert.match(read("components/ui/Button.tsx"), /useNavigation\(navigationScope\)/);
     assert.doesNotMatch(read("app/(editor)/[link]/edit/EditorClient.tsx"), /animateAppear=\{true\}/);
+});
+
+test("room-card entry uses the shared element morph while editor and return keep slide", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const card = read("components/rooms/RoomCard.tsx");
+    const nav = read("components/layout/Navigation.tsx");
+    const css = read("components/layout/navigation.css");
+    assert.match(card, /navigationTransition="morph"\s+navigationMorphSource=\{articleRef\}/);
+    assert.match(read("app/(game)/(browse)/[link]/RoomDetailShell.tsx"), /size="xlarge"\s+morphTarget/);
+    assert.match(nav, /source\.style\.viewTransitionName = "etb-navigation-morph"/);
+    assert.match(nav, /destination\.style\.viewTransitionName = "etb-navigation-morph"/);
+    assert.match(nav, /clearMorph\(request\)/);
+    assert.match(css, /animation-duration: var\(--duration-etb, 400ms\)/);
+    assert.match(css, /animation-timing-function: var\(--ease-etb, ease\)/);
+    assert.match(card, /href=\{\x60\/\$\{roomLink\}\/edit\x60\}\s+navigation="push"\s+navigationScope="root"/);
 });
