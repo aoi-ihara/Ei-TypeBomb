@@ -55,14 +55,19 @@ function ControlsFixture() {
     </>
   );
 }
+const params = new URLSearchParams(location.search);
+const card = params.has("card");
+const single = card && params.has("single");
+const practiceRoom = single ? { ...room, items: items.slice(0, 1) } : room;
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {location.search ? (
+    {location.search && !card ? (
       <ControlsFixture />
     ) : (
       <OfflineClient
-        room={room}
-        answerMode="selection"
+        room={practiceRoom}
+        answerMode={card ? "card" : "selection"}
         initialBackgroundMusic={false}
         initialSounDeffects={false}
       />

@@ -3,6 +3,15 @@ import { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
 export { getTypingAnswer };
 
 export type AnswerMode = "selection" | "input";
+export type OfflineAnswerMode = AnswerMode | "card";
+
+// Card practice deliberately shares the selection memory model for now.
+export const toLearningAnswerMode = (mode: OfflineAnswerMode): AnswerMode =>
+    mode === "card" ? "selection" : mode;
+
+// Self-assessment remains a meaningful binary choice even without distractors.
+export const getRecognitionChoiceCount = (mode: OfflineAnswerMode, distinctAnswers: number): number =>
+    mode === "card" ? Math.max(2, distinctAnswers) : distinctAnswers;
 
 // ItemView falls back to selection for answers that cannot be typed.
 // Keep progress calculations in sync with the mode actually rendered.
@@ -15,23 +24,22 @@ export const getEffectiveAnswerMode = (
         : "selection";
 
 export const ANSWER_MODE_OPTIONS: {
-    value: AnswerMode;
+    value: OfflineAnswerMode;
     label: string;
 }[] = [
     { value: "selection", label: "選択" },
     { value: "input", label: "入力" },
+    { value: "card", label: "カード" },
 ];
 
 export const normalizeAnswerMode = (
     value: unknown,
     hasTypingAnswers: boolean,
-): AnswerMode =>
-    value === "input" && hasTypingAnswers ? "input" : "selection";
+): OfflineAnswerMode =>
+    value === "card" ? "card" : value === "input" && hasTypingAnswers ? "input" : "selection";
 
 export const getAnswerModeOptions = (hasTypingAnswers: boolean) =>
-    hasTypingAnswers
-        ? ANSWER_MODE_OPTIONS
-        : [ANSWER_MODE_OPTIONS[0]];
+    ANSWER_MODE_OPTIONS.filter(option => hasTypingAnswers || option.value !== "input");
 
 const shuffle = <T,>(values: T[], random: () => number): T[] => {
     const result = [...values];

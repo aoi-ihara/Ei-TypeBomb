@@ -7,6 +7,8 @@ import {
     getTypingAnswer,
     getEffectiveAnswerMode,
     normalizeAnswerMode,
+    toLearningAnswerMode,
+    getRecognitionChoiceCount,
 } from "../lib/answer-mode";
 import {
     createInitialMemory,
@@ -50,14 +52,14 @@ const items: Item[] = [
     { id: "pear", type: "typed_recall", prompt: "梨", answer: "pear" },
 ];
 
-test("the answer-mode selector only offers selection when no answer is typable", () => {
+test("the answer-mode selector offers card even when no answer is typable", () => {
     assert.deepEqual(
         getAnswerModeOptions(false).map((option) => option.value),
-        ["selection"],
+        ["selection", "card"],
     );
     assert.deepEqual(
         getAnswerModeOptions(true).map((option) => option.value),
-        ["selection", "input"],
+        ["selection", "input", "card"],
     );
 });
 
@@ -74,6 +76,11 @@ test("typing uses only the first valid kana candidate, then the original answer"
     assert.equal(normalizeAnswerMode("input", true), "input");
     assert.equal(normalizeAnswerMode("auto", true), "selection");
     assert.equal(normalizeAnswerMode("input", false), "selection");
+    assert.equal(normalizeAnswerMode("card", false), "card");
+    assert.equal(normalizeAnswerMode("card", true), "card");
+    assert.equal(toLearningAnswerMode("card"), "selection");
+    assert.equal(toLearningAnswerMode("input"), "input");
+    assert.equal(toLearningAnswerMode("selection"), "selection");
 });
 
 test("effective answer mode follows ItemView's per-item typing fallback", () => {
@@ -510,4 +517,21 @@ test("legacy recognition history without stability remains readable", () => {
     });
     assert.ok(updated.answerModeStats!.recognition.stability! > 0);
     assert.equal(updated.answerModeStats!.recognition.lastReviewedAt, new Date(Date.parse(stamp) + 86_400_000).toISOString());
+});
+
+test("card self-assessment records recognition without distractors", () => {
+    assert.equal(getRecognitionChoiceCount("selection", 1), 1);
+    assert.equal(getRecognitionChoiceCount("card", 1), 2);
+    assert.equal(getRecognitionChoiceCount("card", 4), 4);
+    const now = new Date("2026-11-24T00:00:00Z");
+    for (const success of [true, false]) {
+        const rated = recordAnswerModeResult({
+            memory: undefined, userId: "u", roomId: "r", itemId: item.id,
+            mode: toLearningAnswerMode("card"), success, now,
+            choiceCount: getRecognitionChoiceCount("card", 1),
+        });
+        assert.equal(rated.answerModeStats?.recognition.attempts, 1);
+        assert.equal(rated.answerModeStats?.recognition.correct, Number(success));
+        assert.equal(rated.answerModeStats?.recognition.unknownCount ?? 0, 0);
+    }
 });

@@ -23,7 +23,7 @@ const bundle = async (beta) => build({
         build.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path }) => ({
           contents:
             path === "next/navigation"
-              ? "export const useRouter = () => ({push(){}, refresh(){}});"
+              ? "export const useRouter = () => ({push(){}, refresh(){}}); export const usePathname = () => window.location.pathname;"
               : path === "next/link"
                 ? 'import React from "react"; export default function Link(props) { return React.createElement("a", props); }'
                 : path === "@/lib/room/auth" || path === "./auth"
