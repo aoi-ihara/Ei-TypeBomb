@@ -30,7 +30,7 @@ import posthog from "posthog-js";
 import { legacyWireWordsToItems } from "@/lib/item";
 import {
     loadPlaygroundMemory,
-    syncPlaygroundMemory,
+    startMemorySync,
 } from "@/lib/playground/memory-client";
 import type {
     RecallObservation,
@@ -47,8 +47,6 @@ import {
 } from "@/lib/online/recall-diagnostics";
 import {
     createOnlineMemorySession,
-    cacheOnlinePendingMemory,
-    loadOnlinePendingMemory,
     loadOnlineGuestMemory,
     nextUnsentOnlineRecommendation,
     onlineSchedulerDiagnostic,
@@ -116,7 +114,7 @@ export default function Clinet({
         itemId: string;
     } | null>(null);
     const [authSessionGeneration, setAuthSessionGeneration] = useState(0);
-    const memoryFlushRef = useRef<Promise<void> | null>(null);
+    const memorySyncRef = useRef<ReturnType<typeof startMemorySync> | null>(null);
     const [onlineMemoryReady, setOnlineMemoryReady] = useState(0);
 
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -151,42 +149,6 @@ export default function Clinet({
         })),
     );
 
-    // Upserts are serialized so a slow network response cannot overwrite a
-    // newer answer. Failed writes remain queued for the next retry.
-    const flushOnlineMemory = useCallback(async () => {
-        if (memoryFlushRef.current) return memoryFlushRef.current;
-        const session = onlineMemoryRef.current;
-        if (!session?.userId || session.pending.size === 0) return;
-        const operation = (async () => {
-            while (session.pending.size > 0) {
-                const snapshot = [...session.pending.values()];
-                try {
-                    const error = await syncPlaygroundMemory(
-                        snapshot,
-                        session.roomId,
-                        "online",
-                    );
-                    if (error) throw error;
-                    for (const saved of snapshot) {
-                        if (session.pending.get(saved.itemId) === saved)
-                            session.pending.delete(saved.itemId);
-                    }
-                    cacheOnlinePendingMemory(session);
-                } catch (error) {
-                    console.error("Online memory sync failed", error);
-                    cacheOnlinePendingMemory(session);
-                    break;
-                }
-            }
-        })();
-        memoryFlushRef.current = operation;
-        try {
-            await operation;
-        } finally {
-            memoryFlushRef.current = null;
-        }
-    }, []);
-
     // A room uses the very same memory rows (or guest localStorage key) as
     // Playground, but starts its own transient per-player scheduling session.
     const memoryRoomId = room?.id;
@@ -195,7 +157,7 @@ export default function Clinet({
         let cancelled = false;
         const itemIds = (room.items ?? []).map((item) => item.id);
         const load = async () => {
-            const result = await loadPlaygroundMemory(memoryRoomId);
+            const result = await loadPlaygroundMemory(memoryRoomId, itemIds);
             if (cancelled) return;
             if (result.error) {
                 console.error("Online memory load failed", result.error);
@@ -204,6 +166,11 @@ export default function Clinet({
             const memory = result.userId
                 ? result.memoryByItem
                 : loadOnlineGuestMemory(memoryRoomId, itemIds);
+            const sync = result.userId
+                ? startMemorySync(result.userId, memoryRoomId, "online", !result.persistenceDisabled)
+                : null;
+            memorySyncRef.current = sync;
+            sync?.queue.restore(memory, new Set(itemIds));
             const session = createOnlineMemorySession(
                 memoryRoomId,
                 itemIds,
@@ -211,39 +178,25 @@ export default function Clinet({
                 memory,
                 Object.fromEntries((room.items ?? []).map(item => [item.id, getEffectiveAnswerMode(item, "input")])),
                 new Set((room.items ?? []).map(item => item.answer).filter(Boolean)).size,
+                sync ? value => sync.queue.enqueue(value) : undefined,
             );
-            if (result.userId) {
-                // Playground and online play share the same unsent-write queue.
-                for (const pending of loadOnlinePendingMemory(
-                    memoryRoomId,
-                    result.userId,
-                    itemIds,
-                )) {
-                    const remote = session.memory[pending.itemId];
-                    if (
-                        !remote ||
-                        (Date.parse(pending.updatedAt ?? "") || 0) >=
-                            (Date.parse(remote.updatedAt ?? "") || 0)
-                    ) {
-                        session.memory[pending.itemId] = pending;
-                        session.pending.set(pending.itemId, pending);
-                    }
-                }
-            }
             onlineMemoryRef.current = session;
             setOnlineMemoryReady((n) => n + 1);
-            void flushOnlineMemory();
         };
-        void load();
+        void load().catch(error => {
+            if (!cancelled) console.error("Online memory load failed", error);
+        });
         return () => {
             cancelled = true;
+            memorySyncRef.current?.stop();
+            memorySyncRef.current = null;
             if (onlineMemoryRef.current?.roomId === memoryRoomId)
                 onlineMemoryRef.current = null;
         };
         // Room snapshots are replaced on each broadcast; only a new room identity
         // should reset the learning session and reload its memory.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [flushOnlineMemory, memoryRoomId]);
+    }, [memoryRoomId]);
 
     const publishOnlineRecommendation = useCallback(() => {
         const session = onlineMemoryRef.current;
@@ -289,28 +242,6 @@ export default function Clinet({
         authSessionGeneration,
         publishOnlineRecommendation,
     ]);
-
-    useEffect(() => {
-        const retry = () => {
-            const session = onlineMemoryRef.current;
-            if (session) cacheOnlinePendingMemory(session);
-            void flushOnlineMemory();
-        };
-        const interval = setInterval(retry, 5_000);
-        const visibility = () => {
-            if (document.visibilityState === "hidden") retry();
-        };
-        window.addEventListener("online", retry);
-        window.addEventListener("pagehide", retry);
-        document.addEventListener("visibilitychange", visibility);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener("online", retry);
-            window.removeEventListener("pagehide", retry);
-            document.removeEventListener("visibilitychange", visibility);
-            retry();
-        };
-    }, [flushOnlineMemory]);
 
     useEffect(() => {
         blipAudioRef.current = new Audio("/Blip_select_8.wav");
@@ -943,6 +874,7 @@ export default function Clinet({
                         : userIdRef.current === holderUserId;
                     finishUnansweredRecall(didLose ? "exploded" : "game_ended");
                     setResult(didLose);
+                    void memorySyncRef.current?.queue.flush();
                     setLostDisplayName(holderDisplayName ?? null);
                     setLoserNames(
                         losers?.map(
@@ -1231,10 +1163,8 @@ export default function Clinet({
                         promptPresentedAt.current,
                     );
                     if (!updated && (session.choiceCount ?? 4) >= 2) return;
-                    cacheOnlinePendingMemory(session);
                     setOnlineMemoryReady((revision) => revision + 1);
                     if (correct) publishOnlineRecommendation();
-                    void flushOnlineMemory();
                 }}
                 hintDelaysMs={ONLINE_HINT_DELAYS_MS}
                 remoteHintLength={
@@ -1312,10 +1242,8 @@ export default function Clinet({
                         promptPresentedAt.current,
                     );
                     if (!updated) return;
-                    cacheOnlinePendingMemory(session);
                     setOnlineMemoryReady((revision) => revision + 1);
                     publishOnlineRecommendation();
-                    void flushOnlineMemory();
                 }}
                 onSuccess={() => {
                     console.log("Success! Emitting to server...");
@@ -1339,11 +1267,9 @@ export default function Clinet({
                                 false,
                             );
                             if (updated) {
-                                cacheOnlinePendingMemory(session);
                                 setOnlineMemoryReady(
                                     (revision) => revision + 1,
                                 );
-                                void flushOnlineMemory();
                             }
                         }
                     }

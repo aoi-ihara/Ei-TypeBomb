@@ -1,9 +1,14 @@
 "use server";
 
 import { createClient } from "@/lib/db/server";
-import { getMemoryAuthStatus } from "@/lib/auth/session";
+import { getMemoryAuthStatus } from "@/lib/auth/memory-session";
 import type { ItemMemoryState } from "@/lib/playground/memory";
-import { isValidAnswerModeStats, toMemoryState } from "@/lib/playground/memory";
+import { toMemoryState } from "@/lib/playground/memory";
+import { memoryStorageId } from "./memory-storage-id";
+import {
+    isMemoryItemId, MAX_MEMORY_BATCH, memoryTime, normalizeMemory, UUID,
+    type MemoryRejection, type MemorySyncResult,
+} from "./memory-sync-format";
 
 const LEGACY_MEMORY_COLUMNS =
     "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at";
@@ -11,8 +16,9 @@ const LEGACY_MEMORY_COLUMNS =
 const MEMORY_COLUMNS =
     "user_id, room_id, id, stability, difficulty, review_count, last_reviewed_at, created_at, updated_at, learning_state, last_presented_at, answer_mode_stats";
 
-export const loadPlaygroundMemory = async (roomId: string) => {
-    const { userId, error: authError } = await getMemoryAuthStatus();
+export const loadPlaygroundMemory = async (roomId: string, itemIds: string[] = []) => {
+    const supabase = await createClient();
+    const { userId, error: authError } = await getMemoryAuthStatus(supabase);
     if (authError) {
         return {
             userId: null,
@@ -28,7 +34,7 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         };
     }
 
-    if (!/^[a-f0-9-]{36}$/i.test(roomId)) {
+    if (typeof roomId !== "string" || !UUID.test(roomId)) {
         return {
             userId,
             memoryByItem: {} as Record<string, ItemMemoryState>,
@@ -36,7 +42,6 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         };
     }
 
-    const supabase = await createClient();
     const { data, error } = await supabase
         .from("ei_typebomb_item_memory")
         .select(MEMORY_COLUMNS)
@@ -68,12 +73,18 @@ export const loadPlaygroundMemory = async (roomId: string) => {
         };
     }
 
+    const itemAliases = new Map(
+        (Array.isArray(itemIds) ? itemIds.slice(0, 512) : [])
+            .filter(isMemoryItemId)
+            .map(id => [memoryStorageId(roomId, id), id]),
+    );
     return {
         userId,
         persistenceDisabled: missingAnswerModeStats,
         memoryByItem: Object.fromEntries(
             (legacyResult?.data ?? data ?? []).map((row) => {
                 const memory = toMemoryState(row);
+                memory.itemId = itemAliases.get(memory.itemId) ?? memory.itemId;
                 return [memory.itemId, memory];
             }),
         ) as Record<string, ItemMemoryState>,
@@ -81,73 +92,104 @@ export const loadPlaygroundMemory = async (roomId: string) => {
     };
 };
 
-type MemorySyncFailure = {
-    type:
-        | "batch_too_large"
-        | "auth_failed"
-        | "auth_required"
-        | "invalid_memory"
-        | "database_error";
-    message: string;
-    databaseCode?: string;
-};
-
-export const syncPlaygroundMemory = async (
-    memory: ItemMemoryState[],
-): Promise<MemorySyncFailure | null> => {
-    if (memory.length === 0) return null;
-    if (memory.length > 500) {
-        return { type: "batch_too_large", message: "Too many memory updates" };
-    }
-
-    const { userId, error: authError } = await getMemoryAuthStatus();
-    if (authError) return { type: "auth_failed", message: authError.message };
-    if (!userId) {
-        return { type: "auth_required", message: "Authentication required" };
-    }
-
-    if (
-        memory.some(
-            (item) =>
-                item.userId !== userId ||
-                !/^[a-f0-9-]{36}$/i.test(item.roomId) ||
-                !/^[a-f0-9-]{36}$/i.test(item.itemId) ||
-                !Number.isFinite(item.stability) ||
-                item.stability <= 0 ||
-                !Number.isFinite(item.difficulty) ||
-                item.difficulty < 1 ||
-                item.difficulty > 10 ||
-                !Number.isSafeInteger(item.reviewCount) ||
-                item.reviewCount < 0 ||
-                (item.answerModeStats !== undefined &&
-                    !isValidAnswerModeStats(item.answerModeStats)),
-        )
-    ) {
-        return { type: "invalid_memory", message: "Invalid memory update" };
-    }
+const syncMemoryBatch = async (
+    roomId: string,
+    expectedUserId: string,
+    memory: unknown[],
+): Promise<MemorySyncResult> => {
+    if (!Array.isArray(memory) || memory.length > MAX_MEMORY_BATCH ||
+        typeof roomId !== "string" || !UUID.test(roomId))
+        return { type: "permanent" };
+    if (memory.length === 0) return { type: "saved", rejected: [] };
 
     const supabase = await createClient();
-    const rows = memory.map((item) => ({
-        user_id: userId,
-        room_id: item.roomId,
-        id: item.itemId,
-        stability: item.stability,
-        difficulty: item.difficulty,
-        review_count: item.reviewCount,
-        last_reviewed_at: item.lastReviewedAt,
-        updated_at: item.updatedAt ?? new Date().toISOString(),
-        learning_state: item.learningState ?? null,
-        last_presented_at: item.lastPresentedAt ?? null,
-        answer_mode_stats: item.answerModeStats ?? null,
-    }));
+    const { userId, error } = await getMemoryAuthStatus(supabase);
+    if (error) return { type: error.retryable ? "temporary" : "auth_required" };
+    if (!userId || userId !== expectedUserId) return { type: "auth_required" };
 
-    const { error } = await supabase
-        .from("ei_typebomb_item_memory")
-        .upsert(rows, { onConflict: "user_id,room_id,id" });
-    if (!error) return null;
-    // Only include machine-readable SQLSTATE and PostgREST codes in telemetry.
-    const databaseCode = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/.test(error.code)
-        ? error.code
-        : undefined;
-    return { type: "database_error", message: error.message, databaseCode };
+    const rejected: MemoryRejection[] = [];
+    const latestAllowed = Date.now() + 5 * 60_000;
+    type Entry = {
+        index: number;
+        row: {
+            user_id: string;
+            room_id: string;
+            id: string;
+            stability: number;
+            difficulty: number;
+            review_count: number;
+            last_reviewed_at: string | null;
+            updated_at: string;
+            learning_state: ItemMemoryState["learningState"];
+            last_presented_at: ItemMemoryState["lastPresentedAt"];
+            answer_mode_stats: ItemMemoryState["answerModeStats"] | null;
+        };
+    };
+    const rows = new Map<string, Entry>();
+    for (const [index, value] of memory.entries()) {
+        const parsed = normalizeMemory(value, userId, roomId);
+        if ("reason" in parsed) {
+            rejected.push({ index, reason: parsed.reason });
+            continue;
+        }
+        const item = parsed.memory;
+        const updatedAt = item.updatedAt!;
+        if (memoryTime(updatedAt) > latestAllowed) {
+            rejected.push({ index, reason: "timestamp" });
+            continue;
+        }
+        const id = memoryStorageId(roomId, item.itemId);
+        const previous = rows.get(id);
+        if (previous && previous.row.updated_at >= updatedAt) continue;
+        rows.set(id, { index, row: {
+            user_id: userId,
+            room_id: roomId,
+            id,
+            stability: item.stability,
+            difficulty: item.difficulty,
+            review_count: item.reviewCount,
+            last_reviewed_at: item.lastReviewedAt,
+            updated_at: updatedAt,
+            learning_state: item.learningState,
+            last_presented_at: item.lastPresentedAt,
+            answer_mode_stats: item.answerModeStats ?? null,
+        } });
+    }
+
+    const write = async (batch: Entry[]):
+        Promise<Exclude<MemorySyncResult, { type: "saved" }> | null> => {
+        if (batch.length === 0) return null;
+        const { error, status } = await supabase
+            .from("ei_typebomb_item_memory")
+            .upsert(batch.map(({ row }) => row), { onConflict: "user_id,room_id,id" });
+        if (!error) return null;
+        const code = error.code ?? "";
+        const databaseCode = /^(?:[0-9A-Z]{5}|PGRST\d{3})$/.test(code) ? code : undefined;
+        if (status === 401 || code === "PGRST301")
+            return { type: "auth_required", databaseCode };
+        // FK failures apply to the entire batch (one user and one room).
+        // Data and check errors may be specific to a single row.
+        if (/^(22|23514)/.test(code)) {
+            if (batch.length === 1) {
+                rejected.push({ index: batch[0].index, reason: "database_error" });
+                return null;
+            }
+            const middle = Math.floor(batch.length / 2);
+            return await write(batch.slice(0, middle)) ?? await write(batch.slice(middle));
+        }
+        const retryable = status === 0 || status === 408 || status === 429 ||
+            status >= 500 || /^(08|40|53|55P03|57P0)/.test(code);
+        return { type: retryable ? "temporary" : "permanent", databaseCode };
+    };
+    return await write([...rows.values()]) ?? { type: "saved", rejected };
 };
+
+export async function syncPlaygroundMemory(
+    roomId: string,
+    expectedUserId: string,
+    memory: unknown[],
+): Promise<MemorySyncResult> {
+    const start = performance.now();
+    const result = await syncMemoryBatch(roomId, expectedUserId, memory);
+    return { ...result, serverDurationMs: Math.round(performance.now() - start) };
+}

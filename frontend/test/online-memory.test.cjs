@@ -152,14 +152,16 @@ test("guest online memory is visible to Playground and survives reload", () => {
     );
 });
 test("server fallback is recorded against the actual word, never the suggestion", () => {
-    const session = online.createOnlineMemorySession("room", ids, "user", {});
+    const pending = new Map();
+    const session = online.createOnlineMemorySession("room", ids, "user", {}, undefined, 4,
+        memory => pending.set(memory.itemId, memory));
     const recommendation = online.nextOnlineRecommendation(session);
     const actual = ids.find((id) => id !== recommendation);
     const updated = online.recordOnlineRecall(session, actual, recall);
     assert.equal(updated.itemId, actual);
     assert.equal(session.scheduler.userAnswered[recommendation] ?? 0, 0);
     assert.equal(session.scheduler.userAnswered[actual], 1);
-    assert.equal(session.pending.get(actual), updated);
+    assert.equal(pending.get(actual), updated);
 });
 
 test("online recommendations and retries survive a new session after reload", () => {
@@ -181,11 +183,13 @@ test("online recommendations and retries survive a new session after reload", ()
 });
 
 test("a forced single choice advances online play without recording recognition", () => {
-    const session = online.createOnlineMemorySession("forced-choice", ["one"], "user", {}, { one: "selection" }, 1);
+    const pending = [];
+    const session = online.createOnlineMemorySession("forced-choice", ["one"], "user", {}, { one: "selection" }, 1,
+        memory => pending.push(memory));
     assert.equal(online.nextOnlineRecommendation(session), "one");
     online.recordOnlineAnswerModeResult(session, "one", "selection", true);
     assert.equal(session.scheduler.current, null);
     assert.equal(session.memory.one, undefined);
-    assert.equal(session.pending.size, 0);
+    assert.equal(pending.length, 0);
     assert.equal(online.nextOnlineRecommendation(session), "one");
 });

@@ -10,6 +10,9 @@ import posthog from "posthog-js";
 import Link from "next/link";
 import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
+// Each speculative room request on beta requires a verified Supabase user.
+const prefetchRooms = process.env.NEXT_PUBLIC_BETA_ENVIRONMENT !== "true";
+
 export default function RoomCard({
     room,
     isSaved = false,
@@ -30,7 +33,7 @@ export default function RoomCard({
     const roomLink = room.link ?? room.id;
 
     const prefetchOnIntent = useCallback(() => {
-        if (room.visibility !== "public" || eagerPrefetch) return;
+        if (!prefetchRooms || room.visibility !== "public" || eagerPrefetch) return;
         // ETB currently keeps dynamic Router Cache entries for 30 seconds.
         // Limit duplicate prefetches but allow a new one after expiry.
         const last = lastPrefetchRef.current;
@@ -45,6 +48,7 @@ export default function RoomCard({
     useEffect(() => {
         const article = articleRef.current;
         if (
+            !prefetchRooms ||
             !article ||
             room.visibility !== "public" ||
             eagerPrefetch ||
@@ -99,7 +103,7 @@ export default function RoomCard({
                         posthog.capture("play_clicked", { room_id: room.id });
                     }}
                     onNavigate={() => startNavigationProgress()}
-                    prefetch={room.visibility === "public" && eagerPrefetch}
+                    prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     onMouseEnter={prefetchOnIntent}
                     onFocus={prefetchOnIntent}
                     href={`/${roomLink}`}
@@ -162,7 +166,7 @@ export default function RoomCard({
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     href={`/${roomLink}`}
-                    prefetch={room.visibility === "public" && eagerPrefetch}
+                    prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"
                     padding="middle"

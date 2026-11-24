@@ -355,7 +355,7 @@ export const toMemoryState = (row: {
     stability: number;
     difficulty: number;
     review_count: number;
-    last_reviewed_at: string;
+    last_reviewed_at: string | null;
     created_at?: string | null;
     updated_at?: string | null;
     learning_state?: PersistedLearningState | null;
@@ -604,6 +604,10 @@ const updateAnswerModeStats = (
     };
 };
 
+// Preserve the order of two answers recorded within the same millisecond.
+const nextMemoryTimestamp = (memory: ItemMemoryState, now: Date): string =>
+    new Date(Math.max(now.getTime(), (Date.parse(memory.updatedAt ?? "") || 0) + 1)).toISOString();
+
 export const recordAnswerModeResult = ({
     memory,
     userId,
@@ -658,7 +662,7 @@ export const recordAnswerModeResult = ({
             mode === "input" && !success
                 ? (current.lastPresentedAt ?? null)
                 : iso,
-        updatedAt: iso,
+        updatedAt: nextMemoryTimestamp(current, now),
     };
 };
 
@@ -833,7 +837,7 @@ export const applyRecallObservation = ({
         reviewCount: current.reviewCount + 1,
         lastReviewedAt,
         lastPresentedAt: iso,
-        updatedAt: iso,
+        updatedAt: nextMemoryTimestamp(current, now),
         learningState: null,
         answerModeStats: updateAnswerModeStats(
             current.answerModeStats,
@@ -850,7 +854,7 @@ export const recordAnswerExposure = (
 ): ItemMemoryState => ({
     ...memory,
     lastPresentedAt: now.toISOString(),
-    updatedAt: now.toISOString(),
+    updatedAt: nextMemoryTimestamp(memory, now),
 });
 
 // Every presentation starts without letter cues. Learning hints are requested manually.
