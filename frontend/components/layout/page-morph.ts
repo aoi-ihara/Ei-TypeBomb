@@ -1,4 +1,4 @@
-import { createMorphClock, advanceMorphRect, type MorphRect } from "./morph-motion";
+import { createMorphClock, advanceMorphRect, intersectMorphRect, visibleMorphTransform, morphClipInsets, type MorphRect } from "./morph-motion";
 import { getSlideMotion, prefersReducedMotion } from "./slide-motion";
 import { trackMorphCursorElement } from "./slide-cursor";
 
@@ -12,6 +12,21 @@ export type PageMorph = {
 function rectOf(element: HTMLElement): MorphRect {
     const { left, top, width, height } = element.getBoundingClientRect();
     return { x: left, y: top, width, height };
+}
+
+// Use the browser's visible content area, not the scrollable document height.
+function screenRect(): MorphRect {
+    const visual = window.visualViewport;
+    return visual
+        ? { x: visual.offsetLeft, y: visual.offsetTop, width: visual.width, height: visual.height }
+        : { x: 0, y: 0, width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
+}
+
+function clipToVisible(element: HTMLElement, full: MorphRect, visible: MorphRect) {
+    const insets = morphClipInsets(full, visible);
+    element.style.clipPath = insets.some(value => value > 0)
+        ? "inset(" + insets.map(value => value + "px").join(" ") + ")"
+        : "none";
 }
 
 function place(element: HTMLElement, rect: MorphRect) {
@@ -38,7 +53,8 @@ function inertCopy(element: HTMLElement) {
 // The incoming element remains live, so asynchronous content is never
 // replaced by a stale screenshot at the end of the animation.
 export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): PageMorph | null {
-    const origin = rectOf(source);
+    const fullOrigin = rectOf(source);
+    const origin = intersectMorphRect(fullOrigin, screenRect());
     const pageRect = rectOf(viewport);
     if (!origin.width || !origin.height || !pageRect.width || !pageRect.height) return null;
 
@@ -68,8 +84,18 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
     });
     place(oldPage, pageRect);
     oldPage.style.backgroundColor = "var(--color-background)";
-    place(oldSource, origin);
-    overlay.append(oldPage, oldSource);
+    // Preserve the original layout and crop before scaling; shrinking the
+    // full Shell would otherwise bring offscreen words into view.
+    const oldLayer = document.createElement("div");
+    place(oldLayer, origin);
+    place(oldSource, {
+        ...fullOrigin,
+        x: fullOrigin.x - origin.x,
+        y: fullOrigin.y - origin.y,
+    });
+    clipToVisible(oldSource, fullOrigin, origin);
+    oldLayer.append(oldSource);
+    overlay.append(oldPage, oldLayer);
 
     let disposed = false;
     let frameId = 0;
@@ -93,7 +119,8 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
         if (disposed) return;
         const { timing } = getSlideMotion();
         const duration = Number(timing.duration);
-        let target = rectOf(destination);
+        let fullTarget = rectOf(destination);
+        let target = intersectMorphRect(fullTarget, screenRect());
         if (prefersReducedMotion() || !target.width || !target.height || !Number.isFinite(duration) || duration <= 0 ||
             getComputedStyle(destination).transform !== "none") {
             dispose();
@@ -101,7 +128,7 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
             return;
         }
 
-        const properties = ["transform", "transform-origin", "transition", "opacity", "will-change"] as const;
+        const properties = ["transform", "transform-origin", "transition", "opacity", "will-change", "clip-path"] as const;
         const previous = properties.map(name => [name, destination.style.getPropertyValue(name), destination.style.getPropertyPriority(name)] as const);
         restore = () => {
             for (const [name, value, priority] of previous) {
@@ -118,13 +145,12 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
         let applied = { dx: 0, dy: 0, sx: 1, sy: 1 };
 
         const paint = () => {
-            const sx = current.width / target.width;
-            const sy = current.height / target.height;
-            applied = { dx: current.x - target.x, dy: current.y - target.y, sx, sy };
-            destination.style.transform = "translate(" + applied.dx + "px, " + applied.dy + "px) scale(" + sx + ", " + sy + ")";
+            applied = visibleMorphTransform(fullTarget, target, current);
+            clipToVisible(destination, fullTarget, target);
+            destination.style.transform = "translate(" + applied.dx + "px, " + applied.dy + "px) scale(" + applied.sx + ", " + applied.sy + ")";
             destination.style.opacity = String(mix);
-            oldSource.style.transform = "translate(" + (current.x - origin.x) + "px, " + (current.y - origin.y) + "px) scale(" + (current.width / origin.width) + ", " + (current.height / origin.height) + ")";
-            oldSource.style.opacity = String(1 - mix);
+            oldLayer.style.transform = "translate(" + (current.x - origin.x) + "px, " + (current.y - origin.y) + "px) scale(" + (current.width / origin.width) + ", " + (current.height / origin.height) + ")";
+            oldLayer.style.opacity = String(1 - mix);
             oldPage.style.opacity = String(1 - mix);
         };
 
@@ -155,10 +181,12 @@ export function capturePageMorph(viewport: HTMLElement, source: HTMLElement): Pa
             if (disposed) return;
             if (!destination.isConnected || !clock) { finish(); return; }
             const next = measure();
-            if (!next.width || !next.height) { finish(); return; }
+            const visible = intersectMorphRect(next, screenRect());
+            if (!visible.width || !visible.height) { finish(); return; }
             // Measure every frame, including position-only shifts. Retargeting
             // must not reset the clock or skip this frame's elapsed progress.
-            target = next;
+            fullTarget = next;
+            target = visible;
             const done = Number(clock.currentTime ?? 0) >= duration;
             const progress = done ? 1 : clock.effect?.getComputedTiming().progress ?? mix;
             const advanced = advanceMorphRect(current, target, mix, progress);

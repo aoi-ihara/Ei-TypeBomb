@@ -40,3 +40,34 @@ export function advanceMorphRect(current: MorphRect, target: MorphRect, previous
         progress: next,
     };
 }
+
+/** Intersect in viewport coordinates, without changing the element's layout. */
+export function intersectMorphRect(rect: MorphRect, bounds: MorphRect): MorphRect {
+    const x = Math.max(rect.x, bounds.x);
+    const y = Math.max(rect.y, bounds.y);
+    return {
+        x, y,
+        width: Math.max(0, Math.min(rect.x + rect.width, bounds.x + bounds.width) - x),
+        height: Math.max(0, Math.min(rect.y + rect.height, bounds.y + bounds.height) - y),
+    };
+}
+
+/** Map only the visible portion of the full DOM box to the animated rectangle. */
+export function visibleMorphTransform(full: MorphRect, visible: MorphRect, current: MorphRect) {
+    const sx = current.width / visible.width;
+    const sy = current.height / visible.height;
+    return {
+        sx, sy,
+        dx: current.x - full.x - (visible.x - full.x) * sx,
+        dy: current.y - full.y - (visible.y - full.y) * sy,
+    };
+}
+
+export function morphClipInsets(full: MorphRect, visible: MorphRect) {
+    return [
+        Math.max(0, visible.y - full.y),
+        Math.max(0, full.x + full.width - visible.x - visible.width),
+        Math.max(0, full.y + full.height - visible.y - visible.height),
+        Math.max(0, visible.x - full.x),
+    ];
+}
