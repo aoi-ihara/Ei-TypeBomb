@@ -124,7 +124,7 @@ test("public feeds are ISR pages and never await personalized room list data", (
     );
     assert.match(layout, /<RoomListViewerProvider>/);
     assert.match(client, /useRoomListViewer\(\)/);
-    assert.match(client, /if \(deferViewer\) \{\s*ensureLoaded\(\);\s*\} else \{\s*initialize\(/);
+    assert.match(client, /if \(deferViewer\) \{\s*ensureLoaded\(\);\s*\} else \{\s*reconcile\(/);
     assert.match(layout, /<RoomBrowser>\{children\}<\/RoomBrowser>/);
     assert.doesNotMatch(layout, /cookies\(|headers\(|getUser/);
     assert.match(provider, /fetch\("\/api\/room-list-viewer"/);
@@ -164,9 +164,8 @@ test("same-layout sign out clears the shared viewer before redirect and restores
     assert.match(handler, /viewer.restore\(previousSnapshot\)/);
     assert.match(handler, /unstable_rethrow\(error\)/);
 
-    // A cached personalized page cannot re-seed after the provider is reset.
-    assert.match(layoutProvider, /resetToGuest[\s\S]+commit\(\{ \.\.\.GUEST \}\)/);
-    assert.match(layoutProvider, /initialize[\s\S]+snapshotRef\.current\.status !== "ready"/);
+    assert.match(handler, /finally \{\s*viewer.finishSignOut\(\)/);
+    assert.match(layoutProvider, /resetToGuest[\s\S]+commit\(GUEST\)/);
 });
 
 test("public feed auth transitions preserve navbar, header and CTA dimensions", () => {
@@ -206,13 +205,126 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
     assert.match(button, /opacity-50 pointer-events-none/);
 });
 
-test("saved room toggles in personalized feeds update the shared viewer too", () => {
-    const source = readFileSync(
-        path.join(__dirname, "../app/(game)/(browse)/RoomList.tsx"),
-        "utf8",
-    );
-    assert.match(source, /\{ snapshot, ensureLoaded, initialize, setSavedRoomIds \} = useRoomListViewer\(\)/);
-    assert.match(source, /useServerViewer \? initialSavedRoomIds : snapshot.savedRoomIds/);
-    assert.match(source, /setSavedRoomIds\(nextSavedIds\)/);
-    assert.match(source, /setSavedRoomIds\(\(current\) =>/);
+function viewerProvider({ fetch, toggleSavedRoom } = {}) {
+    const compiled = ts.transpileModule(readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"), "utf8",
+    ), { compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        jsx: ts.JsxEmit.ReactJSX,
+    } }).outputText;
+    const hooks = [];
+    let cursor = 0;
+    const exports = {};
+    vm.runInNewContext(compiled, {
+        exports, AbortController, fetch, console,
+        require(id) {
+            if (id === "@/lib/room/save") return { toggleSavedRoom };
+            if (id === "react/jsx-runtime") return { jsx: (_, props) => props };
+            if (id === "react") return {
+                createContext: () => ({ Provider: Symbol() }),
+                useCallback: value => value,
+                useMemo: fn => fn(),
+                useRef(value) {
+                    const index = cursor++;
+                    hooks[index] ??= { current: value };
+                    return hooks[index];
+                },
+                useState(value) {
+                    const index = cursor++;
+                    if (!(index in hooks)) hooks[index] = value;
+                    return [hooks[index], next => { hooks[index] = next; }];
+                },
+            };
+            throw Error("Unexpected module: " + id);
+        },
+    });
+    return () => {
+        cursor = 0;
+        return exports.RoomListViewerProvider({ children: null }).value;
+    };
+}
+
+const viewerData = (id, savedRoomIds = []) => ({
+    currentUser: id ? { id, email: null, displayName: null } : null,
+    ownedRoomIds: id ? ["owned-" + id] : [],
+    savedRoomIds,
+});
+const assertSaves = (viewer, expected) => assert.deepEqual([...viewer().snapshot.savedRoomIds], expected);
+const nextTick = () => new Promise(resolve => setImmediate(resolve));
+
+test("fresh personalized routes reconcile a ready guest, identity changes and bookmark reads", () => {
+    const viewer = viewerProvider();
+    viewer().reconcile(viewerData(null));
+    viewer().reconcile(viewerData("one", ["saved"]));
+    assert.equal(viewer().snapshot.currentUser.id, "one");
+    assertSaves(viewer, ["saved"]);
+    viewer().reconcile(viewerData("one", ["external"]));
+    assertSaves(viewer, ["external"]);
+    viewer().reconcile(viewerData("one", null));
+    assertSaves(viewer, ["external"]);
+    viewer().reconcile(viewerData("two", ["account-two"]));
+    assert.equal(viewer().snapshot.currentUser.id, "two");
+    assertSaves(viewer, ["account-two"]);
+});
+
+test("server snapshots replace settled bookmarks while only pending edits remain optimistic", async () => {
+    let complete;
+    const viewer = viewerProvider({ toggleSavedRoom: () => new Promise(resolve => { complete = resolve; }) });
+    viewer().reconcile(viewerData("one", ["removed"]));
+    const attempt = viewer().toggleSaved("one", "pending");
+    assertSaves(viewer, ["removed", "pending"]);
+    viewer().reconcile(viewerData("one", ["external"]));
+    assertSaves(viewer, ["external", "pending"]);
+    complete({ error: "failed", saved: false });
+    await attempt;
+    assertSaves(viewer, ["external"]);
+
+    const success = viewer().toggleSaved("one", "confirmed");
+    complete({ error: null, saved: true });
+    await success;
+    assertSaves(viewer, ["external", "confirmed"]);
+    viewer().reconcile(viewerData("one", ["external"]));
+    assertSaves(viewer, ["external"]);
+
+    const stale = viewer().toggleSaved("one", "old-user");
+    viewer().reconcile(viewerData("two", ["account-two"]));
+    complete({ error: null, saved: true });
+    assert.equal(await stale, null);
+    assertSaves(viewer, ["account-two"]);
+});
+
+test("sign-out ignores cached personalized props until fresh auth confirms an identity", async () => {
+    let payload = viewerData(null);
+    let requests = 0;
+    const viewer = viewerProvider({ fetch: async () => {
+        requests++;
+        return { ok: true, json: async () => payload };
+    } });
+    const old = viewerData("one", ["private"]);
+    viewer().reconcile(old);
+    viewer().resetToGuest();
+    viewer().reconcile(old);
+    assert.equal(requests, 0);
+    assertSaves(viewer, []);
+    viewer().finishSignOut();
+    viewer().reconcile(old);
+    viewer().reconcile(old);
+    await nextTick();
+    assert.equal(requests, 1);
+    assert.equal(viewer().snapshot.currentUser, null);
+    assertSaves(viewer, []);
+
+    payload = viewerData("two", ["verified"]);
+    viewer().reconcile(old);
+    await nextTick();
+    assert.equal(requests, 2);
+    assert.equal(viewer().snapshot.currentUser.id, "two");
+    assertSaves(viewer, ["verified"]);
+    viewer().reconcile(old);
+    assert.equal(viewer().snapshot.currentUser.id, "two");
+    await nextTick();
+    assert.equal(viewer().snapshot.currentUser.id, "two");
+    viewer().reconcile(viewerData("two", ["fresh"]));
+    assertSaves(viewer, ["fresh"]);
 });

@@ -34,9 +34,8 @@ function ViewerActions() {
     }, [currentUser]);
 
     const handleSignOut = async () => {
-        const previousSnapshot = viewer.snapshot;
         // The layout and bookmark UI can survive the action's redirect.
-        viewer.resetToGuest();
+        const previousSnapshot = viewer.resetToGuest();
         posthog.capture("signed_out");
         posthog.reset();
         try {
@@ -48,6 +47,8 @@ function ViewerActions() {
             viewer.restore(previousSnapshot);
             if (currentUser) identifyPostHogUser(currentUser);
             console.error("Failed to sign out", error);
+        } finally {
+            viewer.finishSignOut();
         }
     };
 

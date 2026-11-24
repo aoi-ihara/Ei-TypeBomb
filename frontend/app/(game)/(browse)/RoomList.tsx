@@ -8,7 +8,6 @@ import RoomGrid from "@/components/rooms/RoomGrid";
 import Button from "@/components/ui/Button";
 import { createNewRoom } from "@/lib/room/create";
 import { getSignInUrl } from "@/lib/auth/sign-in-url";
-import { toggleSavedRoom } from "@/lib/room/save";
 import posthog from "posthog-js";
 import Shell from "@/components/layout/Shell";
 import Input from "@/components/ui/Input";
@@ -16,6 +15,8 @@ import { View } from "@/type";
 import { getEditableRoomIds, selectRoomsForView } from "@/lib/room/list-view";
 import { useRoomListViewer } from "@/components/rooms/RoomListViewerProvider";
 import { getRoomListNavigationItems } from "@/lib/room/list-navigation";
+
+const EMPTY_SAVED_ROOM_IDS: string[] = [];
 
 type CurrentUser = {
     id: string;
@@ -28,7 +29,7 @@ type Props = {
     myRooms: Room[];
     initialView: View;
     currentUser: CurrentUser | null;
-    initialSavedRoomIds: string[];
+    initialSavedRoomIds: string[] | null;
     /** Public ISR pages hydrate account-only controls from a private endpoint. */
     deferViewer?: boolean;
 };
@@ -48,28 +49,28 @@ export default function RoomList({
     const [keyword, setKeyword] = useState("");
     // Keep typing responsive even when many rooms match the search.
     const deferredKeyword = useDeferredValue(keyword);
-    const { snapshot, ensureLoaded, initialize, setSavedRoomIds } = useRoomListViewer();
+    const { snapshot, ensureLoaded, reconcile, toggleSaved } = useRoomListViewer();
 
     useEffect(() => {
         if (deferViewer) {
             ensureLoaded();
         } else {
-            initialize({
+            reconcile({
                 currentUser: initialCurrentUser,
                 ownedRoomIds: initialMyRooms.map(({ id }) => id),
                 savedRoomIds: initialSavedRoomIds,
             });
         }
-    }, [deferViewer, ensureLoaded, initialize, initialCurrentUser, initialMyRooms, initialSavedRoomIds]);
+    }, [deferViewer, ensureLoaded, reconcile, initialCurrentUser, initialMyRooms, initialSavedRoomIds]);
 
-    const useServerViewer = !deferViewer && snapshot.status !== "ready";
+    const useServerViewer = !deferViewer && snapshot.status === "idle";
     const currentUser = useServerViewer ? initialCurrentUser : snapshot.currentUser;
     const myRooms = useMemo(() => {
         if (!currentUser) return [];
         if (!deferViewer && currentUser.id === initialCurrentUser?.id) return initialMyRooms;
         return snapshot.ownedRoomIds.map((id) => ({ id, userId: currentUser.id }));
     }, [currentUser, deferViewer, initialCurrentUser, initialMyRooms, snapshot.ownedRoomIds]);
-    const savedRoomIds = useServerViewer ? initialSavedRoomIds : snapshot.savedRoomIds;
+    const savedRoomIds = useServerViewer ? (initialSavedRoomIds ?? EMPTY_SAVED_ROOM_IDS) : snapshot.savedRoomIds;
     const viewerLoading = deferViewer && snapshot.status === "idle";
     const viewerError = deferViewer && snapshot.status === "error";
 
@@ -115,31 +116,20 @@ export default function RoomList({
     const toggleSavedRoomState = async (roomId: string) => {
         if (!currentUser) return;
 
-        const wasSaved = savedRoomIds.includes(roomId);
-        const nextSavedIds = wasSaved
-            ? savedRoomIds.filter((id) => id !== roomId)
-            : Array.from(new Set([...savedRoomIds, roomId]));
-
-        setSavedRoomIds(nextSavedIds);
-
-        const result = await toggleSavedRoom(roomId);
-        if (result.error) {
-            setSavedRoomIds((current) => {
-                if (wasSaved) {
-                    return current.includes(roomId)
-                        ? current
-                        : [...current, roomId];
-                }
-                return current.filter((id) => id !== roomId);
+        try {
+            const result = await toggleSaved(currentUser.id, roomId);
+            if (!result) return;
+            if (result.error) {
+                console.error(result.error);
+                return;
+            }
+            posthog.capture("room_saved_toggled", {
+                room_id: roomId,
+                saved: result.saved,
             });
-            console.error(result.error);
-            return;
+        } catch (error) {
+            console.error("Failed to update saved room", error);
         }
-
-        posthog.capture("room_saved_toggled", {
-            room_id: roomId,
-            saved: result.saved,
-        });
     };
 
     const addRoom = async () => {

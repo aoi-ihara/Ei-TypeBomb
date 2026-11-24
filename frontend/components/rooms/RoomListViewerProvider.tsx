@@ -7,10 +7,9 @@ import {
     useMemo,
     useRef,
     useState,
-    type Dispatch,
     type ReactNode,
-    type SetStateAction,
 } from "react";
+import { toggleSavedRoom } from "@/lib/room/save";
 
 /**
  * Only viewer-specific data lives here; public room summaries remain in the
@@ -42,13 +41,16 @@ const INITIAL: FeedViewerSnapshot = { ...GUEST, status: "idle" };
 type FeedViewerContext = {
     signedInHint: boolean;
     setSignedInHint: (signedIn: boolean) => void;
-    initialize: (viewer: Omit<FeedViewerSnapshot, "status">) => void;
+    reconcile: (viewer: Omit<FeedViewerSnapshot, "status" | "savedRoomIds"> & {
+        savedRoomIds: string[] | null;
+    }) => void;
     snapshot: FeedViewerSnapshot;
     ensureLoaded: () => void;
     retry: () => void;
-    resetToGuest: () => void;
+    resetToGuest: () => FeedViewerSnapshot;
+    finishSignOut: () => void;
     restore: (snapshot: FeedViewerSnapshot) => void;
-    setSavedRoomIds: Dispatch<SetStateAction<string[]>>;
+    toggleSaved: (userId: string, roomId: string) => Promise<Awaited<ReturnType<typeof toggleSavedRoom>> | null>;
 };
 
 const Context = createContext<FeedViewerContext | null>(null);
@@ -80,14 +82,35 @@ export function RoomListViewerProvider({ children }: { children: ReactNode }) {
     const snapshotRef = useRef<FeedViewerSnapshot>(INITIAL);
     const requestRef = useRef<AbortController | null>(null);
     const generationRef = useRef(0);
+    const signOutRef = useRef<"pending" | "complete" | null>(null);
+    const pendingSaves = useRef(new Map<string, { saved: boolean }>());
 
     const commit = useCallback((next: FeedViewerSnapshot) => {
+        if (snapshotRef.current.currentUser?.id !== next.currentUser?.id)
+            pendingSaves.current.clear();
         snapshotRef.current = next;
-        setSnapshot(next);
+
+        if (pendingSaves.current.size === 0) {
+            setSnapshot(next);
+            return;
+        }
+
+        const savedRoomIds = new Set(next.savedRoomIds);
+        for (const [roomId, { saved }] of pendingSaves.current) {
+            if (saved) savedRoomIds.add(roomId);
+            else savedRoomIds.delete(roomId);
+        }
+        setSnapshot({ ...next, savedRoomIds: [...savedRoomIds] });
     }, []);
 
-    const fetchViewer = useCallback(() => {
-        if (requestRef.current || snapshotRef.current.status !== "idle") return;
+    const cancelViewerRequest = useCallback(() => {
+        ++generationRef.current;
+        requestRef.current?.abort();
+        requestRef.current = null;
+    }, []);
+
+    const fetchViewer = useCallback((verifyAfterSignOut = false) => {
+        if (requestRef.current || (!verifyAfterSignOut && snapshotRef.current.status !== "idle")) return;
 
         const controller = new AbortController();
         const generation = ++generationRef.current;
@@ -116,8 +139,8 @@ export function RoomListViewerProvider({ children }: { children: ReactNode }) {
             } catch (error) {
                 if (controller.signal.aborted || generation !== generationRef.current) return;
                 console.error("Failed to load room viewer state", error);
-                // Do not retain old owner controls after an auth/network error.
-                commit({ ...GUEST, status: "error" });
+                // Keep the signed-out UI if a recheck fails.
+                if (!verifyAfterSignOut) commit({ ...GUEST, status: "error" });
             } finally {
                 if (requestRef.current === controller) requestRef.current = null;
             }
@@ -125,65 +148,90 @@ export function RoomListViewerProvider({ children }: { children: ReactNode }) {
     }, [commit]);
 
     const resetToGuest = useCallback(() => {
-        ++generationRef.current;
-        requestRef.current?.abort();
-        requestRef.current = null;
-        commit({ ...GUEST });
-    }, [commit]);
+        const previous = snapshotRef.current;
+        signOutRef.current = "pending";
+        cancelViewerRequest();
+        commit(GUEST);
+        return previous;
+    }, [cancelViewerRequest, commit]);
 
-    const restore = useCallback(
-        (previous: FeedViewerSnapshot) => {
-            ++generationRef.current;
-            requestRef.current?.abort();
-            requestRef.current = null;
-            commit(previous);
-        },
-        [commit],
-    );
+    const finishSignOut = useCallback(() => {
+        if (signOutRef.current === "pending") signOutRef.current = "complete";
+    }, []);
 
-    const initialize = useCallback((viewer: Omit<FeedViewerSnapshot, "status">) => {
-        // Existing viewer state includes optimistic saves and same-layout sign-out.
-        if (snapshotRef.current.status !== "ready")
-            restore({ ...viewer, status: "ready" });
-    }, [restore]);
+    const restore = useCallback((previous: FeedViewerSnapshot) => {
+        signOutRef.current = null;
+        cancelViewerRequest();
+        commit(previous);
+    }, [cancelViewerRequest, commit]);
+
+    const reconcile = useCallback((viewer: Parameters<FeedViewerContext["reconcile"]>[0]) => {
+        if (signOutRef.current === "pending") return;
+        const previous = snapshotRef.current;
+        const sameUser = viewer.currentUser?.id === previous.currentUser?.id;
+        if (signOutRef.current === "complete" && viewer.currentUser && !sameUser) {
+            // Cached personalized pages can carry an older identity after
+            // sign-out. Only a fresh private lookup can restore that identity.
+            fetchViewer(true);
+            return;
+        }
+        cancelViewerRequest();
+        commit({
+            ...viewer,
+            status: "ready",
+            savedRoomIds: viewer.savedRoomIds ?? (sameUser ? previous.savedRoomIds : []),
+        });
+    }, [cancelViewerRequest, commit, fetchViewer]);
 
     const retry = useCallback(() => {
-        ++generationRef.current;
-        requestRef.current?.abort();
-        requestRef.current = null;
-        // Called from a click handler; reset before starting the private fetch.
-        commit({ ...INITIAL });
-        // fetchViewer uses snapshotRef rather than captured React state.
+        cancelViewerRequest();
+        commit(INITIAL);
         fetchViewer();
-    }, [commit, fetchViewer]);
+    }, [cancelViewerRequest, commit, fetchViewer]);
 
-    const setSavedRoomIds = useCallback<Dispatch<SetStateAction<string[]>>>(
-        (value) => {
-            setSnapshot((previous) => {
-                if (!previous.currentUser || previous.status !== "ready") return previous;
-                const savedRoomIds =
-                    typeof value === "function" ? value(previous.savedRoomIds) : value;
-                const next = { ...previous, savedRoomIds };
-                snapshotRef.current = next;
-                return next;
-            });
-        },
-        [],
-    );
+    const toggleSaved = useCallback(async (userId: string, roomId: string) => {
+        const viewer = snapshotRef.current;
+        if (viewer.currentUser?.id !== userId || pendingSaves.current.has(roomId)) return null;
+
+        const pending = { saved: !viewer.savedRoomIds.includes(roomId) };
+        pendingSaves.current.set(roomId, pending);
+        commit(viewer);
+
+        let result: Awaited<ReturnType<typeof toggleSavedRoom>> | undefined;
+        try {
+            result = await toggleSavedRoom(roomId);
+            return pendingSaves.current.get(roomId) === pending ? result : null;
+        } finally {
+            // Reconciliation can replace the account while the action runs.
+            if (pendingSaves.current.get(roomId) === pending) {
+                pendingSaves.current.delete(roomId);
+                const current = snapshotRef.current;
+                if (result && !result.error) {
+                    const savedRoomIds = new Set(current.savedRoomIds);
+                    if (result.saved) savedRoomIds.add(roomId);
+                    else savedRoomIds.delete(roomId);
+                    commit({ ...current, savedRoomIds: [...savedRoomIds] });
+                } else {
+                    commit(current);
+                }
+            }
+        }
+    }, [commit]);
 
     const contextValue = useMemo(
         () => ({
             snapshot,
             signedInHint,
             setSignedInHint,
-            initialize,
+            reconcile,
             ensureLoaded: fetchViewer,
             retry,
             resetToGuest,
+            finishSignOut,
             restore,
-            setSavedRoomIds,
+            toggleSaved,
         }),
-        [snapshot, signedInHint, initialize, fetchViewer, retry, resetToGuest, restore, setSavedRoomIds],
+        [snapshot, signedInHint, reconcile, fetchViewer, retry, resetToGuest, finishSignOut, restore, toggleSaved],
     );
 
     return <Context.Provider value={contextValue}>{children}</Context.Provider>;
