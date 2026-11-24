@@ -86,7 +86,7 @@ test("only sign-in, signup, recovery and OAuth bootstrap endpoints bypass the be
         "/.well-known/oauth-authorization-server",
         "/.well-known/oauth-protected-resource/api/mcp",
         "/ingest/array/",
-        "/favicon-light.ico",
+        "/favicon.ico",
         "/favicon-dark.ico",
     ])
         assert.equal(isPublicBetaPath(allowed), true, allowed);
