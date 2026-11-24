@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Header from "@/components/layout/Header";
+import Navigation from "@/components/layout/Navigation";
 import Sidebar, { type SidebarItem } from "@/components/layout/Sidebar";
 import AccountSignOut from "@/components/account/settings/AccountSignOut";
 import requireAccountUser from "./require-account-user";
@@ -16,7 +17,7 @@ export default async function Layout({ children }: { children: ReactNode }) {
         <>
             <Header />
             <Sidebar items={items} actions={<AccountSignOut user={user} />}>
-                {children}
+                <Navigation>{children}</Navigation>
             </Sidebar>
         </>
     );

@@ -4,6 +4,7 @@ import React from "react";
 import { IconName } from "./Icon";
 import { Icon } from "./Icon";
 import Link from "next/link";
+import { useNavigation, type NavigationDirection } from "../layout/Navigation";
 
 type ButtonVariant = "default" | "primary" | "text" | "danger";
 
@@ -30,6 +31,7 @@ type ButtonProps = Pick<
     cursor?: "0" | "1" | "2";
     href?: string;
     prefetch?: boolean;
+    navigation?: NavigationDirection;
     font?: "default" | "mono" | "serif";
 };
 
@@ -70,9 +72,11 @@ export default function Button({
     cursor = disabled || loading ? "2" : variant === "text" ? "1" : "0",
     href,
     prefetch,
+    navigation,
     font,
     ...ariaProps
 }: ButtonProps) {
+    const navigate = useNavigation();
     const currentVariantStyle = variantStyles(variant, loading, disabled);
     const paddingStyle =
         variant === "text" && padding === "xsmall"
@@ -95,6 +99,11 @@ export default function Button({
                 <Link
                     href={href}
                     prefetch={prefetch}
+                    onNavigate={(event) => {
+                        if (navigation && !disabled && !loading) {
+                            navigate?.(href, navigation, event.preventDefault);
+                        }
+                    }}
                     {...ariaProps}
                     type={type}
                     className={`${baseStyles} ${currentVariantStyle} ${paddingStyle} ${fontStyle} ${disabled && "opacity-50 pointer-events-none"} ${alignment === "left" ? "justify-start" : "justify-center"}`}
