@@ -7,6 +7,8 @@ import {
     getTypingAnswer,
     getEffectiveAnswerMode,
     normalizeAnswerMode,
+    toLearningAnswerMode,
+    getRecognitionChoiceCount,
 } from "../lib/answer-mode";
 import {
     createInitialMemory,
@@ -50,10 +52,10 @@ const items: Item[] = [
     { id: "pear", type: "typed_recall", prompt: "梨", answer: "pear" },
 ];
 
-test("the answer-mode selector only offers selection when no answer is typable", () => {
+test("the answer-mode selector offers card even when no answer is typable", () => {
     assert.deepEqual(
         getAnswerModeOptions(false).map((option) => option.value),
-        ["selection"],
+        ["selection", "card"],
     );
     assert.deepEqual(
         getAnswerModeOptions(true).map((option) => option.value),
