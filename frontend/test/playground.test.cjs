@@ -2258,10 +2258,10 @@ test("navigation and local question slides read the same duration and offset tok
 test("solo slides clip at the game edges independently of the centered content width", () => {
     const game = fs.readFileSync(path.join(root, "components/game/GameView.tsx"), "utf8");
     const slide = fs.readFileSync(path.join(root, "components/layout/SlideTransition.tsx"), "utf8");
-    assert.match(game, /const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError/);
+    assert.match(game, /const\s+fullWidthQuestion\s*=\s*soloMode\s*&&\s*isStarted\s*&&\s*currentItem\s*!==\s*null\s*&&\s*!!room\s*&&\s*!serverError/);
     assert.match(game, /w-full \$\{fullWidthQuestion \? "" : "max-w-3xl px-4"\}/);
     assert.match(game, /fullWidthQuestion \? "px-4"/);
-    assert.match(game, /<div className="w-full max-w-3xl px-4">\{masteryProgress\}<\/div>/);
+    assert.match(game, /<div\s+className="w-full max-w-3xl px-4">\s*\{masteryProgress\}\s*<\/div>/);
     assert.match(game, /contentClassName="max-w-3xl"/);
     assert.match(game, /getDistance=\{getQuestionSlideDistance\}/);
     assert.match(slide, /w-full flex-col overflow-x-clip/);
