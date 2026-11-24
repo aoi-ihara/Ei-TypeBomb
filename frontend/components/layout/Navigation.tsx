@@ -12,6 +12,7 @@ import {
 import "./navigation.css";
 import { slideFrames, getSlideMotion, prefersReducedMotion } from "./slide-motion";
 import { animateSlideEntrance, beginNativeSlideCursor, endNativeSlideCursor } from "./slide-cursor";
+import { capturePageMorph, type PageMorph } from "./page-morph";
 
 export type NavigationDirection = "push" | "pop";
 export type NavigationTransition = "slide" | "morph";
@@ -31,7 +32,7 @@ type Request = {
     complete?: () => void;
     transition?: ViewTransition;
     viewport?: HTMLElement;
-    morph?: { source: HTMLElement; key?: string; destination?: HTMLElement };
+    morph?: PageMorph;
 };
 
 // View transitions are document-wide, even when Navigation providers are nested.
@@ -64,10 +65,7 @@ export function useNavigation(scope: "local" | "root" = "local") {
 }
 
 function clearMorph(request: Request) {
-    const morph = request.morph;
-    if (!morph) return;
-    morph.source.style.removeProperty("view-transition-name");
-    morph.destination?.style.removeProperty("view-transition-name");
+    request.morph?.dispose();
 }
 
 function stop(request: Request, skip = false) {
@@ -125,7 +123,14 @@ export default function Navigation({ children, root = false }: { children: React
         pending.current = null;
         const matches = normalize(pathname) === request.target;
         const width = viewport.current ? navigationWidth(viewport.current) : 0;
-        if (matches && request.transition && request.morph) {
+        if (request.morph) {
+            stop(request);
+            // Next's scroll handling is disabled for morph navigation. Reset
+            // push scrolling even if a redirect or password gate prevents morphing.
+            if (request.direction === "push") {
+                window.scrollTo({ top: 0, behavior: "instant" });
+            }
+            if (!matches) { cancel(); return; }
             const { source, key } = request.morph;
             const targets = viewport.current?.querySelectorAll<HTMLElement>("[data-navigation-morph-target]");
             const destination = Array.from(targets ?? []).find((element) =>
@@ -133,16 +138,19 @@ export default function Navigation({ children, root = false }: { children: React
             );
             // A gate, error, or list without the original room must never morph into another room.
             if (!destination || !destination.getBoundingClientRect().height || !destination.getBoundingClientRect().width) {
-                stop(request, true);
+                cancel();
                 return;
             }
             if (request.direction === "pop") {
                 // Restore visibility before capturing the destination, including cards below the fold.
                 destination.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
             }
-            request.morph.source.style.removeProperty("view-transition-name");
-            request.morph.destination = destination;
-            destination.style.viewTransitionName = "etb-navigation-morph";
+            request.morph.play(destination, () => {
+                if (active.current !== request) return;
+                active.current = null;
+                releaseDocumentTransition(request);
+            });
+            return;
         }
         if (matches && request.transition && width > 0) {
             document.documentElement.style.setProperty("--etb-navigation-new-width", `${width}px`);
@@ -175,6 +183,31 @@ export default function Navigation({ children, root = false }: { children: React
         const request: Request = { target, direction };
         pending.current = request;
 
+        const source = options?.source;
+        if (options?.transition === "morph" && source && node.contains(source)) {
+            documentTransition?.cancel();
+            const morph = capturePageMorph(node, source);
+            if (morph) {
+                request.morph = morph;
+                active.current = request;
+                documentTransition = { request, cancel };
+                // Loading and animation have independent lifetimes. The outgoing
+                // page stays live until Next commits the destination.
+                request.timer = setTimeout(() => {
+                    if (pending.current === request) cancel();
+                }, 15000);
+                try {
+                    router.push(href, { scroll: false });
+                    preventDefault();
+                    return;
+                } catch {
+                    cancel();
+                    pending.current = request;
+                    request.morph = undefined;
+                }
+            }
+        }
+
         if (typeof document.startViewTransition === "function") {
             // Retire the old owner synchronously before assigning any shared names.
             documentTransition?.cancel();
@@ -187,13 +220,7 @@ export default function Navigation({ children, root = false }: { children: React
                 root.style.setProperty("--etb-navigation-new-width", `${width}px`);
             }
             node.style.viewTransitionName = "etb-navigation-content";
-            const source = options?.source;
-            const rect = source?.getBoundingClientRect();
-            if (options?.transition === "morph" && source && node.contains(source) && rect?.width && rect.height) {
-                request.morph = { source, key: source.dataset.navigationMorphTarget };
-                source.style.viewTransitionName = "etb-navigation-morph";
-            }
-            root.dataset.etbNavigation = request.morph ? "morph" : direction;
+            root.dataset.etbNavigation = direction;
             active.current = request;
             try {
                 const transition = document.startViewTransition(async () => {

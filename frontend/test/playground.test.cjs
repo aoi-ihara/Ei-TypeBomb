@@ -2353,3 +2353,42 @@ test("native slide cursor resolves the new DOM when captured content cannot be h
     cursor.endNativeSlideCursor();
     assert.equal(cursor.getSlideCursorTarget(120, 30), null);
 });
+
+test("shared morph rectangles interpolate both axes and retarget without jumping", () => {
+    const { interpolateMorphRect, sameMorphRect } = load("components/layout/morph-motion.ts");
+    const start = { x: 20, y: 100, width: 300, height: 120 };
+    const target = { x: 10, y: 20, width: 700, height: 520 };
+    const middle = interpolateMorphRect(start, target, 0.5);
+    assert.deepEqual({ ...middle }, { x: 15, y: 60, width: 500, height: 320 });
+    const resized = { ...target, height: 620 };
+    assert.equal(sameMorphRect(target, resized), false);
+    assert.deepEqual({ ...interpolateMorphRect(middle, resized, 0) }, { ...middle });
+    assert.deepEqual({ ...interpolateMorphRect(middle, resized, 1) }, resized);
+});
+
+test("page morph keeps the same eased curve for a fixed target", () => {
+    const { advanceMorphRect, interpolateMorphRect } = load("components/layout/morph-motion.ts");
+    const origin = { x: 20, y: 100, width: 300, height: 120 };
+    const target = { x: 10, y: 20, width: 700, height: 520 };
+    let state = { rect: origin, progress: 0 };
+    for (const progress of [0.1, 0.35, 0.7, 0.91, 1]) {
+        state = advanceMorphRect(state.rect, target, state.progress, progress);
+        const expected = interpolateMorphRect(origin, target, progress);
+        for (const key of Object.keys(expected)) assert.ok(Math.abs(state.rect[key] - expected[key]) < 1e-9);
+        assert.equal(state.progress, progress);
+    }
+});
+
+test("page morph advances even when its destination changes every frame", () => {
+    const { advanceMorphRect } = load("components/layout/morph-motion.ts");
+    let state = { rect: { x: 0, y: 0, width: 100, height: 50 }, progress: 0 };
+    for (let i = 1; i <= 20; i++) {
+        const target = { x: 200 + i, y: 100 + i, width: 500 + i, height: 300 + i };
+        const previous = state;
+        state = advanceMorphRect(state.rect, target, state.progress, i / 20);
+        assert.ok(state.rect.x > previous.rect.x);
+        assert.ok(state.rect.height > previous.rect.height);
+        assert.ok(state.progress > previous.progress);
+        if (i === 20) assert.deepEqual({ ...state.rect }, target);
+    }
+});

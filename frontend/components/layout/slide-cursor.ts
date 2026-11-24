@@ -3,9 +3,10 @@ export const SLIDE_CURSOR_CHANGE = "etbslidecursorchange";
 type CursorTarget = { element: HTMLElement; rect: DOMRect };
 const entrances = new Map<HTMLElement, Animation>();
 let nativeSlide = false;
+const morphElements = new Set<HTMLElement>();
 
 export function isSlideCursorActive() {
-    return nativeSlide || entrances.size > 0;
+    return nativeSlide || entrances.size > 0 || morphElements.size > 0;
 }
 
 function refresh() {
@@ -28,6 +29,16 @@ export function animateSlideEntrance(
     void animation.finished.then(finish, finish);
     refresh();
     return animation;
+}
+
+/** Hit-test a live morph destination at its final, untransformed position. */
+export function trackMorphCursorElement(element: HTMLElement) {
+    morphElements.add(element);
+    refresh();
+    return () => {
+        morphElements.delete(element);
+        refresh();
+    };
 }
 
 /** Called once the destination DOM has committed, before the native snapshot. */
@@ -70,12 +81,15 @@ function nativeTarget(x: number, y: number): CursorTarget | null {
 /** Temporarily remove just the entrance transforms for a synchronous
  * hit test. Restore them before returning, so no rendered frame jumps. */
 export function getSlideCursorTarget(x: number, y: number): CursorTarget | null {
-    if (!nativeSlide && !entrances.size) return null;
+    if (!nativeSlide && !entrances.size && !morphElements.size) return null;
     const restore: (() => void)[] = [];
     try {
+        const moving = new Set(morphElements);
         for (const [element, animation] of entrances) {
-            if (!element.isConnected || animation.playState === "idle" ||
-                animation.playState === "finished") continue;
+            if (animation.playState !== "idle" && animation.playState !== "finished") moving.add(element);
+        }
+        for (const element of moving) {
+            if (!element.isConnected) continue;
             const style = element.style;
             const value = style.getPropertyValue("transform");
             const priority = style.getPropertyPriority("transform");
