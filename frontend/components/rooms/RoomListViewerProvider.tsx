@@ -14,8 +14,8 @@ import {
 
 /**
  * Only viewer-specific data lives here; public room summaries remain in the
- * Vercel ISR page. This provider is above / and /latest, so a navigation
- * between them does not re-enter the "unknown auth state" UI.
+ * Vercel ISR page. The browse layout keeps this provider mounted across
+ * feeds and room details so the navigation retains its viewer state.
  */
 export type FeedCurrentUser = {
     id: string;
@@ -40,6 +40,9 @@ const GUEST: FeedViewerSnapshot = {
 const INITIAL: FeedViewerSnapshot = { ...GUEST, status: "idle" };
 
 type FeedViewerContext = {
+    signedInHint: boolean;
+    setSignedInHint: (signedIn: boolean) => void;
+    initialize: (viewer: Omit<FeedViewerSnapshot, "status">) => void;
     snapshot: FeedViewerSnapshot;
     ensureLoaded: () => void;
     retry: () => void;
@@ -73,6 +76,7 @@ const isViewerPayload = (value: unknown): value is Omit<FeedViewerSnapshot, "sta
 
 export function RoomListViewerProvider({ children }: { children: ReactNode }) {
     const [snapshot, setSnapshot] = useState<FeedViewerSnapshot>(INITIAL);
+    const [signedInHint, setSignedInHint] = useState(false);
     const snapshotRef = useRef<FeedViewerSnapshot>(INITIAL);
     const requestRef = useRef<AbortController | null>(null);
     const generationRef = useRef(0);
@@ -137,6 +141,12 @@ export function RoomListViewerProvider({ children }: { children: ReactNode }) {
         [commit],
     );
 
+    const initialize = useCallback((viewer: Omit<FeedViewerSnapshot, "status">) => {
+        // Existing viewer state includes optimistic saves and same-layout sign-out.
+        if (snapshotRef.current.status !== "ready")
+            restore({ ...viewer, status: "ready" });
+    }, [restore]);
+
     const retry = useCallback(() => {
         ++generationRef.current;
         requestRef.current?.abort();
@@ -164,13 +174,16 @@ export function RoomListViewerProvider({ children }: { children: ReactNode }) {
     const contextValue = useMemo(
         () => ({
             snapshot,
+            signedInHint,
+            setSignedInHint,
+            initialize,
             ensureLoaded: fetchViewer,
             retry,
             resetToGuest,
             restore,
             setSavedRoomIds,
         }),
-        [snapshot, fetchViewer, retry, resetToGuest, restore, setSavedRoomIds],
+        [snapshot, signedInHint, initialize, fetchViewer, retry, resetToGuest, restore, setSavedRoomIds],
     );
 
     return <Context.Provider value={contextValue}>{children}</Context.Provider>;

@@ -102,7 +102,7 @@ test("failed private DB lookups fail closed and are never CDN cached", async () 
 
 test("public feeds are ISR pages and never await personalized room list data", () => {
     for (const page of ["page.tsx", "latest/page.tsx"]) {
-        const pathToPage = path.join(__dirname, "../app/(game)/", page);
+        const pathToPage = path.join(__dirname, "../app/(game)/(browse)/", page);
         const code = readFileSync(pathToPage, "utf8");
         assert.match(code, /export const dynamic = "force-static"/);
         assert.match(code, /export const revalidate = 3600/);
@@ -111,7 +111,7 @@ test("public feeds are ISR pages and never await personalized room list data", (
         assert.doesNotMatch(code, /getRoomListData|getUserDetails|searchParams/);
     }
     const client = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        path.join(__dirname, "../app/(game)/(browse)/RoomList.tsx"),
         "utf8",
     );
     const provider = readFileSync(
@@ -119,12 +119,14 @@ test("public feeds are ISR pages and never await personalized room list data", (
         "utf8",
     );
     const layout = readFileSync(
-        path.join(__dirname, "../app/(game)/layout.tsx"),
+        path.join(__dirname, "../app/(game)/(browse)/layout.tsx"),
         "utf8",
     );
     assert.match(layout, /<RoomListViewerProvider>/);
     assert.match(client, /useRoomListViewer\(\)/);
-    assert.match(client, /viewer\.ensureLoaded\(\)/);
+    assert.match(client, /if \(deferViewer\) \{\s*ensureLoaded\(\);\s*\} else \{\s*initialize\(/);
+    assert.match(layout, /<RoomBrowser>\{children\}<\/RoomBrowser>/);
+    assert.doesNotMatch(layout, /cookies\(|headers\(|getUser/);
     assert.match(provider, /fetch\("\/api\/room-list-viewer"/);
     assert.match(provider, /cache: "no-store"/);
     assert.match(provider, /requestRef\.current/);
@@ -138,37 +140,42 @@ test("cookie-bearing feed requests bypass guest ISR", () => {
     assert.match(proxy, /\/viewer-feed-internal/);
     assert.doesNotMatch(proxy, /\/_viewer-feed/);
     for (const page of ["page.tsx", "latest/page.tsx"]) {
-        const source = readFileSync(path.join(__dirname, "../app/(game)/viewer-feed-internal", page), "utf8");
+        const source = readFileSync(path.join(__dirname, "../app/(game)/(browse)/viewer-feed-internal", page), "utf8");
         assert.match(source, /force-dynamic/);
         assert.match(source, /getRoomListData/);
         assert.doesNotMatch(source, /deferViewer/);
     }
 });
 
-test("same-route sign out clears deferred ownership and save controls before redirect", () => {
-    const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+test("same-layout sign out clears the shared viewer before redirect and restores it on failure", () => {
+    const browser = readFileSync(
+        path.join(__dirname, "../app/(game)/(browse)/RoomBrowser.tsx"),
         "utf8",
     );
-    const handlerStart = source.indexOf("const handleSignOut = async () => {");
-    const handlerEnd = source.indexOf("const viewTitle =", handlerStart);
-    assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
-    const handler = source.slice(handlerStart, handlerEnd);
-    const redirect = handler.indexOf("await signOut()");
-    assert.ok(redirect > 0, "sign-out Server Action must still execute");
-    const sharedReset = handler.indexOf("viewer.resetToGuest()");
-    assert.ok(sharedReset > 0 && sharedReset < redirect);
-    // Logging out from /mine or /saved must also clear the shared provider.
-    assert.ok(sharedReset < handler.indexOf("if (!deferViewer)"));
-    assert.match(handler, /viewer.restore\(previousSnapshot\)/);
-    assert.match(handler, /catch \(error\)/);
+    const layoutProvider = readFileSync(
+        path.join(__dirname, "../components/rooms/RoomListViewerProvider.tsx"),
+        "utf8",
+    );
+    const handler = browser.slice(browser.indexOf("const handleSignOut"), browser.indexOf("const navigate"));
+    const reset = handler.indexOf("viewer.resetToGuest()");
+    const signOut = handler.indexOf("await signOut()");
+    assert.ok(reset >= 0 && signOut > reset);
+    assert.match(handler, /router\.replace\("\/"\)/);
     assert.match(handler, /viewer.restore\(previousSnapshot\)/);
     assert.match(handler, /unstable_rethrow\(error\)/);
+
+    // A cached personalized page cannot re-seed after the provider is reset.
+    assert.match(layoutProvider, /resetToGuest[\s\S]+commit\(\{ \.\.\.GUEST \}\)/);
+    assert.match(layoutProvider, /initialize[\s\S]+snapshotRef\.current\.status !== "ready"/);
 });
 
 test("public feed auth transitions preserve navbar, header and CTA dimensions", () => {
     const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        path.join(__dirname, "../app/(game)/(browse)/RoomList.tsx"),
+        "utf8",
+    );
+    const browser = readFileSync(
+        path.join(__dirname, "../app/(game)/(browse)/RoomBrowser.tsx"),
         "utf8",
     );
     const provider = readFileSync(
@@ -186,10 +193,10 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
 
     assert.match(provider, /snapshotRef\.current\.status !== "idle"/);
     assert.match(provider, /resetToGuest/);
-    assert.match(source, /viewer\.snapshot\.status === "idle"/);
-    assert.match(source, /className="invisible pointer-events-none"/);
-    assert.match(source, /<Button variant="text">サインイン<\/Button>/);
-    assert.doesNotMatch(source, /className="h-(?:9|10) w-28"/);
+    assert.match(source, /snapshot\.status === "idle"/);
+    assert.match(browser, /className="invisible pointer-events-none"/);
+    assert.match(browser, /<Button variant="text">サインイン<\/Button>/);
+    assert.doesNotMatch(browser, /className="h-(?:9|10) w-28"/);
     // Keep the header dimensions stable without requiring an exact class order.
     assert.match(header, /<header className="[^"]*\bw-full\b[^"]*\bshrink-0\b[^"]*\bjustify-between\b[^"]*\bpx-4\b[^"]*\bpy-4\b/);
     assert.match(header, /className="flex min-w-0 flex-1 gap-4"/);
@@ -201,20 +208,11 @@ test("public feed auth transitions preserve navbar, header and CTA dimensions", 
 
 test("saved room toggles in personalized feeds update the shared viewer too", () => {
     const source = readFileSync(
-        path.join(__dirname, "../app/(game)/RoomList.tsx"),
+        path.join(__dirname, "../app/(game)/(browse)/RoomList.tsx"),
         "utf8",
     );
-    const setterStart = source.indexOf("const setSavedRoomIds = (value:");
-    const setterEnd = source.indexOf("const viewerLoading =", setterStart);
-    assert.ok(setterStart >= 0 && setterEnd > setterStart);
-    const setter = source.slice(setterStart, setterEnd);
-    assert.match(setter, /setLocalSavedRoomIds\(value\)/);
-    assert.match(setter, /viewer\.setSavedRoomIds\(value\)/);
-    assert.match(setter, /viewer\.snapshot\.currentUser\?\.id === localCurrentUser\?\.id/);
-    const saveHandler = source.slice(
-        source.indexOf("const toggleSavedRoomState = async"),
-        source.indexOf("useEffect(() => {\n        if (!currentUser)", source.indexOf("const toggleSavedRoomState = async")),
-    );
-    assert.match(saveHandler, /setSavedRoomIds\(nextSavedIds\)/);
-    assert.match(saveHandler, /setSavedRoomIds\(\(current\) =>/);
+    assert.match(source, /\{ snapshot, ensureLoaded, initialize, setSavedRoomIds \} = useRoomListViewer\(\)/);
+    assert.match(source, /useServerViewer \? initialSavedRoomIds : snapshot.savedRoomIds/);
+    assert.match(source, /setSavedRoomIds\(nextSavedIds\)/);
+    assert.match(source, /setSavedRoomIds\(\(current\) =>/);
 });

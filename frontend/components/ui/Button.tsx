@@ -9,7 +9,7 @@ type ButtonVariant = "default" | "primary" | "text" | "danger";
 
 type ButtonProps = Pick<
     React.ButtonHTMLAttributes<HTMLButtonElement>,
-    "aria-haspopup" | "aria-expanded" | "aria-controls" | "aria-label"
+    "aria-haspopup" | "aria-expanded" | "aria-controls" | "aria-label" | "aria-current"
 > & {
     children?: React.ReactNode;
     onClick?: React.MouseEventHandler<HTMLButtonElement>;

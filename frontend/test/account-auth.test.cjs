@@ -239,20 +239,18 @@ test("recovery proof is limited to the verified session and expires", async () =
     assert.equal(await exports.hasPasswordRecovery(session), false);
 });
 
+const readAccountRoute = (file) => readFileSync(
+    new URL("../app/(auth)/account/" + file, `file://${__filename}`),
+    "utf8",
+);
+
 test("settings link to password recovery and the reset page checks recovery state", () => {
-    const settings = readFileSync(
-        new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`),
-        "utf8",
-    );
-    const security = readFileSync(
-        new URL("../components/account/settings/Security.tsx", `file://${__filename}`),
-        "utf8",
-    );
-    assert.match(settings, /label: "セキュリティ", icon: "shield"/);
-    assert.match(settings, /title=\{title\}/);
-    assert.match(security, /label: "メールアドレス"/);
-    assert.match(security, /label: "パスワード"/);
-    assert.match(security, /mode=\{screen === "password" \? "password-link" : "email"\}/);
+    const password = readAccountRoute("security/password/page.tsx");
+    const email = readAccountRoute("security/email/page.tsx");
+    assert.match(password, /<AuthForm mode="password-link"/);
+    assert.match(email, /<AuthForm mode="email"/);
+    for (const page of [password, email])
+        assert.match(page, /backLink="\/account\/security"/);
     const resetPage = readFileSync(
         new URL("../app/(auth)/sign-in/reset-password/page.tsx", `file://${__filename}`),
         "utf8",
@@ -261,19 +259,12 @@ test("settings link to password recovery and the reset page checks recovery stat
     assert.match(resetPage, /await hasPasswordRecovery/);
 });
 
-test("settings show apps to all users and group email/password under security", () => {
-    const page = readFileSync(
-        new URL("../app/(auth)/account/page.tsx", `file://${__filename}`),
-        "utf8",
-    );
-    const settings = readFileSync(
-        new URL("../components/account/settings/AccountSettings.tsx", `file://${__filename}`),
-        "utf8",
-    );
-    const security = readFileSync(
-        new URL("../components/account/settings/Security.tsx", `file://${__filename}`),
-        "utf8",
-    );
+test("account layout preserves apps, security, sign-out and protected nested settings", () => {
+    const page = readAccountRoute("page.tsx");
+    const layout = readAccountRoute("layout.tsx");
+    const security = readAccountRoute("security/page.tsx");
+    const accountPage = readAccountRoute("AccountPage.tsx");
+    const requireUser = readAccountRoute("require-account-user.ts");
     const apps = readFileSync(
         new URL("../components/account/settings/Apps.tsx", `file://${__filename}`),
         "utf8",
@@ -282,17 +273,15 @@ test("settings show apps to all users and group email/password under security", 
         new URL("../components/ui/Icon.tsx", `file://${__filename}`),
         "utf8",
     );
-    assert.match(page, /<AccountSettings user=\{user\}/);
-    assert.doesNotMatch(page, /mcpEnabled|ETB_MCP_OAUTH_ENABLED/);
-    assert.match(settings, /key: "apps", label: "アプリ"/);
-    assert.match(settings, /key: "security", label: "セキュリティ", icon: "shield"/);
-    assert.match(settings, /section === "apps" \? \(/);
-    assert.match(security, /key: "email", label: "メールアドレス"/);
-    assert.match(security, /key: "password", label: "パスワード"/);
-    assert.match(settings, /showBackButton=\{section === "security" && securityScreen !== "overview"\}/);
-    assert.match(settings, /onBackClicked=\{\(\) => setSecurityScreen\("overview"\)\}/);
-    assert.doesNotMatch(security, /セキュリティへ戻る/);
-    assert.doesNotMatch(security, /iconName="arrowLeft"/);
+    assert.match(page, /<Apps \/>/);
+    assert.doesNotMatch(page + layout, /mcpEnabled|ETB_MCP_OAUTH_ENABLED/);
+    assert.match(layout, /label: "アプリ", iconName: "layoutGrid", href: "\/account"/);
+    assert.match(layout, /label: "セキュリティ", iconName: "shield", href: "\/account\/security"/);
+    assert.match(layout, /<Sidebar items=\{items\} actions=\{<AccountSignOut user=\{user\}/);
+    assert.match(security, /href="\/account\/security\/email"/);
+    assert.match(security, /href="\/account\/security\/password"/);
+    assert.match(accountPage, /await requireAccountUser\(\)/);
+    assert.match(requireUser, /if \(!user\) redirect\("\/sign-in"\)/);
     assert.match(apps, /listAuthorizedApps/);
     assert.match(icon, /shield: Shield/);
 });

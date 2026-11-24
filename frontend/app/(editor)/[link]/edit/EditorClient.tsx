@@ -51,7 +51,6 @@ import { generateWordsAction, getGeminiUsageAction } from "@/lib/AI/actions";
 import Picker from "@/components/ui/Picker";
 import Selection from "@/components/ui/Selection";
 import MorphDialog from "@/components/ui/MorphDialog";
-import RoomNavigation from "@/components/rooms/RoomNavigation";
 
 const VISIBILITY_OPTIONS: RoomVisibility[] = ["public", "unlisted", "private"];
 
@@ -685,7 +684,6 @@ export default function EditorClient({
 
     return (
         <Shell
-            sidebar={<RoomNavigation isSignedIn={true} />}
             animateAppear={true}
             className="flex flex-col px-4 gap-4"
             size="large"

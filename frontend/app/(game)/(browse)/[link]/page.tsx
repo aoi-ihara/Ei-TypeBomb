@@ -3,9 +3,7 @@ import Shell from "@/components/layout/Shell";
 import { Icon } from "@/components/ui/Icon";
 import { getRoomPageDataFromLink } from "@/lib/room/get";
 import PlayRoom from "./PlayRoom";
-import RoomPasswordGate from "./RoomPasswordGate";
 import RoomShareActions from "./RoomShareActions";
-import RoomNavigation from "@/components/rooms/RoomNavigation";
 import { getTypingAnswer } from "@/lib/answer-mode";
 
 export default async function RoomPage({
@@ -18,19 +16,13 @@ export default async function RoomPage({
     if (!result) notFound();
     if (link !== result.link) redirect("/" + result.link);
 
-    if (result.requiresPassword && !result.authorized) {
-        return (
-            <>
-                <Shell title="パスワードを入力" size="medium" animateAppear>
-                    <RoomPasswordGate roomId={result.id} />
-                </Shell>
-            </>
-        );
-    }
+    // Layouts and pages render independently. Never include protected room
+    // details in a page response until the room itself authorizes access.
+    if (result.requiresPassword && !result.authorized) return null;
 
     if (!result.room) notFound();
 
-    const { room, itemCount, isOwner, isSignedIn } = result;
+    const { room, itemCount, isOwner } = result;
     const title = room.title || "ルーム";
     const items = room.items ?? [];
     const hasTypingAnswers = items.some(
@@ -39,7 +31,7 @@ export default async function RoomPage({
 
     return (
         <Shell
-            sidebar={<RoomNavigation isSignedIn={isSignedIn} />}
+            showHeader={false}
             title={title}
             className="grid lg:grid-cols-2 gap-4 px-4"
             showBackButton
