@@ -62,7 +62,7 @@ createRoot(document.getElementById("root")!).render(
     ) : (
       <OfflineClient
         room={room}
-        answerMode="selection"
+        answerMode={location.search.includes("card") ? "card" : "selection"}
         initialBackgroundMusic={false}
         initialSounDeffects={false}
       />

@@ -10,7 +10,7 @@ import Selection from "@/components/ui/Selection";
 import {
     getAnswerModeOptions,
     normalizeAnswerMode,
-    type AnswerMode,
+    type OfflineAnswerMode,
 } from "@/lib/answer-mode";
 import { PopUp } from "@/components/ui/PopUp";
 import dynamic from "next/dynamic";
@@ -51,10 +51,10 @@ export default function PlayRoom({
     const [showPasswordField, setShowPasswordField] = useState(false);
     const [roomPassword, setRoomPassword] = useState("");
     const [displayName, setDisplayName] = useState("");
-    const [answerMode, setAnswerMode] = useState<AnswerMode>("selection");
+    const [answerMode, setAnswerMode] = useState<OfflineAnswerMode>("selection");
 
     const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
-    const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
+    const effectiveAnswerMode = normalizeAnswerMode(answerMode, hasTypingAnswers);
     const answerModeSelection = Math.max(
         0,
         availableAnswerModes.findIndex(
@@ -66,7 +66,7 @@ export default function PlayRoom({
     const [turnstile, setTurnstile] = useState(false);
     const [turnstileMode, setTurnstileMode] = useState<PlayMode | null>(null);
     const [turnstileAnswerMode, setTurnstileAnswerMode] =
-        useState<AnswerMode>("selection");
+        useState<OfflineAnswerMode>("selection");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -102,7 +102,7 @@ export default function PlayRoom({
 
     const navigateToMode = (
         mode: PlayMode,
-        selectedAnswerMode: AnswerMode,
+        selectedAnswerMode: OfflineAnswerMode,
     ) => {
         posthog.capture("room_entered", {
             room_id: roomId,
@@ -119,7 +119,7 @@ export default function PlayRoom({
     const handleSignIn = async (
         turnstileToken: string | undefined,
         mode: PlayMode,
-        selectedAnswerMode: AnswerMode,
+        selectedAnswerMode: OfflineAnswerMode,
     ) => {
         if (itemCount === 0) {
             setError(

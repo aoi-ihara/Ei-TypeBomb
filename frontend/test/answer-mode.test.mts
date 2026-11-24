@@ -74,6 +74,11 @@ test("typing uses only the first valid kana candidate, then the original answer"
     assert.equal(normalizeAnswerMode("input", true), "input");
     assert.equal(normalizeAnswerMode("auto", true), "selection");
     assert.equal(normalizeAnswerMode("input", false), "selection");
+    assert.equal(normalizeAnswerMode("card", false), "card");
+    assert.equal(normalizeAnswerMode("card", true), "card");
+    assert.equal(toLearningAnswerMode("card"), "selection");
+    assert.equal(toLearningAnswerMode("input"), "input");
+    assert.equal(toLearningAnswerMode("selection"), "selection");
 });
 
 test("effective answer mode follows ItemView's per-item typing fallback", () => {

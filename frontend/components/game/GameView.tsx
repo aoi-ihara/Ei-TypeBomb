@@ -14,7 +14,7 @@ import type {
     RecallObservation,
     RecallProgress,
 } from "@/lib/playground/memory";
-import type { AnswerMode } from "@/lib/answer-mode";
+import { toLearningAnswerMode, type OfflineAnswerMode } from "@/lib/answer-mode";
 import { getRoomItems } from "@/lib/item";
 import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
 
@@ -65,7 +65,7 @@ type Props = {
     stopRecommended?: boolean;
     soloMode?: boolean;
     isPaused?: boolean;
-    answerMode: AnswerMode;
+    answerMode: OfflineAnswerMode;
     onSelectionAnswer?: (
         correct: boolean,
         hadMistake: boolean,
@@ -221,7 +221,7 @@ export default function GameView({
                 key={`${currentItem.id}:${currentTurn}:${itemPresentationKey}`}
                 item={currentItem}
                 items={getRoomItems(room)}
-                answerMode={answerMode}
+                answerMode={soloMode ? answerMode : toLearningAnswerMode(answerMode)}
                 allowSelectionHint={soloMode}
                 onSelectionAnswer={(
                     correct,

@@ -45,11 +45,11 @@ import {
     startMemorySync,
 } from "@/lib/playground/memory-client";
 import { Icon } from "@/components/ui/Icon";
-import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
+import { getEffectiveAnswerMode, getTypingAnswer, toLearningAnswerMode, type OfflineAnswerMode } from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
-    answerMode: AnswerMode;
+    answerMode: OfflineAnswerMode;
     initialBackgroundMusic: boolean;
     initialSounDeffects: boolean;
 };
@@ -159,11 +159,12 @@ const clampTypingDelay = (delayMs: number) =>
 
 export default function Client({
     room: sourceRoom,
-    answerMode,
+    answerMode: requestedAnswerMode,
     initialBackgroundMusic,
     initialSounDeffects,
 }: Readonly<Props>) {
     const router = useRouter();
+    const answerMode = toLearningAnswerMode(requestedAnswerMode);
 
     const [backgroundMusic, setBackgroundMusic] = useState(
         initialBackgroundMusic,
@@ -1092,26 +1093,40 @@ export default function Client({
                             aria-labelledby="offline-instructions-title"
                         >
                             <div className="flex flex-col gap-4">
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="keyboard" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        入力問題では、英語・日本語ともに
-                                        <strong>半角</strong>
-                                        で入力してください。
-                                    </span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <span className="shrink-0">
-                                        <Icon name="lightbulb" />
-                                    </span>
-                                    <span data-cursor="text">
-                                        オフラインプレイの場合は、
-                                        <strong>スペースキーを2回押す</strong>
-                                        と解答を見ることができます。
-                                    </span>
-                                </div>
+                                {requestedAnswerMode === "card" ? (
+                                    <div className="flex gap-2">
+                                        <span className="shrink-0">
+                                            <Icon name="lightbulb" />
+                                        </span>
+                                        <span data-cursor="text">
+                                            斜線部分をタップ、またはスペースキーで解答を表示し、正誤を選んでください。
+                                            分からない場合は「分からない」を選択できます。
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="keyboard" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                入力問題では、英語・日本語ともに
+                                                <strong>半角</strong>
+                                                で入力してください。
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <span className="shrink-0">
+                                                <Icon name="lightbulb" />
+                                            </span>
+                                            <span data-cursor="text">
+                                                オフラインプレイの場合は、
+                                                <strong>スペースキーを2回押す</strong>
+                                                と解答を見ることができます。
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                                 {!isSignedIn && (
                                     <div className="flex gap-2">
                                         <span className="shrink-0">
@@ -1147,7 +1162,7 @@ export default function Client({
                 result={null}
                 soloMode
                 isPaused={isPaused}
-                answerMode={answerMode}
+                answerMode={requestedAnswerMode}
                 masteryProgress={
                     <OfflineMasteryProgress
                         progress={masteryGraph.totals}
