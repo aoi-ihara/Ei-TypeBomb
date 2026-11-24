@@ -9,6 +9,8 @@ type Props = {
     transitionKey: number | string;
     enabled?: boolean;
     contentClassName?: string;
+    /** Optional destination-based distance, independent of the clipping/layout width. */
+    getDistance?: (element: HTMLElement) => number;
 };
 
 type Snapshot = {
@@ -76,12 +78,14 @@ export default class SlideTransition extends Component<Props, object, Snapshot |
         overlay.appendChild(node);
 
         const { timing, offset } = getSlideMotion();
-        const outgoing = node.animate(slideFrames("under-out", width, offset), {
+        const distance = this.props.getDistance?.(live);
+        const customDistance = typeof distance === "number" && Number.isFinite(distance) && distance > 0 ? distance : undefined;
+        const outgoing = node.animate(slideFrames("under-out", customDistance ?? width, offset), {
             ...timing,
             fill: "forwards",
         });
         this.outgoing = outgoing;
-        this.incoming = live.animate(slideFrames("push-in", live.offsetWidth, offset), timing);
+        this.incoming = live.animate(slideFrames("push-in", customDistance ?? live.offsetWidth, offset), timing);
         const finish = () => {
             if (this.outgoing !== outgoing) return;
             node.remove();

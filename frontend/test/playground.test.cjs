@@ -2254,13 +2254,35 @@ test("solo slides clip at the game edges independently of the centered content w
     const slide = fs.readFileSync(path.join(root, "components/layout/SlideTransition.tsx"), "utf8");
     assert.match(game, /const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError/);
     assert.match(game, /w-full \$\{fullWidthQuestion \? "" : "max-w-3xl px-4"\}/);
-    assert.match(game, /fullWidthQuestion \? "px-4 sm:px-0"/);
+    assert.match(game, /fullWidthQuestion \? "px-4"/);
     assert.match(game, /<div className="w-full max-w-3xl px-4">\{masteryProgress\}<\/div>/);
-    assert.match(game, /contentClassName="sm:w-\[calc\(100%-2rem\)\] sm:max-w-\[calc\(var\(--container-3xl\)-2rem\)\]"/);
+    assert.match(game, /contentClassName="max-w-3xl"/);
+    assert.match(game, /getDistance=\{getQuestionSlideDistance\}/);
     assert.match(slide, /w-full flex-col overflow-x-clip/);
     assert.match(slide, /mx-auto flex h-full min-w-0 w-full flex-col/);
     assert.match(slide, /left: "50%"/);
     assert.match(slide, /marginLeft: `\$\{-width \/ 2\}px`/);
-    assert.match(slide, /slideFrames\("push-in", live\.offsetWidth, offset\)/);
-    assert.match(slide, /slideFrames\("under-out", width, offset\)/);
+    assert.match(slide, /slideFrames\("push-in", customDistance \?\? live\.offsetWidth, offset\)/);
+    assert.match(slide, /slideFrames\("under-out", customDistance \?\? width, offset\)/);
+});
+
+test("question slide distance uses the widest visible question element and both gutters", () => {
+    let desktop = true;
+    const { getQuestionSlideDistance } = load("components/game/question-slide-distance.ts", {
+        window: { matchMedia: () => ({ matches: desktop }) },
+        getComputedStyle: () => ({ paddingLeft: "16px", paddingRight: "16px" }),
+    });
+    const make = (width, ...parts) => ({
+        offsetWidth: width,
+        querySelector: () => ({
+            querySelectorAll: () => parts.map(offsetWidth => ({ offsetWidth })),
+        }),
+    });
+    assert.equal(getQuestionSlideDistance(make(768, 300, 512)), 544);
+    assert.equal(getQuestionSlideDistance(make(768, 620, 512)), 652);
+    assert.equal(getQuestionSlideDistance(make(768, 100, 160)), 192);
+    assert.equal(getQuestionSlideDistance(make(640, 640)), 640);
+    assert.equal(getQuestionSlideDistance(make(768)), 768);
+    desktop = false;
+    assert.equal(getQuestionSlideDistance(make(390, 100, 200)), 390);
 });

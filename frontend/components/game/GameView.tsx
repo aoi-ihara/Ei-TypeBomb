@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import SlideTransition from "@/components/layout/SlideTransition";
+import { getQuestionSlideDistance } from "@/components/game/question-slide-distance";
 import type { ReactNode, Ref } from "react";
 import ItemView from "@/components/recall/ItemView";
 import UsersView from "@/components/game/UsersView";
@@ -200,7 +201,7 @@ export default function GameView({
     // the resting question and progress bar constrained independently.
     const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError;
     const questionContent = currentItem === null ? null : (
-        <div className={`flex h-full ${fullWidthQuestion ? "px-4 sm:px-0" : soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
+        <div data-question-slide-content className={`flex h-full ${fullWidthQuestion ? "px-4" : soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
             {soloMode ? null : currentTurnUser?.id === userId ? (
                 <div
                     className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -294,7 +295,8 @@ export default function GameView({
                     <SlideTransition
                         transitionKey={itemPresentationKey}
                         enabled={slideQuestion && !isPaused}
-                        contentClassName="sm:w-[calc(100%-2rem)] sm:max-w-[calc(var(--container-3xl)-2rem)]"
+                        contentClassName="max-w-3xl"
+                        getDistance={getQuestionSlideDistance}
                     >
                         {questionContent}
                     </SlideTransition>
