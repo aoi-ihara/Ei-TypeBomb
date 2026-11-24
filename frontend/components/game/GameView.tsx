@@ -196,8 +196,11 @@ export default function GameView({
         activeGameRef.current?.classList.remove("wrong-answer");
     }, [failureKey]);
 
+    // On mobile the slide viewport reaches the game area edges. Keep the
+    // visual gutter inside the moving question instead of clipping at it.
+    const fullWidthQuestion = soloMode && isStarted && currentItem !== null && !!room && !serverError;
     const questionContent = currentItem === null ? null : (
-        <div className={`flex h-full ${soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
+        <div className={`flex h-full ${fullWidthQuestion ? "px-4 sm:px-0" : soloMode ? "" : "animate-appear"} items-center justify-center flex-col gap-2 w-full`}>
             {soloMode ? null : currentTurnUser?.id === userId ? (
                 <div
                     className="font-bold text-xl px-2 pt-1 pb-1 w-fit flex"
@@ -284,7 +287,9 @@ export default function GameView({
                         event.currentTarget.classList.remove("wrong-answer");
                 }}
             >
-                {masteryProgress}
+                {fullWidthQuestion && masteryProgress ? (
+                    <div className="w-full px-4 sm:px-0">{masteryProgress}</div>
+                ) : masteryProgress}
                 {soloMode ? (
                     <SlideTransition
                         transitionKey={itemPresentationKey}
@@ -373,7 +378,7 @@ export default function GameView({
             )}
 
             <div
-                className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full px-4 gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
+                className={`${soloMode ? "mx-auto" : "md:order-2"} max-w-3xl w-full ${fullWidthQuestion ? "sm:px-4" : "px-4"} gap-4 pb-4 pt-17 h-full justify-end flex flex-col`}
             >
                 <div
                     inert={isReconnecting || isPaused}
