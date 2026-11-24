@@ -339,7 +339,7 @@ test("navigation distance follows responsive Shell width without narrowing its v
     assert.match(shell, /data-navigation-shell-width\s+className=/);
     assert.match(navigation, /shell\?\.offsetWidth \|\| viewport\.clientWidth/);
     assert.match(navigation, /min-w-0 w-full overflow-x-clip/);
-    assert.match(navigation, /direction === "push" \? width : -width \/ 2/);
+    assert.match(navigation, /slideFrames\(request\.direction === "push" \? "push-in" : "under-in", width\)/);
     assert.match(css, /translateX\(var\(--etb-navigation-new-width, 100%\)\)/);
     assert.match(css, /translateX\(var\(--etb-navigation-old-width, 100%\)\)/);
     assert.match(css, /calc\(var\(--etb-navigation-old-width, 100%\) \* -0\.5\)/);

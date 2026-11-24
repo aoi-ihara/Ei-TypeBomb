@@ -10,6 +10,7 @@ import {
     type ReactNode,
 } from "react";
 import "./navigation.css";
+import { slideFrames, slideTiming, prefersReducedMotion } from "./slide-motion";
 
 export type NavigationDirection = "push" | "pop";
 
@@ -103,25 +104,21 @@ export default function Navigation({ children }: { children: ReactNode }) {
         }
         stop(request, !matches);
         if (request.transition || !matches ||
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+            prefersReducedMotion()) return;
 
         // Older browsers still get a directional entrance without snapshots.
         if (!width) return;
-        const offset = request.direction === "push" ? width : -width / 2;
         animation.current?.cancel();
         animation.current = content.current?.animate(
-            [
-                { transform: `translateX(${offset}px)` },
-                { transform: "translateX(0)" },
-            ],
-            { duration: 300, easing: "cubic-bezier(0.25, 0.8, 0.25, 1)" },
+            slideFrames(request.direction === "push" ? "push-in" : "under-in", width),
+            slideTiming(300),
         ) ?? null;
     }, [pathname]);
 
     const navigate: Navigate = (href, direction, preventDefault) => {
         cancel();
         const node = viewport.current;
-        if (!node || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        if (!node || prefersReducedMotion()) return;
         const url = new URL(href, window.location.href);
         const target = normalize(url.pathname);
         if (url.origin !== window.location.origin ||

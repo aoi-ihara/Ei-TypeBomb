@@ -1228,7 +1228,10 @@ test("solo answer speech plays after success, including after a full hint", () =
             previousInputAtRef: { current: null },
             previousInputLengthRef: { current: 0 },
             resolveTurnWithItem: () => ({ id: "b" }),
-            setTrackedItem: (item) => nextItems.push(item.id),
+            setTrackedItem: (item, slide) => {
+                assert.equal(slide, true, "successful answers opt into a slide");
+                nextItems.push(item.id);
+            },
             posthog: { capture: () => {} },
             room: { id: "r" },
         });
@@ -1477,6 +1480,7 @@ test("actual solo Client callbacks cover all words and keep practicing without a
         for (const setter of [
             "setCurrentItem",
             "setItemPresentationKey",
+            "setSlidePresentationKey",
             "setMemoryByItem",
             "setMasteryNow",
             "setCurrentInput",
@@ -2169,4 +2173,53 @@ test("single-option Client answers persist exposure without recognition credit",
     assert.equal(records.current.single.lastReviewedAt, null);
     assert(Number.isFinite(Date.parse(records.current.single.lastPresentedAt)));
     assert.equal(scheduler.chooseNextUserItem(state, records.current).itemId, item.id);
+});
+
+test("offline question transitions are requested only after success", () => {
+    const source = fs.readFileSync(
+        path.join(root, "app/(game)/[link]/offline/Client.tsx"),
+        "utf8",
+    );
+    assert.match(source, /setTrackedItem\(resolveTurnWithItem\(\), true\)/);
+    assert.match(source, /setTrackedItem\(resolveTurnWithItem\(\)\);/);
+    assert.match(source, /setSlidePresentationKey\(slide \? sessionTurnNumberRef\.current : null\)/);
+    assert.match(source, /slideQuestion=\{slidePresentationKey === itemPresentationKey\}/);
+});
+
+test("repeated presentations of the same item get distinct transition keys", () => {
+    const keys = [];
+    const slides = [];
+    const callback = getCallback("setTrackedItem", {
+        currentItemRef: { current: null },
+        setCurrentItem: () => {},
+        recallProgressRef: { current: null },
+        sessionTurnNumberRef: { current: 0 },
+        setItemPresentationKey: (key) => keys.push(key),
+        setSlidePresentationKey: (key) => slides.push(key),
+        memoryByItemRef: { current: {} },
+        predictedRetrievabilityAtPromptRef: { current: null },
+        exposureGapAtStartRef: { current: null },
+        expectedTypingAtStartRef: { current: 0 },
+        itemModes: {},
+        answerMode: "input",
+        getExposureGap: () => null,
+        getTypingAnswer: (item) => item.answer,
+        userTypingDelayRef: { current: 220 },
+    });
+    const item = { id: "same", answer: "apple" };
+    callback(item);
+    callback(item, true);
+    callback(item, true);
+    callback(item);
+    assert.deepEqual(keys, [1, 2, 3, 4]);
+    assert.deepEqual(slides, [null, 2, 3, null]);
+});
+
+test("shared slide motion scales to the rendered width", () => {
+    const { slideFrames } = load("components/layout/slide-motion.ts");
+    const positions = (phase, width) => Array.from(slideFrames(phase, width), frame => frame.transform);
+    assert.deepEqual(positions("push-in", 320), ["translateX(320px)", "translateX(0)"]);
+    assert.deepEqual(positions("under-out", 320), ["translateX(0)", "translateX(-160px)"]);
+    assert.deepEqual(positions("push-in", 448), ["translateX(448px)", "translateX(0)"]);
+    assert.deepEqual(positions("pop-out", 448), ["translateX(0)", "translateX(448px)"]);
 });

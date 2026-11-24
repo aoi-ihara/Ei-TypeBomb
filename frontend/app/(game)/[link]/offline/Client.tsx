@@ -241,6 +241,7 @@ export default function Client({
 
     const sessionTurnNumberRef = useRef(0);
     const [itemPresentationKey, setItemPresentationKey] = useState(0);
+    const [slidePresentationKey, setSlidePresentationKey] = useState<number | null>(null);
     const recallProgressRef = useRef<RecallProgress | null>(null);
     const [isSignedIn, setIsSignedIn] = useState(false);
     const userReviewCountRef = useRef(0);
@@ -394,7 +395,7 @@ export default function Client({
         };
     }, [room.id, items, answerMode]);
 
-    const setTrackedItem = useCallback((item: Item | null) => {
+    const setTrackedItem = useCallback((item: Item | null, slide = false) => {
         currentItemRef.current = item;
         setCurrentItem(item);
         recallProgressRef.current = null;
@@ -402,6 +403,7 @@ export default function Client({
 
         sessionTurnNumberRef.current += 1;
         setItemPresentationKey(sessionTurnNumberRef.current);
+        setSlidePresentationKey(slide ? sessionTurnNumberRef.current : null);
         const memory = memoryByItemRef.current[item.id];
         predictedRetrievabilityAtPromptRef.current =
             memory && memory.reviewCount > 0 && memory.lastReviewedAt
@@ -878,7 +880,7 @@ export default function Client({
         setCurrentInput("");
         previousInputAtRef.current = null;
         previousInputLengthRef.current = 0;
-        setTrackedItem(resolveTurnWithItem());
+        setTrackedItem(resolveTurnWithItem(), true);
 
         posthog.capture(
             wasAnswerRevealed ? "word_reviewed" : "word_succeeded",
@@ -1039,6 +1041,7 @@ export default function Client({
                 bombStatus={0}
                 currentItem={currentItem}
                 itemPresentationKey={itemPresentationKey}
+                slideQuestion={slidePresentationKey === itemPresentationKey}
                 currentInput={currentInput}
                 isStarted={isStarted}
                 preGameContent={
