@@ -137,3 +137,41 @@ test("card mask scales only on press and reveal has no opacity animation", async
     expect(maskStyle.transitionProperty).toBe("scale");
     await expect(page.locator(".card-answer-text")).toHaveCSS("opacity", "1");
 });
+
+test("card focused buttons keep native Enter activation", async ({ page }) => {
+    const answer = await start(page);
+    await unknown(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(answer, { exact: true })).toBeVisible();
+    await expect(correct(page)).toHaveCount(0);
+    const next = page.getByRole("button", { name: "次へ", exact: true });
+    await expect(next).toBeEnabled();
+    await next.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => recognition(page, answer)).toMatchObject({ attempts: 1, correct: 0 });
+});
+
+test("card focused mask and rating buttons retain Enter activation", async ({ page }) => {
+    const answer = await start(page);
+    await mask(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(correct(page)).toBeEnabled();
+    await correct(page).focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => recognition(page, answer)).toMatchObject({ attempts: 1, correct: 1 });
+});
+
+test("card shortcuts do not act on a focused control outside the question", async ({ page }) => {
+    const answer = await start(page);
+    const pause = page.getByRole("button", { name: "一時停止", exact: true });
+    await pause.focus();
+    await page.keyboard.press("Space");
+    // Space retains the native pause action.
+    await page.getByRole("button", { name: "再開", exact: true }).click();
+    await mask(page).click();
+    await pause.focus();
+    await page.keyboard.press("2");
+    await page.keyboard.press("ArrowRight");
+    await expect(correct(page)).toBeEnabled();
+    expect((await recognition(page, answer))?.attempts ?? 0).toBe(0);
+});

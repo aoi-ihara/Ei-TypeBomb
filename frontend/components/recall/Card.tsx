@@ -93,11 +93,7 @@ export default function Card({
 
     const revealHint = useCallback(() => reveal(true), [reveal]);
     const onOtherKeyDown = useCallback((event: KeyboardEvent) => {
-        if (completed.current || event.defaultPrevented) return;
-        const target = event.target;
-        const interactive = target instanceof Element &&
-            target.closest("button, a, summary, [role='button'], [role='link']");
-        if (interactive && !questionRef.current?.contains(interactive)) return;
+        if (completed.current) return;
 
         const current = phaseRef.current;
         if (event.key === "Enter" && current !== "revealed") {

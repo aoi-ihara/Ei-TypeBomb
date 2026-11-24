@@ -63,18 +63,18 @@ export function useSelectionShortcuts({
             // two short Space taps. It must not cancel an armed shortcut.
             if (isDualRoleSpaceRelease(event)) return;
 
-            if (allowHint && isSpaceKey(event)) {
-                const isInteractive =
-                    target instanceof Element &&
-                    Boolean(
-                        target.closest(
-                            "button, a, summary, [role='button'], [role='link']",
-                        ),
-                    );
-                const isInsideQuestion =
-                    target instanceof Node &&
-                    questionRef.current?.contains(target) === true;
+            const isInteractive =
+                target instanceof Element &&
+                Boolean(
+                    target.closest(
+                        "button, a, summary, [role='button'], [role='link']",
+                    ),
+                );
+            const isInsideQuestion =
+                target instanceof Node &&
+                questionRef.current?.contains(target) === true;
 
+            if (allowHint && isSpaceKey(event)) {
                 if (
                     disabled ||
                     hintUsed ||
@@ -116,7 +116,16 @@ export function useSelectionShortcuts({
             }
 
             lastKeyWasSpaceRef.current = false;
-            if (event.repeat || disabled) return;
+            if (
+                event.repeat ||
+                disabled ||
+                event.defaultPrevented ||
+                (isInteractive && !isInsideQuestion)
+            ) return;
+
+            // Enter activates a focused control natively. Only use the
+            // background Enter shortcut when no interactive element owns it.
+            if (event.key === "Enter" && isInteractive) return;
             onOtherKeyDown(event);
         };
         const onKeyUp = (event: KeyboardEvent) => {

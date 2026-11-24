@@ -383,3 +383,23 @@ test("key/code fallbacks work and IME composition cannot arm a hint", async ({
   });
   await reveal(page);
 });
+
+test("selection numeric shortcuts respect focus outside the question", async ({ page }) => {
+  await controls(page);
+  const outside = page.getByRole("button", { name: "Outside 0" });
+  await outside.focus();
+  await page.keyboard.press("1");
+  await page.keyboard.press("2");
+  for (const choice of await choices(page).all())
+    await expect(choice).toBeEnabled();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Outside 1" })).toBeVisible();
+});
+
+test("selection focused unknown button retains native Enter activation", async ({ page }) => {
+  const answer = await start(page);
+  await hint(page).focus();
+  await page.keyboard.press("Enter");
+  await expect(hint(page)).toBeDisabled();
+  await expectRevealed(page, answer);
+});
