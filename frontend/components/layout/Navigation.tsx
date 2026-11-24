@@ -30,7 +30,7 @@ type Request = {
     timer?: ReturnType<typeof setTimeout>;
     complete?: () => void;
     transition?: ViewTransition;
-    morph?: { source: HTMLElement; destination?: HTMLElement };
+    morph?: { source: HTMLElement; key?: string; destination?: HTMLElement };
 };
 
 const NavigationContext = createContext<Navigate | null>(null);
@@ -122,11 +122,19 @@ export default function Navigation({ children, root = false }: { children: React
         const matches = normalize(pathname) === request.target;
         const width = viewport.current ? navigationWidth(viewport.current) : 0;
         if (matches && request.transition && request.morph) {
-            const destination = viewport.current?.querySelector<HTMLElement>("[data-navigation-morph-target]");
-            // A password gate, error or redirect is not a room-detail morph target.
-            if (!destination || !destination.getBoundingClientRect().height) {
+            const { source, key } = request.morph;
+            const targets = viewport.current?.querySelectorAll<HTMLElement>("[data-navigation-morph-target]");
+            const destination = Array.from(targets ?? []).find((element) =>
+                element !== source && (key === undefined || element.dataset.navigationMorphTarget === key),
+            );
+            // A gate, error, or list without the original room must never morph into another room.
+            if (!destination || !destination.getBoundingClientRect().height || !destination.getBoundingClientRect().width) {
                 stop(request, true);
                 return;
+            }
+            if (request.direction === "pop") {
+                // Restore visibility before capturing the destination, including cards below the fold.
+                destination.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
             }
             request.morph.source.style.removeProperty("view-transition-name");
             request.morph.destination = destination;
@@ -174,7 +182,7 @@ export default function Navigation({ children, root = false }: { children: React
             const source = options?.source;
             const rect = source?.getBoundingClientRect();
             if (options?.transition === "morph" && source && node.contains(source) && rect?.width && rect.height) {
-                request.morph = { source };
+                request.morph = { source, key: source.dataset.navigationMorphTarget };
                 source.style.viewTransitionName = "etb-navigation-morph";
             }
             root.dataset.etbNavigation = request.morph ? "morph" : direction;

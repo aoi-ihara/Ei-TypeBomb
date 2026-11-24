@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Shell from "@/components/layout/Shell";
 import { useRoomListBackHref } from "../RoomBrowser";
 
-export default function RoomDetailShell({ title, children }: { title: string; children: ReactNode }) {
+export default function RoomDetailShell({ title, roomId, children }: { title: string; roomId: string; children: ReactNode }) {
     const backHref = useRoomListBackHref();
 
     return (
@@ -14,7 +14,7 @@ export default function RoomDetailShell({ title, children }: { title: string; ch
             className="grid lg:grid-cols-2 gap-4 px-4"
             back={backHref}
             size="xlarge"
-            morphTarget
+            morphTarget={roomId}
         >
             {children}
         </Shell>

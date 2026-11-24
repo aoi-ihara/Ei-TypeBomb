@@ -92,6 +92,7 @@ export default function RoomCard({
     return (
         <article
             ref={articleRef}
+            data-navigation-morph-target={room.id}
             className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]"
         >
             <div

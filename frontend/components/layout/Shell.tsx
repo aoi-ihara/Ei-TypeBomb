@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import ProgressSignal from "./ProgressSignal";
 import { useRouter } from "next/navigation";
 import Button from "../ui/Button";
@@ -17,7 +18,7 @@ type ShellProps = {
     back?: string;
     onBackClicked?: () => void;
     showHeader?: boolean;
-    morphTarget?: boolean;
+    morphTarget?: boolean | string;
 };
 
 export default function Shell({
@@ -35,6 +36,7 @@ export default function Shell({
     morphTarget = false,
 }: ShellProps) {
     const router = useRouter();
+    const morphRef = useRef<HTMLDivElement>(null);
     const backHref = back ?? backLink;
 
     if (loading) return <ProgressSignal />;
@@ -47,7 +49,8 @@ export default function Shell({
             {showHeader && <Header />}
             <div className="flex flex-col items-center w-full">
                 <div
-                    data-navigation-morph-target={morphTarget ? "" : undefined}
+                    ref={morphRef}
+                    data-navigation-morph-target={typeof morphTarget === "string" ? morphTarget : morphTarget ? "" : undefined}
                     className={morphTarget ? `flex w-full flex-col items-center ${sizeClass}` : "contents"}
                 >
                 {title && (
@@ -62,6 +65,8 @@ export default function Shell({
                                 padding="small"
                                 href={backHref}
                                 navigation={back ? "pop" : undefined}
+                                navigationTransition={morphTarget ? "morph" : "slide"}
+                                navigationMorphSource={morphTarget ? morphRef : undefined}
                                 onClick={
                                     !backHref
                                         ? onBackClicked

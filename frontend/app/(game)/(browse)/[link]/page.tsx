@@ -30,7 +30,7 @@ export default async function RoomPage({
     );
 
     return (
-        <RoomDetailShell title={title}>
+        <RoomDetailShell title={title} roomId={result.id}>
             <section className="w-full flex-col flex gap-4">
                 <div className="flex w-full p-4 flex-col gap-4 rounded-lg bg-(--color-background-secondary)">
                     {room.explanation && (
