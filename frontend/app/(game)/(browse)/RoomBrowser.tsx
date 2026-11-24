@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
-import { unstable_rethrow, useRouter, useSelectedLayoutSegment } from "next/navigation";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { unstable_rethrow, usePathname, useRouter, useSelectedLayoutSegment } from "next/navigation";
 import posthog from "posthog-js";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
+import Navigation from "@/components/layout/Navigation";
 import { useRoomListViewer } from "@/components/rooms/RoomListViewerProvider";
 import Button from "@/components/ui/Button";
 import Menu from "@/components/ui/Menu";
@@ -23,6 +24,11 @@ const getSidebarItems = (signedIn: boolean) =>
     }));
 const publicItems = getSidebarItems(false);
 const signedInItems = getSidebarItems(true);
+const RoomListBackContext = createContext("/");
+
+export function useRoomListBackHref() {
+    return useContext(RoomListBackContext);
+}
 
 function ViewerActions() {
     const router = useRouter();
@@ -85,6 +91,14 @@ function ViewerActions() {
 export default function RoomBrowser({ children }: { children: ReactNode }) {
     const segment = useSelectedLayoutSegment();
     const isFeed = feedSegments.has(segment);
+    const pathname = usePathname();
+    const [backHref, setBackHref] = useState("/");
+    // Keep the last public-facing list URL across the shared browse layout.
+    // Rewritten feeds use the browser pathname, never their internal route.
+    const listPath = pathname?.replace(/\/+$/, "") || "/";
+    if (isFeed && signedInItems.some(({ href }) => href === listPath) && backHref !== listPath) {
+        setBackHref(listPath);
+    }
     const { snapshot, signedInHint } = useRoomListViewer();
     const signedIn = snapshot.status === "idle" ? signedInHint : Boolean(snapshot.currentUser);
 
@@ -94,7 +108,9 @@ export default function RoomBrowser({ children }: { children: ReactNode }) {
             {/* A room gate hides the rail without replacing the shared layout. */}
             <div className="w-full [&:has([data-room-password-gate])_[data-sidebar-navigation]]:hidden">
                 <Sidebar items={signedIn ? signedInItems : publicItems}>
-                    {children}
+                    <RoomListBackContext.Provider value={backHref}>
+                        <Navigation>{children}</Navigation>
+                    </RoomListBackContext.Provider>
                 </Sidebar>
             </div>
         </>

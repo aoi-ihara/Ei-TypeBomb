@@ -2241,7 +2241,7 @@ test("navigation and local question slides read the same duration and offset tok
         }),
     });
     const defaults = getSlideMotion();
-    assert.equal(defaults.timing.duration, 200);
+    assert.equal(defaults.timing.duration, 400);
     assert.equal(defaults.timing.easing, tokens["--etb-slide-easing"]);
     assert.equal(defaults.offset, 0.5);
     tokens["--etb-slide-duration"] = "0.25s";

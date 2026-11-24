@@ -684,7 +684,6 @@ export default function EditorClient({
 
     return (
         <Shell
-            animateAppear={true}
             className="flex flex-col px-4 gap-4"
             size="large"
         >

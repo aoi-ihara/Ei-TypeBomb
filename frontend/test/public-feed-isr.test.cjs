@@ -328,3 +328,71 @@ test("sign-out ignores cached personalized props until fresh auth confirms an id
     viewer().reconcile(viewerData("two", ["fresh"]));
     assertSaves(viewer, ["fresh"]);
 });
+
+test("room lists and details share the existing directional navigation and Shell width", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const browser = read("app/(game)/(browse)/RoomBrowser.tsx");
+    const list = read("app/(game)/(browse)/RoomList.tsx");
+    const detail = read("app/(game)/(browse)/[link]/page.tsx");
+    const shell = read("app/(game)/(browse)/[link]/RoomDetailShell.tsx");
+    const card = read("components/rooms/RoomCard.tsx");
+    assert.match(browser, /<Navigation>\{children\}<\/Navigation>/);
+    assert.match(browser, /useState\("\/"\)/);
+    assert.match(browser, /isFeed && signedInItems\.some/);
+    assert.match(browser, /setBackHref\(listPath\)/);
+    assert.match(list, /size="xlarge"/);
+    assert.match(detail, /<RoomDetailShell title=\{title\} roomId=\{result.id\}>/);
+    assert.match(shell, /size="xlarge"/);
+    assert.match(shell, /back=\{backHref\}/);
+    assert.match(card, /navigate\?\.\(`\/\$\{roomLink\}`, "push", event\.preventDefault,\s+source \? \{ transition: "morph", source \}/);
+    assert.match(card, /href=\{`\/\$\{roomLink\}`\}\s+navigation="push"/);
+    assert.match(card, /href=\{`\/\$\{roomLink\}\/edit`\}\s+navigation="push"\s+navigationScope="root"/);
+});
+
+test("editor links use a persistent root navigation across route groups", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    assert.match(read("app/layout.tsx"), /<Navigation root>\{children\}<\/Navigation>/);
+    assert.match(read("app/(game)/(browse)/[link]/PlayRoom.tsx"), /href=\{"\/" \+ link \+ "\/edit"\}\s+prefetch=\{false\}\s+navigation="push"\s+navigationScope="root"/);
+    assert.match(read("components/ui/Button.tsx"), /useNavigation\(navigationScope\)/);
+    assert.doesNotMatch(read("app/(editor)/[link]/edit/EditorClient.tsx"), /animateAppear=\{true\}/);
+});
+
+test("room-card entry and return share a keyed morph while editor keeps slide", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const card = read("components/rooms/RoomCard.tsx");
+    const nav = read("components/layout/Navigation.tsx");
+    const css = read("components/layout/navigation.css");
+    assert.match(card, /navigationTransition="morph"\s+navigationMorphSource=\{articleRef\}/);
+    assert.match(read("app/(game)/(browse)/[link]/RoomDetailShell.tsx"), /size="xlarge"\s+morphTarget=\{roomId\}/);
+    assert.match(nav, /source\.style\.viewTransitionName = "etb-navigation-morph"/);
+    assert.match(nav, /destination\.style\.viewTransitionName = "etb-navigation-morph"/);
+    assert.match(nav, /clearMorph\(request\)/);
+    assert.match(css, /animation-duration: var\(--duration-etb, 400ms\)/);
+    assert.match(css, /animation-timing-function: var\(--ease-etb, ease\)/);
+    assert.match(card, /href=\{\x60\/\$\{roomLink\}\/edit\x60\}\s+navigation="push"\s+navigationScope="root"/);
+});
+
+test("room morph snapshots follow both dimensions of the interpolated rectangle", () => {
+    const css = readFileSync(path.join(__dirname, "..", "components/layout/navigation.css"), "utf8");
+    assert.match(css, /::view-transition-old\(etb-navigation-morph\),\s*html\[data-etb-navigation="morph"\]::view-transition-new\(etb-navigation-morph\)\s*\{\s*width: 100%;\s*height: 100%;\s*object-fit: fill;/);
+});
+
+test("room detail back morph selects only the original room card", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const nav = read("components/layout/Navigation.tsx");
+    const shell = read("components/layout/Shell.tsx");
+    const card = read("components/rooms/RoomCard.tsx");
+    assert.match(card, /data-navigation-morph-target=\{room.id\}/);
+    assert.match(shell, /navigation=\{back \? "pop" : undefined\}\s+navigationTransition=\{morphTarget \? "morph" : "slide"\}\s+navigationMorphSource=\{morphTarget \? morphRef : undefined\}/);
+    assert.match(nav, /key: source.dataset.navigationMorphTarget/);
+    assert.match(nav, /element !== source && \(key === undefined \|\| element.dataset.navigationMorphTarget === key\)/);
+    assert.match(nav, /if \(request.direction === "pop"\) \{\s*\/\/[^\n]+\n\s*destination.scrollIntoView/);
+    assert.match(nav, /if \(!destination \|\|[^}]+stop\(request, true\)/);
+});
+
+test("nested navigation releases document state only for the current transition owner", () => {
+    const nav = readFileSync(path.join(__dirname, "..", "components/layout/Navigation.tsx"), "utf8");
+    assert.match(nav, /function releaseDocumentTransition\(request: Request\) \{\s*if \(documentTransition\?\.request !== request\) return;\s*documentTransition = null;/);
+    assert.match(nav, /documentTransition\?\.cancel\(\);\s*documentTransition = \{ request, cancel \};/);
+    assert.match(nav, /clearMorph\(request\);\s*releaseDocumentTransition\(request\);\s*node.style.viewTransitionName = "";/);
+});

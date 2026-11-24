@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import posthog from "posthog-js";
 import Link from "next/link";
+import { useNavigation } from "@/components/layout/Navigation";
 import { scheduleRoomPrefetch } from "@/lib/room/prefetch-queue";
 
 // Each speculative room request on beta requires a verified Supabase user.
@@ -27,6 +28,7 @@ export default function RoomCard({
     eagerPrefetch?: boolean;
 }) {
     const router = useRouter();
+    const navigate = useNavigation();
     const lastPrefetchRef = useRef<{ link: string; at: number } | null>(null);
     const articleRef = useRef<HTMLElement>(null);
     const [copied, setCopied] = useState(false);
@@ -90,6 +92,7 @@ export default function RoomCard({
     return (
         <article
             ref={articleRef}
+            data-navigation-morph-target={room.id}
             className="flex h-full w-full flex-col rounded-lg bg-(--color-background-secondary) shadow-[8px_8px_0px_0px_var(--color-border)]"
         >
             <div
@@ -102,7 +105,13 @@ export default function RoomCard({
                     onClick={() => {
                         posthog.capture("play_clicked", { room_id: room.id });
                     }}
-                    onNavigate={() => startNavigationProgress()}
+                    onNavigate={(event) => {
+                        startNavigationProgress();
+                        const source = articleRef.current;
+                        navigate?.(`/${roomLink}`, "push", event.preventDefault,
+                            source ? { transition: "morph", source } : undefined,
+                        );
+                    }}
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     onMouseEnter={prefetchOnIntent}
                     onFocus={prefetchOnIntent}
@@ -166,6 +175,9 @@ export default function RoomCard({
             <div className="mt-auto flex flex-wrap items-center justify-end">
                 <Button
                     href={`/${roomLink}`}
+                    navigation="push"
+                    navigationTransition="morph"
+                    navigationMorphSource={articleRef}
                     prefetch={prefetchRooms && room.visibility === "public" && eagerPrefetch}
                     iconName="play"
                     variant="text"
@@ -174,6 +186,8 @@ export default function RoomCard({
                 {isOwner && (
                     <Button
                         href={`/${roomLink}/edit`}
+                        navigation="push"
+                        navigationScope="root"
                         prefetch={false}
                         iconName="pen"
                         variant="text"

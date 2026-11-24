@@ -323,10 +323,10 @@ export default function PlayRoom({
 
             {isOwner && (
                 <Button
-                    onClick={() => {
-                        startNavigationProgress();
-                        router.push("/" + link + "/edit");
-                    }}
+                    href={"/" + link + "/edit"}
+                    prefetch={false}
+                    navigation="push"
+                    navigationScope="root"
                     className="w-full"
                     iconName="pen"
                 >

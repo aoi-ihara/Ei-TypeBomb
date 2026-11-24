@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import ProgressSignal from "./ProgressSignal";
 import { useRouter } from "next/navigation";
 import Button from "../ui/Button";
@@ -17,6 +18,7 @@ type ShellProps = {
     back?: string;
     onBackClicked?: () => void;
     showHeader?: boolean;
+    morphTarget?: boolean | string;
 };
 
 export default function Shell({
@@ -31,16 +33,26 @@ export default function Shell({
     back,
     onBackClicked,
     showHeader = true,
+    morphTarget = false,
 }: ShellProps) {
     const router = useRouter();
+    const morphRef = useRef<HTMLDivElement>(null);
     const backHref = back ?? backLink;
 
     if (loading) return <ProgressSignal />;
+
+    const sizeClass = size === "small" ? "max-w-xs" : size === "medium"
+        ? "max-w-md" : size === "large" ? "max-w-2xl" : "max-w-4xl";
 
     return (
         <>
             {showHeader && <Header />}
             <div className="flex flex-col items-center w-full">
+                <div
+                    ref={morphRef}
+                    data-navigation-morph-target={typeof morphTarget === "string" ? morphTarget : morphTarget ? "" : undefined}
+                    className={morphTarget ? `flex w-full flex-col items-center ${sizeClass}` : "contents"}
+                >
                 {title && (
                     <div
                         className={`relative mb-8 flex items-center ${(showBackButton || backHref) && "max-w-[calc(100vw-32px)]"} px-8`}
@@ -53,6 +65,8 @@ export default function Shell({
                                 padding="small"
                                 href={backHref}
                                 navigation={back ? "pop" : undefined}
+                                navigationTransition={morphTarget ? "morph" : "slide"}
+                                navigationMorphSource={morphTarget ? morphRef : undefined}
                                 onClick={
                                     !backHref
                                         ? onBackClicked
@@ -75,20 +89,14 @@ export default function Shell({
 
                 <div
                     data-navigation-shell-width
-                    className={`pb-[50vh] ${
-                        size == "small"
-                            ? "max-w-xs"
-                            : size === "medium"
-                              ? "max-w-md"
-                              : size === "large"
-                                ? "max-w-2xl"
-                                : "max-w-4xl"
-                    } w-full ${className} ${
+                    className={`${morphTarget ? "" : "pb-[50vh]"} ${sizeClass} w-full ${className} ${
                         animateAppear && "animate-appear origin-top"
                     }`}
                 >
                     {children}
                 </div>
+                </div>
+                {morphTarget && <div className="w-full h-[50vh] shrink-0" aria-hidden="true" />}
             </div>
         </>
     );
