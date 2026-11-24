@@ -25,9 +25,20 @@
     border: 0;
     border-radius: 0.5rem;
     background-color: var(--color-background-secondary, #eee);
+    transition: scale var(--duration-etb, 400ms) var(--ease-etb, ease-out);
 }
 
 .card-mask[aria-hidden="true"] {
     opacity: 0;
     pointer-events: none;
+}
+
+.card-mask:not(:disabled):active {
+    scale: 0.95;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card-mask {
+        transition: none;
+    }
 }
