@@ -44,7 +44,12 @@ import {
     syncPlaygroundMemory,
 } from "@/lib/playground/memory-client";
 import { Icon } from "@/components/ui/Icon";
-import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
+import {
+    getEffectiveAnswerMode,
+    getTypingAnswer,
+    type AnswerMode,
+    type CardRating,
+} from "@/lib/answer-mode";
 
 type Props = {
     room: Room;
@@ -443,7 +448,8 @@ export default function Client({
                 : null;
         exposureGapAtStartRef.current = getExposureGap(
             memory,
-            itemModes[item.id] ?? answerMode,
+            itemModes[item.id] ??
+                (answerMode === "card" ? "selection" : answerMode),
             Date.now(),
         );
         expectedTypingAtStartRef.current =
@@ -462,7 +468,7 @@ export default function Client({
             memoryByItemRef.current,
             Math.random,
             Date.now(),
-            answerMode,
+            answerMode === "card" ? "selection" : answerMode,
             itemModes,
             LEARNING_DIAGNOSTICS_ENABLED ? trace => {
                 try {
@@ -490,7 +496,7 @@ export default function Client({
                           schedulerRef.current,
                           memoryByItemRef.current,
                           Date.now(),
-                          answerMode,
+                          answerMode === "card" ? "selection" : answerMode,
                           itemModes,
                       ) ?? nextSuspendedReviewAt(schedulerRef.current)
                     : null,
@@ -744,6 +750,7 @@ export default function Client({
             responseMs: number | null = null,
             usedHint = false,
             exposureGapMs?: number | null,
+            recordChoiceCount = choiceCount,
         ) => {
             const userId =
                 authenticatedUserIdRef.current ??
@@ -770,7 +777,7 @@ export default function Client({
                 success,
                 responseMs,
                 usedHint,
-                choiceCount,
+                choiceCount: recordChoiceCount,
                 exposureGapMs,
             });
             if (LEARNING_DIAGNOSTICS_ENABLED && mode === "selection") answerDiagnosticRef.current = {
@@ -981,61 +988,122 @@ export default function Client({
         [isPaused, room.id, updateAnswerModeMemory, choiceCount],
     );
 
-    const handleSuccess = useCallback(() => {
-        if (isPaused || !currentItemRef.current) return;
+    const handleSuccess = useCallback(
+        (celebrate = true, reviewed = false) => {
+            if (isPaused || !currentItemRef.current) return;
 
-        const wasAnswerRevealed =
-            recallProgressRef.current?.answerWasFullyRevealed === true;
-        if (!wasAnswerRevealed && successAudioRef.current && soundEffects) {
-            successAudioRef.current.currentTime = 0;
-            successAudioRef.current.volume = 1;
-            successAudioRef.current.play().catch(() => {});
-        }
+            const wasAnswerRevealed =
+                reviewed ||
+                recallProgressRef.current?.answerWasFullyRevealed === true;
+            if (
+                celebrate &&
+                !wasAnswerRevealed &&
+                successAudioRef.current &&
+                soundEffects
+            ) {
+                successAudioRef.current.currentTime = 0;
+                successAudioRef.current.volume = 1;
+                successAudioRef.current.play().catch(() => {});
+            }
 
-        const presentedItem = currentItemRef.current;
-        // Speech also plays when the answer was entered after a full hint.
-        if (
-            readAnswer &&
-            presentedItem.answer.trim() &&
-            typeof window !== "undefined" &&
-            "speechSynthesis" in window &&
-            typeof SpeechSynthesisUtterance !== "undefined"
-        ) {
-            const synthesis = window.speechSynthesis;
-            answerSpeechRef.current = null;
-            synthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(
-                presentedItem.answer,
-            );
-            utterance.lang = "en-US";
-            answerSpeechRef.current = utterance;
-            const finishAnswerSpeech = () => {
-                if (answerSpeechRef.current !== utterance) return;
+            const presentedItem = currentItemRef.current;
+            // Speech also plays when the answer was entered after a full hint.
+            if (
+                readAnswer &&
+                presentedItem.answer.trim() &&
+                typeof window !== "undefined" &&
+                "speechSynthesis" in window &&
+                typeof SpeechSynthesisUtterance !== "undefined"
+            ) {
+                const synthesis = window.speechSynthesis;
                 answerSpeechRef.current = null;
-                setAnswerSpeechVersion((version) => version + 1);
-            };
-            utterance.onend = finishAnswerSpeech;
-            utterance.onerror = finishAnswerSpeech;
-            synthesis.speak(utterance);
-        }
+                synthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(
+                    presentedItem.answer,
+                );
+                utterance.lang = "en-US";
+                answerSpeechRef.current = utterance;
+                const finishAnswerSpeech = () => {
+                    if (answerSpeechRef.current !== utterance) return;
+                    answerSpeechRef.current = null;
+                    setAnswerSpeechVersion((version) => version + 1);
+                };
+                utterance.onend = finishAnswerSpeech;
+                utterance.onerror = finishAnswerSpeech;
+                synthesis.speak(utterance);
+            }
 
-        setCurrentInput("");
-        previousInputAtRef.current = null;
-        previousInputLengthRef.current = 0;
-        setTrackedItem(resolveTurnWithItem());
+            setCurrentInput("");
+            previousInputAtRef.current = null;
+            previousInputLengthRef.current = 0;
+            setTrackedItem(resolveTurnWithItem());
 
-        posthog.capture(
-            wasAnswerRevealed ? "word_reviewed" : "word_succeeded",
-            { mode: "playground", room_id: room.id },
-        );
-    }, [
-        isPaused,
-        soundEffects,
-        readAnswer,
-        resolveTurnWithItem,
-        room.id,
-        setTrackedItem,
-    ]);
+            posthog.capture(
+                wasAnswerRevealed ? "word_reviewed" : "word_succeeded",
+                { mode: "playground", room_id: room.id },
+            );
+        },
+        [
+            isPaused,
+            soundEffects,
+            readAnswer,
+            resolveTurnWithItem,
+            room.id,
+            setTrackedItem,
+        ],
+    );
+
+    const handleCardRate = useCallback(
+        (rating: CardRating) => {
+            const item = currentItemRef.current;
+            if (!item || isPaused) return;
+            const scheduler = schedulerRef.current;
+            if (scheduler) {
+                // A self-graded miss is recognition evidence, just like a
+                // wrong choice. "分からなかった" is the revealed-answer case.
+                recordRecognitionAnswer(
+                    scheduler,
+                    item.id,
+                    rating !== "correct",
+                    Date.now(),
+                    exposureGapAtStartRef.current,
+                );
+                if (!memoryPersistenceDisabledRef.current) {
+                    saveSchedulerState(
+                        "playground",
+                        authenticatedUserIdRef.current ?? GUEST_MEMORY_USER_ID,
+                        room.id,
+                        scheduler,
+                    );
+                }
+            }
+            recallProgressRef.current = null;
+            // A single word has no distractors; unlike a one-choice question,
+            // a self-graded card is still a real recognition observation.
+            updateAnswerModeMemory(
+                item,
+                "selection",
+                rating === "correct",
+                null,
+                rating === "unknown",
+                exposureGapAtStartRef.current,
+                Math.max(choiceCount, 2),
+            );
+            posthog.capture("playground_card_rated", {
+                room_id: room.id,
+                item_id: item.id,
+                rating,
+            });
+            handleSuccess(rating === "correct", true);
+        },
+        [
+            isPaused,
+            room.id,
+            choiceCount,
+            updateAnswerModeMemory,
+            handleSuccess,
+        ],
+    );
 
     useEffect(() => {
         if (
@@ -1123,7 +1191,7 @@ export default function Client({
                 masteryItemIds,
                 memoryByItem,
                 masteryNow,
-                answerMode,
+                answerMode === "card" ? "selection" : answerMode,
                 itemModes,
                 LEARNING_DIAGNOSTICS_ENABLED,
             ),
@@ -1231,12 +1299,28 @@ export default function Client({
                             <div className="flex flex-col gap-4">
                                 <div className="flex gap-2">
                                     <span className="shrink-0">
-                                        <Icon name="keyboard" />
+                                        <Icon
+                                            name={
+                                                answerMode === "card"
+                                                    ? "playingCardsFan"
+                                                    : "keyboard"
+                                            }
+                                        />
                                     </span>
                                     <span data-cursor="text">
-                                        入力問題では、英語・日本語ともに
-                                        <strong>半角</strong>
-                                        で入力してください。
+                                        {answerMode === "card" ? (
+                                            <>
+                                                カードでは、
+                                                <strong>表示</strong>
+                                                を押して答えを確認し、思い出せたかどうかを選びます。
+                                            </>
+                                        ) : (
+                                            <>
+                                                入力問題では、英語・日本語ともに
+                                                <strong>半角</strong>
+                                                で入力してください。
+                                            </>
+                                        )}
                                     </span>
                                 </div>
                                 <div className="flex gap-2">
@@ -1290,11 +1374,14 @@ export default function Client({
                         progress={masteryGraph.totals}
                         itemIds={masteryItemIds}
                         memories={memoryByItem}
-                        answerMode={answerMode}
+                        answerMode={
+                            answerMode === "card" ? "selection" : answerMode
+                        }
                         modes={itemModes}
                     />
                 }
                 onSelectionAnswer={handleSelectionAnswer}
+                onCardRate={handleCardRate}
                 onResume={() => setIsPaused(false)}
                 onSuccess={handleSuccess}
                 onChangeInput={handleInputChange}

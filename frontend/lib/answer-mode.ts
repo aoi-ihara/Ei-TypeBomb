@@ -2,14 +2,17 @@ import type { Item } from "@/type";
 import { getTypingAnswer } from "../../backend/shared/typing-answer.cjs";
 export { getTypingAnswer };
 
-export type AnswerMode = "selection" | "input";
+export type AnswerMode = "selection" | "input" | "card";
+export type CardRating = "correct" | "incorrect" | "unknown";
 
-// ItemView falls back to selection for answers that cannot be typed.
+// Cards use the same spaced-repetition model as recognition questions: only
+// the presentation differs, so their effective learning mode is "selection".
+// ItemView also falls back to selection for answers that cannot be typed.
 // Keep progress calculations in sync with the mode actually rendered.
 export const getEffectiveAnswerMode = (
     item: Item,
     requestedMode: AnswerMode,
-): AnswerMode =>
+): "selection" | "input" =>
     requestedMode === "input" && getTypingAnswer(item) !== null
         ? "input"
         : "selection";
@@ -20,18 +23,21 @@ export const ANSWER_MODE_OPTIONS: {
 }[] = [
     { value: "selection", label: "選択" },
     { value: "input", label: "入力" },
+    { value: "card", label: "カード" },
 ];
 
 export const normalizeAnswerMode = (
     value: unknown,
     hasTypingAnswers: boolean,
-): AnswerMode =>
-    value === "input" && hasTypingAnswers ? "input" : "selection";
+): AnswerMode => {
+    if (value === "card") return "card";
+    return value === "input" && hasTypingAnswers ? "input" : "selection";
+};
 
 export const getAnswerModeOptions = (hasTypingAnswers: boolean) =>
     hasTypingAnswers
         ? ANSWER_MODE_OPTIONS
-        : [ANSWER_MODE_OPTIONS[0]];
+        : [ANSWER_MODE_OPTIONS[0], ANSWER_MODE_OPTIONS[2]];
 
 const shuffle = <T,>(values: T[], random: () => number): T[] => {
     const result = [...values];

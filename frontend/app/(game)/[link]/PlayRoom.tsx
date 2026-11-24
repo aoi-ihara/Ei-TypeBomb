@@ -54,7 +54,9 @@ export default function PlayRoom({
     const [answerMode, setAnswerMode] = useState<AnswerMode>("selection");
 
     const availableAnswerModes = getAnswerModeOptions(hasTypingAnswers);
-    const effectiveAnswerMode = hasTypingAnswers ? answerMode : "selection";
+    // Cards do not need a typable answer, unlike input mode.
+    const effectiveAnswerMode =
+        hasTypingAnswers || answerMode === "card" ? answerMode : "selection";
     const answerModeSelection = Math.max(
         0,
         availableAnswerModes.findIndex(

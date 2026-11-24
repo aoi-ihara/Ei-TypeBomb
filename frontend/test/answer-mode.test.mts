@@ -50,14 +50,14 @@ const items: Item[] = [
     { id: "pear", type: "typed_recall", prompt: "梨", answer: "pear" },
 ];
 
-test("the answer-mode selector only offers selection when no answer is typable", () => {
+test("the answer-mode selector offers selection and card when no answer is typable", () => {
     assert.deepEqual(
         getAnswerModeOptions(false).map((option) => option.value),
-        ["selection"],
+        ["selection", "card"],
     );
     assert.deepEqual(
         getAnswerModeOptions(true).map((option) => option.value),
-        ["selection", "input"],
+        ["selection", "input", "card"],
     );
 });
 
@@ -74,6 +74,8 @@ test("typing uses only the first valid kana candidate, then the original answer"
     assert.equal(normalizeAnswerMode("input", true), "input");
     assert.equal(normalizeAnswerMode("auto", true), "selection");
     assert.equal(normalizeAnswerMode("input", false), "selection");
+    assert.equal(normalizeAnswerMode("card", false), "card");
+    assert.equal(normalizeAnswerMode("card", true), "card");
 });
 
 test("effective answer mode follows ItemView's per-item typing fallback", () => {
@@ -82,6 +84,8 @@ test("effective answer mode follows ItemView's per-item typing fallback", () => 
     assert.equal(getEffectiveAnswerMode(selectionOnly, "input"), "selection");
     assert.equal(getEffectiveAnswerMode(item, "input"), "input");
     assert.equal(getEffectiveAnswerMode(item, "selection"), "selection");
+    // Cards share recognition memory with selection questions.
+    assert.equal(getEffectiveAnswerMode(item, "card"), "selection");
 });
 
 test("mixed input rooms include selection-only mastery in current and 24h counts", () => {

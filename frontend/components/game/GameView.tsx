@@ -12,7 +12,7 @@ import type {
     RecallObservation,
     RecallProgress,
 } from "@/lib/playground/memory";
-import type { AnswerMode } from "@/lib/answer-mode";
+import type { AnswerMode, CardRating } from "@/lib/answer-mode";
 import { getRoomItems } from "@/lib/item";
 import GameNotice, { type GameNoticeProps } from "@/components/game/GameNotice";
 
@@ -69,6 +69,7 @@ type Props = {
         responseMs: number | null,
         usedHint?: boolean,
     ) => void;
+    onCardRate?: (rating: CardRating) => void;
     onResume?: () => void;
     onStop?: () => void;
 };
@@ -121,6 +122,7 @@ export default function GameView({
     isPaused = false,
     answerMode,
     onSelectionAnswer,
+    onCardRate,
     onResume,
     onStop,
 }: Readonly<Props>) {
@@ -237,6 +239,7 @@ export default function GameView({
                         items={getRoomItems(room)}
                         answerMode={answerMode}
                         allowSelectionHint={soloMode}
+                        onCardRate={onCardRate}
                         onSelectionAnswer={(
                             correct,
                             hadMistake,

@@ -1,6 +1,12 @@
 import TypedRecallView from "@/components/recall/TypedRecallView";
 import SelectionQuestionView from "@/components/recall/SelectionQuestionView";
-import { getEffectiveAnswerMode, getTypingAnswer, type AnswerMode } from "@/lib/answer-mode";
+import CardView from "@/components/recall/CardView";
+import {
+    getEffectiveAnswerMode,
+    getTypingAnswer,
+    type AnswerMode,
+    type CardRating,
+} from "@/lib/answer-mode";
 import type { Item } from "@/type";
 import type {
     LearningMode,
@@ -34,11 +40,22 @@ type Props = {
         responseMs: number | null,
         usedHint?: boolean,
     ) => void;
+    onCardRate?: (rating: CardRating) => void;
 };
 
 export default function ItemView(props: Readonly<Props>) {
     switch (props.item.type) {
         case "typed_recall": {
+            if (props.answerMode === "card") {
+                return (
+                    <CardView
+                        item={props.item}
+                        currentInput={props.currentInput}
+                        onRate={(rating) => props.onCardRate?.(rating)}
+                        isPaused={props.isPaused}
+                    />
+                );
+            }
             const typingAnswer =
                 getEffectiveAnswerMode(props.item, props.answerMode) === "input"
                     ? getTypingAnswer(props.item)

@@ -57,7 +57,14 @@ function ControlsFixture() {
 }
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {location.search ? (
+    {location.pathname === "/card" ? (
+      <OfflineClient
+        room={room}
+        answerMode="card"
+        initialBackgroundMusic={false}
+        initialSounDeffects={false}
+      />
+    ) : location.search ? (
       <ControlsFixture />
     ) : (
       <OfflineClient
