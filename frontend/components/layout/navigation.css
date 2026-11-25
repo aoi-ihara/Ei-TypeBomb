@@ -127,3 +127,17 @@ html[data-etb-navigation="pop"]::view-transition-new(etb-navigation-content) {
         animation: none;
     }
 }
+
+/* The common header is captured independently only for editor navigation. */
+html[data-etb-navigation-keep-header] [data-navigation-header] {
+    view-transition-name: etb-navigation-header;
+}
+html[data-etb-navigation-keep-header]::view-transition-group(etb-navigation-header),
+html[data-etb-navigation-keep-header]::view-transition-new(etb-navigation-header) {
+    animation: none;
+    mix-blend-mode: normal;
+    z-index: 2;
+}
+html[data-etb-navigation-keep-header]::view-transition-old(etb-navigation-header) {
+    display: none;
+}

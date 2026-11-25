@@ -6,7 +6,7 @@ import Link from "next/link";
 
 export default function Header({ children }: { children?: React.ReactNode }) {
     return (
-        <header className="flex w-full shrink-0 items-center justify-between gap-4 px-4 py-4">
+        <header className="flex w-full shrink-0 items-center justify-between gap-4 px-4 py-4" data-navigation-header>
             <div className="flex min-w-0 flex-1 gap-4">
                 <div className="min-w-0 rounded-lg" data-cursor="button">
                     <Link

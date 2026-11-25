@@ -44,6 +44,7 @@ import {
 } from "@/lib/auth/validator";
 import posthog from "posthog-js";
 import Shell from "@/components/layout/Shell";
+import { useEditorBack, useNavigation } from "@/components/layout/Navigation";
 import Dialog from "@/components/ui/Dialog";
 import { deleteRoom } from "@/lib/room/delete";
 import Collapsible from "@/components/ui/Collapsible";
@@ -93,6 +94,8 @@ export default function EditorClient({
     initialRoom: Room;
 }) {
     const router = useRouter();
+    const editorBack = useEditorBack();
+    const navigate = useNavigation("root");
     const [roomExplanation, setRoomExplanation] = useState(
         initialRoom.explanation ?? "",
     );
@@ -624,7 +627,10 @@ export default function EditorClient({
 
     const handlePlay = async () => {
         startNavigationProgress();
-        router.push("/" + roomLink);
+        const href = "/" + roomLink;
+        let handled = false;
+        navigate?.(href, "pop", () => { handled = true; });
+        if (!handled) router.push(href);
     };
 
     useEffect(() => {
@@ -714,7 +720,8 @@ export default function EditorClient({
                     variant="text"
                     iconName="arrowLeft"
                     padding="small"
-                    onClick={() => router.back()}
+                    aria-label="戻る"
+                    onClick={() => editorBack ? editorBack() : router.back()}
                 />
                 <Button
                     variant="text"

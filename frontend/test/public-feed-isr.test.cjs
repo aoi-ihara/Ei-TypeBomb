@@ -417,3 +417,17 @@ test("page morph crops both outgoing and incoming layers without changing page l
     assert.match(morph, /const visible = intersectMorphRect\(next, screenRect\(\)\)/);
     assert.match(morph, /const properties = \[[^\]]*"clip-path"\]/);
 });
+
+
+test("editor navigation isolates the shared header and animates the history return", () => {
+    const read = (file) => readFileSync(path.join(__dirname, "..", file), "utf8");
+    const nav = read("components/layout/Navigation.tsx");
+    const css = read("components/layout/navigation.css");
+    const editor = read("app/(editor)/[link]/edit/EditorClient.tsx");
+    assert.match(nav, /root && \(isEditorPath\(current\) \|\| isEditorPath\(target\)\)/);
+    assert.match(nav, /if \(request.historyBack\) router.back\(\)/);
+    assert.match(nav, /delete root.dataset.etbNavigationKeepHeader/);
+    assert.match(read("components/layout/Header.tsx"), /data-navigation-header/);
+    assert.match(css, /view-transition-name: etb-navigation-header/);
+    assert.match(editor, /const editorBack = useEditorBack\(\)/);
+});
