@@ -370,3 +370,33 @@ test("root navigation preserves the full-height game layout and anchors game set
         assert.match(client, /<header className="absolute top-0 right-0 flex justify-end p-4 gap-4">/);
     }
 });
+
+test("sign-in return path keeps internal OAuth redirects and rejects unsafe targets", () => {
+    const exports = {};
+    const source = ts.transpileModule(
+        readFileSync(new URL("../lib/auth/return-path.ts", `file://${__filename}`), "utf8"),
+        { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+    ).outputText;
+    vm.runInNewContext(source, { exports, URLSearchParams });
+    const { getSignInReturnPath } = exports;
+    assert.equal(getSignInReturnPath(""), "/mine");
+    assert.equal(getSignInReturnPath("?next="), "/mine");
+    const consent = "/oauth/consent?authorization_id=example";
+    assert.equal(getSignInReturnPath("?next=" + encodeURIComponent(consent)), consent);
+    for (const search of [
+        "?next=https%3A%2F%2Fexample.org",
+        "?next=%2F%2Fexample.org",
+        "?next=%2F%5Cexample.org",
+        "?next=%2F%0Aexample.org",
+        "?next=%2Fmine&next=%2Fsaved",
+    ]) assert.equal(getSignInReturnPath(search), "/");
+});
+
+test("public sign-in page does not read request-specific search parameters on the server", () => {
+    const page = readFileSync(new URL("../app/(auth)/sign-in/page.tsx", `file://${__filename}`), "utf8");
+    const form = readFileSync(new URL("../components/account/AuthForm.tsx", `file://${__filename}`), "utf8");
+    assert.doesNotMatch(page, /searchParams|cookies\(|headers\(/);
+    assert.match(page, /<AuthForm mode="sign-in" \/>/);
+    assert.match(form, /getSignInReturnPath\(window\.location\.search\)/);
+    assert.match(form, /window\.location\.assign\(returnTo\)/);
+});

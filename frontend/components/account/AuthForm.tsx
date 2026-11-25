@@ -5,15 +5,13 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { Turnstile } from "@marsidev/react-turnstile";
 import { submitAccountForm } from "@/lib/auth/account";
-import { safeReturnPath } from "@/lib/auth/return-path";
+import { getSignInReturnPath } from "@/lib/auth/return-path";
 
 type Mode = "sign-in" | "sign-up" | "recovery" | "password-link" | "email" | "password";
 export default function AuthForm({
     mode,
-    next,
 }: {
     mode: Mode;
-    next?: string;
 }) {
     const router = useRouter();
     const [email, setEmail] = useState("");
@@ -49,6 +47,10 @@ export default function AuthForm({
                 lock.current = true;
                 setBusy(true);
                 try {
+                    const returnTo =
+                        mode === "sign-in"
+                            ? getSignInReturnPath(window.location.search)
+                            : "/mine";
                     const result = await submitAccountForm(
                         mode,
                         email,
@@ -57,9 +59,7 @@ export default function AuthForm({
                     );
                     if (result) setError(result);
                     else if (mode === "sign-in")
-                        window.location.assign(
-                            next ? safeReturnPath(next) : "/mine",
-                        );
+                        window.location.assign(returnTo);
                     else if (mode === "sign-up")
                         router.replace("/sign-up/check-email");
                     else {

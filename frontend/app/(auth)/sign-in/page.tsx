@@ -1,18 +1,12 @@
 import Shell from "@/components/layout/Shell";
 import Button from "@/components/ui/Button";
 import AuthForm from "@/components/account/AuthForm";
-import { safeReturnPath } from "@/lib/auth/return-path";
 
-export default async function Page({
-    searchParams,
-}: {
-    searchParams: Promise<{ next?: string }>;
-}) {
-    const { next } = await searchParams;
-    const returnTo = next ? safeReturnPath(next) : undefined;
+// The public form can be prerendered. Its return URL is read only on submit.
+export default function Page() {
     return (
         <Shell title="サインイン">
-            <AuthForm mode="sign-in" next={returnTo} />
+            <AuthForm mode="sign-in" />
             <Button href="/sign-up" variant="text" iconName="userRoundPlus">
                 サインアップ
             </Button>
