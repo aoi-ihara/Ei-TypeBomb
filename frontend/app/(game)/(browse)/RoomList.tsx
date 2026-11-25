@@ -49,7 +49,8 @@ export default function RoomList({
     const [keyword, setKeyword] = useState("");
     // Keep typing responsive even when many rooms match the search.
     const deferredKeyword = useDeferredValue(keyword);
-    const { snapshot, ensureLoaded, reconcile, toggleSaved } = useRoomListViewer();
+    const { snapshot, ensureLoaded, reconcile, toggleSaved } =
+        useRoomListViewer();
 
     useEffect(() => {
         if (deferViewer) {
@@ -61,16 +62,37 @@ export default function RoomList({
                 savedRoomIds: initialSavedRoomIds,
             });
         }
-    }, [deferViewer, ensureLoaded, reconcile, initialCurrentUser, initialMyRooms, initialSavedRoomIds]);
+    }, [
+        deferViewer,
+        ensureLoaded,
+        reconcile,
+        initialCurrentUser,
+        initialMyRooms,
+        initialSavedRoomIds,
+    ]);
 
     const useServerViewer = !deferViewer && snapshot.status === "idle";
-    const currentUser = useServerViewer ? initialCurrentUser : snapshot.currentUser;
+    const currentUser = useServerViewer
+        ? initialCurrentUser
+        : snapshot.currentUser;
     const myRooms = useMemo(() => {
         if (!currentUser) return [];
-        if (!deferViewer && currentUser.id === initialCurrentUser?.id) return initialMyRooms;
-        return snapshot.ownedRoomIds.map((id) => ({ id, userId: currentUser.id }));
-    }, [currentUser, deferViewer, initialCurrentUser, initialMyRooms, snapshot.ownedRoomIds]);
-    const savedRoomIds = useServerViewer ? (initialSavedRoomIds ?? EMPTY_SAVED_ROOM_IDS) : snapshot.savedRoomIds;
+        if (!deferViewer && currentUser.id === initialCurrentUser?.id)
+            return initialMyRooms;
+        return snapshot.ownedRoomIds.map((id) => ({
+            id,
+            userId: currentUser.id,
+        }));
+    }, [
+        currentUser,
+        deferViewer,
+        initialCurrentUser,
+        initialMyRooms,
+        snapshot.ownedRoomIds,
+    ]);
+    const savedRoomIds = useServerViewer
+        ? (initialSavedRoomIds ?? EMPTY_SAVED_ROOM_IDS)
+        : snapshot.savedRoomIds;
     const viewerLoading = deferViewer && snapshot.status === "idle";
     const viewerError = deferViewer && snapshot.status === "error";
 
@@ -162,11 +184,7 @@ export default function RoomList({
         "おすすめ";
 
     return (
-        <Shell
-            showHeader={false}
-            size="xlarge"
-            title={viewTitle}
-        >
+        <Shell showHeader={false} size="xlarge" title={viewTitle}>
             <div className="flex w-full items-center justify-between gap-4">
                 <Input
                     value={keyword}

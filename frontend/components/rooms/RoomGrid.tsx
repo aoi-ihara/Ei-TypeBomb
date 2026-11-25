@@ -47,7 +47,7 @@ export default function RoomGrid({
 
     return (
         <div className="w-full">
-            <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full gap-4">
                 {rooms.slice(0, renderCount).map((room, index) => (
                     <RoomCard
                         key={room.id}
